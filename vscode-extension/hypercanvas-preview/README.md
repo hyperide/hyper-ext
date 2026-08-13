@@ -79,6 +79,21 @@ Recommended: **GLM via Z.ai** — flat-rate starting from $10/mo.
 | Hyper: Start Diagnostic Capture | —             | Start capturing extension-host errors to a structured NDJSON log |
 | Hyper: Stop Diagnostic Capture  | —             | Stop capture, open the log, and show rejection/exception counts  |
 
+## Privacy & Telemetry
+
+HyperIDE collects **anonymous** usage and error telemetry to improve the product.
+
+- **Respects your VS Code setting.** Telemetry is always AND-ed with the global
+  `telemetry.telemetryLevel`. If VS Code telemetry is off, HyperIDE sends nothing.
+- **No personal data, ever.** We send only enums, counts, durations, booleans, and
+  one-way hashes — never your source code, file paths, prompts, URLs, or content.
+- **Opt out any time** via the `hypercanvas.telemetry.enabled` setting (or the
+  "Disable" button on the first-run notice).
+- **Backends:** PostHog (EU) for product analytics, Sentry (EU) for error reports.
+
+Run `code --telemetry` to see the full list of events, or read
+[`telemetry.json`](./telemetry.json) in this extension.
+
 ## Requirements
 
 - VS Code 1.74 or later

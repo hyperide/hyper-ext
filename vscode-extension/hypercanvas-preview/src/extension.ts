@@ -76,6 +76,10 @@ import { detectPreviewProviders, detectSSRMockConfig } from './extension-provide
 import { applyTamaguiPalette } from './extension-tamagui';
 import { registerCommands } from './extension-commands';
 import { setupMcpServer } from './extension-mcp-setup';
+import { TelemetryService } from './telemetry/TelemetryService';
+import { SessionTelemetry } from './telemetry/sessionTelemetry';
+import { TelemetryEvents, categorizeErrorMessage } from './telemetry/events';
+import { showFirstRunNoticeOnce } from './telemetry/firstRunNotice';
 
 // Global references
 let mcpServer: HyperMcpServer | null = null;
@@ -89,6 +93,11 @@ let stateHub: StateHub | null = null;
 let panelRouter: PanelRouter | null = null;
 let diagnosticHub: DiagnosticHub | null = null;
 let diagnosticsChannel: vscode.OutputChannel | null = null;
+// Telemetry (greenfield). Constructed in activate(); no-ops cleanly when keys
+// are absent or telemetry is disabled. `session` holds per-session counters,
+// heartbeat, and the dissatisfaction heuristics.
+let telemetry: TelemetryService | null = null;
+let session: SessionTelemetry | null = null;
 // Monorepo-aware dev-server start prep (HYP-431). Set by activate() so the
 // hypercanvas.startDevServer command (registered in registerCommands, a sibling
 // function with no access to activate()'s reroot closures) can resolve a runnable
@@ -102,7 +111,41 @@ let _prevDiagnosticSinkPath: string | undefined;
 let _diagnosticCaptureActive = false;
 
 export function activate(context: vscode.ExtensionContext) {
+  const activationStartedAt = Date.now();
   console.log('[HyperIDE] Extension activating...');
+
+  // Telemetry seam. Constructs safely with NO keys and stays inert when
+  // telemetry is disabled — must never throw or block activation.
+  try {
+    telemetry = new TelemetryService(context);
+    session = new SessionTelemetry(telemetry, context);
+    // Only surface the privacy notice once telemetry is actually live (enabled AND
+    // a backend key is configured). While the feature ships inert (no keys) it
+    // sends nothing, so claiming "we collect telemetry" would be inaccurate.
+    if (telemetry.isEnabled() && telemetry.hasActiveBackend()) {
+      void showFirstRunNoticeOnce(context);
+    }
+  } catch (err) {
+    console.error('[HyperIDE] Telemetry init failed (continuing without it):', err);
+    telemetry = null;
+    session = null;
+  }
+
+  // Telemetry: track VS Code color-theme changes (kind only — no theme name).
+  if (telemetry) {
+    const tel = telemetry;
+    context.subscriptions.push(
+      vscode.window.onDidChangeActiveColorTheme((theme) => {
+        const kind =
+          theme.kind === vscode.ColorThemeKind.Dark
+            ? 'dark'
+            : theme.kind === vscode.ColorThemeKind.Light
+              ? 'light'
+              : 'highContrast';
+        tel.track(TelemetryEvents.themeChanged, { kind });
+      }),
+    );
+  }
 
   // Initialize right-panel input-focus guard to false so the keybinding
   // `!hypercanvas.rightPanelInputFocused` condition is defined from the start.
@@ -136,6 +179,23 @@ export function activate(context: vscode.ExtensionContext) {
       } catch {
         // best effort — never crash extension host on logging failure
       }
+    }
+    // Telemetry: scrubbed counts only. The stack is hashed (never sent raw); the
+    // error NAME is a safe enum-ish token. isForeign is already false here
+    // (foreign errors returned above), so we only see our own host errors.
+    try {
+      session?.incError();
+      const errName = reason instanceof Error ? reason.name : 'NonError';
+      const stack = reason instanceof Error && reason.stack ? reason.stack : label;
+      telemetry?.track(TelemetryEvents.errorUnhandled, {
+        kind,
+        errorName: errName,
+        scrubbedStackHash: telemetry.hash(stack),
+        isForeign: false,
+      });
+      telemetry?.trackError(reason, { where: 'preview', severity: kind === 'uncaughtException' ? 'fatal' : 'error' });
+    } catch {
+      // telemetry must never affect diagnostics
     }
   };
 
@@ -324,6 +384,8 @@ export function activate(context: vscode.ExtensionContext) {
     aiChatProvider?.sendAIPrompt(prompt);
   });
 
+  // Guards session.activated to a single emit (detection may run more than once).
+  let sessionActivatedEmitted = false;
   let detectionSeq = 0;
   // Topology of the last-detected workspace root. The HYP-788 selection hook reads it to
   // decide whether to recompute support dimensions per sub-repo (monorepo) or leave the
@@ -404,6 +466,21 @@ export function activate(context: vscode.ExtensionContext) {
         // token provider, or reset to Radix for non-Tamagui projects. paletteSeq
         // serializes this against concurrent watcher reloads.
         await applyTamaguiPalette(root, kit === 'tamagui');
+
+        // Telemetry: emit session.activated once, now that the project shape is
+        // known. Only enums/booleans/counts — no paths or names.
+        if (session && !sessionActivatedEmitted) {
+          sessionActivatedEmitted = true;
+          session.start({
+            activationReason: 'onStartupFinished',
+            vscodeVersion: vscode.version,
+            coldStartMs: Date.now() - activationStartedAt,
+            hasWorkspace: Boolean(vscode.workspace.workspaceFolders?.length),
+            projectType: projectType ?? 'unknown',
+            cssSystem: cssSystem ?? 'unknown',
+            uiKit: kit ?? 'unknown',
+          });
+        }
       })
       .catch((err) => {
         console.warn('[HyperIDE] Failed to detect project info:', err);
@@ -451,6 +528,18 @@ export function activate(context: vscode.ExtensionContext) {
   logsProvider.setDiagnosticHub(diagnosticHub);
   aiChatProvider.setDiagnosticHub(diagnosticHub);
 
+  // Telemetry: feed the AI chat provider a combined sink (host track +
+  // webview-origin forward + AI-request counting from the session).
+  if (telemetry && session) {
+    const tel = telemetry;
+    const ses = session;
+    aiChatProvider.setTelemetry({
+      track: (name, props) => tel.track(name, props),
+      trackFromWebview: (name, props) => tel.trackFromWebview(name, props),
+      incAiRequest: () => ses.incAiRequest(),
+    });
+  }
+
   // Retry counter for componentMissing self-healing — declared at activate() scope so it is
   // accessible both inside if (devServerManager) (onComponentMissing callback) and in the
   // stateHub.onChange callback where it is cleared on component switch. Declaring it after
@@ -464,6 +553,10 @@ export function activate(context: vscode.ExtensionContext) {
   // component switch (same lifecycle as componentMissingRetries) so switching away
   // and back can retry.
   const providerErrorAttempts = new Set<string>();
+
+  // Telemetry: timestamp of the most recent dev-server 'starting' status, used to
+  // compute startupMs when it reaches 'running'.
+  let devServerStartingAt: number | null = null;
 
   // Render-failure app-mode fallback: components for which we already retried a FAILED
   // component-mode render inside the full-app wrapper (componentMissing / non-provider
@@ -603,12 +696,57 @@ export function activate(context: vscode.ExtensionContext) {
       if (state.status === 'stopped' || state.status === 'error') {
         previewPanel?.notifyDevServerStopped();
       }
+
+      // Telemetry: map dev-server status to lifecycle events. startupMs is the
+      // time from the first 'starting' to 'running'. No URLs/paths emitted.
+      try {
+        if (state.status === 'starting') {
+          devServerStartingAt = Date.now();
+          telemetry?.track(TelemetryEvents.devServerStarted, {});
+        } else if (state.status === 'running') {
+          telemetry?.track(TelemetryEvents.devServerReady, {
+            startupMs: devServerStartingAt ? Date.now() - devServerStartingAt : 0,
+          });
+          devServerStartingAt = null;
+        } else if (state.status === 'error') {
+          const raw = (state as { error?: unknown }).error;
+          const msg = raw instanceof Error ? raw.message : typeof raw === 'string' ? raw : '';
+          session?.incError();
+          telemetry?.track(TelemetryEvents.devServerFailed, {
+            errorCategory: categorizeErrorMessage(msg),
+            scrubbedMessageHash: telemetry.hash(msg),
+          });
+          devServerStartingAt = null;
+        }
+      } catch {
+        // telemetry must never affect dev-server status handling
+      }
     });
 
     // Wire runtime errors from preview iframe to dev server manager + diagnostic hub
     previewPanel.onRuntimeError((error) => {
       devServerManager?.setRuntimeError(error ?? null);
       diagnosticHub?.setRuntimeError(error ?? null);
+
+      // Telemetry: a preview runtime error. Categorize, hash the (scrubbed)
+      // message, and flag the blank-preview process-not-defined case separately.
+      try {
+        if (error) {
+          const msg = typeof error.message === 'string' ? error.message : String(error);
+          const category = categorizeErrorMessage(msg);
+          session?.incError();
+          telemetry?.track(TelemetryEvents.previewRenderFailed, {
+            errorClass: 'runtimeError',
+            errorCategory: category,
+            scrubbedMessageHash: telemetry.hash(msg),
+          });
+          if (category === 'process_not_defined') {
+            telemetry?.track(TelemetryEvents.previewBlankDetected, {});
+          }
+        }
+      } catch {
+        // telemetry must never affect error handling
+      }
     });
 
     // Wire console capture from preview iframe to diagnostic hub
@@ -733,6 +871,17 @@ export function activate(context: vscode.ExtensionContext) {
     // app-entry candidate rendered in component mode is excluded → the iframe reports componentMissing
     // (not a blank success) → THIS handler's componentMissing→app-mode fallback engages. No DOM probe.
     previewPanel.onComponentMissing((componentPath) => {
+      // Telemetry: a render failed because the requested component wasn't in the
+      // preview registry. Path is NEVER emitted — only the categorized class.
+      try {
+        session?.incError();
+        telemetry?.track(TelemetryEvents.previewRenderFailed, {
+          errorClass: 'componentMissing',
+          errorCategory: 'module_missing',
+        });
+      } catch {
+        // telemetry must never affect self-heal
+      }
       const currentWorkspaceRoot = syncWorkspaceRuntime();
       const { componentPath: reportedRepoRelPath, previewComponentPath: relPath } = resolveSelfHealComponentParams({
         componentPath,
@@ -897,6 +1046,22 @@ export function activate(context: vscode.ExtensionContext) {
     // wrapper the manual scope→component-only toggle produces), which flips the
     // preview into isolated mode so the component renders inside its providers.
     previewPanel.onComponentError((componentPath, error) => {
+      // Telemetry: a component-level render error (ErrorBoundary). Emitted for ALL
+      // component errors, not just provider-context ones. Message is hashed.
+      try {
+        const category = categorizeErrorMessage(error);
+        session?.incError();
+        telemetry?.track(TelemetryEvents.previewRenderFailed, {
+          errorClass: 'componentError',
+          errorCategory: category,
+          scrubbedMessageHash: telemetry.hash(error),
+        });
+        if (category === 'process_not_defined') {
+          telemetry?.track(TelemetryEvents.previewBlankDetected, {});
+        }
+      } catch {
+        // telemetry must never affect auto-recovery
+      }
       const currentWorkspaceRoot = syncWorkspaceRuntime();
       // ORDER: provider-context crash → HYP-487 isolation wrapper (FIRST); else an app-entry-candidate
       // NON-provider crash → full-app retry. Never both for the same signal — a provider-context error
@@ -907,6 +1072,20 @@ export function activate(context: vscode.ExtensionContext) {
       }
       handleNonProviderError(componentPath, currentWorkspaceRoot);
     });
+
+    // Telemetry: preview render succeeded → emit preview.renderSucceeded and the
+    // one-shot funnel.firstPreview (componentKind is a coarse bucket, never a path).
+    previewPanel.onRenderSucceeded((componentPath) => {
+      try {
+        const componentKind = componentPath ? (isUiPrimitive(componentPath) ? 'primitive' : 'component') : 'unknown';
+        session?.onPreviewRenderSucceeded({ componentKind });
+      } catch {
+        // telemetry must never affect render handling
+      }
+    });
+
+    // Telemetry: allow-listed webview-origin events (rage/dead/error clicks).
+    if (telemetry) previewPanel.setTelemetrySink(telemetry);
   }
 
   context.subscriptions.push(
@@ -1632,6 +1811,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register Left Panel (Activity Bar explorer)
   leftPanelProvider = new LeftPanelProvider(context.extensionUri, stateHub, panelRouter);
+  if (telemetry) leftPanelProvider.setTelemetry(telemetry);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(LeftPanelProvider.viewType, leftPanelProvider, {
@@ -1646,6 +1826,7 @@ export function activate(context: vscode.ExtensionContext) {
   rightPanelProvider = new RightPanelProvider(context.extensionUri, stateHub, panelRouter, leftPanelProvider, () =>
     pr.getComponentGroups(),
   );
+  if (telemetry) rightPanelProvider.setTelemetry(telemetry);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(RightPanelProvider.viewType, rightPanelProvider, {
@@ -1668,6 +1849,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register commands
   registerCommands(context, workspaceRoot, {
+    telemetry,
+    session,
     previewPanel,
     devServerManager,
     diagnosticHub,
@@ -1737,11 +1920,43 @@ export function activate(context: vscode.ExtensionContext) {
       });
   }
 
+  // Telemetry safety net: if project detection never resolved (no workspace,
+  // detector error), still emit session.activated once so we don't lose the
+  // activation entirely. Runs after the microtask queue so the detection path
+  // wins the race when it does resolve.
+  setTimeout(() => {
+    if (session && !sessionActivatedEmitted) {
+      sessionActivatedEmitted = true;
+      session.start({
+        activationReason: 'onStartupFinished',
+        vscodeVersion: vscode.version,
+        coldStartMs: Date.now() - activationStartedAt,
+        hasWorkspace: Boolean(vscode.workspace.workspaceFolders?.length),
+        projectType: 'unknown',
+      });
+    }
+  }, 3000).unref?.();
+
   console.log('[HyperIDE] Extension activated successfully');
 }
 
 export async function deactivate() {
   console.log('[HyperIDE] Extension deactivating...');
+
+  // Telemetry: emit session.ended (+ errorThenQuit check), flush, and shut down.
+  // Run FIRST so the flush has the full ~4s deactivate budget. Best-effort.
+  try {
+    session?.end('deactivate');
+    if (telemetry) {
+      await telemetry.flush();
+      await telemetry.dispose();
+    }
+  } catch (err) {
+    console.error('[HyperIDE] Telemetry teardown failed:', err);
+  } finally {
+    telemetry = null;
+    session = null;
+  }
 
   // Flush deferred .hyperide writes before teardown
   if (panelRouter) {

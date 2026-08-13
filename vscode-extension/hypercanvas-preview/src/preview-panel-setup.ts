@@ -36,6 +36,9 @@ export interface PanelSetupDeps {
   dispatch(event: LifecycleEvent): readonly LifecycleEffect[];
   startSyncService(): void;
   initializeComponent(activeEditor?: vscode.TextEditor): void;
+  // Telemetry: fired once when the panel tab is disposed (explicit dispose OR
+  // user closing the tab) — both routes flow through onDidDispose below.
+  onPanelClosed?(): void;
 }
 
 export function setupPanel(
@@ -99,7 +102,7 @@ export function setupPanel(
     // the full teardown would dispose the NEW panel's resources. A superseded panel's
     // stale onDidDispose must no-op — the newer panel owns the current resources.
     if (deps.getPanel() !== panel) return;
-
+    deps.onPanelClosed?.();
     const timer = deps.getReEmitTimer();
     if (timer) {
       clearTimeout(timer);

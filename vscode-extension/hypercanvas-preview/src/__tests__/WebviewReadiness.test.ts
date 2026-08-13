@@ -27,6 +27,7 @@ interface MockWebviewView {
   onDidDispose: (handler: () => void) => { dispose: () => void };
   onDidChangeVisibility: (handler: () => void) => { dispose: () => void };
   fireDispose: () => void;
+  fireVisibilityChange: (visible: boolean) => void;
 }
 
 interface MockWebviewViewOptions {
@@ -63,20 +64,27 @@ function createMockWebviewView(options: MockWebviewViewOptions = {}): MockWebvie
     },
   });
 
-  return {
+  const visibilityHandlers: Array<() => void> = [];
+  const view: MockWebviewView = {
     webview,
-    visible: false,
+    visible: true,
     onDidDispose(handler: () => void) {
-      disposeHandlers.push(handler);
-      return { dispose: mock() };
-    },
-    onDidChangeVisibility() {
+    disposeHandlers.push(handler);
+    return { dispose: mock() };
+  },
+    onDidChangeVisibility(handler: () => void) {
+      visibilityHandlers.push(handler);
       return { dispose: mock() };
     },
     fireDispose() {
-      for (const handler of disposeHandlers) handler();
+    for (const handler of disposeHandlers) handler();
+  },
+    fireVisibilityChange(visible: boolean) {
+      view.visible = visible;
+      for (const handler of visibilityHandlers) handler();
     },
   };
+  return view;
 }
 
 function createStateHub() {
@@ -197,5 +205,77 @@ describe('sidebar webview readiness recovery', () => {
       type: 'ai:openChat',
       prompt: 'fix the failed dev server',
     });
+  });
+});
+
+interface CapturedEvent {
+  name: string;
+  props: Record<string, string | number | boolean>;
+}
+
+function captureSink(): {
+  sink: { track: (n: string, p?: Record<string, string | number | boolean>) => void; trackFromWebview: () => void };
+  events: CapturedEvent[];
+} {
+  const events: CapturedEvent[] = [];
+  return {
+    events,
+    sink: {
+      track: (name, props) => events.push({ name, props: props ?? {} }),
+      trackFromWebview: () => {},
+    },
+  };
+}
+
+function makeRightPanel(): RightPanelProvider {
+  return new RightPanelProvider(
+    vscode.Uri.file('/extension'),
+    createStateHub() as never,
+    { routeMessage: mock(() => Promise.resolve(false)) } as never,
+  );
+}
+
+describe('inspector.toggled telemetry', () => {
+  it('emits inspector.toggled { open: true } on initial visible resolve, with no PII', () => {
+    const { sink, events } = captureSink();
+    const provider = makeRightPanel();
+    provider.setTelemetry(sink as never);
+
+    const view = createMockWebviewView();
+    view.visible = true;
+    provider.resolveWebviewView(view as never, {} as never, {} as never);
+
+    const toggled = events.filter((e) => e.name === 'inspector.toggled');
+    expect(toggled).toHaveLength(1);
+    expect(toggled[0].props).toEqual({ open: true });
+    // Only a boolean — nothing that could carry a path / element / content.
+    expect(Object.keys(toggled[0].props)).toEqual(['open']);
+  });
+
+  it('emits on each genuine show/hide and dedupes a repeated same-state event', () => {
+    const { sink, events } = captureSink();
+    const provider = makeRightPanel();
+    provider.setTelemetry(sink as never);
+
+    const view = createMockWebviewView();
+    view.visible = true;
+    provider.resolveWebviewView(view as never, {} as never, {} as never);
+
+    view.fireVisibilityChange(false); // hide  → emit { open: false }
+    view.fireVisibilityChange(false); // same  → deduped (no emit)
+    view.fireVisibilityChange(true); // show   → emit { open: true }
+
+    const toggled = events.filter((e) => e.name === 'inspector.toggled');
+    expect(toggled.map((e) => e.props.open)).toEqual([true, false, true]);
+  });
+
+  it('is a no-op when no telemetry sink is set (telemetry disabled / no keys)', () => {
+    const provider = makeRightPanel();
+    const view = createMockWebviewView();
+    // No setTelemetry — must not throw.
+    expect(() => {
+      provider.resolveWebviewView(view as never, {} as never, {} as never);
+      view.fireVisibilityChange(false);
+    }).not.toThrow();
   });
 });

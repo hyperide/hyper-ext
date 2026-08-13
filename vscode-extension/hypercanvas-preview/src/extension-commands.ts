@@ -21,6 +21,7 @@ import { PreviewPanel } from './PreviewPanel';
 import { detectBrowserForPlaywright } from './playwright-chrome';
 import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
+import { TelemetryEvents } from './telemetry/events';
 import { AstService } from './services/AstService';
 import { DevServerManager } from './services/DevServerManager';
 import { detectPackageManager, detectUnsupportedProject } from './services/ProjectDetector';
@@ -37,9 +38,27 @@ import {
 } from './extension-commands-utils';
 
 /**
+ * Minimal telemetry surface threaded into commands. Avoids importing the full
+ * TelemetryService/SessionTelemetry types into this large command module.
+ */
+export interface CommandTelemetry {
+  track(name: string, props?: Record<string, string | number | boolean>): void;
+}
+export interface CommandSession {
+  incCommand(): void;
+  onInvoke(key: string): void;
+  onApply(key: string): void;
+  onUndo(): void;
+}
+
+/**
  * Dependencies needed by command handlers.
  */
 export interface CommandContext {
+  // Telemetry seam: command.invoked wrapping + quickUndo/retryLoop correlation.
+  // Both nullable — telemetry no-ops cleanly when absent.
+  telemetry: CommandTelemetry | null;
+  session: CommandSession | null;
   previewPanel: PreviewPanel | null;
   devServerManager: DevServerManager | null;
   diagnosticHub: DiagnosticHub | null;
@@ -110,15 +129,52 @@ async function applyCodeCanvasLayout(ctx: CommandContext, canvasOnBottom: boolea
   });
 }
 
+/** Canvas mutations that an undo could reverse — feed the quickUndo correlator. */
+const CANVAS_APPLY_COMMANDS = new Set<string>([
+  'hypercanvas.canvasDelete',
+  'hypercanvas.canvasDuplicate',
+  'hypercanvas.canvasWrap',
+  'hypercanvas.canvasInsertElement',
+]);
+
 export function registerCommands(context: vscode.ExtensionContext, workspaceRoot: string, ctx: CommandContext): void {
   const getCurrentRoot = () => ctx.getWorkspaceRoot() ?? workspaceRoot;
   // Per-activation toggle state for hypercanvas.toggleCodeCanvasLayout. A simple flip
   // flag; a manual drag can desync it by one press, which is acceptable for a demo/
   // authoring affordance (the next press re-applies a deterministic layout regardless).
   let canvasOnBottom = false;
+
+  /**
+   * Wrap a command callback so it emits command.invoked (commandId, durationMs,
+   * outcome) and feeds the dissatisfaction correlators. DRY: every command goes
+   * through this instead of calling vscode.commands.registerCommand directly.
+   * Telemetry never changes the command's return value or error behavior.
+   */
+  const register = (commandId: string, fn: (...args: never[]) => unknown): vscode.Disposable => {
+    return vscode.commands.registerCommand(commandId, async (...args: never[]) => {
+      const startedAt = Date.now();
+      ctx.session?.incCommand();
+      ctx.session?.onInvoke(commandId);
+      if (commandId === 'hypercanvas.canvasUndo') ctx.session?.onUndo();
+      else if (CANVAS_APPLY_COMMANDS.has(commandId)) ctx.session?.onApply(commandId);
+      let outcome: 'ok' | 'error' | 'cancelled' = 'ok';
+      try {
+        return await fn(...args);
+      } catch (err) {
+        outcome = err instanceof Error && err.name === 'CancellationError' ? 'cancelled' : 'error';
+        throw err;
+      } finally {
+        ctx.telemetry?.track('command.invoked', {
+          commandId,
+          durationMs: Date.now() - startedAt,
+          outcome,
+        });
+      }
+    });
+  };
   // Open preview
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.openPreview', () => {
+    register('hypercanvas.openPreview', () => {
       // ViewColumn.Two — see the auto-open comment above for why not ViewColumn.Beside.
       ctx.previewPanel?.createOrShow(vscode.ViewColumn.Two);
       // Sync current dev-server state into the just-created panel. The
@@ -143,7 +199,7 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
   // code-left/canvas-right and code-top/canvas-bottom (vertically stacked groups) so a
   // demo can show the code change live ABOVE the canvas as a style edit lands.
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.toggleCodeCanvasLayout', async () => {
+    register('hypercanvas.toggleCodeCanvasLayout', async () => {
       canvasOnBottom = !canvasOnBottom;
       await applyCodeCanvasLayout(ctx, canvasOnBottom);
     }),
@@ -153,7 +209,7 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
   // without relying on the external `code --reuse-window` process targeting the
   // correct Extension Development Host.
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.openFolderPath', async (folderPath: string) => {
+    register('hypercanvas.openFolderPath', async (folderPath: string) => {
       if (typeof folderPath !== 'string' || folderPath.length === 0) return;
       await ctx.devServerManager?.stop();
       ctx.previewPanel?.dispose();
@@ -163,43 +219,47 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
 
   // Open Logs
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.openLogs', () => {
+    register('hypercanvas.openLogs', () => {
       vscode.commands.executeCommand('hypercanvas.logsView.focus');
     }),
   );
 
   // Clear diagnostics
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.clearDiagnostics', () => {
+    register('hypercanvas.clearDiagnostics', () => {
       ctx.diagnosticHub?.clear();
     }),
   );
 
   // Open AI Chat
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.openAIChat', async () => {
+    register('hypercanvas.openAIChat', async () => {
       await ctx.aiChatProvider?.focusAndEnsureReady();
     }),
   );
 
   // Open Explorer panel
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.openExplorer', () => {
+    register('hypercanvas.openExplorer', () => {
       vscode.commands.executeCommand('hypercanvas.explorerView.focus');
     }),
   );
 
   // Open Inspector panel
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.openInspector', async () => {
+    register('hypercanvas.openInspector', async () => {
       await ctx.rightPanelProvider?.focusAndEnsureReady();
     }),
   );
 
   // Refresh preview
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.refreshPreview', () => {
-      ctx.previewPanel?.refresh();
+    register('hypercanvas.refreshPreview', () => {
+      // Telemetry only when a refresh was ACTUALLY posted (refresh() returns false
+      // on its no-op early-returns) — so we count real refreshes, not invocations.
+      // SAFE: just the fact + trigger source. No URL, route, or component identity.
+      const refreshed = ctx.previewPanel?.refresh() ?? false;
+      if (refreshed) ctx.telemetry?.track(TelemetryEvents.canvasPreviewRefreshed, { source: 'command' });
     }),
   );
 
@@ -218,38 +278,36 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
   // and the per-test git checkout + command palette reopens give us
   // enough isolation for cross-test stability.
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.closePreview', async () => {
+    register('hypercanvas.closePreview', async () => {
       ctx.previewPanel?.dispose();
     }),
   );
 
   // Canvas keybinding commands (VS Code intercepts keys before they reach the webview iframe)
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.canvasUndo', () => ctx.previewPanel?.undo()),
-    vscode.commands.registerCommand('hypercanvas.canvasRedo', () => ctx.previewPanel?.redo()),
-    vscode.commands.registerCommand('hypercanvas.canvasDelete', () => ctx.previewPanel?.deleteSelected()),
-    vscode.commands.registerCommand('hypercanvas.canvasDuplicate', () => ctx.previewPanel?.duplicateSelected()),
-    vscode.commands.registerCommand('hypercanvas.canvasGoToCode', () => ctx.previewPanel?.goToCodeSelected()),
-    vscode.commands.registerCommand('hypercanvas.canvasWrap', () => ctx.previewPanel?.wrapSelected()),
-    vscode.commands.registerCommand('hypercanvas.canvasInsertElement', () =>
-      ctx.previewPanel?.openInsertPanelForSelection(),
-    ),
-    vscode.commands.registerCommand('hypercanvas.canvasSelectChildren', () => ctx.previewPanel?.selectChildren()),
-    vscode.commands.registerCommand('hypercanvas.canvasSelectParent', () => ctx.previewPanel?.selectParent()),
-    vscode.commands.registerCommand('hypercanvas.canvasSelectNextSibling', () => ctx.previewPanel?.selectNextSibling()),
-    vscode.commands.registerCommand('hypercanvas.canvasSelectPrevSibling', () => ctx.previewPanel?.selectPrevSibling()),
-    vscode.commands.registerCommand('hypercanvas.canvasEscape', () => ctx.previewPanel?.clearSelection()),
-    vscode.commands.registerCommand('hypercanvas.selectElement', (elementId: string) => {
+    register('hypercanvas.canvasUndo', () => ctx.previewPanel?.undo()),
+    register('hypercanvas.canvasRedo', () => ctx.previewPanel?.redo()),
+    register('hypercanvas.canvasDelete', () => ctx.previewPanel?.deleteSelected()),
+    register('hypercanvas.canvasDuplicate', () => ctx.previewPanel?.duplicateSelected()),
+    register('hypercanvas.canvasGoToCode', () => ctx.previewPanel?.goToCodeSelected()),
+    register('hypercanvas.canvasWrap', () => ctx.previewPanel?.wrapSelected()),
+    register('hypercanvas.canvasInsertElement', () => ctx.previewPanel?.openInsertPanelForSelection()),
+    register('hypercanvas.canvasSelectChildren', () => ctx.previewPanel?.selectChildren()),
+    register('hypercanvas.canvasSelectParent', () => ctx.previewPanel?.selectParent()),
+    register('hypercanvas.canvasSelectNextSibling', () => ctx.previewPanel?.selectNextSibling()),
+    register('hypercanvas.canvasSelectPrevSibling', () => ctx.previewPanel?.selectPrevSibling()),
+    register('hypercanvas.canvasEscape', () => ctx.previewPanel?.clearSelection()),
+    register('hypercanvas.selectElement', (elementId: string) => {
       ctx.previewPanel?.selectElement(elementId);
     }),
-    vscode.commands.registerCommand('hypercanvas.selectElements', (elementIds: string[]) => {
+    register('hypercanvas.selectElements', (elementIds: string[]) => {
       ctx.previewPanel?.selectElements(elementIds);
     }),
   );
 
   // Go to Visual - navigate from code to canvas
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.goToVisual', async () => {
+    register('hypercanvas.goToVisual', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showWarningMessage('No active editor');
@@ -279,7 +337,7 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
 
   // Start dev server
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.startDevServer', async () => {
+    register('hypercanvas.startDevServer', async () => {
       console.log('[HyperIDE] startDevServer command triggered');
 
       if (!ctx.devServerManager) {
@@ -329,7 +387,7 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
 
   // Stop dev server
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.stopDevServer', async () => {
+    register('hypercanvas.stopDevServer', async () => {
       if (!ctx.devServerManager) {
         return;
       }
@@ -341,14 +399,14 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
 
   // Show dev server output
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.showDevServerOutput', () => {
+    register('hypercanvas.showDevServerOutput', () => {
       ctx.devServerManager?.showOutput();
     }),
   );
 
   // Fix unsupported project — installs react-native-web + Vite config for React Native / Tamagui projects
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.fixUnsupportedProject', async () => {
+    register('hypercanvas.fixUnsupportedProject', async () => {
       // Use the active project root (may be a monorepo sub-repo) rather than the
       // VS Code workspace folder root, so the fix runs in the selected sub-project.
       const root = ctx.getActiveProjectRoot();
@@ -804,7 +862,7 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
 
   // Configure AI API key — multi-step wizard
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.configureAIKey', async () => {
+    register('hypercanvas.configureAIKey', async () => {
       // ── Step 1: Choose provider ──
       const config = vscode.workspace.getConfiguration('hypercanvas.ai');
       const currentProvider = config.get<string>('provider', 'glm') as AIProvider;
@@ -931,7 +989,7 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
 
   // Open/create project structure config file
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.openProjectStructure', async () => {
+    register('hypercanvas.openProjectStructure', async () => {
       const configDir = vscode.Uri.joinPath(vscode.Uri.file(getCurrentRoot()), '.hyperide');
       const configFile = vscode.Uri.joinPath(configDir, 'project-structure.json');
 
@@ -961,7 +1019,7 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
 
   // Setup MCP for AI agents (Copilot, Claude Code, Codex, OpenCode)
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.setupMcp', async () => {
+    register('hypercanvas.setupMcp', async () => {
       const mcpServer = ctx.getMcpServer();
       if (!mcpServer || mcpServer.port === 0) {
         vscode.window.showErrorMessage('HyperCanvas MCP server is not running');

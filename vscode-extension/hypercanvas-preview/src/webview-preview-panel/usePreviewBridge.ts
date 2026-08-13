@@ -204,6 +204,28 @@ export function hasForwardableState(state: ForwardedIframeState | null): state i
   return state != null && FORWARDED_STATE_KEYS.some((key) => key in state);
 }
 
+/**
+ * Derive PII-SAFE telemetry props for an in-app route change. We NEVER send the
+ * route string itself (it leaks app structure, ids, query params). Instead we
+ * emit only structural shape: the path-segment DEPTH (how deep the user is) and
+ * whether it is a hash route. Pure + exported so it is unit-testable.
+ *
+ * `route` is the already-validated `/`-rooted in-app path from
+ * `hypercanvas:appRouteChanged`. The leading `/` and any query/hash are split off
+ * before counting segments so `/a/b?x=1` and `/a/b` both report depth 2.
+ */
+export function routeNavigationTelemetryProps(route: string): { routeDepth: number; isHashRoute: boolean } {
+  const hashIdx = route.indexOf('#');
+  const isHashRoute = hashIdx !== -1;
+  // For a hash route (`/#/users/5`) the meaningful path is INSIDE the hash, so
+  // count the hash fragment's segments; otherwise count the leading path. Strip
+  // the query (`?…`) in both cases. We never emit the route text — only depth.
+  const meaningful = isHashRoute ? route.slice(hashIdx + 1) : route;
+  const pathOnly = meaningful.split('?', 1)[0];
+  const segments = pathOnly.split('/').filter((s) => s.length > 0);
+  return { routeDepth: segments.length, isHashRoute };
+}
+
 export function canUpdatePreviewComponentInPlace(
   currentSrc: string | null | undefined,
   nextSrc: string | null | undefined,
@@ -246,6 +268,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [unsupportedFile, setUnsupportedFile] = useState<NonPreviewableFile | null>(null);
   const [autoStart, setAutoStart] = useState(false);
   const [appMode, setAppMode] = useState<AppModeState | null>(null);
+  // Last in-app route we emitted canvas.routeNavigated for. A ref (not state) so
+  // the dedupe survives re-renders AND the telemetry emit lives OUTSIDE the
+  // setAppMode reducer (a reducer must stay pure — React StrictMode invokes it
+  // twice in dev, which would double-post a side effect).
+  const lastNavTelemetryRouteRef = useRef<string | null>(null);
   // Track whether we were previously connected (for reconnecting banner)
   const wasConnectedRef = useRef(false);
   const [disconnected, setDisconnected] = useState(false);
@@ -418,6 +445,14 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           });
         } else if (msg.type === 'hypercanvas:componentRenderSucceeded') {
           setComponentError((prev) => applyComponentRenderSucceeded(prev, msg.componentPath));
+          // Telemetry (host-side): forward the success so the extension host can
+          // emit preview.renderSucceeded + the one-shot funnel.firstPreview. The
+          // componentPath is consumed host-side only for a coarse componentKind
+          // bucket — it is never sent as a telemetry prop.
+          canvas.sendEvent({
+            type: 'preview:renderSucceeded',
+            componentPath: msg.componentPath,
+          } as unknown as PlatformMessage);
         } else if (msg.type === 'hypercanvas:componentMissing') {
           // Component not in registry — forward to extension host to trigger self-healing.
           canvas.sendEvent({
@@ -430,7 +465,22 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // bar doesn't show a stale route until the user types one. (The SaaS canvas already does
           // this in useAppPreviewMode; this is the VS Code-panel counterpart.)
           if (typeof msg.route === 'string') {
-            setAppMode((prev) => applyAppRouteChanged(prev, msg.route));
+            const route = msg.route;
+            setAppMode((prev) => applyAppRouteChanged(prev, route));
+            // Telemetry emitted OUTSIDE the reducer (reducers must be pure). Only a
+            // valid in-app `/`-rooted route that differs from the last one we
+            // counted — dedupes idle re-fires and rejects payloads the address bar
+            // would also reject. Raw event-name string (not a TelemetryEvents
+            // import) keeps node-side telemetry out of the webview bundle; the host
+            // allow-lists 'canvas.routeNavigated'.
+            if (route.startsWith('/') && route !== lastNavTelemetryRouteRef.current) {
+              lastNavTelemetryRouteRef.current = route;
+              canvas.sendEvent({
+                type: 'telemetry:event',
+                name: 'canvas.routeNavigated',
+                props: routeNavigationTelemetryProps(route),
+              } as unknown as PlatformMessage);
+            }
           }
         } else if (msg.type === 'hypercanvas:bridgeReady') {
           // #51 — the iframe bridge finished mounting its message listener and announced itself.

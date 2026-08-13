@@ -27,6 +27,8 @@ import {
 import { setupPanel, type PanelSetupDeps } from './preview-panel-setup';
 import { handleCreateSampleFromError } from './preview-panel-error-handler';
 import { routeMessage, type MessageRouterDeps } from './preview-panel-message-router';
+import { type PanelKind, TelemetryEvents } from './telemetry/events';
+import type { TelemetrySink } from './telemetry/TelemetryService';
 import { deriveSubProjectPrefix } from './bridges/monorepo-path-translate';
 import {
   canNavigate,
@@ -174,6 +176,13 @@ export class PreviewPanel {
 
   // Runtime error callback
   private _onRuntimeErrorCallback: ((error: DevServerRuntimeError | null) => void) | null = null;
+
+  // Telemetry: render-success forward (host emits preview.renderSucceeded +
+  // funnel.firstPreview) and the allow-listed webview-origin event sink.
+  private _onRenderSucceededCallback: ((componentPath: string | undefined) => void) | null = null;
+  private _telemetrySink: TelemetrySink | null = null;
+  // Dedupe holder for inspector.elementInspected (see emitInspectorElementInspected).
+  private readonly _inspectorSelection: { lastKey: string | null } = { lastKey: null };
 
   // Sample-created callback (triggers preview file regen + activation in extension host)
   private _onSampleCreatedCallback: ((componentPath: string) => Promise<void> | void) | null = null;
@@ -366,6 +375,9 @@ export class PreviewPanel {
   }
   private _setupPanel(panel: vscode.WebviewPanel, activeEditor?: vscode.TextEditor): void {
     setupPanel(this._panelSetupDeps(), panel, activeEditor, PreviewPanel.PANEL_ID);
+    // Telemetry: the preview panel just opened (covers both createOrShow paths).
+    const panelKind: PanelKind = 'preview';
+    this._telemetrySink?.track(TelemetryEvents.panelOpened, { panel: panelKind });
   }
   private _panelSetupDeps(): PanelSetupDeps {
     return {
@@ -399,6 +411,7 @@ export class PreviewPanel {
       dispatch: (event) => this._dispatch(event),
       startSyncService: () => this._startSyncService(),
       initializeComponent: (activeEditor) => this._initializeComponent(activeEditor),
+      onPanelClosed: () => this._telemetrySink?.track(TelemetryEvents.panelClosed, { panel: 'preview' }),
     };
   }
   private _startSyncService(): void {
@@ -440,6 +453,10 @@ export class PreviewPanel {
       reEmitSelectionAfterHmr: () => this._reEmitSelectionAfterHmr(),
       onComponentMissingCallback: this._onComponentMissingCallback,
       onComponentErrorCallback: this._onComponentErrorCallback,
+      onRenderSucceededCallback: this._onRenderSucceededCallback,
+      telemetrySink: this._telemetrySink,
+      track: this._telemetrySink ? (name, props) => this._telemetrySink?.track(name, props) : null,
+      inspectorSelection: this._inspectorSelection,
       undo: () => this.undo(),
       redo: () => this.redo(),
       handleCreateSampleFromError: (componentPath, propValues, sampleName, options) =>
@@ -1133,18 +1150,22 @@ export class PreviewPanel {
     return true;
   }
   /**
-   * Refresh preview
+   * Refresh preview. Returns `true` only when a refresh was actually posted to
+   * the webview — `false` on the early-return paths (no panel, or the current
+   * component is not navigable) so the caller's telemetry counts real refreshes,
+   * not no-op invocations.
    */
-  public refresh(): void {
-    if (!this._panel) return;
+  public refresh(): boolean {
+    if (!this._panel) return false;
     // Re-push full state before reloading — guards against races where
     // webview:ready fired before _pushFullStateToWebview had current state
     // (e.g. openPreview called before devserver:statusChanged propagated).
     this._pushFullStateToWebview();
     if (this._currentComponent && this._navigableComponent !== this._currentComponent) {
-      return;
+      return false;
     }
     this._postToWebview({ type: 'refresh' });
+    return true;
   }
   /**
    * Dispose the preview panel. This closes the webview tab and fires
@@ -1532,6 +1553,20 @@ export class PreviewPanel {
    */
   public onRuntimeError(callback: (error: DevServerRuntimeError | null) => void): void {
     this._onRuntimeErrorCallback = callback;
+  }
+  /**
+   * Telemetry: callback fired when the preview reports a successful render. The
+   * extension host emits preview.renderSucceeded + the one-shot funnel.firstPreview.
+   */
+  public onRenderSucceeded(callback: (componentPath: string | undefined) => void): void {
+    this._onRenderSucceededCallback = callback;
+  }
+  /**
+   * Telemetry: inject the sink for allow-listed webview-origin events (rage/dead/
+   * error clicks) forwarded via `telemetry:event` messages from the preview.
+   */
+  public setTelemetrySink(sink: TelemetrySink): void {
+    this._telemetrySink = sink;
   }
   /**
    * Set callback for component-missing signals from the preview iframe.

@@ -1,0 +1,98 @@
+{
+  "$comment": "HyperIDE (hypercanvas-preview) telemetry manifest. Enumerates every event the extension may send, for `code --telemetry` transparency. All properties are enums, counts, durations, booleans, or hashes — NEVER source code, file paths, prompts, URLs, or personal data. Telemetry is gated on VS Code's global telemetry setting AND hypercanvas.telemetry.enabled. Backends: PostHog EU (analytics), Sentry EU (errors).",
+  "events": {
+    "session.activated": {
+      "purpose": "FeatureInsight",
+      "comment": "Extension activated.",
+      "properties": "activationReason, vscodeVersion, coldStartMs, hasWorkspace, projectType, cssSystem, uiKit"
+    },
+    "session.heartbeat": {
+      "purpose": "FeatureInsight",
+      "comment": "Periodic liveness ping. properties: activeMs, focused"
+    },
+    "session.ended": {
+      "purpose": "FeatureInsight",
+      "comment": "Session ended. properties: durationMs, commandCount, aiRequestCount, previewRenderCount, errorCount, endReason"
+    },
+    "funnel.firstPreview": {
+      "purpose": "FeatureInsight",
+      "comment": "First successful preview render on this machine (once). properties: msSinceActivate, succeeded"
+    },
+    "command.invoked": {
+      "purpose": "FeatureInsight",
+      "comment": "A HyperIDE command ran. properties: commandId (enum), durationMs, outcome (ok|error|cancelled)"
+    },
+    "preview.renderSucceeded": {
+      "purpose": "FeatureInsight",
+      "comment": "Preview rendered a component successfully. properties: renderMs?, componentKind"
+    },
+    "preview.renderFailed": {
+      "purpose": "FeatureInsight",
+      "comment": "Preview failed to render. properties: errorClass (componentError|runtimeError|componentMissing), errorCategory, scrubbedMessageHash"
+    },
+    "preview.blankDetected": {
+      "purpose": "FeatureInsight",
+      "comment": "Blank-preview 'process is not defined' detected (dedicated counter)."
+    },
+    "devServer.started": {
+      "purpose": "FeatureInsight",
+      "comment": "Dev server entered 'starting'."
+    },
+    "devServer.ready": {
+      "purpose": "FeatureInsight",
+      "comment": "Dev server reached 'running'. properties: startupMs"
+    },
+    "devServer.failed": {
+      "purpose": "FeatureInsight",
+      "comment": "Dev server errored. properties: errorCategory, scrubbedMessageHash"
+    },
+    "ai.requestStarted": {
+      "purpose": "FeatureInsight",
+      "comment": "AI chat request started. properties: provider (enum), model, feature"
+    },
+    "ai.requestCompleted": {
+      "purpose": "FeatureInsight",
+      "comment": "AI chat request finished. properties: durationMs, outcome (ok|error|aborted), errorCategory?"
+    },
+    "error.unhandled": {
+      "purpose": "PerformanceAndHealth",
+      "comment": "Unhandled host error (ours, not foreign). properties: kind (unhandledRejection|uncaughtException), errorName, scrubbedStackHash, isForeign(false)"
+    },
+    "error.handled": {
+      "purpose": "PerformanceAndHealth",
+      "comment": "A handled error. properties: where (enum), errorName, scrubbedMessage, severity"
+    },
+    "error.webviewCrash": {
+      "purpose": "PerformanceAndHealth",
+      "comment": "A webview React bundle crashed. properties: context, lastEvent?"
+    },
+    "feedback.aiThumb": {
+      "purpose": "FeatureInsight",
+      "comment": "User rated an AI response. properties: responseId, model?, score (1|0), reasonCategory?"
+    },
+    "dissatisfaction.quickUndo": {
+      "purpose": "FeatureInsight",
+      "comment": "An accept/apply was undone almost immediately. properties: action, elapsedMs"
+    },
+    "dissatisfaction.retryLoop": {
+      "purpose": "FeatureInsight",
+      "comment": "Same action re-invoked repeatedly without success. properties: key, count, windowMs"
+    },
+    "dissatisfaction.errorThenQuit": {
+      "purpose": "FeatureInsight",
+      "comment": "An error occurred shortly before the session ended. properties: sinceErrorMs"
+    },
+    "dissatisfaction.rageClick": {
+      "purpose": "FeatureInsight",
+      "comment": "Rapid repeated clicks on the same target (webview). properties: target, clickCount, windowMs"
+    },
+    "dissatisfaction.deadClick": {
+      "purpose": "FeatureInsight",
+      "comment": "A click with no resulting state change (webview). NOTE: not yet emitted (see useDissatisfactionClicks TODO)."
+    },
+    "dissatisfaction.errorClick": {
+      "purpose": "FeatureInsight",
+      "comment": "A click shortly after a runtime error (webview). properties: target, precededError"
+    }
+  }
+}

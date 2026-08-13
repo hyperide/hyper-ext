@@ -24,6 +24,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { canvasRPC } from '@/lib/platform/PlatformContext';
 import type { CanvasAdapter } from '@/lib/platform/types';
 import { postToPreviewIframe } from './postToPreviewIframe';
+import { createThrottleGate } from './telemetry-throttle';
+import { type ClickTelemetrySink, hashTarget, useDissatisfactionClicks } from './useDissatisfactionClicks';
+
+/** Throttle window for the high-frequency hover stream (ms). */
+const HOVER_TELEMETRY_THROTTLE_MS = 2000;
 
 // ============================================================================
 // Scroll compensation helpers (exported for unit testing)
@@ -201,6 +206,24 @@ export function useCanvasInteraction(
   const overlayElements = useRef(new Map<string, HTMLDivElement>());
   const iframeOriginRef = useRef<string | null>(null);
   const placeholderElements = useRef(new Map<string, HTMLDivElement>());
+  // Telemetry: rage/error click detection. Posts telemetry:event via the canvas
+  // bridge (same channel as runtime:error). recordClick on each element click,
+  // noteError when a runtime error arrives in the iframe message stream.
+  const { recordClick, noteError } = useDissatisfactionClicks(canvas as unknown as ClickTelemetrySink);
+
+  // Telemetry: discrete webview-origin canvas events (select/clear/hover/drag),
+  // posted via the same `telemetry:event` bridge channel as the dissatisfaction
+  // clicks. Distinct from recordClick — that drives rage/error heuristics; this
+  // emits the plain interaction events. The host allow-lists these names.
+  const emitTelemetry = useCallback(
+    (name: string, props: Record<string, string | number | boolean> = {}) => {
+      (canvas as unknown as ClickTelemetrySink).sendEvent({ type: 'telemetry:event', name, props });
+    },
+    [canvas],
+  );
+  // Leading-edge gate so the hover stream (fires per pointermove) collapses to at
+  // most one canvas.elementHovered per HOVER_TELEMETRY_THROTTLE_MS.
+  const hoverGateRef = useRef(createThrottleGate(HOVER_TELEMETRY_THROTTLE_MS));
 
   // Scroll compensation: baselineScrollY is the iframe window.scrollY captured when the
   // last overlayRects message was computed. On overlayScroll we apply a CSS transform so
@@ -264,6 +287,15 @@ export function useCanvasInteraction(
       switch (msg.type) {
         case 'hypercanvas:elementClick': {
           const elementId = typeof msg.elementId === 'string' ? msg.elementId : sourceToElementId(msg.source);
+          // Telemetry: rage/error-click detection keyed by the clicked element id.
+          recordClick(typeof elementId === 'string' ? elementId : null);
+          // Telemetry: discrete element-selected event. Hash the nodeRef in the
+          // webview (it is `fileName:line:column` — PII) before it leaves.
+          emitTelemetry('canvas.elementSelected', {
+            target: typeof elementId === 'string' && elementId.length > 0 ? hashTarget(elementId) : 'unknown',
+            additive: Boolean(msg.additive),
+            selectionCount: Array.isArray(msg.selectedIds) ? msg.selectedIds.length : 1,
+          });
           const patch: Partial<SharedEditorState> & { source?: unknown } = {};
           if (msg.additive) {
             // iframe already computed the toggled selection — use it directly.
@@ -305,6 +337,13 @@ export function useCanvasInteraction(
           break;
         }
 
+        case 'hypercanvas:runtimeError': {
+          // Telemetry only: arm error-click detection. The actual error handling
+          // (overlay, host forward) lives in usePreviewBridge — we just observe.
+          noteError();
+          break;
+        }
+
         case 'hypercanvas:computedStyleResult': {
           const elementId = typeof msg.elementId === 'string' ? msg.elementId : null;
           if (!elementId || !msg.computedStyle || typeof msg.computedStyle !== 'object') break;
@@ -325,6 +364,10 @@ export function useCanvasInteraction(
 
         case 'hypercanvas:elementHover': {
           const elementId = typeof msg.elementId === 'string' ? msg.elementId : sourceToElementId(msg.source);
+          // Telemetry: hover is high-frequency — throttle to one event per window.
+          if (typeof elementId === 'string' && elementId.length > 0 && hoverGateRef.current(Date.now())) {
+            emitTelemetry('canvas.elementHovered', { target: hashTarget(elementId) });
+          }
           canvas.sendEvent({
             type: 'state:update',
             patch: {
@@ -336,6 +379,7 @@ export function useCanvasInteraction(
         }
 
         case 'hypercanvas:emptyClick': {
+          emitTelemetry('canvas.selectionCleared');
           const emptyPatch: Partial<SharedEditorState> = {
             selectedIds: [],
             insertTargetId: null,
@@ -563,6 +607,7 @@ export function useCanvasInteraction(
         case 'hypercanvas:contextMenu': {
           // Only show context menu when an element is targeted
           if (!msg.elementId) break;
+          emitTelemetry('canvas.contextMenuOpened');
 
           // Select the element and capture runtime style (mirrors elementClick path)
           const selectPatch: Partial<SharedEditorState> = {
@@ -685,6 +730,10 @@ export function useCanvasInteraction(
       const baseH = parseFloat(overlayDiv.style.height) || 0;
       const startX = event.clientX;
       const startY = event.clientY;
+      // Telemetry: a resize drag started. Emit once here (NOT per pointermove);
+      // the matching dragEnded + elementResized fire from finishDrag with duration.
+      const dragStartedAt = Date.now();
+      emitTelemetry('canvas.dragStarted', { kind: 'resize', axis });
 
       try {
         capturedHandle.setPointerCapture(event.pointerId);
@@ -710,6 +759,11 @@ export function useCanvasInteraction(
       function finishDrag(endX: number, endY: number) {
         if (dragFinished) return;
         dragFinished = true;
+
+        // Telemetry: the resize drag ended (one event, with duration — no
+        // per-pointermove emits). elementResized is emitted below only when the
+        // drag crossed the write threshold and an AST style write actually fires.
+        emitTelemetry('canvas.dragEnded', { kind: 'resize', axis, durationMs: Date.now() - dragStartedAt });
 
         ghost.removeEventListener('pointermove', onPointerMove);
         ghost.removeEventListener('pointerup', onPointerUp);
@@ -747,6 +801,10 @@ export function useCanvasInteraction(
 
         const filePathMatch = capturedElementId.match(/^(.+):\d+:\d+$/);
         if (!filePathMatch) return;
+
+        // Telemetry: a committed resize (drag crossed the write threshold). Axis
+        // only — the actual dimension values flow as ast:updateStyles, never here.
+        emitTelemetry('canvas.elementResized', { axis });
 
         canvas.sendEvent({
           type: 'ast:updateStyles',
@@ -861,7 +919,7 @@ export function useCanvasInteraction(
       clearOverlays(overlayElements.current);
       clearOverlays(placeholderElements.current);
     };
-  }, [canvas, iframeEl, overlayEl]);
+  }, [canvas, iframeEl, overlayEl, recordClick, noteError, emitTelemetry]);
 
   // Keep iframeEl in a ref so updateState callback stays stable
   const iframeElRef = useRef(iframeEl);

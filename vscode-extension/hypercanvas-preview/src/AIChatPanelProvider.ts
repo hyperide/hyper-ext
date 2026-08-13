@@ -14,6 +14,18 @@ import type { StateHub } from './StateHub';
 import { ChatHistoryService } from './services/ChatHistoryService';
 import type { DevServerManager } from './services/DevServerManager';
 import { postToWebviewRawSafe } from './webview-post';
+import { TelemetryEvents } from './telemetry/events';
+
+/**
+ * Telemetry surface used by the AI chat provider: request counting, host-side
+ * event tracking, and the allow-listed webview-origin forward (AI thumbs).
+ * Nullable so the provider no-ops cleanly when telemetry is absent.
+ */
+export interface AIChatTelemetry {
+  track(name: string, props?: Record<string, string | number | boolean>): void;
+  trackFromWebview(name: string, props?: Record<string, string | number | boolean>): void;
+  incAiRequest(): void;
+}
 
 export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.aiChatView';
@@ -23,6 +35,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   private _chatHistory: ChatHistoryService;
   private _pendingAIPrompt: string | null = null;
   private _ready = false;
+  private _telemetry: AIChatTelemetry | null = null;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -122,6 +135,16 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
     this._aiBridge.setDiagnosticHub(hub);
   }
 
+  /**
+   * Telemetry: forward the sink to the AIBridge (ai.requestStarted/Completed) and
+   * keep a reference so the webview's telemetry:event messages (allow-listed AI
+   * thumbs) route to the host, and AI-request counts feed session totals.
+   */
+  setTelemetry(telemetry: AIChatTelemetry): void {
+    this._telemetry = telemetry;
+    this._aiBridge.setTelemetry(telemetry);
+  }
+
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
@@ -129,6 +152,9 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   ) {
     this._view = webviewView;
     this._ready = false;
+
+    // Telemetry: the AI chat view became visible.
+    this._telemetry?.track(TelemetryEvents.panelOpened, { panel: 'aiChat' });
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -150,6 +176,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
     });
 
     webviewView.onDidDispose(() => {
+      this._telemetry?.track(TelemetryEvents.panelClosed, { panel: 'aiChat' });
       // Share the view-state clear with _clearDisposedView so a future lifecycle field
       // can't be cleared in one path and forgotten in the other; then extra teardown.
       this._clearDisposedView();
@@ -172,17 +199,36 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
       case 'ai:chat': {
         const requestId = message.requestId as string;
         const messages = message.messages as Array<{ role: 'user' | 'assistant'; content: string }>;
+        this._telemetry?.incAiRequest();
         // The stream runs for many ticks; the view can be disposed mid-stream — each
         // event posts through the safe poster so a late event can't poison the worker.
         this._aiBridge.handleChat(requestId, messages, (event) => {
-          void this._postToWebview(event);
-        });
+        void this._postToWebview(event);
+      });
         return;
       }
 
       case 'ai:abort': {
         const requestId = message.requestId as string;
         this._aiBridge.abort(requestId);
+        return;
+      }
+
+      // Telemetry: allow-listed webview-origin event (AI 👍/👎 thumb). Gating +
+      // PII scrubbing happen host-side in trackFromWebview.
+      //
+      // TODO(telemetry) HYP-840: wire ai.suggestionShown/Accepted/Rejected once an
+      // apply/reject signal exists. The event NAMES are defined in events.ts but
+      // are intentionally NOT in WEBVIEW_ALLOWED_EVENTS yet: the AI chat currently
+      // renders code edits as tool RESULTS (no per-suggestion accept/reject UI and
+      // no ai:applyEdit/ai:rejectEdit message). When that UI lands it should post
+      // `telemetry:event` with name=ai.suggestion* and props={provider,model}
+      // ONLY (no content) and the names get added to the allow-list — this same
+      // handler then forwards them unchanged.
+      case 'telemetry:event': {
+        const name = message.name as string;
+        const props = message.props as Record<string, string | number | boolean> | undefined;
+        if (typeof name === 'string') this._telemetry?.trackFromWebview(name, props);
         return;
       }
 

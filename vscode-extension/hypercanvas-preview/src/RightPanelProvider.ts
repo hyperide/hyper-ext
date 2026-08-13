@@ -13,6 +13,8 @@ import type { LeftPanelProvider } from './LeftPanelProvider';
 import type { PanelRouter } from './PanelRouter';
 import { toPickerGroups } from './PreviewPanel';
 import type { StateHub } from './StateHub';
+import { TelemetryEvents } from './telemetry/events';
+import type { TelemetrySink } from './telemetry/TelemetryService';
 import type { ScanResult } from './services/ComponentService';
 import type { DesignToken } from './services/DesignTokensService';
 import type { ProjectCapabilities } from './types';
@@ -23,6 +25,9 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
 
   private _view?: vscode.WebviewView;
   private _ready = false;
+  private _telemetry: TelemetrySink | null = null;
+  /** Last reported visibility — dedupes repeated same-state visibility events. */
+  private _lastVisible: boolean | null = null;
   // Observers of THIS panel's (Inspector) visibility — the PreviewPanel aggregator needs it to
   // decide when BOTH side panels are hidden and the canvas component picker should show (#92).
   private _visibilityListeners: Array<(visible: boolean) => void> = [];
@@ -39,13 +44,18 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     for (const listener of this._visibilityListeners) listener(visible);
   }
 
+  /** Inject the telemetry sink so inspector open/close can be tracked. */
+  public setTelemetry(sink: TelemetrySink): void {
+    this._telemetry = sink;
+  }
+
   constructor(
-    private readonly _extensionUri: vscode.Uri,
-    private readonly _stateHub: StateHub,
-    private readonly _panelRouter: PanelRouter,
-    private readonly _leftPanelProvider?: LeftPanelProvider,
-    private readonly _getComponentGroups?: () => Promise<ScanResult>,
-  ) {}
+  private readonly _extensionUri: vscode.Uri,
+  private readonly _stateHub: StateHub,
+  private readonly _panelRouter: PanelRouter,
+  private readonly _leftPanelProvider?: LeftPanelProvider,
+  private readonly _getComponentGroups?: () => Promise<ScanResult>,
+) {}
 
   private _capabilities: ProjectCapabilities | null = null;
   private _designTokens: DesignToken[] = [];
@@ -85,6 +95,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
   private _clearDisposedView(): void {
     this._view = undefined;
     this._ready = false;
+    this._lastVisible = null;
   }
 
   /**
@@ -142,6 +153,14 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
 
     // Register with StateHub for cross-panel sync
     this._stateHub.register(RightPanelProvider.viewType, webviewView.webview);
+
+    // Telemetry: the inspector panel was opened (became visible). Emit the initial
+    // state, then on every show/hide. Deduped so a no-op visibility event (same
+    // boolean) doesn't double-count. SAFE: only an `open` boolean — never content.
+    this._emitToggled(webviewView.visible);
+    webviewView.onDidChangeVisibility(() => {
+      this._emitToggled(webviewView.visible);
+    });
 
     // Track explorer visibility changes → forward to webview. This callback fires
     // LATER (on a visibility toggle), by which point the view may be disposed — route
@@ -201,6 +220,17 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     });
 
     webviewView.webview.html = this._getHtml(webviewView.webview);
+  }
+
+  /**
+   * Emit `inspector.toggled` with an `open` boolean — deduped against the last
+   * reported state so a repeated same-state visibility callback doesn't double
+   * count. PII-safe: the only prop is a boolean.
+   */
+  private _emitToggled(visible: boolean): void {
+    if (this._lastVisible === visible) return;
+    this._lastVisible = visible;
+    this._telemetry?.track(TelemetryEvents.inspectorToggled, { open: visible });
   }
 
   private _sendExplorerState(): void {

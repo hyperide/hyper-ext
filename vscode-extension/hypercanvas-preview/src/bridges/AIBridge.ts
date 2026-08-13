@@ -34,6 +34,16 @@ import { ALLOWED_COMMANDS } from '../../../../shared/allowed-bash-commands';
 import type { DiagnosticHub } from '../DiagnosticHub';
 import type { StateHub } from '../StateHub';
 import type { DevServerManager } from '../services/DevServerManager';
+import { categorizeErrorMessage } from '../telemetry/events';
+
+/**
+ * Minimal telemetry surface for the AI bridge (ai.requestStarted/Completed).
+ * Implemented by the host TelemetryService; nullable so the bridge no-ops when
+ * telemetry is absent.
+ */
+export interface AIBridgeTelemetry {
+  track(name: string, props?: Record<string, string | number | boolean>): void;
+}
 
 /** Minimal shape of AST tree nodes from ComponentService.parseStructure() */
 interface AstTreeNode {
@@ -417,6 +427,7 @@ export class AIBridge {
   private _devServerManager: DevServerManager | null = null;
   private _diagnosticHub: DiagnosticHub | null = null;
   private _stateHub: StateHub | null = null;
+  private _telemetry: AIBridgeTelemetry | null = null;
   /** Pending ask_user responses: toolUseId -> resolve function */
   private _pendingUserResponses = new Map<string, (response: string) => void>();
 
@@ -447,6 +458,14 @@ export class AIBridge {
   }
 
   /**
+   * Telemetry: inject the AI-request event sink (ai.requestStarted/Completed).
+   * Matches the setDiagnosticHub/setDevServerManager injection pattern.
+   */
+  setTelemetry(telemetry: AIBridgeTelemetry): void {
+    this._telemetry = telemetry;
+  }
+
+  /**
    * Handle a chat request from webview
    */
   async handleChat(
@@ -461,6 +480,13 @@ export class AIBridge {
 
     const abortController = new AbortController();
     this._activeRequest = { requestId, abortController };
+
+    // Telemetry: outcome + duration tracked across the try/catch/finally and
+    // emitted as ai.requestCompleted at the end. provider/model fill in once
+    // resolved below (ai.requestStarted fires then).
+    const startedAt = Date.now();
+    let outcome: 'ok' | 'error' | 'aborted' = 'ok';
+    let errorCategory: string | undefined;
 
     try {
       let apiKey = await this._getApiKey();
@@ -495,6 +521,14 @@ export class AIBridge {
       const wireModel = resolved?.model ?? freshModel;
       const wireBaseURL = resolved?.baseURL ?? (baseURL || undefined);
 
+      // Telemetry: request started — provider/model are now known. feature='chat'
+      // (the only feature this bridge serves). No prompt content emitted.
+      this._telemetry?.track('ai.requestStarted', {
+        provider: freshProvider,
+        model: wireModel,
+        feature: 'chat',
+      });
+
       if (wireProtocol === 'openai') {
         // OpenAI-protocol chats get the same agentic tool loop via function calling
         // (Command Code OSS models, OpenAI, any /chat/completions gateway).
@@ -522,13 +556,25 @@ export class AIBridge {
         );
       }
     } catch (error: unknown) {
-      if (error instanceof Error && error.name === 'AbortError') return;
+      if (error instanceof Error && error.name === 'AbortError') {
+        outcome = 'aborted';
+        return;
+      }
+      outcome = 'error';
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      errorCategory = categorizeErrorMessage(errorMsg);
       callback({ type: 'ai:error', requestId, error: errorMsg });
     } finally {
       if (this._activeRequest?.requestId === requestId) {
         this._activeRequest = null;
       }
+      // Telemetry: request completed. errorCategory only on the error path.
+      const props: Record<string, string | number | boolean> = {
+        durationMs: Date.now() - startedAt,
+        outcome,
+      };
+      if (errorCategory) props.errorCategory = errorCategory;
+      this._telemetry?.track('ai.requestCompleted', props);
     }
   }
 

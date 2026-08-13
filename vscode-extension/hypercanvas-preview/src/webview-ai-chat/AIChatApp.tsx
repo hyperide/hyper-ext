@@ -2,6 +2,7 @@ import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 import { useEffect, useState } from 'react';
 import { AIChat } from '../webview/AIChat';
 import { vscode } from '../webview/vscodeApi';
+import { AiThumbStrip } from './AiThumbStrip';
 
 /**
  * Standalone AI Chat webview app.
@@ -37,6 +38,9 @@ export function AIChatApp() {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <AIChat initialPrompt={initialPrompt} onPromptConsumed={() => setInitialPrompt(null)} hasApiKey={hasApiKey} />
+      {/* Telemetry-only feedback control (👍/👎). Extension-local; posts a
+          telemetry:event to the host, never touches the shared chat component. */}
+      <AiThumbStrip />
     </div>
   );
 }
