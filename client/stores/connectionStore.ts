@@ -17,9 +17,11 @@ interface ConnectionState {
   signals: Record<ConnectionSignal, boolean>;
   status: ConnectionStatus;
   backoffMs: number;
+  nodepodRunning: boolean;
 
   reportSignal: (signal: ConnectionSignal, connected: boolean) => void;
   retryNow: () => void;
+  setNodePodRunning: (running: boolean) => void;
 
   /** Internal — starts subscriptions & backoff loop. Returns cleanup. */
   _start: () => () => void;
@@ -132,6 +134,9 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => {
     signals: { online: true, auth: true, sse: true },
     status: 'connected',
     backoffMs: BASE_DELAY,
+    nodepodRunning: false,
+
+    setNodePodRunning: (running) => set({ nodepodRunning: running }),
 
     reportSignal: (signal, connected) => {
       const { signals } = get();

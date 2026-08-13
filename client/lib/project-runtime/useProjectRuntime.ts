@@ -15,10 +15,10 @@ interface UseProjectRuntimeOptions {
 
 export function useProjectRuntime(
   project: ProjectData | null,
-  user: User | null,
+  _user: User | null,
   opts: UseProjectRuntimeOptions,
 ): ProjectRuntime {
-  const isNodePodEligible = !!(user?.clientSideRuntime && project && isViteProject(project));
+  const isNodePodEligible = !!(project && isViteProject(project));
   const mode: RuntimeMode = isNodePodEligible ? 'nodepod' : 'docker';
 
   const docker = useDockerRuntime(project, {

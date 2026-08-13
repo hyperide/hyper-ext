@@ -1,38 +1,27 @@
 import type { RuntimeError } from '@shared/runtime-error';
-import type { ProjectStatus } from '@shared/types/statuses';
 import { memo, useCallback } from 'react';
 import { DiagnosticLogsViewer } from '@/components/DiagnosticLogsViewer';
 import { DragResizeHandle } from '@/components/ui/drag-resize-handle';
-import { useDiagnosticSync } from '@/hooks/useDiagnosticSync';
 import { useOpenAIChat } from '@/lib/platform/PlatformContext';
 
 interface LogsPanelProps {
   projectId: string;
-  containerStatus?: ProjectStatus;
-  proxyError?: string | null;
   runtimeError?: RuntimeError | null;
   height: number;
   onHeightChange: (height: number) => void;
   onDismiss?: () => void;
+  onClear?: () => void;
 }
 
-/**
- * Panel for displaying diagnostic logs with resize handle.
- * Shown when gateway/runtime error is detected.
- */
 export const LogsPanel = memo(function LogsPanel({
-  projectId,
-  containerStatus,
-  proxyError,
-  runtimeError,
+  projectId: _projectId,
+  runtimeError: _runtimeError,
   height,
   onHeightChange,
   onDismiss,
+  onClear,
 }: LogsPanelProps) {
   const openAIChat = useOpenAIChat();
-
-  // Connect data sources to diagnosticStore
-  const { clear: persistedClear } = useDiagnosticSync({ projectId, containerStatus, runtimeError, proxyError });
 
   const handleAutoFix = useCallback(
     (prompt: string) => {
@@ -63,7 +52,7 @@ export const LogsPanel = memo(function LogsPanel({
           zIndex: 10,
         }}
       />
-      <DiagnosticLogsViewer height="100%" onAutoFix={handleAutoFix} onClear={persistedClear} onDismiss={onDismiss} />
+      <DiagnosticLogsViewer height="100%" onAutoFix={handleAutoFix} onClear={onClear} onDismiss={onDismiss} />
     </div>
   );
 });

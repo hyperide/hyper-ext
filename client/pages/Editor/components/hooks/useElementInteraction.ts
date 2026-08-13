@@ -60,8 +60,10 @@ export function useElementInteraction({
       }
 
       if (!nodeRef) {
-        // Fiber couldn't resolve — clear selection (server round-trip may confirm later)
-        engine.clearSelection();
+        // Fiber source found but no cached nodeRef yet (server round-trip pending).
+        // Don't clear selection — useTracerSelectionSync confirms it async when server
+        // responds. If server never responds (e.g. NodePod: no server-side AST),
+        // selection stays unchanged rather than forcing inspector to close.
         return;
       }
 

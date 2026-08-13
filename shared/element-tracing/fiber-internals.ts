@@ -115,8 +115,11 @@ export function sameDebugSource(a: DebugSource, b: DebugSource): boolean {
  * SourceLocation.column is 0-based (matches Babel AST node.loc.start.column).
  */
 export function debugSourceToLocation(ds: DebugSource): SourceLocation {
+  // Strip NodePod workdir prefix: "/app/src/..." → "src/..."
+  // NodePod mounts project files at /app inside its virtual FS.
+  const fileName = ds.fileName.replace(/^\/app\//, '');
   return {
-    fileName: ds.fileName,
+    fileName,
     line: ds.lineNumber,
     // _debugSource.columnNumber is 1-based, convert to 0-based
     column: (ds.columnNumber ?? 1) - 1,
@@ -216,6 +219,10 @@ export function parseDebugStack(err: Error): SourceLocation | null {
     } catch {
       // Not an absolute URL — use as-is (relative path or file:// handled elsewhere)
     }
+
+    // Strip NodePod virtual path prefix: "__virtual__/{podId}/{port}/src/..."
+    // NodePod serves files via SW at /__virtual__/{randomId}/{vitePort}/...
+    fileName = fileName.replace(/^__virtual__\/[^/]+\/\d+\//, '');
 
     return {
       fileName,

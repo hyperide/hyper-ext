@@ -31,9 +31,10 @@ interface UseElementTracerResult {
   ready: boolean;
 }
 
-/** Max attempts to detect React inside iframe after load (200ms intervals). */
-const MAX_DETECT_ATTEMPTS = 15;
+/** Fast-retry window: 15 × 200ms = 3s. After that, slow retry every 2s until disposed. */
+const FAST_DETECT_ATTEMPTS = 15;
 const DETECT_INTERVAL_MS = 200;
+const SLOW_DETECT_INTERVAL_MS = 2000;
 
 /**
  * Detect React with fiber source in an iframe document.
@@ -117,21 +118,19 @@ export function useElementTracer({
       const doc = iframeEl.contentDocument;
       const iframeWindow = iframeEl.contentWindow;
       if (!doc || !iframeWindow) {
-        if (attempt < MAX_DETECT_ATTEMPTS) {
-          detectTimer = setTimeout(() => tryInit(attempt + 1), DETECT_INTERVAL_MS);
-        }
+        const delay = attempt < FAST_DETECT_ATTEMPTS ? DETECT_INTERVAL_MS : SLOW_DETECT_INTERVAL_MS;
+        detectTimer = setTimeout(() => tryInit(attempt + 1), delay);
         return;
       }
 
       // Use cross-realm safe detection (nodeType, not instanceof HTMLElement)
       const detected = detectReactInIframe(doc);
-      if (attempt === 0 || attempt === MAX_DETECT_ATTEMPTS || detected) {
+      if (attempt === 0 || attempt === FAST_DETECT_ATTEMPTS || detected) {
         console.log(`[Tracer] attempt=${attempt} detected=${detected} body=${doc.body?.children.length}`);
       }
       if (!detected) {
-        if (attempt < MAX_DETECT_ATTEMPTS) {
-          detectTimer = setTimeout(() => tryInit(attempt + 1), DETECT_INTERVAL_MS);
-        }
+        const delay = attempt < FAST_DETECT_ATTEMPTS ? DETECT_INTERVAL_MS : SLOW_DETECT_INTERVAL_MS;
+        detectTimer = setTimeout(() => tryInit(attempt + 1), delay);
         return;
       }
 

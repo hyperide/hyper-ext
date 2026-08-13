@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as clientFileStore from '@/lib/client-file-store';
 import type { ProjectData } from '@/pages/Editor/components/hooks/useProjectControl';
-import { authFetch } from '@/utils/authFetch';
 import { INERT_POLL_STATUS, type ProjectRuntime, type RuntimeStatus } from './types';
 
 interface UseNodePodRuntimeOptions {
@@ -31,6 +30,7 @@ const INERT: ProjectRuntime = {
   start: async () => {},
   stop: async () => {},
   restart: async () => {},
+  writeFile: async () => {},
 };
 
 export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodRuntimeOptions): ProjectRuntime {
@@ -90,18 +90,11 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
       appendLog('[nodepod] runtime booted');
 
       appendLog('[files] loading from OPFS...');
-      let files = await clientFileStore.readFiles(project.id);
+      const files = await clientFileStore.readFiles(project.id);
       if (Object.keys(files).length === 0) {
-        appendLog('[files] OPFS empty — bootstrapping from server...');
-        const res = await authFetch(`/api/projects/${project.id}/files`);
-        if (!res.ok) throw new Error(`Failed to bootstrap files: ${res.status}`);
-        const { files: serverFiles } = (await res.json()) as { files: Record<string, string> };
-        await clientFileStore.seedFiles(project.id, serverFiles);
-        files = serverFiles;
-        appendLog(`[files] seeded ${Object.keys(files).length} files into OPFS`);
-      } else {
-        appendLog(`[files] ${Object.keys(files).length} files from OPFS`);
+        throw new Error('Project has no files. Create the project with AI first.');
       }
+      appendLog(`[files] ${Object.keys(files).length} files from OPFS`);
       if (isStale()) return;
 
       // Pin Vite to 7.3.1 in both deps fields — Vite 8 has HMR WS bug in NodePod v1.8.2
@@ -129,7 +122,10 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
       appendLog('[npm] install started...');
       const install = await pod.spawn('npm', ['install'], { cwd: '/app' });
       install.on('output', (t) => appendLog(`[npm] ${t}`));
-      install.on('error', (t) => appendLog(`[npm:err] ${t}`));
+      install.on('error', (t) => {
+        const isRealError = /error/i.test(t) || /\bfailed\b/i.test(t) || /^\s+at /.test(t);
+        appendLog(isRealError ? `[npm:err] ${t}` : `[npm] ${t}`);
+      });
       const { exitCode: installCode } = await install.completion;
       if (isStale()) return;
       if (installCode !== 0) throw new Error(`npm install failed with exit ${installCode}`);
@@ -138,7 +134,14 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
       appendLog('[vite] starting dev server...');
       const dev = await pod.spawn('npm', ['run', 'dev'], { cwd: '/app' });
       dev.on('output', (t) => appendLog(`[vite] ${t}`));
-      dev.on('error', (t) => appendLog(`[vite:err] ${t}`));
+      dev.on('error', (t) => {
+        const isRealError =
+          /error/i.test(t) ||
+          /\bfailed\b/i.test(t) ||
+          /\bSyntaxError|TypeError|ReferenceError|RangeError\b/.test(t) ||
+          /^\s+at /.test(t);
+        appendLog(isRealError ? `[vite:err] ${t}` : `[vite] ${t}`);
+      });
       dev.completion.then(({ exitCode }) => {
         if (isStale()) return;
         appendLog(`[vite] process exited: ${exitCode}`);
@@ -190,6 +193,19 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
     await start();
   }, [stop, start]);
 
+  const writeFile = useCallback(
+    async (path: string, content: string) => {
+      if (!project?.id) return;
+      // Persist to OPFS so future restarts pick it up
+      await clientFileStore.writeFile(project.id, path, content);
+      // Write into running pod FS to trigger Vite HMR
+      if (podRef.current) {
+        await podRef.current.fs.writeFile(`/app/${path}`, content);
+      }
+    },
+    [project?.id],
+  );
+
   useEffect(() => {
     return () => {
       runIdRef.current++;
@@ -213,5 +229,6 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
     start,
     stop,
     restart,
+    writeFile,
   };
 }
