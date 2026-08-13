@@ -47,6 +47,7 @@
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@sentry/node": "^10",
     "html2canvas": "^1.4.1",
+    "iconv-lite": "^0.7.3",
     "posthog-node": "^5",
     "react-resizable-panels": "^4.6.5",
     "recast": "^0.23.11",

@@ -34,6 +34,7 @@ import {
   getPackageScripts,
   getProjectInfo,
 } from './ProjectDetector';
+import { detectWindowsOemCodePage, StreamOutputDecoder } from './windowsOutputDecoding';
 
 /**
  * Pure predicate behind {@link DevServerManager._hasDirtyViteConfig}: do any of the dirty open
@@ -321,6 +322,144 @@ export function toShellCommandString(cmd: string, args: string[]): string {
   return tokens.join(' ');
 }
 
+/**
+ * REMOVED (HYP-1140 follow-up): this file used to prefix the spawned command with
+ * `chcp 65001>nul&` on win32, hoping to force cmd.exe's OWN text (e.g. `'npm' is not
+ * recognized...`) into UTF-8. A real Windows repro proved this ineffective AND
+ * regressive, for two independent reasons:
+ *
+ * 1. Encoding: `chcp` reprograms the ACTIVE CONSOLE code page. This process spawns
+ *    with `stdio: ['pipe','pipe','pipe']` — there is no attached console, so `chcp`
+ *    has nothing to reprogram; cmd.exe's own built-in message text is still emitted in
+ *    the OS's OEM code page regardless. The mojibake was never actually fixed by this
+ *    prefix — decoding now happens via {@link StreamOutputDecoder}
+ *    (`./windowsOutputDecoding`), which detects the real OEM code page and decodes
+ *    with iconv-lite only when the bytes are not valid UTF-8.
+ * 2. Exit code: `spawn('npm run dev', {shell:true})` on Windows compiles to a SINGLE
+ *    command (`cmd /c "npm run dev"`); when cmd.exe cannot resolve `npm` it fails to
+ *    launch the target and the whole process exits with the documented "command not
+ *    found via cmd /c" code, 9009. Prefixing `chcp 65001>nul&` turned this into a
+ *    COMPOUND command (`cmd /c "chcp 65001>nul&npm run dev"`): cmd.exe runs each
+ *    sub-command as if typed at a prompt, so the unresolved second command just prints
+ *    its "not recognized" text and sets the ordinary errorlevel 1 — which, being last
+ *    in the chain, becomes the overall exit code instead of 9009. That silently broke
+ *    {@link buildMissingCommandHint}'s exit-code-based detection for the exact case the
+ *    prefix was meant to help with.
+ *
+ * Do not re-add a codepage prefix to the spawned shell command for this reason.
+ * Every spawn() callsite in this file now calls {@link toShellCommandString} directly.
+ */
+
+/**
+ * Windows cmd.exe's own (English) message when it can't resolve a command on PATH.
+ * Best-effort only: names the missing binary when the shell happens to run in an
+ * English locale. `chcp 65001` (above) fixes the BYTE ENCODING of cmd.exe's text, not
+ * its LANGUAGE — a Russian-locale box (the actual HYP-1140 report) emits
+ * `"npm" не является внутренней или внешней командой...`, which this pattern will never
+ * match. The locale-independent signal is cmd.exe's exit code (see
+ * WIN_COMMAND_NOT_FOUND_EXIT_CODE below), which `buildMissingCommandHint` gates on
+ * independently of whether a binary name could be parsed out of the text.
+ */
+// All four patterns below carry the `g` flag — NOT for a single lookup, but so
+// extractMissingCommandName can walk EVERY match within a category via matchAll and
+// skip past a "chcp" capture to find a REAL match later in the same buffer (review
+// finding: a plain first-match .match() would stop at line 1's "chcp" and never see
+// line 2's "npm" — see extractMissingCommandName's doc comment for the full scenario).
+const WIN_COMMAND_NOT_FOUND_PATTERN = /'([^']+)' is not recognized as an internal or external command/gi;
+/**
+ * POSIX zsh: `command not found: <cmd>` (name comes AFTER the phrase, unlike sh/bash).
+ * Checked BEFORE the sh/bash pattern below: zsh's own line is `zsh: command not found:
+ * bun`, which the sh/bash pattern ALSO matches (as a substring, capturing "zsh" — the
+ * shell name, not the missing binary). Trying this pattern first ensures zsh output
+ * resolves to the real missing command.
+ */
+const POSIX_COMMAND_NOT_FOUND_ZSH_PATTERN = /command not found: (\S+)/gim;
+/** POSIX sh/bash: `<cmd>: command not found`. */
+const POSIX_COMMAND_NOT_FOUND_PATTERN = /(?:^|\s)(\S+): command not found/gim;
+/**
+ * Node's own spawn error when the shell/binary itself could not be found. With
+ * `shell: true` (every spawn in this file), a bare ENOENT names the SHELL binary
+ * (`/bin/sh`, `cmd.exe`), not the user's package manager — an edge case rare enough
+ * (the whole OS shell is missing) that surfacing it as-is is still more useful than
+ * silence, even though the wording ends up naming the shell rather than e.g. `npm`.
+ */
+const NODE_SPAWN_ENOENT_PATTERN = /spawn (\S+) ENOENT/gi;
+
+/** cmd.exe's own exit code when it cannot resolve a command on PATH — locale-independent. */
+const WIN_COMMAND_NOT_FOUND_EXIT_CODE = 9009;
+/** POSIX shells' conventional exit code for "command not found" — locale-independent. */
+const POSIX_COMMAND_NOT_FOUND_EXIT_CODE = 127;
+
+/** First capture-group match in `text` for `pattern` whose value isn't "chcp" (case-insensitive), or undefined. */
+function firstNonChcpMatch(text: string, pattern: RegExp): string | undefined {
+  for (const match of text.matchAll(pattern)) {
+    const name = match[1];
+    if (name && name.toLowerCase() !== 'chcp') return name;
+  }
+  return undefined;
+}
+
+/**
+ * Best-effort: pull a missing-binary name out of text via the known signatures.
+ * Pattern-category priority order (Windows, zsh, sh/bash, Node ENOENT) — first
+ * CATEGORY with any non-"chcp" match wins, not just the first match overall.
+ *
+ * Skips "chcp" specifically (case-insensitive): this predates removal of the
+ * `chcp 65001>nul&` spawn prefix (see the removal note above `toShellCommandString`'s
+ * callsites) — when that prefix was still chained into the dev-server command, a PATH
+ * broken enough that even `System32\chcp.com` couldn't resolve made cmd.exe print its
+ * OWN "not recognized" line for `chcp` BEFORE the real command's line, and a naive
+ * first-match lookup would lock onto that line and never see the real binary's line
+ * right after it. The chcp prefix is gone now, so this line can no longer appear from
+ * OUR injection — kept as cheap, still-correct defense in case a user's own dev script
+ * happens to invoke `chcp` itself. Naming "chcp" in that case would be a confusing
+ * hint; falling through to the generic "the required command" wording is more honest.
+ */
+function extractMissingCommandName(text: string): string | undefined {
+  return (
+    firstNonChcpMatch(text, WIN_COMMAND_NOT_FOUND_PATTERN) ??
+    firstNonChcpMatch(text, POSIX_COMMAND_NOT_FOUND_ZSH_PATTERN) ??
+    firstNonChcpMatch(text, POSIX_COMMAND_NOT_FOUND_PATTERN) ??
+    firstNonChcpMatch(text, NODE_SPAWN_ENOENT_PATTERN)
+  );
+}
+
+/**
+ * Turn a raw "command not found" shell failure into an actionable diagnostic instead of
+ * just the opaque "Server failed to start" the catch block would otherwise surface
+ * (HYP-1140). Two DIFFERENT trust levels, deliberately not conflated:
+ *  - `errorMessage` is a CONTROLLED string — either Node's own `spawn X ENOENT` (the
+ *    child 'error' handler, no arbitrary program output involved) or something this file
+ *    built itself — so matching it directly is always trustworthy on its own, no
+ *    corroboration needed.
+ *  - `logs` is ARBITRARY dev-server program output. A benign, non-fatal line that happens
+ *    to contain one of these phrases (e.g. a healthy script probing
+ *    `which foo || echo "not found"`) must never attach a misleading PATH hint to some
+ *    later, unrelated failure — so log TEXT is used ONLY to best-effort name the binary,
+ *    and ONLY once `exitCode` (9009 Windows / 127 POSIX, locale-independent — works even
+ *    when the shell's own text is in a language the patterns above can't parse) has
+ *    ALREADY confirmed this really was a command-not-found failure. Log text alone,
+ *    without a corroborating exit code, is never sufficient to trigger a hint.
+ * Returns `null` when neither signal fires, so ordinary errors (syntax errors, port
+ * conflicts, startup timeouts) never get a misleading PATH hint.
+ */
+export function buildMissingCommandHint(
+  errorMessage: string,
+  logs: readonly LogEntry[],
+  exitCode: number | null = null,
+): string | null {
+  const exitCodeSignalsMissingCommand =
+    exitCode === WIN_COMMAND_NOT_FOUND_EXIT_CODE || exitCode === POSIX_COMMAND_NOT_FOUND_EXIT_CODE;
+  const missingFromMessage = extractMissingCommandName(errorMessage);
+  if (!missingFromMessage && !exitCodeSignalsMissingCommand) return null;
+
+  const missing =
+    missingFromMessage ??
+    (exitCodeSignalsMissingCommand ? extractMissingCommandName(logs.map((entry) => entry.line).join('\n')) : undefined);
+  const target = missing ? `"${missing}"` : 'the required command';
+  return `Could not find ${target} on your PATH. If you just installed it, fully restart VS Code (a reload is not enough) so it picks up the updated PATH.`;
+}
+
 export class DevServerManager {
   private _process: ChildProcess | null = null;
   private _port: number | null = null;
@@ -365,6 +504,13 @@ export class DevServerManager {
   // Port auto-detection — set once per start() when dev server stdout reveals
   // the actual bound port (e.g. "http://localhost:3000"). Resets on each start().
   private _portDetected = false;
+
+  // Last exit code of the dev-server child, captured in child.on('exit'). Read by
+  // buildMissingCommandHint (HYP-1140) as a locale-independent "command not found"
+  // signal (9009 on Windows, 127 on POSIX) — the shell's own error TEXT may be in a
+  // language none of the English patterns can parse, but the exit code is not. Reset
+  // on each start() alongside the log buffer.
+  private _lastExitCode: number | null = null;
 
   // HMR-staleness auto-restart state (HYP-758 / task #38).
   // Counts how many times we have restarted for the current staleness episode.
@@ -710,7 +856,20 @@ export class DevServerManager {
     this._logs = [];
     this._hasErrors = false;
     this._portDetected = false;
+    this._lastExitCode = null;
 
+    // Kick off the (cached, win32-only) OEM code page probe now. Deliberately NOT
+    // awaited before spawn (HYP-1140 follow-up, review finding): on a box where `chcp`
+    // genuinely hangs, blocking spawn on this would add several seconds to EVERY
+    // dev-server start. Instead the stdout/stderr decoders read this box through a
+    // LIVE accessor (see their construction below) — chunks that arrive before the
+    // probe resolves decode as plain UTF-8 (same as "code page unknown"); chunks after
+    // it resolves get the real OEM-aware treatment. Resolves in well under a second in
+    // the overwhelmingly common case, so this is rarely even observable.
+    const oemCodePageBox: { value: number | null } = { value: null };
+    detectWindowsOemCodePage().then((codePage) => {
+      oemCodePageBox.value = codePage;
+    });
     try {
       // Get project info
       const projectInfo = await getProjectInfo(this._projectPath);
@@ -931,10 +1090,18 @@ export class DevServerManager {
 
       const isCurrentProcess = () => this._process === child;
 
+      // One StreamOutputDecoder per physical stream (HYP-1140 follow-up): a raw `data`
+      // event is not guaranteed to end on a character boundary, so decoding each chunk
+      // independently can misclassify or corrupt output. Each reads oemCodePageBox
+      // LIVE (not a snapshot) so the still-pending probe above can resolve mid-stream —
+      // see windowsOutputDecoding.ts.
+      const stdoutDecoder = new StreamOutputDecoder(process.platform, () => oemCodePageBox.value);
+      const stderrDecoder = new StreamOutputDecoder(process.platform, () => oemCodePageBox.value);
+
       // Handle stdout
       child.stdout?.on('data', (data: Buffer) => {
         if (!isCurrentProcess()) return;
-        const text = data.toString();
+        const text = stdoutDecoder.push(data);
         // Strip ANSI escape codes — Vite 8 (rolldown) wraps output in color
         // codes that pollute the VS Code output channel and split keywords.
         const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
@@ -956,7 +1123,7 @@ export class DevServerManager {
       // Handle stderr — many servers (Vite 8, Next.js) write to stderr
       child.stderr?.on('data', (data: Buffer) => {
         if (!isCurrentProcess()) return;
-        const text = data.toString();
+        const text = stderrDecoder.push(data);
         const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
         this._appendLog(text); // raw ANSI — webview renders via ansi_up
@@ -972,11 +1139,47 @@ export class DevServerManager {
         this._maybeRestartOnStaleness(clean);
       });
 
-      // Handle process exit
+      // Handle process exit. Deliberately 'exit', NOT 'close' — a prior version of this
+      // fix used 'close' (Node guarantees full stdio drain only there) to make
+      // buildMissingCommandHint's log-based binary-name extraction more reliable, but
+      // review (two independent passes) flagged a worse regression: 'close' only fires
+      // once ALL processes holding the stdio pipe FDs close them, so a dev tool whose
+      // grandchild inherits stdout/stderr can delay 'close' indefinitely — stranding
+      // this manager in 'starting'/'running' and blocking orphan cleanup for a process
+      // that already exited. 'exit' firing slightly before full drain is the tracked,
+      // accepted tradeoff (HYP-1141) — occasionally losing the binary NAME in the hint
+      // is far better than occasionally never detecting the exit at all.
       child.on('exit', (code) => {
         if (!isCurrentProcess()) return;
+        // Flush any bytes the stream decoders were still holding back (HYP-1140
+        // follow-up): nothing more is coming now that the process exited, so a
+        // sequence truncated at the very last `data` chunk is decoded best-effort
+        // instead of silently dropped. Must run BEFORE _lastExitCode/buildMissingCommandHint
+        // read this._logs below, so a flushed "not recognized" tail line (if any) is
+        // already in the buffer.
+        //
+        // Known, assessed residual gap (review finding): if a DETACHED GRANDCHILD keeps
+        // writing to the inherited stdio pipe AFTER this 'exit' fires, that later `data`
+        // chunk is already dropped by the `isCurrentProcess()` guard at the top of the
+        // stdout/stderr handlers (this._process is nulled a few lines below, in THIS
+        // same handler) — a PRE-EXISTING gap, not introduced by the decoders. Flushing
+        // here does not make that gap worse: at most it surfaces the same best-effort
+        // U+FFFD-style placeholder plain `data.toString()` already produced for a
+        // same-boundary split before StreamOutputDecoder existed. A structural fix would
+        // flush on each stream's own `end`/`close` instead of the process `exit` — but
+        // `end`/`close` on a pipe a grandchild still holds open can itself hang
+        // indefinitely, which is exactly the hazard HYP-1141 already chose 'exit' over
+        // 'close' to avoid. Not reintroducing that trade for a narrower, rarer edge case.
+        this._flushStreamDecoder(stdoutDecoder);
+        this._flushStreamDecoder(stderrDecoder);
         console.log(`[HyperIDE] DevServer process exited with code ${code}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         this._outputChannel.appendLine(`[DevServer] Process exited with code ${code}`);
+        // Captured for buildMissingCommandHint (HYP-1140): _waitForReady only sees
+        // `_status === 'stopped'` after this handler runs and throws a generic "Server
+        // failed to start" — the exit code is the locale-independent signal that this
+        // was actually a "command not found" (9009/127), so it must survive past this
+        // handler into the _runStart catch block below.
+        this._lastExitCode = code;
         // The child is gone — drop its orphan record so the next start does not try
         // to reap an already-dead pid (or, worse, a recycled one).
         if (child.pid) {
@@ -985,7 +1188,7 @@ export class DevServerManager {
         this._process = null;
         this._port = null;
         this._stopProxy();
-        this.transition('stopped');
+        this._transitionToStoppedUnlessErrorAlready();
       });
 
       // Handle process error
@@ -993,7 +1196,7 @@ export class DevServerManager {
         if (!isCurrentProcess()) return;
         console.error('[HyperIDE] DevServer process error:', error.message);
         this._outputChannel.appendLine(`[DevServer] Process error: ${error.message}`);
-        this.transition('error', error.message);
+        this.transition('error', this._describeStartFailure(error.message));
       });
 
       // Wait for server to be ready (with timeout).
@@ -1009,6 +1212,18 @@ export class DevServerManager {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('[HyperIDE] Dev server failed:', errorMessage);
       this._outputChannel.appendLine(`[DevServer] Failed to start: ${errorMessage}`);
+
+      // Both captured BEFORE the dependency-repair branch below, which internally calls
+      // _runStop()/_runStart() and can reset _status/_lastExitCode (HYP-52 retry, and
+      // _runStart's own top-of-function reset) — reading either one later would lose
+      // the original signal (review finding). `alreadyDescribed` is true only when the
+      // child 'error' handler already produced a fully-described message (hint
+      // included) that _waitForReady rethrew verbatim: re-describing it here would
+      // re-scan the same text via buildMissingCommandHint and could append a duplicate
+      // hint. `lastExitCode` is this attempt's own exit code, for the non-already-
+      // described case below.
+      const alreadyDescribed = this._status === 'error' && errorMessage === this._error;
+      const lastExitCode = this._lastExitCode;
 
       if (!dependencyRepairAttempted && shouldRepairDependencies(errorMessage, this._logs)) {
         try {
@@ -1026,8 +1241,51 @@ export class DevServerManager {
       }
 
       this._stopProxy();
-      this.transition('error', errorMessage);
+      this.transition(
+        'error',
+        alreadyDescribed ? errorMessage : this._describeStartFailure(errorMessage, lastExitCode),
+      );
       return this.getState();
+    }
+  }
+
+  /**
+   * Turn a raw start failure into an actionable diagnostic (HYP-1140) instead of
+   * leaving the user staring at an opaque "Server failed to start". Keeps the raw
+   * shell output as-is (it's already in this._logs / the output channel) — this only
+   * ADDS a hint line and appends it to the returned error, it never replaces the raw
+   * text. Shared by the _runStart catch block (has an exit code via _lastExitCode) and
+   * the child 'error' handler (Node-level spawn failure, no exit code — e.g. a bare
+   * ENOENT when the shell binary itself is missing).
+   *
+   * Pushes the hint through BOTH surfaces a user might be watching: the "HyperIDE Dev
+   * Server" Output channel AND the log pipeline (_appendLog -> onLogsUpdate -> Hyper
+   * Logs panel). The `DevServerState.error` field this method's return value feeds is
+   * NOT enough on its own — the auto-start path (extension.ts) never reads it (review
+   * finding, HYP-1140), so without also logging it here the hint could go completely
+   * unseen on the exact flow the bug was originally reported from.
+   */
+  private _describeStartFailure(rawMessage: string, exitCode: number | null = null): string {
+    const hint = buildMissingCommandHint(rawMessage, this._logs, exitCode);
+    if (!hint) return rawMessage;
+    this._outputChannel.appendLine(`[DevServer] ${hint}`);
+    // forceError: true — this is a synthesized diagnostic, not arbitrary program output;
+    // it always represents an error condition regardless of ERROR_PATTERNS wording.
+    this._appendLog(`[HyperIDE] ${hint}\n`, true);
+    return `${rawMessage} — ${hint}`;
+  }
+
+  /**
+   * Transition to 'stopped' UNLESS status is already 'error' — preserves a more
+   * specific error state a sibling handler (child.on('error')) already set, e.g. the
+   * HYP-1140 missing-command hint, rather than clobbering it with the less-informative
+   * 'stopped'. Node's docs note 'exit' commonly fires even after 'error' (review
+   * finding), so without this guard the hint would be erased the moment the exit
+   * handler runs right after the error handler.
+   */
+  private _transitionToStoppedUnlessErrorAlready(): void {
+    if (this._status !== 'error') {
+      this.transition('stopped');
     }
   }
 
@@ -1401,6 +1659,15 @@ export class DevServerManager {
     this._outputChannel.appendLine(`[DevServer] Repairing dependencies with ${command.cmd} ${command.args.join(' ')}`);
     this._appendLog(`[HyperIDE] Repairing dependencies with ${command.cmd} ${command.args.join(' ')}\n`);
 
+    // detectWindowsOemCodePage() (HYP-1140 follow-up) — module-cached, so this costs
+    // nothing beyond the first real probe of the extension host session. NOT awaited
+    // (review finding, same rationale as _runStart): a hung `chcp` must not add several
+    // seconds to every dependency repair. The decoders below read this live.
+    const oemCodePageBox: { value: number | null } = { value: null };
+    detectWindowsOemCodePage().then((codePage) => {
+      oemCodePageBox.value = codePage;
+    });
+
     await new Promise<void>((resolve, reject) => {
       // Fold args into the command string (no `args` array) so `shell: true`
       // does not trigger DEP0190 (deprecated: args + shell:true).
@@ -1415,15 +1682,20 @@ export class DevServerManager {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
+      // One StreamOutputDecoder per stream (HYP-1140 follow-up) — same rationale as the
+      // dev-server handlers above: a raw `data` chunk can end mid-character.
+      const stdoutDecoder = new StreamOutputDecoder(process.platform, () => oemCodePageBox.value);
+      const stderrDecoder = new StreamOutputDecoder(process.platform, () => oemCodePageBox.value);
+
       child.stdout?.on('data', (data: Buffer) => {
-        const text = data.toString();
+        const text = stdoutDecoder.push(data);
         const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
         this._appendLog(text); // raw ANSI — webview renders via ansi_up
       });
 
       child.stderr?.on('data', (data: Buffer) => {
-        const text = data.toString();
+        const text = stderrDecoder.push(data);
         const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
         this._appendLog(text); // raw ANSI — webview renders via ansi_up
@@ -1431,6 +1703,8 @@ export class DevServerManager {
 
       child.on('error', (error) => reject(error));
       child.on('exit', (code) => {
+        this._flushStreamDecoder(stdoutDecoder);
+        this._flushStreamDecoder(stderrDecoder);
         if (code === 0) {
           resolve();
           return;
@@ -1561,7 +1835,12 @@ export class DevServerManager {
       }
 
       if (this._status === 'error' || this._status === 'stopped') {
-        throw new Error('Server failed to start');
+        // `error` (not `stopped`) means a handler upstream (child.on('error')) already
+        // set a SPECIFIC, fully-described `_error` — e.g. the HYP-1140 missing-command
+        // hint. Rethrow it verbatim so the _runStart catch block below preserves it,
+        // instead of clobbering it with this generic fallback. `stopped` (a clean exit
+        // with no such handler) has no specific message to preserve.
+        throw new Error(this._status === 'error' && this._error ? this._error : 'Server failed to start');
       }
 
       // Check if port is accepting connections — capture port to a local variable
@@ -1637,16 +1916,38 @@ export class DevServerManager {
   }
 
   /**
-   * Append text to log buffer, split into lines, detect errors
+   * Flush a StreamOutputDecoder's held-back bytes (HYP-1140 follow-up) and push
+   * whatever it decodes through the same output-channel + log-buffer path a normal
+   * `data` chunk goes through. A no-op when nothing was held back (the common case).
    */
-  private _appendLog(text: string): void {
+  private _flushStreamDecoder(decoder: StreamOutputDecoder): void {
+    const flushed = decoder.flush();
+    if (!flushed) return;
+    this._outputChannel.append(flushed.replace(ANSI_ESCAPE_PATTERN, ''));
+    this._appendLog(flushed);
+  }
+
+  /**
+   * Append text to log buffer, split into lines, detect errors.
+   *
+   * `forceError`: mark every line from this call as an error unconditionally, skipping
+   * the ERROR_PATTERNS regex scan. For text this file SYNTHESIZES itself (not arbitrary
+   * dev-server program output) where we already KNOW it represents an error — e.g. the
+   * HYP-1140 missing-command hint from _describeStartFailure. Without this, that hint
+   * line got `isError: false` (none of the shared ERROR_PATTERNS match its wording),
+   * so `hasErrors`/the diagnostics UI (Auto Fix, "Errors: yes/no") disagreed with the
+   * dev server's actual `error` status (review finding). Does NOT touch ERROR_PATTERNS
+   * itself — that shared list also gates `server/services/build-status-wait.ts`, and a
+   * broader match there was already reverted once for regressing a false-positive there.
+   */
+  private _appendLog(text: string, forceError = false): void {
     const now = Date.now();
     const lines = text.split('\n').filter((l) => l.length > 0);
     const newEntries: LogEntry[] = [];
 
     for (const line of lines) {
       const cleanLine = line.replace(ANSI_ESCAPE_PATTERN, '');
-      const isError = ERROR_PATTERNS.some((pattern) => pattern.test(cleanLine));
+      const isError = forceError || ERROR_PATTERNS.some((pattern) => pattern.test(cleanLine));
       // Both checks are needed independently: isSuccess clears _hasErrors even for non-error lines.
       // Short-circuiting on isError would skip success detection for error-free log lines.
       const isSuccess = SUCCESS_PATTERNS.some((pattern) => pattern.test(cleanLine));

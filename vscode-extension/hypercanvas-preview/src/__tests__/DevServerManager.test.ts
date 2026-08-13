@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import {
   clearOwnedDevServer,
@@ -50,6 +51,7 @@ const {
   anyDirtyDocIsViteConfig,
   appendScriptCliArgs,
   buildInstallCommand,
+  buildMissingCommandHint,
   devScriptDeclaresPort,
   devScriptUsesWrapper,
   DevServerManager,
@@ -58,6 +60,16 @@ const {
   shouldRepairDependencies,
   toShellCommandString,
 } = await import('../services/DevServerManager');
+const {
+  decodeChildOutput,
+  detectWindowsOemCodePage,
+  isLikelyValidUtf8,
+  parseCodePageFromChcpOutput,
+  StreamOutputDecoder,
+  trailingIncompleteUtf8Length,
+  _resetWindowsOemCodePageCacheForTests,
+} = await import('../services/windowsOutputDecoding');
+const iconv = await import('iconv-lite');
 
 describe('toShellCommandString (DEP0190: fold args into one string for shell:true spawn)', () => {
   it('joins a plain package-manager command and its args', () => {
@@ -83,6 +95,669 @@ describe('toShellCommandString (DEP0190: fold args into one string for shell:tru
     expect(() => toShellCommandString('npm', ['run', 'dev$(whoami)'])).toThrow(/unsafe token/);
     expect(() => toShellCommandString('npm', ['run', 'dev`id`'])).toThrow(/unsafe token/);
     expect(() => toShellCommandString('npm', ['run', 'dev*'])).toThrow(/unsafe token/);
+  });
+});
+
+describe('toShellCommandString (HYP-1140 follow-up: NO Windows chcp codepage prefix)', () => {
+  // A prior version of this fix prefixed the win32 spawn command with `chcp
+  // 65001>nul&` (via a since-removed `withWindowsUtf8CodepageFix` wrapper /
+  // `buildSpawnShellCommand` entrypoint) to try to force cmd.exe's own text into
+  // UTF-8. A REAL Windows repro (Russian locale) proved this both ineffective AND
+  // regressive:
+  //  - Ineffective: `chcp` reprograms the ACTIVE CONSOLE code page, which does not
+  //    apply to this process's piped stdio (no attached console) — the mojibake was
+  //    never actually fixed by the prefix. See ./windowsOutputDecoding for the real
+  //    fix (detect the OEM code page, decode with iconv-lite on a UTF-8 decode
+  //    failure).
+  //  - Regressive: it turned a single `cmd /c "npm run dev"` into a COMPOUND command
+  //    (`cmd /c "chcp 65001>nul&npm run dev"`), which silently changed cmd.exe's
+  //    command-not-found exit code from 9009 to the ordinary 1 — breaking
+  //    buildMissingCommandHint's exit-code-based detection for exactly the failure
+  //    this hint exists to explain.
+  // There is now no platform branch left anywhere in the command-building layer:
+  // every spawn() callsite in DevServerManager calls toShellCommandString directly,
+  // so the command sent to spawn() is always exactly this, on every platform.
+  it('produces the plain command with no chcp prefix, on any platform', () => {
+    expect(toShellCommandString('npm', ['run', 'dev'])).toBe('npm run dev');
+    expect(toShellCommandString('npm', ['run', 'dev'])).not.toContain('chcp');
+  });
+});
+
+describe('buildMissingCommandHint (HYP-1140: actionable PATH hint on command-not-found)', () => {
+  // Design (review-driven, two rounds): errorMessage is a CONTROLLED string (Node's own
+  // `spawn X ENOENT`, or something this file built) — matching it directly is always
+  // trustworthy on its own. `logs` is ARBITRARY dev-server program output, so log TEXT is
+  // used ONLY to best-effort name the binary, and ONLY once a corroborating exit code
+  // (9009 Windows / 127 POSIX) has already confirmed a real command-not-found failure —
+  // never from text alone. This is what every "detects the ... signature" test below
+  // exercises: the exit code that would ACTUALLY accompany that shell text in production.
+
+  it('detects the Windows cmd.exe "not recognized" signature (with its 9009 exit code) and names the binary', () => {
+    const hint = buildMissingCommandHint(
+      'Server failed to start',
+      [
+        { line: `'npm' is not recognized as an internal or external command,`, timestamp: 1, isError: true },
+        { line: 'operable program or batch file.', timestamp: 1, isError: true },
+      ],
+      9009,
+    );
+    expect(hint).not.toBeNull();
+    expect(hint).toContain('npm');
+    expect(hint).toContain('PATH');
+    expect(hint).toMatch(/restart VS Code/i);
+  });
+
+  it('detects the POSIX sh/bash "command not found" signature (with its 127 exit code)', () => {
+    const hint = buildMissingCommandHint(
+      'Server failed to start',
+      [{ line: 'sh: bun: command not found', timestamp: 1, isError: true }],
+      127,
+    );
+    expect(hint).not.toBeNull();
+    expect(hint).toContain('bun');
+    expect(hint).toContain('PATH');
+  });
+
+  it('detects the POSIX zsh "command not found: <cmd>" signature and names the BINARY, not the shell', () => {
+    // Regression (review finding): zsh's own line ("zsh: command not found: bun") is also a
+    // substring match for the sh/bash pattern, which would wrongly capture "zsh" — the shell
+    // name — instead of "bun", the actual missing binary. The zsh pattern must be tried first.
+    const hint = buildMissingCommandHint(
+      'Server failed to start',
+      [{ line: 'zsh: command not found: bun', timestamp: 1, isError: true }],
+      127,
+    );
+    expect(hint).not.toBeNull();
+    expect(hint).toContain('bun');
+    expect(hint).not.toContain('"zsh"');
+  });
+
+  it('detects a bare Node spawn ENOENT error DIRECTLY from errorMessage — no exit code needed', () => {
+    // The child 'error' handler path: a genuine Node-level spawn failure has no exit code
+    // at all (the process never ran), so errorMessage itself must be trusted on its own.
+    const hint = buildMissingCommandHint('spawn pnpm ENOENT', []);
+    expect(hint).not.toBeNull();
+    expect(hint).toContain('pnpm');
+  });
+
+  it('returns null for an unrelated failure — no hint pollution on ordinary errors', () => {
+    expect(buildMissingCommandHint('Server startup timeout', [])).toBeNull();
+    expect(
+      buildMissingCommandHint('Failed to start', [
+        { line: 'SyntaxError: Unexpected token', timestamp: 1, isError: true },
+      ]),
+    ).toBeNull();
+  });
+
+  it('is NOT fooled by "command not found" appearing in log text WITHOUT a corroborating exit code', () => {
+    // A healthy script probing for an optional tool ("foo: command not found" as
+    // informational output) must not attach a misleading PATH hint to some LATER,
+    // unrelated failure (e.g. a startup timeout) just because the phrase appears
+    // somewhere in the buffer. Log text alone — without exitCode 127/9009 — never counts.
+    expect(
+      buildMissingCommandHint('Server startup timeout', [
+        { line: 'checking for optional tool...', timestamp: 1, isError: false },
+        { line: 'ncu: command not found — skipping optional check', timestamp: 1, isError: true },
+      ]),
+    ).toBeNull();
+  });
+
+  it('fires on the Windows cmd.exe exit code (9009) even when the message text cannot be parsed', () => {
+    // Locale-independence (review finding): chcp 65001 fixes the ENCODING of cmd.exe's text,
+    // not its LANGUAGE. A non-English cmd.exe (e.g. the Russian-locale box HYP-1140 was
+    // reported from) never matches the English patterns above, but its exit code (9009) is
+    // locale-independent and must still surface an (unnamed) actionable hint.
+    const hint = buildMissingCommandHint(
+      'Server failed to start',
+      [
+        {
+          line: '"npm" не является внутренней или внешней командой, исполняемой программой или пакетным файлом.',
+          timestamp: 1,
+          isError: true,
+        },
+      ],
+      9009,
+    );
+    expect(hint).not.toBeNull();
+    expect(hint).toContain('PATH');
+    expect(hint).toMatch(/restart VS Code/i);
+  });
+
+  it('fires on the POSIX exit code (127) even with no matching text at all', () => {
+    const hint = buildMissingCommandHint('Server failed to start', [], 127);
+    expect(hint).not.toBeNull();
+    expect(hint).toContain('the required command');
+  });
+
+  it('an unrelated exit code does not force a hint on ordinary errors', () => {
+    expect(buildMissingCommandHint('Server startup timeout', [], 1)).toBeNull();
+    expect(buildMissingCommandHint('Server startup timeout', [], null)).toBeNull();
+  });
+
+  it('never names "chcp" even when it is the one that fails to resolve', () => {
+    // This predates removal of the `chcp 65001>nul&` spawn prefix (see the
+    // toShellCommandString describe block above): when that prefix was still chained
+    // into the dev-server command, a PATH broken enough that even System32\chcp.com
+    // couldn't resolve made cmd.exe emit its "not recognized" line for "chcp" BEFORE
+    // the real command's line. The prefix is gone now, so this line can no longer
+    // appear from OUR injection — kept as cheap, still-correct defense in case a
+    // user's own dev script happens to invoke `chcp` itself. Naming "chcp" in that
+    // case would confuse the user about something they never asked to run themselves.
+    const hint = buildMissingCommandHint(
+      'Server failed to start',
+      [{ line: `'chcp' is not recognized as an internal or external command,`, timestamp: 1, isError: true }],
+      9009,
+    );
+    expect(hint).not.toBeNull();
+    expect(hint).toContain('the required command');
+    expect(hint).not.toContain('"chcp"');
+  });
+
+  it('skips PAST a "chcp" match to find the REAL binary later in the same buffer (regression: first-match-wins used to lock onto "chcp")', () => {
+    // Review finding: when chcp.com itself fails to resolve, cmd.exe emits BOTH lines,
+    // in order — chcp's own failure, then the real command's. A naive first-match
+    // lookup stopped at line 1 and never saw line 2's real binary name. The fix walks
+    // every match per pattern category and skips "chcp" specifically.
+    const hint = buildMissingCommandHint(
+      'Server failed to start',
+      [
+        { line: `'chcp' is not recognized as an internal or external command,`, timestamp: 1, isError: true },
+        { line: 'operable program or batch file.', timestamp: 1, isError: true },
+        { line: `'npm' is not recognized as an internal or external command,`, timestamp: 2, isError: true },
+        { line: 'operable program or batch file.', timestamp: 2, isError: true },
+      ],
+      9009,
+    );
+    expect(hint).not.toBeNull();
+    expect(hint).toContain('"npm"');
+    expect(hint).not.toContain('"chcp"');
+  });
+
+  it('does not trigger shouldRepairDependencies — the enriched, hinted message must never look like a native-binding failure', () => {
+    // Review finding: _waitForReady now rethrows the SPECIFIC `_error` (which can be
+    // this hint's own output, e.g. "spawn cmd.exe ENOENT — Could not find ... PATH...")
+    // instead of the old generic "Server failed to start". Pin that this text can never
+    // be mistaken for the unrelated native-binding-repair signatures shouldRepairDependencies
+    // checks for — a false match there would trigger a pointless full dependency reinstall
+    // for a broken-PATH failure that reinstalling can't fix.
+    const hint = buildMissingCommandHint('spawn cmd.exe ENOENT', []);
+    expect(hint).not.toBeNull();
+    const enrichedMessage = `spawn cmd.exe ENOENT — ${hint}`;
+    expect(shouldRepairDependencies(enrichedMessage, [])).toBe(false);
+  });
+});
+
+describe('windowsOutputDecoding (HYP-1140 follow-up: decode the ACTUAL bytes, not just fix the prefix)', () => {
+  describe('isLikelyValidUtf8', () => {
+    it('accepts plain ASCII', () => {
+      expect(isLikelyValidUtf8(Buffer.from('npm run dev', 'utf8'))).toBe(true);
+    });
+
+    it('accepts real UTF-8-encoded multi-byte (Cyrillic) text', () => {
+      expect(isLikelyValidUtf8(Buffer.from('не является внутренней командой', 'utf8'))).toBe(true);
+    });
+
+    it('rejects cp866-encoded Cyrillic bytes — NOT structurally valid UTF-8', () => {
+      const cp866Bytes = iconv.encode('не является внутренней командой', 'cp866');
+      expect(isLikelyValidUtf8(cp866Bytes)).toBe(false);
+    });
+
+    it('rejects overlong encodings (review finding: cp866 "рАБ" = E0 80 81 looked like valid UTF-8 structure)', () => {
+      // E0 80 81 has the right byte-count SHAPE (3-byte lead + 2 continuation bytes)
+      // but overlong-encodes U+0001 — real UTF-8 encoders never produce this.
+      expect(isLikelyValidUtf8(Buffer.from([0xe0, 0x80, 0x81]))).toBe(false);
+      expect(isLikelyValidUtf8(Buffer.from([0xc0, 0x80]))).toBe(false); // 0xC0 always overlong
+      expect(isLikelyValidUtf8(Buffer.from([0xc1, 0xbf]))).toBe(false); // 0xC1 always overlong
+      expect(isLikelyValidUtf8(Buffer.from([0xf0, 0x80, 0x80, 0x80]))).toBe(false); // overlong 4-byte
+    });
+
+    it('rejects UTF-16 surrogate halves (never valid in UTF-8)', () => {
+      expect(isLikelyValidUtf8(Buffer.from([0xed, 0xa0, 0x80]))).toBe(false); // U+D800
+    });
+
+    it('rejects codepoints beyond U+10FFFF', () => {
+      expect(isLikelyValidUtf8(Buffer.from([0xf5, 0x80, 0x80, 0x80]))).toBe(false);
+      expect(isLikelyValidUtf8(Buffer.from([0xf4, 0x90, 0x80, 0x80]))).toBe(false);
+    });
+
+    it('still accepts real multi-byte UTF-8 across all sequence lengths after the stricter checks', () => {
+      expect(isLikelyValidUtf8(Buffer.from('не является внутренней командой ➜ 🚀 日本語', 'utf8'))).toBe(true);
+    });
+  });
+
+  describe('parseCodePageFromChcpOutput', () => {
+    it('parses the English confirmation line', () => {
+      expect(parseCodePageFromChcpOutput('Active code page: 65001\r\n')).toBe(65001);
+    });
+
+    it('parses a differently-worded (localized) confirmation line by taking the trailing digit run', () => {
+      // `chcp`'s own confirmation text is ALSO localized (a Russian-locale box prints a
+      // full Russian sentence, not "Active code page: ...") — this must not assume any
+      // fixed English phrase.
+      expect(parseCodePageFromChcpOutput('Текущая кодовая страница: 866\r\n')).toBe(866);
+    });
+
+    it('returns null when no digits are present', () => {
+      expect(parseCodePageFromChcpOutput('unexpected garbage output')).toBeNull();
+    });
+  });
+
+  describe('detectWindowsOemCodePage', () => {
+    // Fake ChildProcess-like object for the injectable `spawnFn` seam (review P2:
+    // hermetic success/fallback/caching coverage instead of depending on the ambient
+    // test-runner OS actually having — or lacking — a real `chcp`).
+    function makeFakeChcpChild(): EventEmitter & { stdout: EventEmitter; kill: ReturnType<typeof mock> } {
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; kill: ReturnType<typeof mock> };
+      child.stdout = new EventEmitter();
+      child.kill = mock(() => true);
+      return child;
+    }
+
+    let originalSystemRoot: string | undefined;
+    beforeEach(() => {
+      originalSystemRoot = process.env.SystemRoot;
+      process.env.SystemRoot = 'C:\\Windows'; // exercise the absolute-path branch deterministically
+    });
+    afterEach(() => {
+      _resetWindowsOemCodePageCacheForTests();
+      if (originalSystemRoot === undefined) {
+        delete process.env.SystemRoot;
+      } else {
+        process.env.SystemRoot = originalSystemRoot;
+      }
+    });
+
+    it('returns null immediately on non-win32 without spawning anything', async () => {
+      const spawnFn = mock(() => makeFakeChcpChild() as unknown as ReturnType<typeof spawn>);
+      expect(await detectWindowsOemCodePage('darwin', spawnFn)).toBeNull();
+      expect(await detectWindowsOemCodePage('linux', spawnFn)).toBeNull();
+      expect(spawnFn).not.toHaveBeenCalled();
+    });
+
+    it('resolves via the absolute %SystemRoot%\\System32\\chcp.com path, without a shell, when it succeeds', async () => {
+      const spawnFn = mock((command: string, _args: readonly string[], options: Record<string, unknown>) => {
+        expect(command).toBe('C:\\Windows\\System32\\chcp.com');
+        expect(options.shell).toBe(false); // real executable — no shell needed
+        // Review regression, corrected: `windowsHide: true` maps to CREATE_NO_WINDOW,
+        // which prevents ANY console from being allocated — `chcp` then has nothing to
+        // report and the probe always resolves null, silently defeating the whole fix.
+        // Must NEVER be set here again.
+        expect(options.windowsHide).toBeUndefined();
+        const child = makeFakeChcpChild();
+        queueMicrotask(() => {
+          child.stdout.emit('data', Buffer.from('Active code page: 866\r\n'));
+          child.emit('close', 0);
+        });
+        return child as unknown as ReturnType<typeof spawn>;
+      });
+      expect(await detectWindowsOemCodePage('win32', spawnFn)).toBe(866);
+      expect(spawnFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to bare `chcp` (via a shell) when the absolute path fails', async () => {
+      const spawnFn = mock((command: string, _args: readonly string[], options: Record<string, unknown>) => {
+        const child = makeFakeChcpChild();
+        if (command === 'C:\\Windows\\System32\\chcp.com') {
+          queueMicrotask(() => child.emit('error', new Error('ENOENT')));
+        } else {
+          expect(command).toBe('chcp');
+          expect(options.shell).toBe(true);
+          queueMicrotask(() => {
+            child.stdout.emit('data', Buffer.from('Active code page: 1251\r\n'));
+            child.emit('close', 0);
+          });
+        }
+        return child as unknown as ReturnType<typeof spawn>;
+      });
+      expect(await detectWindowsOemCodePage('win32', spawnFn)).toBe(1251);
+      expect(spawnFn).toHaveBeenCalledTimes(2);
+    });
+
+    it('treats a non-zero exit code as failure (not a false digit match from stray AutoRun output)', async () => {
+      const spawnFn = mock(() => {
+        const child = makeFakeChcpChild();
+        queueMicrotask(() => {
+          child.stdout.emit('data', Buffer.from('some unrelated AutoRun output 42\r\n'));
+          child.emit('close', 1);
+        });
+        return child as unknown as ReturnType<typeof spawn>;
+      });
+      expect(await detectWindowsOemCodePage('win32', spawnFn)).toBeNull();
+    });
+
+    it('caches a successful result — a second call does not spawn again', async () => {
+      const spawnFn = mock(() => {
+        const child = makeFakeChcpChild();
+        queueMicrotask(() => {
+          child.stdout.emit('data', Buffer.from('Active code page: 65001\r\n'));
+          child.emit('close', 0);
+        });
+        return child as unknown as ReturnType<typeof spawn>;
+      });
+      expect(await detectWindowsOemCodePage('win32', spawnFn)).toBe(65001);
+      expect(await detectWindowsOemCodePage('win32', spawnFn)).toBe(65001);
+      expect(spawnFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT cache a null result — the next call retries', async () => {
+      const spawnFn = mock(() => {
+        const child = makeFakeChcpChild();
+        queueMicrotask(() => child.emit('error', new Error('ENOENT')));
+        return child as unknown as ReturnType<typeof spawn>;
+      });
+      expect(await detectWindowsOemCodePage('win32', spawnFn)).toBeNull();
+      expect(await detectWindowsOemCodePage('win32', spawnFn)).toBeNull();
+      // Two attempts (absolute + fallback) per outer call, times two outer calls.
+      expect(spawnFn).toHaveBeenCalledTimes(4);
+    });
+
+    it('resolves null (and kills the wedged child) instead of hanging forever when chcp never responds', async () => {
+      // Review High finding: a hung cmd.exe (e.g. a blocking AutoRun script) must not
+      // wedge every future dev-server start on a promise that never settles.
+      let killedChild: ReturnType<typeof makeFakeChcpChild> | null = null;
+      const spawnFn = mock(() => {
+        const child = makeFakeChcpChild();
+        killedChild = child;
+        // Never emits 'close' or 'error' — simulates a wedged process.
+        return child as unknown as ReturnType<typeof spawn>;
+      });
+      const result = await detectWindowsOemCodePage('win32', spawnFn);
+      expect(result).toBeNull();
+      expect(killedChild).not.toBeNull();
+      expect((killedChild as unknown as { kill: ReturnType<typeof mock> }).kill).toHaveBeenCalled();
+    }, 10_000);
+
+    it('fails soft (resolves null, never throws/rejects) against the REAL spawn on a non-Windows test machine', async () => {
+      // Complements the hermetic tests above with one real-process check: forcing
+      // platform='win32' with the default (real) spawnFn exercises actual OS process
+      // failure, not just our own fake. Only meaningful on a non-Windows test machine
+      // (real Windows CI would have a genuine `chcp`) — gate rather than assert
+      // something platform-dependent as if it were universal.
+      if (process.platform === 'win32') return;
+      await expect(detectWindowsOemCodePage('win32')).resolves.toBeNull();
+    });
+  });
+
+  describe('decodeChildOutput — the REAL HYP-1140 regression: literal cp866 bytes decode to readable Russian text', () => {
+    // This is the exact string from the CTO's Windows repro (HYP-1140), encoded here
+    // with iconv-lite exactly as cmd.exe would actually emit it on a Russian-locale
+    // box (cp866) when output is piped (no attached console — chcp cannot help).
+    const REPORTED_TEXT =
+      '"npm" не является внутренней или внешней командой, исполняемой программой или файлом сценария.';
+
+    it('decodes cp866-encoded bytes to the correct, readable Russian text on win32 with a detected non-UTF-8 code page', () => {
+      const cp866Bytes = iconv.encode(REPORTED_TEXT, 'cp866');
+      const decoded = decodeChildOutput(cp866Bytes, 'win32', 866);
+      expect(decoded).toBe(REPORTED_TEXT);
+      expect(decoded).not.toContain('�'); // no U+FFFD replacement characters (the reported mojibake)
+    });
+
+    it('leaves already-valid UTF-8 bytes alone even when a non-UTF-8 code page was detected', () => {
+      const utf8Bytes = Buffer.from(REPORTED_TEXT, 'utf8');
+      expect(decodeChildOutput(utf8Bytes, 'win32', 866)).toBe(REPORTED_TEXT);
+    });
+
+    it('decodes as plain UTF-8 (garbled but not throwing) when the code page is unknown (null)', () => {
+      const cp866Bytes = iconv.encode(REPORTED_TEXT, 'cp866');
+      expect(() => decodeChildOutput(cp866Bytes, 'win32', null)).not.toThrow();
+      expect(decodeChildOutput(cp866Bytes, 'win32', null)).not.toBe(REPORTED_TEXT);
+    });
+
+    it('decodes as plain UTF-8 on non-win32 platforms regardless of a detected code page', () => {
+      const cp866Bytes = iconv.encode(REPORTED_TEXT, 'cp866');
+      expect(decodeChildOutput(cp866Bytes, 'darwin', 866)).not.toBe(REPORTED_TEXT);
+    });
+
+    it('decodes as plain UTF-8 when the detected code page is 65001 (already UTF-8)', () => {
+      const utf8Bytes = Buffer.from(REPORTED_TEXT, 'utf8');
+      expect(decodeChildOutput(utf8Bytes, 'win32', 65001)).toBe(REPORTED_TEXT);
+    });
+
+    it('falls back to UTF-8 for an unrecognized code page number rather than throwing', () => {
+      const cp866Bytes = iconv.encode(REPORTED_TEXT, 'cp866');
+      expect(() => decodeChildOutput(cp866Bytes, 'win32', 999999)).not.toThrow();
+    });
+  });
+
+  describe('trailingIncompleteUtf8Length', () => {
+    it('returns 0 for a complete ASCII buffer', () => {
+      expect(trailingIncompleteUtf8Length(Buffer.from('npm run dev', 'utf8'))).toBe(0);
+    });
+
+    it('returns 0 for a buffer ending on a complete multi-byte character', () => {
+      expect(trailingIncompleteUtf8Length(Buffer.from('Local: ➜', 'utf8'))).toBe(0);
+    });
+
+    it('returns 1 for a buffer ending on a lone 2-byte lead byte', () => {
+      // 'Ж' (U+0416) is 2 bytes: 0xD0 0x96. Keep only the lead byte.
+      const full = Buffer.from('Ж', 'utf8');
+      expect(trailingIncompleteUtf8Length(full.subarray(0, 1))).toBe(1);
+    });
+
+    it('returns 1 for a buffer ending on a lone 3-byte lead byte, and 2 for lead+1 continuation', () => {
+      // '➜' (U+279C) is 3 bytes: 0xE2 0x9E 0x9C.
+      const full = Buffer.from('➜', 'utf8');
+      expect(trailingIncompleteUtf8Length(full.subarray(0, 1))).toBe(1);
+      expect(trailingIncompleteUtf8Length(full.subarray(0, 2))).toBe(2);
+    });
+
+    it('returns 1/2/3 for a truncated 4-byte sequence (emoji) at each incomplete depth', () => {
+      // '🚀' (U+1F680) is 4 bytes.
+      const full = Buffer.from('🚀', 'utf8');
+      expect(full.length).toBe(4);
+      expect(trailingIncompleteUtf8Length(full.subarray(0, 1))).toBe(1);
+      expect(trailingIncompleteUtf8Length(full.subarray(0, 2))).toBe(2);
+      expect(trailingIncompleteUtf8Length(full.subarray(0, 3))).toBe(3);
+    });
+
+    it('does not hold back a genuinely malformed tail (no legit lead byte within reach)', () => {
+      // Three bare continuation bytes with no lead byte in range — not a real truncated
+      // sequence, nothing legitimate to wait for.
+      expect(trailingIncompleteUtf8Length(Buffer.from([0x80, 0x80, 0x80]))).toBe(0);
+    });
+  });
+
+  describe('StreamOutputDecoder — line-buffered decode (review P1, second pass: DBCS OEM code pages also corrupted per-chunk)', () => {
+    describe('FAST path (OEM decode not reachable — non-win32, or win32 with unknown/UTF-8 code page)', () => {
+      // Review High finding, second pass: an earlier version of this file used the
+      // line-buffered SAFE path unconditionally on every platform, which held back
+      // partial-line interactive prompts (npm's "Ok to proceed? (y)", etc.) INDEFINITELY
+      // even where Windows/OEM decoding was never in play. The FAST path decodes as
+      // soon as a character completes, matching the pre-fix `data.toString()` latency.
+
+      it('decodes plain ASCII immediately, with no line boundary needed, on darwin', () => {
+        const decoder = new StreamOutputDecoder('darwin', () => null);
+        expect(decoder.push(Buffer.from('Ok to proceed? (y) ', 'utf8'))).toBe('Ok to proceed? (y) ');
+      });
+
+      it('decodes plain ASCII immediately on win32 when the code page is unknown (null) or already UTF-8 (65001)', () => {
+        for (const getOemCodePage of [() => null, () => 65001]) {
+          const decoder = new StreamOutputDecoder('win32', getOemCodePage);
+          expect(decoder.push(Buffer.from('Ok to proceed? (y) ', 'utf8'))).toBe('Ok to proceed? (y) ');
+        }
+      });
+
+      it('reassembles UTF-8 split mid-character across two push() calls WITHOUT waiting for a newline', () => {
+        const bytes = Buffer.from('Ж', 'utf8'); // 0xD0 0x96
+        const decoder = new StreamOutputDecoder('darwin', () => null);
+        expect(decoder.push(Buffer.from(bytes.subarray(0, 1)))).toBe(''); // truncated, held back
+        expect(decoder.push(Buffer.from(bytes.subarray(1)))).toBe('Ж'); // completes immediately, no \n needed
+      });
+
+      it('reassembles a 4-byte emoji split across three push() calls, one byte at a time', () => {
+        const text = 'build 🚀 done'; // deliberately no trailing newline
+        const bytes = Buffer.from(text, 'utf8');
+        const decoder = new StreamOutputDecoder('win32', () => null);
+        let out = '';
+        for (const byte of bytes) {
+          out += decoder.push(Buffer.from([byte]));
+        }
+        expect(out).toBe(text);
+      });
+
+      it('flush() is a no-op when nothing is pending; decodes a still-held-back tail best-effort otherwise', () => {
+        const decoder = new StreamOutputDecoder('darwin', () => null);
+        expect(decoder.flush()).toBe('');
+        const bytes = Buffer.from('➜', 'utf8'); // 0xE2 0x9E 0x9C
+        expect(decoder.push(Buffer.from(bytes.subarray(0, 1)))).toBe('');
+        expect(decoder.flush()).toBe(Buffer.from(bytes.subarray(0, 1)).toString('utf8')); // best-effort, matches plain toString()
+        expect(decoder.flush()).toBe(''); // draining is one-shot
+      });
+    });
+
+    describe('SAFE path (win32 + a real non-UTF-8 code page detected)', () => {
+      it('reassembles UTF-8 text split MID-CHARACTER across two push() calls — the exact regression the review caught', () => {
+        const text = '➜ Local: http://localhost:5173/\n';
+        const bytes = Buffer.from(text, 'utf8');
+        // Split inside the first character's multi-byte sequence ('➜' is 3 bytes) — well
+        // before the trailing newline, so nothing is decoded until the second push.
+        const chunk1 = Buffer.from(bytes.subarray(0, 2));
+        const chunk2 = Buffer.from(bytes.subarray(2));
+
+        // codePage=866 (a detected non-UTF-8 code page) is the exact condition that
+        // triggered the regression: deciding UTF-8-vs-OEM on the truncated first chunk
+        // would misclassify it as OEM bytes and garble it.
+        const decoder = new StreamOutputDecoder('win32', () => 866);
+        const out1 = decoder.push(chunk1);
+        const out2 = decoder.push(chunk2);
+        expect(out1).toBe(''); // nothing complete yet — no line boundary in chunk1
+        expect(out2).toBe(text);
+        expect(out1 + out2).not.toContain('�');
+      });
+
+      it('reassembles a DBCS (double-byte) OEM character split mid-character — CP932/936/949/950, a review P1 repro', () => {
+        // Splitting a Shift-JIS/GBK/UHC/Big5 double-byte character produced replacement
+        // characters under the old per-chunk decoder. Line-buffering fixes this WITHOUT
+        // needing any DBCS-specific boundary logic — nothing is decoded until a full
+        // line (ending in the trailing '\n') has arrived, so the arbitrary split point
+        // never matters.
+        const cases: Array<[number, string]> = [
+          [932, '日本語\n'],
+          [936, '中文\n'],
+          [949, '한국어\n'],
+          [950, '中文\n'],
+        ];
+        for (const [codePage, text] of cases) {
+          const bytes = iconv.encode(text, `cp${codePage}`);
+          const mid = Math.max(1, Math.floor(bytes.length / 2));
+          const decoder = new StreamOutputDecoder('win32', () => codePage);
+          const out =
+            decoder.push(Buffer.from(bytes.subarray(0, mid))) + decoder.push(Buffer.from(bytes.subarray(mid)));
+          expect(out).toBe(text);
+        }
+      });
+
+      it('decodes single-byte OEM (cp866) text correctly across arbitrary chunk splits', () => {
+        const text = '"npm" не является внутренней или внешней командой, исполняемой программой или файлом сценария.\n';
+        const cp866Bytes = iconv.encode(text, 'cp866');
+        const mid = Math.floor(cp866Bytes.length / 2);
+
+        const decoder = new StreamOutputDecoder('win32', () => 866);
+        const out =
+          decoder.push(Buffer.from(cp866Bytes.subarray(0, mid))) + decoder.push(Buffer.from(cp866Bytes.subarray(mid)));
+        expect(out).toBe(text);
+      });
+
+      it('decodes a MIXED block (one valid-UTF-8 line + one OEM-encoded line in the SAME chunk) correctly on BOTH lines', () => {
+        // Review finding: deciding UTF-8-vs-OEM for a whole flushed block (rather than
+        // per line) would garble whichever line is in the minority. Two lines arriving
+        // together in one raw `data` chunk is realistic (e.g. cmd.exe's own two-line
+        // "not recognized" / "operable program or batch file" message alongside a
+        // preceding valid-UTF-8 tool line).
+        const utf8Line = 'Starting dev server ➜\n';
+        const oemLine = '"npm" не является внутренней командой\n';
+        const combined = Buffer.concat([Buffer.from(utf8Line, 'utf8'), iconv.encode(oemLine, 'cp866')]);
+
+        const decoder = new StreamOutputDecoder('win32', () => 866);
+        const out = decoder.push(combined);
+        expect(out).toBe(utf8Line + oemLine);
+        expect(out).not.toContain('�');
+      });
+
+      it('holds back an entire chunk with no line boundary at all, until flush() or a later newline', () => {
+        const bytes = Buffer.from('Ж', 'utf8'); // 0xD0 0x96, no trailing newline — but OEM decode IS
+        // reachable here (unlike the FAST-path equivalent test), so the SAFE path buffers
+        // to a line boundary rather than decoding as soon as the character completes.
+        const decoder = new StreamOutputDecoder('win32', () => 866);
+        expect(decoder.push(Buffer.from(bytes.subarray(0, 1)))).toBe('');
+        expect(decoder.push(Buffer.from(bytes.subarray(1)))).toBe(''); // still no \n/\r — nothing flushed yet
+        expect(decoder.flush()).toBe('Ж');
+      });
+
+      it('flushes on `\\r` (carriage-return progress lines), not only `\\n`', () => {
+        const decoder = new StreamOutputDecoder('win32', () => 866);
+        expect(decoder.push(Buffer.from('Downloading... 42%\r', 'utf8'))).toBe('Downloading... 42%\r');
+        expect(decoder.push(Buffer.from('Downloading... 87%\r', 'utf8'))).toBe('Downloading... 87%\r');
+      });
+
+      it('falls back to the UTF-8-boundary size cap for a very long single line with no newline', () => {
+        // A held-back buffer this large is flushed via trailingIncompleteUtf8Length
+        // instead of buffering forever — bounds worst-case memory/latency.
+        const longLine = 'x'.repeat(9000); // exceeds the 8 KiB cap, no line break anywhere
+        const decoder = new StreamOutputDecoder('win32', () => 866);
+        const out = decoder.push(Buffer.from(longLine, 'utf8'));
+        expect(out.length).toBe(9000);
+        expect(out).toBe(longLine);
+        expect(decoder.flush()).toBe(''); // nothing left held back
+      });
+
+      it('flush() is a no-op (empty string) when nothing is pending', () => {
+        const decoder = new StreamOutputDecoder('win32', () => 866);
+        decoder.push(Buffer.from('complete line\n', 'utf8'));
+        expect(decoder.flush()).toBe('');
+      });
+
+      it('flush() decodes a still-held-back tail best-effort (process exited mid-line) instead of dropping it', () => {
+        const bytes = Buffer.from('no newline yet', 'utf8');
+        const decoder = new StreamOutputDecoder('win32', () => 866);
+        expect(decoder.push(bytes)).toBe(''); // held back, no line boundary
+        expect(decoder.flush()).toBe('no newline yet');
+        expect(decoder.flush()).toBe(''); // draining is one-shot
+      });
+    });
+
+    it('switches from FAST to SAFE mid-stream once a pending OEM code page probe resolves', () => {
+      // Proves the live-accessor design (review finding: the probe must not block
+      // spawn): the decoder reads getOemCodePage() FRESH on every push(), so a
+      // still-resolving detectWindowsOemCodePage() promise can flip the mode partway
+      // through a stream without needing to reconstruct the decoder.
+      const box: { value: number | null } = { value: null };
+      const decoder = new StreamOutputDecoder('win32', () => box.value);
+      // Before the probe resolves: FAST path, decodes immediately, no newline needed.
+      expect(decoder.push(Buffer.from('booting...', 'utf8'))).toBe('booting...');
+      // Probe resolves.
+      box.value = 866;
+      // After: SAFE path — a line with no newline is now held back until flush/boundary.
+      expect(decoder.push(Buffer.from('partial', 'utf8'))).toBe('');
+      expect(decoder.flush()).toBe('partial');
+    });
+  });
+});
+
+describe('decode -> buildMissingCommandHint pipeline (HYP-1140 end-to-end)', () => {
+  it('produces a readable, non-garbled hint from cp866-encoded Russian "not recognized" output at exit code 9009', () => {
+    // Proves the FULL pipeline (decode, then hint) works together, not just each piece
+    // in isolation — this is the closest a unit test gets to the CTO's actual repro:
+    // real cp866 bytes in, a readable hint out.
+    const REPORTED_TEXT =
+      '"npm" не является внутренней или внешней командой, исполняемой программой или файлом сценария.';
+    const cp866Bytes = iconv.encode(REPORTED_TEXT, 'cp866');
+    const decodedLine = decodeChildOutput(cp866Bytes, 'win32', 866);
+    expect(decodedLine).toBe(REPORTED_TEXT);
+
+    const hint = buildMissingCommandHint(
+      'Server failed to start',
+      [{ line: decodedLine, timestamp: Date.now(), isError: true }],
+      9009,
+    );
+    expect(hint).not.toBeNull();
+    expect(hint).not.toContain('�');
+    expect(hint).toContain('PATH');
+    expect(hint).toMatch(/restart VS Code/i);
+    // The Windows "not recognized" pattern is English-only, so no binary name is
+    // parsed out of Russian text — but the exit code alone still produces a readable,
+    // generic hint instead of the old opaque "Server failed to start".
+    expect(hint).toContain('the required command');
   });
 });
 
@@ -630,6 +1305,104 @@ describe('DevServerManager', () => {
   describe('dispose', () => {
     it('does not throw when called on fresh instance', () => {
       expect(() => manager.dispose()).not.toThrow();
+    });
+  });
+
+  describe('_waitForReady preserves an already-described error (HYP-1140 review: no clobbering)', () => {
+    function transition(mgr: InstanceType<typeof DevServerManager>, to: DevServerStatus, error?: string) {
+      (mgr as unknown as { transition(to: DevServerStatus, error?: string): boolean }).transition(to, error);
+    }
+
+    function waitForReady(mgr: InstanceType<typeof DevServerManager>, timeout: number): Promise<void> {
+      return (mgr as unknown as { _waitForReady(timeout: number): Promise<void> })._waitForReady(timeout);
+    }
+
+    it('rethrows the specific `_error` verbatim when status is already `error` (child "error" handler already ran)', async () => {
+      // Mirrors production: child.on('error') already transitioned to 'error' with a
+      // fully-described, hinted message BEFORE _waitForReady's poll loop notices.
+      transition(manager, 'starting');
+      transition(
+        manager,
+        'error',
+        'spawn pnpm ENOENT — Could not find "pnpm" on your PATH. If you just installed it, fully restart VS Code (a reload is not enough) so it picks up the updated PATH.',
+      );
+
+      await expect(waitForReady(manager, 50)).rejects.toThrow(/Could not find "pnpm" on your PATH/);
+    });
+
+    it('falls back to the generic "Server failed to start" when status is `stopped` (a clean exit, no prior specific error)', async () => {
+      transition(manager, 'starting');
+      transition(manager, 'stopped');
+
+      await expect(waitForReady(manager, 50)).rejects.toThrow('Server failed to start');
+    });
+  });
+
+  describe('_describeStartFailure (HYP-1140)', () => {
+    function describeStartFailure(
+      mgr: InstanceType<typeof DevServerManager>,
+      rawMessage: string,
+      exitCode: number | null = null,
+    ): string {
+      return (
+        mgr as unknown as { _describeStartFailure(rawMessage: string, exitCode?: number | null): string }
+      )._describeStartFailure(rawMessage, exitCode);
+    }
+
+    it('passes a raw message through unchanged when no hint applies', () => {
+      expect(describeStartFailure(manager, 'Server startup timeout')).toBe('Server startup timeout');
+    });
+
+    it('appends the hint to the returned message without dropping the raw text', () => {
+      const result = describeStartFailure(manager, 'spawn npm ENOENT');
+      expect(result).toContain('spawn npm ENOENT');
+      expect(result).toContain('Could not find "npm" on your PATH');
+    });
+
+    it('also pushes the hint through the log pipeline (onLogsUpdate) as an ERROR entry — review finding: DevServerState.error alone is not read by the auto-start path, and an unflagged line would disagree with the diagnostics UI', () => {
+      const logCb = mock();
+      manager.onLogsUpdate(logCb);
+
+      describeStartFailure(manager, 'spawn bun ENOENT');
+
+      expect(logCb).toHaveBeenCalled();
+      const [newEntries, hasErrors] = logCb.mock.calls[logCb.mock.calls.length - 1] as [
+        Array<{ line: string; isError: boolean }>,
+        boolean,
+      ];
+      const hintEntry = newEntries.find((entry) => entry.line.includes('Could not find "bun" on your PATH'));
+      expect(hintEntry).toBeDefined();
+      expect(hintEntry?.isError).toBe(true);
+      expect(hasErrors).toBe(true);
+      expect(manager.hasErrors).toBe(true);
+    });
+  });
+
+  describe('_transitionToStoppedUnlessErrorAlready (HYP-1140 review: exit must not clobber a described error)', () => {
+    function transition(mgr: InstanceType<typeof DevServerManager>, to: DevServerStatus, error?: string) {
+      (mgr as unknown as { transition(to: DevServerStatus, error?: string): boolean }).transition(to, error);
+    }
+
+    function transitionToStoppedUnlessErrorAlready(mgr: InstanceType<typeof DevServerManager>): void {
+      (mgr as unknown as { _transitionToStoppedUnlessErrorAlready(): void })._transitionToStoppedUnlessErrorAlready();
+    }
+
+    it("does NOT clobber an already-described \"error\" state (mirrors child.on('exit') firing after child.on('error'))", () => {
+      transition(manager, 'starting');
+      transition(manager, 'error', 'spawn npm ENOENT — Could not find "npm" on your PATH...');
+
+      transitionToStoppedUnlessErrorAlready(manager);
+
+      expect(manager.getState().status).toBe('error');
+      expect(manager.getState().error).toContain('Could not find "npm" on your PATH');
+    });
+
+    it('transitions to "stopped" normally when there is no prior "error" state (the ordinary clean-exit path)', () => {
+      transition(manager, 'starting');
+
+      transitionToStoppedUnlessErrorAlready(manager);
+
+      expect(manager.getState().status).toBe('stopped');
     });
   });
 
