@@ -9,6 +9,12 @@ import type { FrameworkReadResult, SourceClassIdentity } from '@lib/style-read/t
 import type { FrameworkStyleReader } from '@lib/style-write/types';
 
 export class CssModulesReader implements FrameworkStyleReader {
+  /**
+   * Read entry: turn each CSS-Modules class reference on the element
+   * (`className={styles.foo}`) into a source-class identity — one inspector tab per
+   * imported module class, carrying the `.css` file path, selector, and import binding the
+   * write router needs to locate the rule. No declaration values are read yet (Phase 7).
+   */
   read(input: Parameters<FrameworkStyleReader['read']>[0]): FrameworkReadResult {
     const references = input.elementFacts.classNameExpression?.cssModuleReferences ?? [];
     const classIdentities: SourceClassIdentity[] = references.map((reference) => ({

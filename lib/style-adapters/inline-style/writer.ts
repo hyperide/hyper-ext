@@ -28,6 +28,12 @@ function camelToKebab(str: string): string {
   return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
+/**
+ * Map one canonical inspector value to the CSS value written into the `style={{}}`
+ * object. Same contract as the css-modules variant: opacity needs inspector÷100, the
+ * rest goes through {@link cssRuntimeNormalizer}, null drops the property, and an
+ * `invalid` result keeps the raw value for the executor to handle.
+ */
 function convertToCss(key: string, value: string): string | null {
   if (value === '') return null;
 
@@ -48,6 +54,13 @@ function convertToCss(key: string, value: string): string | null {
 }
 
 export class InlineStyleWriter implements FrameworkStyleWriter {
+  /**
+   * Map canonical inspector styles into a {@link ScriptObjectStylePlan} that merges into
+   * the element's inline `style={{}}` object. Values flow through {@link convertToCss};
+   * dropped properties (null) are simply omitted from the merge.
+   * USER-IMPACT: backs inspector style-edit writes on inline-style elements, and is the
+   * universal fallback writer when no other CSS system can own the edit (spec §8.3).
+   */
   createPlan(input: { context: StyleWriteContext; sourceOwner: StyleSourceOwner }): StyleWritePlan {
     const { context, sourceOwner } = input;
     const { requestedStyles, condition } = context;

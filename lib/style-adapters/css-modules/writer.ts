@@ -29,6 +29,13 @@ function camelToKebab(str: string): string {
   return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
+/**
+ * Map one canonical inspector value to the CSS value written into the `.module.css`
+ * rule. Opacity is the sole property needing inspector÷100 (0-100 scale → 0-1 CSS).
+ * Everything else goes through {@link cssRuntimeNormalizer} (validation + bare-number→px).
+ * Returns null to drop the declaration (empty input, or normalizer says `remove`); an
+ * `invalid` normalizer result falls back to the raw value rather than dropping it.
+ */
 function convertToCssValue(key: string, value: string): string | null {
   if (value === '') return null;
 
@@ -48,6 +55,15 @@ function convertToCssValue(key: string, value: string): string | null {
 }
 
 export class CssModulesWriter implements FrameworkStyleWriter {
+  /**
+   * Map canonical inspector styles into a {@link CssModulesFilePlan} targeting the owner's
+   * selector in its `.module.css` file. Declarations are emitted under kebab-case CSS keys
+   * (camelCase requested keys are preserved separately in `targetStyles`); values flow
+   * through {@link convertToCssValue}. The plan describes a rule-level edit — the executor
+   * applies it to the actual file.
+   * USER-IMPACT: backs inspector style-edit writes for CSS-Modules elements
+   * (`className={styles.x}`), the explicit semantic owner that wins Tailwind collisions.
+   */
   createPlan(input: { context: StyleWriteContext; sourceOwner: StyleSourceOwner }): StyleWritePlan {
     const { context, sourceOwner } = input;
     const { requestedStyles, condition } = context;

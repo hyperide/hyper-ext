@@ -15,6 +15,12 @@ import type {
 import type { FrameworkStyleReader } from '@lib/style-write/types';
 
 export class TailwindV4Reader implements FrameworkStyleReader {
+  /**
+   * Read entry: expose the element's Tailwind class source (the "Tailwind" inspector
+   * source tab) from its className expression facts. Returns no `sourceOwners`/`values`
+   * yet — per-property class→CSS ownership tracing is a later Phase 7 slice; today this
+   * only surfaces the tab the write router matches against.
+   */
   read(input: Parameters<FrameworkStyleReader['read']>[0]): FrameworkReadResult {
     const classNameExpression = input.elementFacts.classNameExpression;
     const classIdentities: SourceClassIdentity[] = classNameExpression ? buildClassIdentities(classNameExpression) : [];

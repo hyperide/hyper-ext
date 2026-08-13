@@ -24,6 +24,15 @@ interface SelectTargetResultWithDiagnostics extends SelectTargetResult {
   diagnostics: Diagnostic[];
 }
 
+/**
+ * Map a CSS system to the transport `SourceForm` its writes physically take when no
+ * existing owner dictates one — i.e. the "where the value lives" half of the §7.3 style
+ * identity tuple. Tailwind → `elementClass` (className), CSS Modules / plain CSS →
+ * `cssStyleRule` (a rule in a `.css` file), inline / emotion / vanilla-extract / MUI /
+ * Mantine → `scriptReactStyleRule` (a JS style object), styled-components →
+ * `scriptNativeStyleRule`, Tamagui / Chakra → `adapterKnownElementProp` (a JSX prop).
+ * Used only to synthesize an owner (steps 3-5) when none was found.
+ */
 function defaultSourceFormForSystem(system: CssSystemId): SourceForm {
   switch (system) {
     case 'tailwind-v3':
@@ -67,6 +76,17 @@ function ownerTabId(owner: StyleSourceOwner): string {
 
 const TAILWIND_SYSTEMS = new Set<CssSystemId>(['tailwind-v3', 'tailwind-v4']);
 
+/**
+ * The write-routing brain: given a write request, decide WHICH CSS system / adapter
+ * writer + source owner the edit should land on. This is the AS-IS realization of the
+ * priority chain from master-spec §7.1 (resolved per property / per state), collapsed
+ * to the channels available today. The selected target is then handed to that writer to
+ * MAP into a frozen plan ("frozen plan, dumb dispatch", §7.4).
+ *
+ * USER-IMPACT: decides where an inspector style edit is written — into a Tailwind class,
+ * a `.module.css` rule, a Tamagui prop, or an inline `style={{}}` — and therefore both
+ * the file that changes and the blast radius of the change.
+ */
 export class DefaultStyleWritePlanner implements StyleWritePlanner {
   private adapterMap: Map<CssSystemId, FrameworkStyleAdapter>;
 
@@ -83,6 +103,28 @@ export class DefaultStyleWritePlanner implements StyleWritePlanner {
     };
   }
 
+  /**
+   * Resolve the write target via the ordered priority chain, recording any
+   * blast-radius / ambiguity warnings as diagnostics. Steps, most-preferred first:
+   *
+   *   1. Explicit selected source tab — honor what the user picked in the inspector
+   *      (exact tab identity, else system prefix).
+   *   2. Existing exact owner — an owner that already declares this `(property,
+   *      condition)` with `confidence:'exact'`. Edit-in-place of the incumbent.
+   *   3. Element primary system — the element uses exactly one CSS system: write there.
+   *   4. Mixed system, new property — Tailwind wins for a property no owner declares yet.
+   *   5. Project primary system — prefer Tailwind, then CSS Modules, then first available.
+   *   6. Inline fallback — the universal floor (spec §8.3): inline `style={{}}`.
+   *
+   * OWNERSHIP / COLLISION (the load-bearing case in step 2): when BOTH a Tailwind class
+   * and a CSS-Modules/plain-CSS rule own the same `(property, condition)`, CSS Modules is
+   * treated as the explicit semantic owner and WINS — Tailwind owners are skipped so the
+   * loop falls through to the module owner, and a `warning` diagnostic tells the user the
+   * Tailwind class still also defines this property. This avoids a silent split where the
+   * inspector edits one channel while the cascade is actually driven by the other. The
+   * realm/source-form mapping (system → `SourceForm`) is owned by
+   * {@link defaultSourceFormForSystem}.
+   */
   selectTargetWithDiagnostics(ctx: StyleWriteContext): SelectTargetResultWithDiagnostics {
     const diagnostics: Diagnostic[] = [];
     const { elementFacts, selectedSourceTabId, condition, requestedStyles } = ctx;
@@ -209,6 +251,13 @@ export class DefaultStyleWritePlanner implements StyleWritePlanner {
     };
   }
 
+  /**
+   * Fabricate a source owner for a system that has no existing incumbent owner for the
+   * requested property (chain steps 3-5). Confidence is `exact` because the system was
+   * positively detected on the element/project; the source form comes from
+   * {@link defaultSourceFormForSystem}, and the file/element ref is borrowed from any
+   * existing owner so the writer knows which node to target.
+   */
   private createSyntheticOwner(system: CssSystemId, firstProperty: string, ctx: StyleWriteContext): StyleSourceOwner {
     return {
       cssSystem: system,
@@ -221,6 +270,13 @@ export class DefaultStyleWritePlanner implements StyleWritePlanner {
     };
   }
 
+  /**
+   * The universal floor (chain step 6, spec §8.3): when no CSS system can be resolved,
+   * route to the inline-style writer so an edit always has SOME landing target. The
+   * synthetic owner's confidence is `computed-only` to signal this is a fallback, not a
+   * located source. Throws if the inline-style adapter was not registered — it is a
+   * hard invariant that it always is (see createDefaultStyleWriteManager).
+   */
   private createInlineFallback(
     firstProperty: string,
     ctx: StyleWriteContext,

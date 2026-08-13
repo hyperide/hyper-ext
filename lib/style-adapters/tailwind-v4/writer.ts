@@ -27,6 +27,15 @@ function mapStatePrefix(state: string): string | undefined {
 }
 
 export class TailwindV4Writer implements FrameworkStyleWriter {
+  /**
+   * Map canonical inspector styles into a static {@link TailwindPlan}: generate the
+   * add-classes via {@link generateTailwindClasses} (CSS prop → Tailwind class is owned
+   * there, not here) and list every requested property in `removeForProperties` so the
+   * executor strips the old conflicting classes first. An empty value means "remove this
+   * property": it is excluded from class generation but still listed for removal.
+   * Non-base states (hover/focus/…) become the Tailwind variant prefix.
+   * USER-IMPACT: backs inspector style-edit writes on Tailwind v4 elements.
+   */
   createPlan(input: { context: StyleWriteContext; sourceOwner: StyleSourceOwner }): StyleWritePlan {
     const { context, sourceOwner } = input;
     const { requestedStyles, condition } = context;

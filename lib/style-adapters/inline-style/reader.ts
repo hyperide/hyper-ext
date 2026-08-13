@@ -10,6 +10,12 @@ import type { FrameworkReadResult, SourceClassIdentity } from '@lib/style-read/t
 import type { FrameworkStyleReader } from '@lib/style-write/types';
 
 export class InlineStyleReader implements FrameworkStyleReader {
+  /**
+   * Read entry: expose the element's inline `style` prop as a single "Inline" source tab
+   * when a style attribute is present. Confidence is `exact` for an object-literal style,
+   * `probable` for any other expression form (spread/ref) where the prop set isn't statically
+   * certain. Per-property inline ownership tracing is a later Phase 7 slice.
+   */
   read(input: Parameters<FrameworkStyleReader['read']>[0]): FrameworkReadResult {
     const classIdentities: SourceClassIdentity[] = input.elementFacts.styleAttribute
       ? [

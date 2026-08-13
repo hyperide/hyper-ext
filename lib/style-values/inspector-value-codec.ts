@@ -129,7 +129,25 @@ function normalizePassthrough(value: unknown): NormalizedInspectorValue {
   return { kind: 'value', value: str };
 }
 
+/**
+ * The canonical-form boundary of the style pipeline. Sits at BOTH ends:
+ *   • write — user input → canonical inspector form (before adapters map it per target);
+ *   • read  — adapter output → display form.
+ * It is deliberately NOT a per-target value mapper: turning the canonical form into
+ * "opacity-50" / "0.5" / a Tamagui token is each adapter's job. The codec only enforces
+ * the inspector's canonical shape per property — opacity as a 0-100 integer; for lengths, a
+ * px value is reduced to its bare number while keywords (`auto`) and non-px units (`rem`, `%`,
+ * `vh`, …) pass through unchanged; everything else is passed through trimmed. An empty value
+ * becomes `kind:'remove'`, the pipeline's signal to delete the property.
+ */
 export const inspectorValueCodec = {
+  /**
+   * Normalize one `{ key, value }` to canonical inspector form, dispatching by the
+   * property's value category (opacity → 0-100; color → passthrough; length → bare number
+   * for a px value, keywords/non-px units passed through; default → passthrough). Throws on
+   * a non-numeric opacity; never throws for other categories. Returns `kind:'remove'` for an
+   * empty input.
+   */
   normalize(input: { key: string; value: unknown }): NormalizedInspectorValue {
     const { key, value } = input;
 
@@ -148,6 +166,11 @@ export const inspectorValueCodec = {
     return normalizePassthrough(value);
   },
 
+  /**
+   * Render a stored canonical value for display. Currently an identity passthrough —
+   * canonical form is already the display form — but kept as the explicit read-side
+   * counterpart to {@link normalize} so per-property display formatting has a home.
+   */
   format(input: { key: string; value: string }): string {
     return input.value;
   },

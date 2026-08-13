@@ -110,6 +110,13 @@ function sourceOwnersFromInput(input: StyleWriteRequestContextInput, cssSystem: 
   return [...sourceOwners, createSyntheticOwner(input, cssSystem)];
 }
 
+/**
+ * Extract the explicitly routable CSS system from a selected source tab id
+ * (`<system>:<sourceId>`), or undefined when the tab is a non-routable sentinel
+ * (`computed`/`auto`) or an unknown system. Only tailwind-v4 / css-modules / inline-style
+ * are request-routable today; an undefined result tells the caller to run the priority
+ * cascade ({@link resolveWriteCascade}) instead of honoring an explicit tab.
+ */
 export function getRequestRoutableCssSystem(selectedSourceTabId: string | undefined): CssSystemId | undefined {
   const system = selectedSourceTabId?.split(':')[0] as CssSystemId | undefined;
   if (system && REQUEST_ROUTABLE_SYSTEMS.has(system)) return system;
@@ -181,6 +188,13 @@ function resolveRequestCssSystem(input: StyleWriteRequestContextInput): CssSyste
   return resolveWriteCascade(input).system;
 }
 
+/**
+ * Turn the CSS-Modules class references found on an element (from
+ * {@link getCssModuleClassReferences}) into `exact` source owners the planner can write to —
+ * one per referenced module class, carrying its `.css` file path + selector. When the user
+ * picked a specific `css-modules:<classKey>` tab, only that class's references are kept so the
+ * edit lands on the chosen rule rather than every module class on the element.
+ */
 export function createCssModuleSourceOwnersFromReferences(input: CssModuleSourceOwnersInput): StyleSourceOwner[] {
   const selectedClassKey = input.selectedSourceTabId?.startsWith('css-modules:')
     ? input.selectedSourceTabId.slice('css-modules:'.length)
@@ -204,6 +218,15 @@ export function createCssModuleSourceOwnersFromReferences(input: CssModuleSource
   }));
 }
 
+/**
+ * Assemble the {@link StyleWriteContext} the StyleWriteManager/planner consume from a raw
+ * platform update request: resolve the target CSS system (explicit tab, else the D2 priority
+ * cascade), normalize the state into a condition, ensure a source owner exists for that system
+ * (synthesizing a `probable` one if the request carried none), and project the capability set.
+ * This is the bridge from a thin transport request to the rich context the write pipeline needs;
+ * once StyleReadManager is wired at the platform boundary, real owner facts supersede the
+ * synthesized ones (see file header).
+ */
 export function createStyleWriteContextFromRequest(input: StyleWriteRequestContextInput): StyleWriteContext {
   const cssSystem = resolveRequestCssSystem(input);
   const condition = conditionFromState(input.state);

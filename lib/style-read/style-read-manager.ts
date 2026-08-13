@@ -35,6 +35,18 @@ export class DefaultStyleReadManager implements StyleReadManager {
     this.adapters = options.adapters;
   }
 
+  /**
+   * The single public READ entry of the style pipeline (read → map → write).
+   * Fans the already-collected element facts out to every active framework reader,
+   * then aggregates their canonical facts into the inspector view-model: the source
+   * tabs, the merged property rows, the surface decision, and the available condition
+   * axes. This is the read-merge model from master-spec §6.1 (SelectionStyleRead) —
+   * the inspector never talks to adapters directly, only to this manager.
+   *
+   * USER-IMPACT: backs the Properties-panel style inspector — which source tabs the
+   * user sees (Computed / Tailwind / .module.css / Inline), what each property reads
+   * as, and whether the standard style inspector vs the props editor is shown.
+   */
   async read(context: StyleReadContext): Promise<StyleReadResult> {
     const readResults = await this.readActiveAdapters(context);
     const sourceTabs = buildSourceTabs(context, readResults);
@@ -49,6 +61,13 @@ export class DefaultStyleReadManager implements StyleReadManager {
     };
   }
 
+  /**
+   * Route the read to only the adapters whose CSS system the project actually uses
+   * (e.g. a Tailwind+CSS-Modules project skips the inline-style reader's work unless
+   * registered). Each active reader maps the shared element facts into its own
+   * canonical {@link FrameworkReadResult}; readers run in parallel and never touch the
+   * filesystem — tracing/IO stays at the platform boundary (see file header).
+   */
   private async readActiveAdapters(context: StyleReadContext): Promise<FrameworkReadResult[]> {
     const activeSystemIds = new Set<CssSystemId>(context.projectCapabilities.projectCssSystems);
     const activeReaders = this.adapters.filter((adapter) => adapter.reader && activeSystemIds.has(adapter.id));
@@ -70,6 +89,15 @@ export class DefaultStyleReadManager implements StyleReadManager {
   }
 }
 
+/**
+ * Build the inspector's source-tab list: always a synthetic "Computed" tab first
+ * (the runtime-overlay display fill, never an editable owner), then one de-duplicated
+ * tab per distinct style source discovered — both element-level source owners and each
+ * adapter's class identities. Tabs are keyed by `cssSystem:sourceId` so the same source
+ * surfaced by both the element facts and an adapter collapses to one tab (which is why a
+ * dynamic-branch Tailwind class no longer spawns a second indistinguishable "Tailwind"
+ * button — see TailwindV4Reader, HYP-553).
+ */
 function buildSourceTabs(context: StyleReadContext, readResults: FrameworkReadResult[]): StyleSourceTab[] {
   const tabsById = new Map<string, StyleSourceTab>();
   tabsById.set('computed', {
@@ -154,6 +182,14 @@ function trimClassPrefix(value: string): string {
   return value.startsWith('.') ? value.slice(1) : value;
 }
 
+/**
+ * Merge property rows from two layers into the inspector's PropertySource list:
+ * the live computed style (every property, `active:true`, attributed to the
+ * `computed` tab) plus each source owner's declared value (`active:false`, attributed
+ * to that owner's tab). Owner values are looked up under both kebab and camelCase keys
+ * because adapters key their value maps inconsistently. Per spec §6.3 the computed layer
+ * is a display overlay only — it never makes a property editable, ownership does.
+ */
 function buildProperties(context: StyleReadContext, readResults: FrameworkReadResult[]): PropertySource[] {
   const computedProperties = Object.entries(context.computedStyle).map(([property, value]) => ({
     property,
@@ -191,6 +227,24 @@ function toCamelCase(value: string): string {
   return value.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
 }
 
+/**
+ * Selection-level routing: decide WHICH inspector surface to show — the standard style
+ * inspector, the props editor, or neither — and carry the reasons. This is the AS-IS
+ * home of master-spec §6.5's surface decision (the spec quotes this very function,
+ * `style-read-manager.ts:194`, and notes there is NO `lib/stylability/` dir — D19).
+ *
+ * Precedence: a known adapter prop-mapper enables the style inspector with a compact
+ * props editor; otherwise any standard style surface (intrinsic element, accepts
+ * className/style/css/sx, or a found source owner) enables the inspector with the props
+ * editor hidden; otherwise a recursive props schema routes to the full props editor;
+ * else nothing is stylable here.
+ *
+ * NOTE (spec §6.5): the surface decision is SEPARATE from per-field writability — a shown
+ * inspector does not imply every property is editable; that is owned per-property elsewhere.
+ *
+ * USER-IMPACT: decides whether the user gets the visual style controls or the
+ * props/JSON editor when they select an element.
+ */
 function decideSurface(context: StyleReadContext, readResults: FrameworkReadResult[]): InspectorSurfaceDecision {
   const { componentFacts, componentPropSurface, elementPropMappers, sourceOwners } = context.elementFacts;
 
@@ -246,6 +300,14 @@ function buildActiveConditions(context: StyleReadContext): StyleCondition {
   };
 }
 
+/**
+ * Collect the condition axes the inspector may offer for this selection — states
+ * (base/hover/…), viewport keys, theme axes, and container keys — by unioning the
+ * project's declared theme capabilities with every condition observed across the read
+ * results (owners + class identities). These are the orthogonal axes from master-spec
+ * §5.5 (capability taxonomy); they drive which state/breakpoint/theme toggles the user
+ * can edit under, not the values themselves.
+ */
 function buildAvailableConditionAxes(
   context: StyleReadContext,
   readResults: FrameworkReadResult[],

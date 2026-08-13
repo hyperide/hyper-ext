@@ -17,6 +17,13 @@ export interface CreateDefaultStyleReadManagerOptions {
   adapters?: FrameworkStyleAdapter[];
 }
 
+/**
+ * Construct the shared StyleReadManager with the default adapter registry
+ * (Tailwind v4, CSS Modules, inline-style readers). Both SaaS and the VS Code
+ * extension call this before rendering inspector source tabs so the read-merge
+ * behavior is identical across platforms. Tests/callers may inject a custom
+ * `adapters` set to narrow the active readers.
+ */
 export function createDefaultStyleReadManager(options: CreateDefaultStyleReadManagerOptions = {}): StyleReadManager {
   const adapters = options.adapters ?? [
     { id: 'tailwind-v4', reader: new TailwindV4Reader() },

@@ -18,6 +18,14 @@ export interface CreateDefaultStyleWriteManagerOptions {
   adapters?: FrameworkStyleAdapter[];
 }
 
+/**
+ * Construct the shared StyleWriteManager with the default adapter registry
+ * (Tailwind v4, CSS Modules, Tamagui, inline-style). The platform supplies the
+ * `executor` (the only piece that actually mutates files); the manager wires the
+ * planner over the adapter set so write routing is identical across SaaS and the
+ * VS Code extension. inline-style MUST stay in the set — it is the universal
+ * fallback writer the planner falls through to (see DefaultStyleWritePlanner).
+ */
 export function createDefaultStyleWriteManager(options: CreateDefaultStyleWriteManagerOptions): StyleWriteManager {
   const adapters = options.adapters ?? [tailwindV4Adapter, cssModulesAdapter, tamaGuiAdapter, inlineStyleAdapter];
   return new DefaultStyleWriteManager({

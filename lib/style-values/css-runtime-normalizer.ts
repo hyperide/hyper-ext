@@ -369,6 +369,24 @@ function cssSupports(cssProperty: string, value: string): boolean {
 // --- Public API ---
 
 export const cssRuntimeNormalizer = {
+  /**
+   * Validate a CSS `property: value` pair and canonicalize it for emission into a write
+   * plan. CSS-target adapter writers (inline-style, css-modules) call this AFTER mapping
+   * the canonical inspector value to a CSS value, as the last gate before the plan. Order:
+   *   1. empty → `remove` (delete the declaration);
+   *   2. already a supported value → keep as-is;
+   *   3. a bare number → retry with `px` appended (so `12` → `12px` for length props);
+   *   4. otherwise → `invalid` with a reason the inspector can surface.
+   * Support is checked via the browser's CSS.supports when reliable, else a static
+   * allowlist (happy-dom's CSS.supports is a no-op stub — see {@link isCssSupportsFunctional}).
+   *
+   * Note: this only CLASSIFIES the value — it does not itself block the write. The calling
+   * writer decides what to do with an `invalid` verdict; today the css-modules and inline-style
+   * writers pass the raw value through rather than dropping it (see their convert helpers).
+   *
+   * USER-IMPACT: auto-adds px to bare numbers so typing "12" into a width field just works,
+   * and surfaces an `invalid` reason the inspector can show.
+   */
   normalize(input: { cssProperty: string; value: string }): CssNormalizationResult {
     const { cssProperty, value } = input;
 

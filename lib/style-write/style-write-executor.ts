@@ -153,6 +153,15 @@ function stringifyTargetStyles(styles: Record<string, TargetStyleValue>): Record
   return result;
 }
 
+/**
+ * The WRITE-apply end of the style pipeline: takes a frozen {@link StyleWritePlan} and
+ * performs the actual AST-backed file mutation for one element, parsing the source,
+ * locating the target JSX node, and applying the plan format-preservingly. It dispatches
+ * by `sourceForm` to the per-system execution path (Tailwind className / CSS file rule /
+ * inline style object / adapter prop). Construction is pure over an injected {@link FileIO}
+ * so it unit-tests without a real filesystem; the host threads in DOM classes, project
+ * root, and the color-probe driving list (see {@link ProbeDrivingCandidate}).
+ */
 export class StyleWriteExecutor {
   private readonly fileParser: ReturnType<typeof createFileParser>;
   private readonly fileIO: FileIO;
@@ -170,6 +179,11 @@ export class StyleWriteExecutor {
     this.requestedStyles = options.requestedStyles;
   }
 
+  /**
+   * Apply a frozen plan by dispatching on its `sourceForm` to the matching per-system
+   * executor. Any thrown error is caught into a `success:false` result so a failed write
+   * is a structured verdict, never an unhandled throw (fail-closed, spec §8.4).
+   */
   async execute(plan: StyleWritePlan): Promise<StyleWriteResult> {
     try {
       switch (plan.sourceForm) {
@@ -193,6 +207,16 @@ export class StyleWriteExecutor {
     }
   }
 
+  /**
+   * The Tailwind className write — the single most-exercised, and only genuinely
+   * format-preserving, write path on main (master-spec §3.8). Reached for
+   * `sourceForm:'elementClass'`. Branches in order: refuse dynamic plans carrying explicit
+   * locations (a not-yet-reconciled edit shape, returned as a failure), then a
+   * probe-driven inline override (HYP-544 Phase 3 — when the live color is driven by
+   * inline/var/module a className append would be a no-op), then the static
+   * remove-conflicting-classes + append on the literal className. USER-IMPACT: backs every
+   * inspector style edit on a Tailwind element, preserving the user's existing class order.
+   */
   private async executeTailwindPlan(plan: TailwindPlan): Promise<StyleWriteResult> {
     if (plan.strategy.mode === 'dynamic' && plan.strategy.locations.length > 0) {
       return this.failure(plan, 'Dynamic Tailwind plan locations are not supported by StyleWriteExecutor yet');
@@ -494,6 +518,14 @@ export class StyleWriteExecutor {
   }
 }
 
+/**
+ * Shared public entry for a single-element style write request used by both the SaaS and
+ * VS Code update handlers. Resolves the element ref and the routable CSS system from the
+ * selected source tab, infers the source owner, plans the write, and runs it through a
+ * {@link StyleWriteExecutor}. The `'auto'` tab id is the multi-select intent sentinel,
+ * accepted symmetrically with `'computed'` so the per-element edit-in-place floor runs
+ * instead of throwing (D2 §8). Returns a structured {@link StyleWriteResult} either way.
+ */
 export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestInput): Promise<StyleWriteResult> {
   const elementRef = getElementRef(input.sourceFilePath, input.element);
   if (!elementRef) {

@@ -15,6 +15,14 @@ import type {
 } from '@lib/style-write/types';
 
 export class TamaGuiPropWriter implements FrameworkStyleWriter {
+  /**
+   * Map canonical inspector styles into an {@link AdapterPropPlan}: each requested style
+   * becomes a direct JSX prop (`backgroundColor="#..."`, `padding="$2"`). Values pass
+   * through verbatim — Tamagui token strings (`$blue9`) and plain values alike are written
+   * as JSX string attributes; this writer does NOT run CSS validation (Tamagui has its own).
+   * USER-IMPACT: backs inspector style-edit writes on Tamagui / React Native elements where
+   * style is expressed as adapter-known element props.
+   */
   createPlan(input: { context: StyleWriteContext; sourceOwner: StyleSourceOwner }): StyleWritePlan {
     const { context, sourceOwner } = input;
     const { requestedStyles, condition } = context;

@@ -24,6 +24,14 @@ export class DefaultThemeContextResolver implements ThemeContextResolver {
   }
 }
 
+/**
+ * Build the canonical {@link RuntimeThemeContext} the read/write managers route on: resolve
+ * the effective light/dark scheme from the IDE preference (or the supplied system scheme when
+ * preference is `system`) and derive a default `color-scheme` theme condition unless the caller
+ * opts out. This is the one place light/dark resolution happens so manager routing never reads
+ * ambient machine theme (see file header). USER-IMPACT: drives which theme the inspector reads
+ * and edits styles under (e.g. a value shown for `.dark`).
+ */
 export function createRuntimeThemeContext(input: RuntimeThemeContextInput): RuntimeThemeContext {
   const resolvedColorScheme = resolveColorScheme(input.ideThemePreference, input.systemColorScheme);
   const selectedTheme =
@@ -38,6 +46,12 @@ export function createRuntimeThemeContext(input: RuntimeThemeContextInput): Runt
   };
 }
 
+/**
+ * Adapter for callers that already hold a resolved theme-state triple
+ * (`theme` preference + `resolvedTheme` + optional explicit `selectedTheme`). Normalizes the
+ * `'system'` case to feed `resolvedTheme` as the system scheme, then delegates to
+ * {@link createRuntimeThemeContext}.
+ */
 export function createRuntimeThemeContextFromThemeState(
   input: ThemeStateRuntimeThemeContextInput,
 ): RuntimeThemeContext {
@@ -60,6 +74,12 @@ export function createRuntimeThemeContextFromThemeState(
   });
 }
 
+/**
+ * Build a theme context by INFERRING the active scheme from the live DOM class list — the
+ * `dark`/`light` and VS Code `vscode-dark`/`vscode-light`/`vscode-high-contrast` marker
+ * classes (see {@link themePreferenceFromCssClasses}), defaulting to `system` when none are
+ * present. Used when the preview frame's theme is only observable as classes on the root.
+ */
 export function createRuntimeThemeContextFromCssClasses(input: CssClassRuntimeThemeContextInput): RuntimeThemeContext {
   const ideThemePreference = themePreferenceFromCssClasses(input.classNames);
   if (ideThemePreference === 'system') {

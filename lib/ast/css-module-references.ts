@@ -27,6 +27,19 @@ export function getCssModuleImportLocalNames(ast: t.File): Set<string> {
   return new Set(getCssModuleImportBindings(ast, '').keys());
 }
 
+/**
+ * Map each local binding imported from a `*.module.{css,scss,…}` file to its resolved CSS
+ * file path + syntax. Only default and namespace imports are CSS-Modules bindings.
+ *
+ *   source:  import styles from './Button.module.css'
+ *   node:    ImportDeclaration
+ *              source: StringLiteral('./Button.module.css')   ← isCssModuleImportSource
+ *              specifiers: [ ImportDefaultSpecifier(local: Identifier('styles')) ]
+ *   result:  { 'styles' → { importLocalName:'styles', cssFilePath:'…/Button.module.css', cssSyntax:'css' } }
+ *
+ * USER-IMPACT: this binding map is what lets the inspector know a `className={styles.x}`
+ * edit must be written into the imported `.module.css` rule, not the JSX.
+ */
 export function getCssModuleImportBindings(ast: t.File, importerFilePath: string): Map<string, CssModuleImportBinding> {
   const bindings = new Map<string, CssModuleImportBinding>();
 
@@ -50,6 +63,21 @@ export function getCssModuleImportBindings(ast: t.File, importerFilePath: string
   return bindings;
 }
 
+/**
+ * Walk an element's `className` expression and collect every CSS-Modules class reference
+ * (each `binding.classKey` member access), de-duplicated. Handles bare member access and
+ * any wrapper (clsx/cn/template/conditional) by recursing the whole subtree.
+ *
+ *   source:  <div className={clsx(styles.card, active && styles.on)} />
+ *   walks:   JSXExpressionContainer → CallExpression(clsx) args
+ *              MemberExpression(object: Identifier('styles'), property: Identifier('card'))  → classKey 'card'
+ *              MemberExpression(object: Identifier('styles'), property: Identifier('on'))    → classKey 'on'
+ *   result:  [ { classKey:'card', selector:'.card', expressionPath:"styles.card", … },
+ *              { classKey:'on',   selector:'.on',   expressionPath:"styles.on",   … } ]
+ *
+ * Each reference carries the `.css` file path + selector the write router needs; this is the
+ * read-side source of the CSS-Modules inspector tabs.
+ */
 export function getCssModuleClassReferences(
   element: t.JSXElement,
   bindings: Map<string, CssModuleImportBinding>,
@@ -66,6 +94,16 @@ export function getCssModuleClassReferences(
   return dedupeReferences(references);
 }
 
+/**
+ * Predicate variant of {@link getCssModuleClassReferences}: does this expression subtree
+ * reference ANY of the given CSS-Modules locals? Used by the inline-style writer to decide
+ * a className is a CSS-Modules expression (so appending Tailwind classes is invalid and it
+ * must fall back to an inline `style={{}}` write). Recurses the raw node graph, skipping
+ * non-semantic keys (loc/comments) via {@link shouldSkipTraversalKey}.
+ *
+ *   className={styles.app}            → true   (MemberExpression on a CSS-Modules local)
+ *   className={clsx('x', cond && y)}  → false  (no CSS-Modules member access)
+ */
 export function containsCssModuleClassReference(node: unknown, cssModuleLocals: Set<string>): boolean {
   if (cssModuleLocals.size === 0) return false;
 

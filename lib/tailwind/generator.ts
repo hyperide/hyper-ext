@@ -1,6 +1,17 @@
 /**
- * Tailwind Class Generator
- * Converts style values to Tailwind CSS classes
+ * @file Tailwind Class Generator — the CSS-value → className MAP for the write side of the
+ * style pipeline.
+ *
+ * Role: turns canonical inspector styles into Tailwind utility classes (the "append" half of
+ * master-spec §3.8). The {@link TailwindV4Writer} calls {@link generateTailwindClasses} to
+ * build a plan's add-classes; the executor then strips conflicts (lib/tailwind/parser.ts) and
+ * appends these. Expressibility is decided by what this generator emits: a property that yields
+ * NO class (the generator returns nothing) is "inexpressible". The executor only redirects an
+ * inexpressible property to the inline floor in its GUARDED routing case — Auto/computed,
+ * base-state, no CSS-Modules owner (see splitExpressibility in style-write-executor.ts); an
+ * explicit-Tailwind, non-base, or CSS-Modules-owned route can still produce an empty add-class
+ * plan. TW v4 arbitrary values (`text-[#…]`, `shadow-[…]`) make a generator miss rare. Project
+ * color tokens are honored by mapping requested colors back to palette classes where possible.
  */
 
 import tailwindColors from 'tailwindcss/colors';

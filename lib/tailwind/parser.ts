@@ -1,6 +1,15 @@
 /**
- * Tailwind CSS Classes Parser
- * Parses Tailwind classes and extracts CSS values
+ * @file Tailwind CSS Classes Parser — the className → CSS-value MAP for the read side and
+ * the conflict-detection MAP for the write side of the style pipeline.
+ *
+ * Role: parses a Tailwind className string into CSS values (read/display) and, for writes,
+ * identifies which existing classes conflict with the properties being changed so the
+ * executor can strip them before appending new ones (the remove half of master-spec §3.8's
+ * remove-conflicting + append path). String-level only — it does NOT touch the AST; the JSX
+ * mutation lives in lib/ast/dynamic-classname-mutator.ts. Ownership note: Tailwind prefixes
+ * overlap across CSS properties (`shadow-md` = boxShadow vs `shadow-red-500` = shadowColor;
+ * `border-2` = width vs `border-red-500` = color), so conflict matching is property-aware to
+ * avoid stripping a class that owns a different property — see {@link shouldPreserveClass}.
  */
 
 export interface ParsedTailwindStyles {
