@@ -4,6 +4,7 @@
 
 import * as t from '@babel/types';
 import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor';
+import { runStyleWriteTransaction } from '@lib/style-write/transaction/index.node';
 import { isJsxSourceFile } from './ast-utils';
 import type { ColorProbeCandidate } from './color-probe-types';
 import type { NodeRef } from '@shared/element-tracing/types';
@@ -51,22 +52,29 @@ export async function updateStyles(
     } catch {}
   }
 
-  const writeResult = await executeStyleWriteRequest({
-    ast,
-    sourceFilePath: resolvedPath,
-    element: result.element,
-    styles,
-    state,
-    selectedSourceTabId,
-    domClasses,
-    probeDriving: deps.probeDriving,
-    runtimeThemeContext: {
-      ideThemePreference: 'system',
-      resolvedColorScheme: 'light',
-      source: 'vscode',
+  // B0 write transaction (spec §9.1, HYP-722 T1a): passes the VS Code workspace FileIO as
+  // baseFileIO so the transaction snapshots and rolls back through the same transport the executor
+  // uses for the actual write. fileIO must NOT appear in request — the transaction injects its own
+  // SnapshotFileIO (wrapping baseFileIO) into the execute call so every read/write goes through it.
+  const writeResult = await runStyleWriteTransaction({
+    execute: executeStyleWriteRequest,
+    baseFileIO: deps.fileIO,
+    request: {
+      ast,
+      sourceFilePath: resolvedPath,
+      element: result.element,
+      styles,
+      state,
+      selectedSourceTabId,
+      domClasses,
+      probeDriving: deps.probeDriving,
+      runtimeThemeContext: {
+        ideThemePreference: 'system',
+        resolvedColorScheme: 'light',
+        source: 'vscode',
+      },
+      projectRoot: deps.workspaceRoot,
     },
-    fileIO: deps.fileIO,
-    projectRoot: deps.workspaceRoot,
   });
   if (writeResult.success === false) return { success: false, error: writeResult.error };
 
