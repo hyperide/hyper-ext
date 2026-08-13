@@ -281,6 +281,17 @@ function PreviewContent() {
     canvas.sendEvent({ type: 'command:fixUnsupportedProject' });
   }, [canvas]);
 
+  // Auto Fix (HYP-917): even when the extension genuinely cannot render this project, route
+  // the blocking/unsupported screen's prompt to the AI agent the STANDARD way — the same
+  // `ai:openChat` event the diagnostics panel's Auto Fix button and the SaaS editor already
+  // use (see webview/App.tsx, PanelRouter.ts, AIChatPanelProvider.ts). No new plumbing.
+  const handleAutoFixPrompt = useCallback(
+    (prompt: string) => {
+      canvas.sendEvent({ type: 'ai:openChat', prompt });
+    },
+    [canvas],
+  );
+
   // HYP-788/911: per-(sub-)repo support breakdown for the currently-open repo or the
   // active monorepo sub-repo. This is the authoritative unsupported surface when the host
   // provides supportDimensions (falls back to the legacy single-message screens below only
@@ -290,7 +301,9 @@ function PreviewContent() {
   // only ADDS a tab bar on top when there's more than one blocking dimension (HYP-913).
   const supportTabs = selectDimensionTabs(projectCapabilities?.supportDimensions ?? []);
   if (supportTabs.length > 0) {
-    return <SupportDimensionsTabs dimensions={supportTabs} onFix={handleDimensionFix} />;
+    return (
+      <SupportDimensionsTabs dimensions={supportTabs} onFix={handleDimensionFix} onAutoFix={handleAutoFixPrompt} />
+    );
   }
 
   // Unsupported project — full blocking screen. Two flavours:
@@ -299,7 +312,7 @@ function PreviewContent() {
   //  - 'react-native': renders only after a fix (react-native-web) → fix button.
   if (projectError) {
     if (projectError.type === 'framework') {
-      return <UnsupportedFrameworkScreen message={projectError.message} />;
+      return <UnsupportedFrameworkScreen message={projectError.message} onAutoFix={handleAutoFixPrompt} />;
     }
     const handleFix = () => {
       canvas.sendEvent({ type: 'command:fixUnsupportedProject' });

@@ -41,6 +41,10 @@ export const TID = {
     supportTab: (id: string) => `hyper-preview-support-tab-${id}`,
     supportTabPanel: (id: string) => `hyper-preview-support-panel-${id}`,
     supportFixButton: 'hyper-preview-support-fix',
+    // Auto Fix — routes a blocking dimension's prompt to the AI agent (ai:openChat) either
+    // as the only path forward (no mechanical fix command exists) or as an alternative to
+    // one (HYP-917).
+    supportAutoFixButton: 'hyper-preview-support-autofix',
   },
 
   // Inspector (Right Sidebar)

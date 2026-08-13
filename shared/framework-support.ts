@@ -30,3 +30,17 @@ export const FRAMEWORK_SUPPORT: { name: string; level: SupportLevel }[] = [
   { name: 'Vanilla JS', level: 'not-planned' },
   { name: 'Angular', level: 'not-planned' },
 ];
+
+/**
+ * Formats the "currently supports" line embedded in Auto Fix prompts (HYP-917) — the single
+ * source of truth for that phrasing, shared between `buildUnsupportedFrameworkPrompt`
+ * (shared/components/overlays/PreviewSetupOverlay.tsx) and `buildDimensionAutoFixPrompt`
+ * (vscode-extension/.../SupportDimensionsTabs.tsx) so a future wording/filter tweak can't
+ * silently diverge between the two. Returns '' when there's nothing supported to list.
+ */
+export function buildSupportedFrameworksLine(
+  frameworkSupport: readonly { name: string; level: SupportLevel }[] | undefined,
+): string {
+  const supported = (frameworkSupport ?? []).filter((f) => f.level === 'supported').map((f) => f.name);
+  return supported.length > 0 ? `HyperIDE currently supports: ${supported.join(', ')}.` : '';
+}

@@ -26,14 +26,36 @@
  */
 
 import { useState } from 'react';
-import { FrameworkUnsupportedContent } from '@shared/components/overlays';
-import { FRAMEWORK_SUPPORT } from '@shared/framework-support';
+import { buildUnsupportedFrameworkPrompt, FrameworkUnsupportedContent } from '@shared/components/overlays';
+import { buildSupportedFrameworksLine, FRAMEWORK_SUPPORT } from '@shared/framework-support';
 import { TID } from '@shared/data-testid-map';
 import type { SupportDimension, SupportStatus } from '../types';
 
 /** The one case with a pre-existing legacy screen to preserve verbatim (HYP-913). */
 function isLegacyFrameworkScreen(dimension: SupportDimension): boolean {
   return dimension.id === 'framework' && dimension.status === 'unsupported';
+}
+
+/**
+ * Builds the Auto Fix prompt for a generic blocking dimension (bundler, styleSystem
+ * needs-setup, react-native needs-setup) — these have no legacy screen and, unless they
+ * carry a `fixLabel`, no mechanical fix command either (HYP-917). Shares the "currently
+ * supports" line format with `buildUnsupportedFrameworkPrompt` via `buildSupportedFrameworksLine`.
+ */
+function buildDimensionAutoFixPrompt(dimension: SupportDimension): string {
+  const evidenceLines = dimension.evidence.map((row) => `- ${row.label}: ${row.detail}`).join('\n');
+  const supportedLine = buildSupportedFrameworksLine(FRAMEWORK_SUPPORT);
+  return `HyperIDE's component preview cannot render this project because of its "${dimension.title}" setup.
+
+**Reason:** ${dimension.reason}
+
+**Evidence:**
+${evidenceLines}
+${supportedLine ? `\n${supportedLine}` : ''}
+
+**Task:** Look for a real way to make this dimension previewable in HyperIDE (a config change, a missing dependency, an adapter). If you find one, apply it and explain what changed.
+
+**If there truly is no way** to fix this right now, say so clearly — do not guess or fake support.`;
 }
 
 const STATUS_LABEL: Record<SupportStatus, string> = {
@@ -55,11 +77,14 @@ const STATUS_COLOR: Record<SupportStatus, string> = {
 export function SupportDimensionsTabs({
   dimensions,
   onFix,
+  onAutoFix,
 }: {
   /** Already filtered to BLOCKING dimensions (selectDimensionTabs), worst-first. */
   dimensions: SupportDimension[];
   /** Invoked with the dimension id when its Fix action is clicked. */
   onFix?: (dimensionId: SupportDimension['id']) => void;
+  /** Invoked with a prompt when the active dimension's Auto Fix action is clicked (HYP-917). */
+  onAutoFix?: (prompt: string) => void;
 }) {
   const [activeId, setActiveId] = useState<SupportDimension['id'] | null>(dimensions[0]?.id ?? null);
   if (dimensions.length === 0) return null;
@@ -79,7 +104,7 @@ export function SupportDimensionsTabs({
         </div>
       )}
 
-      <DimensionPanel dimension={active} onFix={onFix} asTabPanel={hasTabs} />
+      <DimensionPanel dimension={active} onFix={onFix} onAutoFix={onAutoFix} asTabPanel={hasTabs} />
     </div>
   );
 }
@@ -116,10 +141,13 @@ function DimensionTab({
 function DimensionPanel({
   dimension,
   onFix,
+  onAutoFix,
   asTabPanel,
 }: {
   dimension: SupportDimension;
   onFix?: (dimensionId: SupportDimension['id']) => void;
+  /** Invoked with a prompt when this dimension's Auto Fix action is clicked (HYP-917). */
+  onAutoFix?: (prompt: string) => void;
   /** Only apply tabpanel ARIA semantics when a tablist is actually present (HYP-905). */
   asTabPanel: boolean;
 }) {
@@ -133,10 +161,26 @@ function DimensionPanel({
       <div role={role} data-testid={testId} style={legacyFrameworkPanelStyle}>
         <div style={legacyFrameworkCardStyle}>
           <FrameworkUnsupportedContent description={dimension.reason} frameworkSupport={FRAMEWORK_SUPPORT} />
+          {/* Centered (not the left-aligned actionRowStyle below) — legacyFrameworkCardStyle
+              mirrors PreviewSetupOverlay's centered card layout on purpose (HYP-913), so its
+              own Auto Fix button follows that centering, not the generic branch's row style. */}
+          {onAutoFix && (
+            <button
+              type="button"
+              data-testid={TID.preview.supportAutoFixButton}
+              style={{ ...fixButtonStyle, alignSelf: 'center' }}
+              onClick={() => onAutoFix(buildUnsupportedFrameworkPrompt(dimension.reason, FRAMEWORK_SUPPORT))}
+            >
+              Auto Fix
+            </button>
+          )}
         </div>
       </div>
     );
   }
+
+  const showFix = Boolean(dimension.fixLabel && onFix);
+  const showAutoFix = Boolean(onAutoFix);
 
   return (
     <div role={role} data-testid={testId} style={panelStyle}>
@@ -158,15 +202,33 @@ function DimensionPanel({
         </tbody>
       </table>
 
-      {dimension.fixLabel && onFix && (
-        <button
-          type="button"
-          data-testid={TID.preview.supportFixButton}
-          style={fixButtonStyle}
-          onClick={() => onFix(dimension.id)}
-        >
-          {dimension.fixLabel}
-        </button>
+      {/* Every blocking dimension always offers a path forward: the mechanical Fix button
+          when one is wired (react-native-web install etc.), and/or Auto Fix — routing the
+          reason + evidence to the AI agent — for the dimensions (bundler, styleSystem,
+          framework needs-setup) that have no mechanical fix command at all (HYP-917). */}
+      {(showFix || showAutoFix) && (
+        <div style={actionRowStyle}>
+          {dimension.fixLabel && onFix && (
+            <button
+              type="button"
+              data-testid={TID.preview.supportFixButton}
+              style={fixButtonStyle}
+              onClick={() => onFix(dimension.id)}
+            >
+              {dimension.fixLabel}
+            </button>
+          )}
+          {onAutoFix && (
+            <button
+              type="button"
+              data-testid={TID.preview.supportAutoFixButton}
+              style={fixButtonStyle}
+              onClick={() => onAutoFix(buildDimensionAutoFixPrompt(dimension))}
+            >
+              Auto Fix
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -269,6 +331,10 @@ const evidenceDetailCell: React.CSSProperties = {
   borderBottom: '1px solid var(--vscode-panel-border, #2a2a2a)',
 };
 
+// No marginTop here — the standalone legacy-branch button gets its spacing from
+// legacyFrameworkCardStyle's `gap`, and the generic-branch row(s) from actionRowStyle's
+// `marginTop` below. Baking a margin into the shared button style meant every new in-row
+// button had to remember to zero it back out (HYP-917 review) — one source of spacing instead.
 const fixButtonStyle: React.CSSProperties = {
   alignSelf: 'flex-start',
   background: 'var(--vscode-button-background)',
@@ -278,5 +344,7 @@ const fixButtonStyle: React.CSSProperties = {
   borderRadius: 4,
   cursor: 'pointer',
   fontSize: 13,
-  marginTop: 4,
 };
+
+// Groups the mechanical Fix button and/or the Auto Fix button side by side (HYP-917).
+const actionRowStyle: React.CSSProperties = { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 };

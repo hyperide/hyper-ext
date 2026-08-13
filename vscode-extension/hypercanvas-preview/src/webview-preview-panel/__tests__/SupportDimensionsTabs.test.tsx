@@ -175,4 +175,52 @@ describe('SupportDimensionsTabs', () => {
     expect(container.querySelector('[role="tablist"]')).not.toBeNull();
     expect(container.textContent).not.toContain('needs attention');
   });
+
+  // HYP-917: every blocking dimension always offers a path to ask the AI, even when there's
+  // no mechanical auto-fix command wired for it.
+  describe('Auto Fix (HYP-917)', () => {
+    it('renders no Auto Fix button when onAutoFix is not provided (legacy framework branch)', () => {
+      const container = renderLocal(<SupportDimensionsTabs dimensions={[frameworkDim]} />);
+      expect(findOptional(container, TID.preview.supportAutoFixButton)).toBeNull();
+    });
+
+    it('renders an Auto Fix button for the legacy framework-unsupported branch and invokes onAutoFix with a prompt', () => {
+      let sent: string | null = null;
+      const container = renderLocal(
+        <SupportDimensionsTabs dimensions={[frameworkDim]} onAutoFix={(p) => (sent = p)} />,
+      );
+      const btn = find(container, TID.preview.supportAutoFixButton);
+      expect(btn.textContent).toBe('Auto Fix');
+      clickEl(btn);
+      expect(sent ?? '').toContain('Vue.js projects not supported');
+    });
+
+    it('renders an Auto Fix button for a generic blocking dimension with no fixLabel and invokes onAutoFix with a prompt built from its reason + evidence', () => {
+      let sent: string | null = null;
+      const container = renderLocal(<SupportDimensionsTabs dimensions={[bundlerDim]} onAutoFix={(p) => (sent = p)} />);
+      const btn = find(container, TID.preview.supportAutoFixButton);
+      clickEl(btn);
+      // Structural assertions on what buildDimensionAutoFixPrompt actually emits — not a
+      // coincidental substring match with a different prompt builder's fallback text.
+      expect(sent ?? '').toContain(bundlerDim.reason);
+      expect(sent ?? '').toContain('- Detected bundler: unknown');
+    });
+
+    it('renders no Auto Fix button for a generic blocking dimension when onAutoFix is not provided', () => {
+      const container = renderLocal(<SupportDimensionsTabs dimensions={[bundlerDim]} />);
+      expect(findOptional(container, TID.preview.supportAutoFixButton)).toBeNull();
+    });
+
+    it('renders both the mechanical Fix button and the Auto Fix button for a needs-setup dimension that has a fixLabel, and Auto Fix sends its own prompt', () => {
+      let sent: string | null = null;
+      const container = renderLocal(
+        <SupportDimensionsTabs dimensions={[rnDim]} onFix={() => {}} onAutoFix={(p) => (sent = p)} />,
+      );
+      expect(findOptional(container, TID.preview.supportFixButton)).not.toBeNull();
+      const autoFixBtn = find(container, TID.preview.supportAutoFixButton);
+      clickEl(autoFixBtn);
+      expect(sent ?? '').toContain(rnDim.reason);
+      expect(sent ?? '').toContain('- Missing: react-native-web');
+    });
+  });
 });
