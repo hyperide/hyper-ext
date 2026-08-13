@@ -49,6 +49,41 @@ export function printAST(ast: t.File): string {
 }
 
 /**
+ * Format-preserving, surgical replacement of a single AST node's source text.
+ *
+ * Re-prints ONLY `node` (recast reuses `.original` for any of its untouched descendants, so their
+ * bytes round-trip identically) and splices the result into `sourceCode` over the node's original
+ * `[start, end)` byte range. Every byte OUTSIDE that range — surrounding JSX children, sibling
+ * attributes, indentation, closing tags — is left untouched.
+ *
+ * Use this instead of {@link printAST} when a mutation replaces a node reference (e.g. swapping a
+ * `className` attribute value via `setAttribute`): a whole-file recast reprint of a freshly built
+ * node that has no `.original` would otherwise reformat the enclosing JSX element's children
+ * (HYP-575).
+ *
+ * Returns `null` when the node has no usable source range (a synthetic node, or a parse that did
+ * not attach offsets), so callers can fall back to {@link printAST}.
+ */
+export function spliceNodeSource(
+  sourceCode: string,
+  node: t.Node,
+  originalStart: number,
+  originalEnd: number,
+): string | null {
+  if (
+    !Number.isInteger(originalStart) ||
+    !Number.isInteger(originalEnd) ||
+    originalStart < 0 ||
+    originalEnd > sourceCode.length ||
+    originalStart > originalEnd
+  ) {
+    return null;
+  }
+  const printed = recastPrint(node, { quote: 'single' }).code;
+  return sourceCode.slice(0, originalStart) + printed + sourceCode.slice(originalEnd);
+}
+
+/**
  * Create file-bound parser functions using given FileIO implementation
  */
 export function createFileParser(io: FileIO) {

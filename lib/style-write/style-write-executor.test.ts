@@ -204,6 +204,117 @@ describe('StyleWriteExecutor', () => {
     expect(fileIO.content(appPath)).toContain("className='text-red-500 pl-[16px]'");
   });
 
+  it('preserves untouched JSX formatting when rewriting a dynamic className (HYP-575)', async () => {
+    const appPath = '/project/src/App.tsx';
+    const original = `import cn from 'clsx';
+
+export function OpaqueColorFixture() {
+  return (
+    <div className={cn("text-red-500 p-4", isActive && "font-bold")}>
+      Hello opaque color world
+    </div>
+  );
+}
+`;
+    const plan = makeTailwindPlan({
+      sourceElement: {
+        filePath: 'src/App.tsx',
+        elementRef: 'src/App.tsx:5:4',
+      },
+      requestedStyles: { color: 'blue' },
+      targetStyles: { color: 'blue' },
+      strategy: {
+        mode: 'dynamic',
+        locations: [],
+        addClasses: 'text-blue-500',
+        removeForProperties: ['color'],
+        fallbackStrategy: 'wrap-expression',
+        analysis: {
+          engine: 'shared-deterministic-analyzer',
+        },
+      },
+      target: {
+        filePath: 'src/App.tsx',
+        elementRef: 'src/App.tsx:5:4',
+      },
+    });
+    const fileIO = new InMemoryFileIO({ [appPath]: original });
+    const executor = new StyleWriteExecutor({ fileIO });
+
+    const result = await executor.execute(plan);
+
+    expect(result.success).toBe(true);
+    const content = fileIO.content(appPath);
+
+    // The intended className change happened: blue replaced red.
+    expect(content).toContain('text-blue-500');
+    expect(content).not.toContain('text-red-500');
+
+    // Every byte OUTSIDE the className attribute is byte-identical: the JSX text child keeps its
+    // own line + indentation and the closing </div> stays on its own indented line. Reconstruct the
+    // expected file by splicing ONLY the new className expression back into the original source.
+    const newClassNameMatch = /className=(\{[\s\S]*?\}|"[^"]*")/.exec(content);
+    expect(newClassNameMatch).not.toBeNull();
+    const expected = original.replace(
+      'className={cn("text-red-500 p-4", isActive && "font-bold")}',
+      `className=${newClassNameMatch?.[1]}`,
+    );
+    expect(content).toBe(expected);
+
+    // Explicit guards against the observed regression symptoms.
+    expect(content).toContain('\n      Hello opaque color world\n');
+    expect(content).toContain('\n    </div>\n');
+  });
+
+  it('preserves untouched JSX formatting for in-place template-literal className edits (HYP-575)', async () => {
+    // Template-literal append mutates quasis IN PLACE (no node replacement). Verify the surgical
+    // splice path also leaves the multi-line JSX child untouched for this distinct mutation shape.
+    const appPath = '/project/src/App.tsx';
+    const original = `export function TemplateFixture() {
+  return (
+    <span className={\`text-red-500 px-2 \${tone}\`}>
+      first line
+      second line
+    </span>
+  );
+}
+`;
+    const plan = makeTailwindPlan({
+      sourceElement: {
+        filePath: 'src/App.tsx',
+        elementRef: 'src/App.tsx:3:4',
+      },
+      requestedStyles: { color: 'blue' },
+      targetStyles: { color: 'blue' },
+      strategy: {
+        mode: 'dynamic',
+        locations: [],
+        addClasses: 'text-blue-500',
+        removeForProperties: ['color'],
+        fallbackStrategy: 'append',
+        analysis: {
+          engine: 'shared-deterministic-analyzer',
+        },
+      },
+      target: {
+        filePath: 'src/App.tsx',
+        elementRef: 'src/App.tsx:3:4',
+      },
+    });
+    const fileIO = new InMemoryFileIO({ [appPath]: original });
+    const executor = new StyleWriteExecutor({ fileIO });
+
+    const result = await executor.execute(plan);
+
+    expect(result.success).toBe(true);
+    const content = fileIO.content(appPath);
+    expect(content).toContain('text-blue-500');
+    expect(content).not.toContain('text-red-500');
+
+    // The multi-line JSX text child and the closing tag indentation are byte-identical.
+    expect(content).toContain('\n      first line\n      second line\n    </span>\n');
+  });
+
   it('fails dynamic Tailwind plans with precise locations until location mapping exists', async () => {
     const appPath = '/project/src/App.tsx';
     const original = `import cn from 'clsx';

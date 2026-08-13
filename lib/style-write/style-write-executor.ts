@@ -14,7 +14,7 @@ import type { FileIO } from '@lib/ast/file-io';
 import { applyInlineStyleUpdate } from '@lib/ast/inline-style-mutator';
 import { getAttribute, getAttributeStaticClassName, getAttributeString, setAttribute } from '@lib/ast/mutator';
 import { NodeFileIO } from '@lib/ast/node-file-io';
-import { createFileParser } from '@lib/ast/parser';
+import { createFileParser, spliceNodeSource } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import type { CssSystemId, RuntimeThemeContext, StyleSourceOwner } from '@lib/style-read/types';
 import { removeConflictingClasses } from '@lib/tailwind/parser';
@@ -162,22 +162,46 @@ export class StyleWriteExecutor {
       );
       const newClassName = [preserved, plan.strategy.addClasses].filter(Boolean).join(' ').trim();
       setAttribute(element, 'className', t.stringLiteral(newClassName));
-    } else {
-      const sourceCode = await this.fileParser.readFileContent(absolutePath);
-      const locations: LegacyClassNameLocation[] = [];
-      modifyDynamicClassName(
-        ast,
-        sourceCode,
-        element,
-        locations,
-        plan.strategy.addClasses,
-        plan.strategy.removeForProperties,
-        plan.strategy.mode === 'dynamic' && plan.strategy.fallbackStrategy === 'wrap-expression' ? 'wrap' : 'append',
-        tailwindStatePrefix(plan),
-      );
+      await this.fileParser.writeAST(ast, absolutePath);
+      return { success: true, plan, mutatedFiles: [absolutePath] };
     }
 
-    await this.fileParser.writeAST(ast, absolutePath);
+    // Dynamic className (template / cn()/clsx() / expression). The mutator may REPLACE the className
+    // value node (e.g. wrapInConcatenation builds a fresh JSXExpressionContainer). A whole-file
+    // recast reprint of a node with no `.original` reformats the enclosing JSX element's untouched
+    // text children (HYP-575). Capture the className value's original source range first, then
+    // surgically splice only that span — every other byte stays untouched.
+    const sourceCode = await this.fileParser.readFileContent(absolutePath);
+    const valueBefore = getAttribute(element, 'className');
+    const originalStart = valueBefore?.start ?? undefined;
+    const originalEnd = valueBefore?.end ?? undefined;
+
+    const locations: LegacyClassNameLocation[] = [];
+    modifyDynamicClassName(
+      ast,
+      sourceCode,
+      element,
+      locations,
+      plan.strategy.addClasses,
+      plan.strategy.removeForProperties,
+      plan.strategy.mode === 'dynamic' && plan.strategy.fallbackStrategy === 'wrap-expression' ? 'wrap' : 'append',
+      tailwindStatePrefix(plan),
+    );
+
+    const valueAfter = getAttribute(element, 'className');
+    const spliced =
+      valueAfter && typeof originalStart === 'number' && typeof originalEnd === 'number'
+        ? spliceNodeSource(sourceCode, valueAfter, originalStart, originalEnd)
+        : null;
+
+    if (spliced !== null) {
+      await this.fileIO.writeFile(absolutePath, spliced);
+      this.fileParser.invalidate(absolutePath);
+    } else {
+      // Safety net: no usable source range (synthetic node / missing offsets) — fall back to the
+      // whole-file recast print. Still format-preserving for every node recast can round-trip.
+      await this.fileParser.writeAST(ast, absolutePath);
+    }
     return { success: true, plan, mutatedFiles: [absolutePath] };
   }
 
