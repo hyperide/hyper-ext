@@ -13,6 +13,8 @@ import type { LeftPanelProvider } from './LeftPanelProvider';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
 import type { ScanResult } from './services/ComponentService';
+import type { ProjectCapabilities } from './types';
+import { postToWebviewRawSafe } from './webview-post';
 
 export class RightPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.inspectorView';
@@ -28,16 +30,34 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     private readonly _getComponentGroups?: () => Promise<ScanResult>,
   ) {}
 
-  private _capabilities: import('./types').ProjectCapabilities | null = null;
+  private _capabilities: ProjectCapabilities | null = null;
 
   /**
    * Notify the webview about project capabilities (readonly mode, CSS system).
    * Pass null to clear capabilities on workspace switch.
    * Caches capabilities so late-resolving webviews receive them on `webview:ready`.
    */
-  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities | null): void {
+  public notifyCapabilities(capabilities: ProjectCapabilities | null): void {
     this._capabilities = capabilities;
-    this._view?.webview.postMessage({ type: 'projectCapabilities', capabilities: capabilities ?? null });
+    this._postToWebview({ type: 'projectCapabilities', capabilities: capabilities ?? null });
+  }
+
+  /**
+   * Post through the disposed-safe poster (rationale: webview-post.ts / PR #514). Guards
+   * the cached-`_view` reuse-after-dispose race for the deferred callers — `notifyCapabilities`
+   * (workspace switch), the visibility callback, and the post-`await` `_sendComponentGroups`.
+   */
+  private _postToWebview(message: unknown): boolean {
+    return postToWebviewRawSafe(this._view?.webview, message, () => this._clearDisposedView());
+  }
+
+  /**
+   * Drop the stale ref so the next `resolveWebviewView` rebuilds. Resource teardown
+   * (StateHub unregister, focus-guard clear) stays with `onDidDispose`; this is idempotent.
+   */
+  private _clearDisposedView(): void {
+    this._view = undefined;
+    this._ready = false;
   }
 
   /**
@@ -46,6 +66,8 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
    * sent its `webview:ready` handshake (or after a 1.5s safety timeout).
    */
   public async reset(): Promise<void> {
+    // Direct webview access (not the safe poster): reset() writes `.html` to reload, not
+    // postMessage, on a view known live at call time. See webview-post.ts for the guard rationale.
     if (!this._view) return;
     const webview = this._view.webview;
     this._ready = false;
@@ -94,9 +116,11 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     // Register with StateHub for cross-panel sync
     this._stateHub.register(RightPanelProvider.viewType, webviewView.webview);
 
-    // Track explorer visibility changes → forward to webview
+    // Track explorer visibility changes → forward to webview. This callback fires
+    // LATER (on a visibility toggle), by which point the view may be disposed — route
+    // through the safe poster so a disposed view is a no-op, not a worker-poisoning throw.
     this._leftPanelProvider?.onVisibilityChange((visible) => {
-      webviewView.webview.postMessage({ type: 'inspector:explorerVisible', visible });
+      this._postToWebview({ type: 'inspector:explorerVisible', visible });
     });
 
     // Route messages through PanelRouter
@@ -107,9 +131,9 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
         this._ready = true;
         this._stateHub.sendInit(RightPanelProvider.viewType);
         // Send initial explorer visibility + component groups + capabilities
-        this._sendExplorerState(webviewView.webview);
-        this._sendComponentGroups(webviewView.webview);
-        webviewView.webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
+        this._sendExplorerState();
+        this._sendComponentGroups();
+        this._postToWebview({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
         return;
       }
 
@@ -120,7 +144,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
       }
 
       if (msg.type === 'component:listGroups') {
-        this._sendComponentGroups(webviewView.webview);
+        this._sendComponentGroups();
         return;
       }
 
@@ -128,8 +152,9 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     });
 
     webviewView.onDidDispose(() => {
-      this._view = undefined;
-      this._ready = false;
+      // Share the view-state clear with _clearDisposedView so a future lifecycle field
+      // can't be cleared in one path and forgotten in the other; then extra teardown.
+      this._clearDisposedView();
       this._stateHub.unregister(RightPanelProvider.viewType);
       // Clear input-focus guard so canvas keybindings aren't permanently blocked
       void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
@@ -138,16 +163,17 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this._getHtml(webviewView.webview);
   }
 
-  private _sendExplorerState(webview: vscode.Webview): void {
+  private _sendExplorerState(): void {
     const visible = this._leftPanelProvider?.visible ?? true;
-    webview.postMessage({ type: 'inspector:explorerVisible', visible });
+    this._postToWebview({ type: 'inspector:explorerVisible', visible });
   }
 
-  private async _sendComponentGroups(webview: vscode.Webview): Promise<void> {
+  private async _sendComponentGroups(): Promise<void> {
     if (!this._getComponentGroups) return;
     try {
       const result = await this._getComponentGroups();
-      webview.postMessage({
+      // The view can be disposed across the await above — post through the safe poster.
+      this._postToWebview({
         type: 'inspector:componentGroups',
         atomGroups: result.data.atomGroups,
         compositeGroups: result.data.compositeGroups,

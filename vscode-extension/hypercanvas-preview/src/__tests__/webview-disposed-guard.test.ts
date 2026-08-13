@@ -3,17 +3,20 @@
  *
  * Accessed via: bun test vscode-extension/hypercanvas-preview/src/__tests__/webview-disposed-guard.test.ts
  *
- * Bug guarded here: the cached `PreviewPanel._panel` can be a stale reference to an
- * already-disposed `WebviewPanel`. VS Code fires `onDidDispose` (which nulls `_panel`)
- * asynchronously, and the async ensure-sample/preview pipeline awaits across several
- * ticks during which the panel can be torn down (workspace switch, tab close, or the
- * E2E harness disposing the panel between specs under load). A plain
- * `_panel?.webview.postMessage(...)` guards only `_panel === undefined`, NOT "disposed",
- * so it threw `Error: Webview is disposed` — which escaped the per-call guards and
- * poisoned the shared extension-host worker into a cascade of dead-preview failures.
+ * Bug guarded here: a cached webview reference can outlive the webview it wraps. VS Code
+ * fires `onDidDispose` (which nulls the cached ref) ASYNCHRONOUSLY, so between disposal
+ * and the callback running there is a window where the ref is non-null but its webview is
+ * dead. A plain `ref?.webview.postMessage(...)` guards only `ref === undefined`, NOT
+ * "disposed", so it threw `Error: Webview is disposed` — which escaped the per-call guards
+ * and poisoned the shared extension-host worker into a cascade of dead-preview failures.
+ *
+ * Covers all three providers that hold such a cached ref:
+ * - `PreviewPanel._panel` (the original #514 cascade) — `_postToWebview` / `_clearDisposedPanel`.
+ * - `RightPanelProvider._view` — `notifyCapabilities` and the async `_sendComponentGroups`.
+ * - `AIChatPanelProvider._view` — `sendAIPrompt`, the streaming `ai:chat` callback, and `_sendKeyStatus`.
  *
  * The guard converts that worker-poisoning throw into a graceful no-op and drops the
- * stale reference so the next `createOrShow` rebuilds a fresh panel.
+ * stale reference so the next `createOrShow` / `resolveWebviewView` rebuilds a fresh one.
  */
 
 import { describe, expect, it, mock } from 'bun:test';
@@ -22,6 +25,8 @@ import { isWebviewDisposedError, postToWebviewSafe } from '../webview-post';
 import { injectGeneratedSampleProps, watchSampleInFile } from '../preview-panel-sample';
 import { setupPanel, type PanelSetupDeps } from '../preview-panel-setup';
 import { PreviewPanel } from '../PreviewPanel';
+import { RightPanelProvider } from '../RightPanelProvider';
+import { AIChatPanelProvider } from '../AIChatPanelProvider';
 import type { PanelRouter } from '../PanelRouter';
 import type { StateHub } from '../StateHub';
 
@@ -36,6 +41,21 @@ function disposedPostMessage() {
     throw new Error('Webview is disposed');
   });
 }
+
+/**
+ * A disposed `WebviewView`: its `webview.postMessage` throws exactly like VS Code does
+ * after the underlying webview is torn down. The sidebar providers (RightPanelProvider,
+ * AIChatPanelProvider) cache `this._view` and null it only in an ASYNC `onDidDispose`,
+ * so the same reuse-after-dispose race PR #514 fixed for PreviewPanel is latent here:
+ * a post fired after disposal (workspace switch, secrets/visibility callback, streaming
+ * AI event) would throw `Webview is disposed` and poison the extension-host worker.
+ */
+function disposedWebviewView() {
+  return { webview: { postMessage: disposedPostMessage() } } as unknown as vscode.WebviewView;
+}
+
+/** Reach the private `_view` field of a sidebar provider in tests. */
+type WithView = { _view: vscode.WebviewView | undefined };
 
 function createPreviewPanelWithDisposedWebview() {
   Object.assign(vscode.workspace, {
@@ -293,5 +313,142 @@ describe('watchSampleInFile survives a disposed webview', () => {
     // The watcher is torn down so it can't fire forever against the dead webview.
     expect(watcherDispose).toHaveBeenCalled();
     expect(state.watcher).toBeUndefined();
+  });
+});
+
+/** The private surface of RightPanelProvider exercised by these tests. */
+type RightInternals = RightPanelProvider &
+  WithView & {
+    _sendComponentGroups: () => Promise<void>;
+  };
+
+describe('RightPanelProvider reuse-after-dispose guard', () => {
+  function createProvider(getComponentGroups?: () => Promise<unknown>) {
+    return new RightPanelProvider(
+      vscode.Uri.file('/extension'),
+      { register: mock(() => {}), unregister: mock(() => {}) } as unknown as StateHub,
+      { routeMessage: mock(() => Promise.resolve()) } as unknown as PanelRouter,
+      undefined,
+      getComponentGroups as (() => Promise<import('../services/ComponentService').ScanResult>) | undefined,
+    );
+  }
+
+  function createProviderWithDisposedView(getComponentGroups?: () => Promise<unknown>) {
+    const provider = createProvider(getComponentGroups) as RightInternals;
+    Object.assign(provider, { _view: disposedWebviewView() });
+    return provider;
+  }
+
+  it('does not throw when notifyCapabilities posts to a disposed view', () => {
+    const provider = createProviderWithDisposedView();
+    expect(() => provider.notifyCapabilities(null)).not.toThrow();
+  });
+
+  it('clears the stale _view so the next resolveWebviewView rebuilds', () => {
+    const provider = createProviderWithDisposedView();
+    provider.notifyCapabilities(null);
+    expect(provider._view).toBeUndefined();
+  });
+
+  it('survives a view disposed across the _sendComponentGroups await (workspace switch in flight)', async () => {
+    // The single most likely real-world hit: a component scan is in flight when the
+    // view is torn down. The post lands AFTER the await on an already-dead webview.
+    let resolveScan!: (r: unknown) => void;
+    const scan = new Promise<unknown>((resolve) => {
+      resolveScan = resolve;
+    });
+    const provider = createProviderWithDisposedView(() => scan);
+
+    const sendPromise = provider._sendComponentGroups();
+    // Resolve the scan only now — the post fires here, against the disposed view.
+    resolveScan({ data: { atomGroups: [], compositeGroups: [] } });
+
+    await expect(sendPromise).resolves.toBeUndefined();
+    expect(provider._view).toBeUndefined();
+  });
+});
+
+/** The private surface of AIChatPanelProvider exercised by these tests. */
+type AIChatInternals = AIChatPanelProvider &
+  WithView & {
+    _ready: boolean;
+    _pendingAIPrompt: string | null;
+    _chatHistory: { listChats: () => Promise<unknown[]> };
+    _postToWebview: (message: unknown) => boolean;
+    _sendKeyStatus: () => Promise<void>;
+    _handleMessage: (message: { type?: string; [key: string]: unknown }) => Promise<void>;
+    _flushPendingPrompt: () => void;
+  };
+
+describe('AIChatPanelProvider reuse-after-dispose guard', () => {
+  function createProvider() {
+    const context = {
+      globalStorageUri: { fsPath: '/tmp/hypercanvas-test' },
+      secrets: { get: mock(() => Promise.resolve(undefined)), onDidChange: mock(() => ({ dispose: mock() })) },
+    } as unknown as vscode.ExtensionContext;
+    const provider = new AIChatPanelProvider(vscode.Uri.file('/extension'), '/workspace', context, {
+      register: mock(() => {}),
+      unregister: mock(() => {}),
+    } as unknown as StateHub) as AIChatInternals;
+    // Stub history I/O so the chat:* handler test is deterministic — no real fs hit.
+    provider._chatHistory = { listChats: mock(() => Promise.resolve([])) };
+    return provider;
+  }
+
+  function createProviderWithDisposedView() {
+    const provider = createProvider();
+    // sendAIPrompt only posts when the view is present AND ready.
+    Object.assign(provider, { _view: disposedWebviewView(), _ready: true });
+    return provider;
+  }
+
+  it('does not throw when sendAIPrompt posts to a disposed view', () => {
+    const provider = createProviderWithDisposedView();
+    expect(() => provider.sendAIPrompt('hello')).not.toThrow();
+  });
+
+  it('clears the stale _view so the next resolveWebviewView rebuilds', () => {
+    const provider = createProviderWithDisposedView();
+    provider.sendAIPrompt('hello');
+    expect(provider._view).toBeUndefined();
+  });
+
+  it('re-queues the prompt as pending when the disposal race swallows the sendAIPrompt post', () => {
+    // Regression guard: the post fails silently on a disposed view, so the prompt must
+    // fall back to _pendingAIPrompt to be replayed when the rebuilt view becomes ready.
+    const provider = createProviderWithDisposedView();
+    provider.sendAIPrompt('hello');
+    expect(provider._pendingAIPrompt).toBe('hello');
+  });
+
+  it('keeps the pending prompt when the flush itself races a disposal', () => {
+    // The view can be disposed between `webview:ready` and _flushPendingPrompt. The flush
+    // must NOT clear _pendingAIPrompt unless the post actually landed.
+    const provider = createProviderWithDisposedView();
+    provider._pendingAIPrompt = 'queued';
+    expect(() => provider._flushPendingPrompt()).not.toThrow();
+    expect(provider._pendingAIPrompt).toBe('queued');
+  });
+
+  it('a late streaming ai:chat event after disposal is a no-op, not a throw', () => {
+    // The handleChat callback fires over many ticks; the view can be disposed mid-stream.
+    const provider = createProviderWithDisposedView();
+    expect(() => provider._postToWebview({ type: 'ai:streamChunk', text: 'x' })).not.toThrow();
+    expect(provider._view).toBeUndefined();
+  });
+
+  it('a chat:* handler that awaits then posts is a no-op when the view is already disposed', async () => {
+    // chat:list/create/load/delete all `await` history I/O then post via _postToWebview —
+    // the post-after-await shape. Exercised end-to-end via _handleMessage against a
+    // disposed view (history I/O stubbed to keep it deterministic, no real fs).
+    const provider = createProviderWithDisposedView();
+    await expect(provider._handleMessage({ type: 'chat:list' })).resolves.toBeUndefined();
+    expect(provider._view).toBeUndefined();
+  });
+
+  it('a _sendKeyStatus from secrets.onDidChange after disposal is a no-op, not a throw', async () => {
+    const provider = createProviderWithDisposedView();
+    await expect(provider._sendKeyStatus()).resolves.toBeUndefined();
+    expect(provider._view).toBeUndefined();
   });
 });

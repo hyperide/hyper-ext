@@ -13,6 +13,7 @@ import type { DiagnosticHub } from './DiagnosticHub';
 import type { StateHub } from './StateHub';
 import { ChatHistoryService } from './services/ChatHistoryService';
 import type { DevServerManager } from './services/DevServerManager';
+import { postToWebviewRawSafe } from './webview-post';
 
 export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.aiChatView';
@@ -40,6 +41,8 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
    * sent its `webview:ready` handshake (or after a 1.5s safety timeout).
    */
   public async reset(): Promise<void> {
+    // Direct webview access (not the safe poster): reset() writes `.html` to reload, not
+    // postMessage, on a view known live at call time. See webview-post.ts for the guard rationale.
     if (!this._view) return;
     const webview = this._view.webview;
     this._ready = false;
@@ -78,11 +81,31 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   sendAIPrompt(prompt: string): void {
     void this.focusAndEnsureReady();
 
-    if (this._view && this._ready) {
-      this._view.webview.postMessage({ type: 'ai:openChat', prompt });
-    } else {
+    // _ready is the real gate (don't post before the handshake); _postToWebview already
+    // returns false for a missing/disposed view. If the post didn't land, queue it — the
+    // rebuilt view replays _pendingAIPrompt once it sends `webview:ready`.
+    const posted = this._ready && this._postToWebview({ type: 'ai:openChat', prompt });
+    if (!posted) {
       this._pendingAIPrompt = prompt;
     }
+  }
+
+  /**
+   * Post through the disposed-safe poster (rationale: webview-post.ts / PR #514). Guards
+   * the cached-`_view` reuse-after-dispose race for the deferred callers — `sendAIPrompt`,
+   * the streaming `ai:chat` events, and the `secrets.onDidChange` key-status push.
+   */
+  private _postToWebview(message: unknown): boolean {
+    return postToWebviewRawSafe(this._view?.webview, message, () => this._clearDisposedView());
+  }
+
+  /**
+   * Drop the stale ref so the next `resolveWebviewView` rebuilds. Resource teardown
+   * (AIBridge dispose, secrets subscription) stays with `onDidDispose`; this is idempotent.
+   */
+  private _clearDisposedView(): void {
+    this._view = undefined;
+    this._ready = false;
   }
 
   /**
@@ -115,42 +138,44 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
-      await this._handleMessage(message, webviewView.webview);
+      await this._handleMessage(message);
     });
 
-    // Send initial API key status and listen for changes
-    this._sendKeyStatus(webviewView.webview);
+    // Send initial API key status and listen for changes. onDidChange fires LATER (a
+    // secret edit), by which point the view may be disposed — _sendKeyStatus posts
+    // through the safe poster, so a disposed view is a no-op, not a worker-poisoning throw.
+    this._refreshKeyStatus();
     const secretsSub = this._context.secrets.onDidChange(() => {
-      this._sendKeyStatus(webviewView.webview);
+      this._refreshKeyStatus();
     });
 
     webviewView.onDidDispose(() => {
-      this._view = undefined;
-      this._ready = false;
+      // Share the view-state clear with _clearDisposedView so a future lifecycle field
+      // can't be cleared in one path and forgotten in the other; then extra teardown.
+      this._clearDisposedView();
       this._aiBridge.dispose();
       secretsSub.dispose();
     });
   }
 
-  private async _handleMessage(
-    message: { type?: string; [key: string]: unknown },
-    webview: vscode.Webview,
-  ): Promise<void> {
+  private async _handleMessage(message: { type?: string; [key: string]: unknown }): Promise<void> {
     if (!message.type) return;
 
     switch (message.type) {
       case 'webview:ready': {
         this._ready = true;
-        await this._sendKeyStatus(webview);
-        this._flushPendingPrompt(webview);
+        await this._sendKeyStatus();
+        this._flushPendingPrompt();
         return;
       }
 
       case 'ai:chat': {
         const requestId = message.requestId as string;
         const messages = message.messages as Array<{ role: 'user' | 'assistant'; content: string }>;
+        // The stream runs for many ticks; the view can be disposed mid-stream — each
+        // event posts through the safe poster so a late event can't poison the worker.
         this._aiBridge.handleChat(requestId, messages, (event) => {
-          webview.postMessage(event);
+          void this._postToWebview(event);
         });
         return;
       }
@@ -165,21 +190,21 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
 
       case 'chat:list': {
         const chats = await this._chatHistory.listChats();
-        webview.postMessage({ type: 'chat:list', chats });
+        this._postToWebview({ type: 'chat:list', chats });
         return;
       }
 
       case 'chat:create': {
         const title = message.title as string | undefined;
         const session = await this._chatHistory.createChat(title);
-        webview.postMessage({ type: 'chat:created', session });
+        this._postToWebview({ type: 'chat:created', session });
         return;
       }
 
       case 'chat:load': {
         const chatId = message.chatId as string;
         const data = await this._chatHistory.loadChat(chatId);
-        webview.postMessage({ type: 'chat:loaded', chatId, data });
+        this._postToWebview({ type: 'chat:loaded', chatId, data });
         return;
       }
 
@@ -200,7 +225,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
       case 'chat:delete': {
         const chatId = message.chatId as string;
         await this._chatHistory.deleteChat(chatId);
-        webview.postMessage({ type: 'chat:deleted', chatId });
+        this._postToWebview({ type: 'chat:deleted', chatId });
         return;
       }
 
@@ -219,26 +244,38 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
       }
 
       case 'ai:checkKey': {
-        this._sendKeyStatus(webview);
+        this._refreshKeyStatus();
         return;
       }
     }
   }
 
-  private _flushPendingPrompt(webview: vscode.Webview): void {
+  private _flushPendingPrompt(): void {
     if (!this._pendingAIPrompt) return;
-    webview.postMessage({ type: 'ai:openChat', prompt: this._pendingAIPrompt });
-    this._pendingAIPrompt = null;
+    // Clear the pending slot ONLY if the post actually landed — if the view was disposed
+    // in the window between `webview:ready` and this flush, keep the prompt queued so the
+    // next rebuilt view replays it instead of dropping it permanently.
+    if (this._postToWebview({ type: 'ai:openChat', prompt: this._pendingAIPrompt })) {
+      this._pendingAIPrompt = null;
+    }
   }
 
-  private async _sendKeyStatus(webview: vscode.Webview): Promise<void> {
+  /**
+   * Fire-and-forget _sendKeyStatus with rejection logging. _sendKeyStatus awaits
+   * `secrets.get`, which can reject; a bare `void` would swallow that signal entirely.
+   */
+  private _refreshKeyStatus(): void {
+    this._sendKeyStatus().catch((e) => console.error('[AIChat] key status refresh failed:', e));
+  }
+
+  private async _sendKeyStatus(): Promise<void> {
     const secretKey = await this._context.secrets.get('hypercanvas.ai.apiKey');
     const settingsKey = vscode.workspace.getConfiguration('hypercanvas.ai').get<string>('apiKey');
     const provider = vscode.workspace.getConfiguration('hypercanvas.ai').get<string>('provider');
     // Key must exist AND be non-empty. Also require provider to be configured.
     const key = secretKey || settingsKey;
     const hasApiKey = !!(key && key.trim().length > 3 && provider);
-    webview.postMessage({ type: 'ai:keyStatus', hasApiKey });
+    this._postToWebview({ type: 'ai:keyStatus', hasApiKey });
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
