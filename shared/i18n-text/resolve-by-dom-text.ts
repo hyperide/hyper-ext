@@ -30,19 +30,6 @@ import { findTsDomTextHit, parseTsLocaleObject, resolveLocaleKey } from './ts-lo
 /** Extensions a translation dictionary can live in. */
 const DICT_EXTENSIONS = ['.json', '.ts', '.js'];
 
-const MERGED_FILE_CANDIDATES = [
-  'src/translations.ts',
-  'src/lib/translations.ts',
-  'client/lib/translations.ts',
-  'lib/translations.ts',
-  'src/i18n.ts',
-  'src/translations.js',
-  'src/lib/translations.js',
-  'client/lib/translations.js',
-  'lib/translations.js',
-  'src/i18n.js',
-];
-
 export interface DomTextI18nMatch {
   key: string;
   /** The locale where the match was first found. */
