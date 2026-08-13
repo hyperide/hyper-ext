@@ -28,6 +28,25 @@ import { findNearestSourceLocation, getFiberFromDOM } from '../element-tracing/f
 import type { SourceLocation } from '../element-tracing/types';
 import { resolveCallSiteSource } from './resolve-source';
 
+/**
+ * First ancestor that is not decorative (aria-hidden). Decorative wrappers carry no
+ * meaningful structure — a nested aria-hidden wrapper's source ref is just as
+ * meaningless as the decorative target's own, so delegation must walk past ALL of
+ * them (DR-16). The getAttribute guard terminates the walk safely on plain-object
+ * body sentinels in tests and on cross-realm nodes.
+ */
+function nearestNonDecorativeAncestor(el: HTMLElement): HTMLElement | null {
+  let current = el.parentElement;
+  while (
+    current !== null &&
+    typeof current.getAttribute === 'function' &&
+    current.getAttribute('aria-hidden') === 'true'
+  ) {
+    current = current.parentElement;
+  }
+  return current;
+}
+
 export interface DragSourceResult {
   /** Source location used to identify the dragged element in reorder messages. */
   source: SourceLocation;
@@ -90,17 +109,7 @@ export function resolveDragSource(
   // caller did not supply a mapped resolver.
   if (!source && isDecorative && target.parentElement !== null) {
     const resolveParent = getMappedSourceLocation ?? getSourceLocation;
-    // Walk up past any aria-hidden ancestors — they are decorative too and must not
-    // become the drag source (a nested aria-hidden wrapper's source ref is just as
-    // meaningless as the target's). Stop at the first non-aria-hidden ancestor. (DR-16)
-    let parentCur: HTMLElement | null = target.parentElement;
-    while (
-      parentCur !== null &&
-      typeof parentCur.getAttribute === 'function' &&
-      parentCur.getAttribute('aria-hidden') === 'true'
-    ) {
-      parentCur = parentCur.parentElement;
-    }
+    const parentCur = nearestNonDecorativeAncestor(target);
     if (parentCur !== null) {
       const parentSource = resolveParent(parentCur);
       if (parentSource) {
@@ -126,22 +135,8 @@ export function resolveDragSource(
   if (!source && !skipRawForDecorative) {
     // For decorative elements, skip when parentElement is null — passing the
     // decorative element itself to getFiberFromDOM would violate the invariant
-    // that decorative elements are never the drag target.
-    // Also skip any aria-hidden parents — same invariant: a nested decorative
-    // wrapper's fiber source is as meaningless as the target's own. (DR-16)
-    let fiberTarget: HTMLElement | null;
-    if (isDecorative) {
-      fiberTarget = target.parentElement;
-      while (
-        fiberTarget !== null &&
-        typeof fiberTarget.getAttribute === 'function' &&
-        fiberTarget.getAttribute('aria-hidden') === 'true'
-      ) {
-        fiberTarget = fiberTarget.parentElement;
-      }
-    } else {
-      fiberTarget = target;
-    }
+    // that decorative elements are never the drag target. (DR-16)
+    const fiberTarget = isDecorative ? nearestNonDecorativeAncestor(target) : target;
     if (fiberTarget !== null) {
       const fiber = getFiberFromDOM(fiberTarget);
       const directLoc = findNearestSourceLocation(fiber);
@@ -161,25 +156,15 @@ export function resolveDragSource(
   if (!source) {
     const resolveAncestor = isDecorative ? (getMappedSourceLocation ?? getSourceLocation) : getSourceLocation;
     const bodyEl = typeof document !== 'undefined' ? document.body : null;
-    let cur = target.parentElement;
+    let cur = nearestNonDecorativeAncestor(target);
     while (cur && cur !== bodyEl) {
-      // Skip aria-hidden ancestors — they are decorative wrappers whose source
-      // positions are as meaningless as the original target's. Walk past them to
-      // reach the nearest real (non-decorative) ancestor. (DR-16)
-      // Guard getAttribute: plain-object body sentinels used in tests may not have
-      // this method; the `cur !== bodyEl` condition above stops at real document.body,
-      // but mock subtrees can produce body-like objects without DOM methods.
-      if (typeof cur.getAttribute === 'function' && cur.getAttribute('aria-hidden') === 'true') {
-        cur = cur.parentElement;
-        continue;
-      }
       const ancestorSrc = resolveAncestor(cur);
       if (ancestorSrc) {
         source = ancestorSrc;
         el = cur;
         break;
       }
-      cur = cur.parentElement;
+      cur = nearestNonDecorativeAncestor(cur);
     }
   }
 
