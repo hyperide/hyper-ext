@@ -49,11 +49,29 @@ export class PreviewProxy {
   private _isRemixProject = false;
   private _projectRoot: string | undefined;
   private _viteBase: string | undefined;
-  private _isStopping = false;
+  // Single source of truth for "are we serving" (HYP-370 Phase 4). The proxy no
+  // longer keeps its own private stop flag; instead DevServerManager injects a
+  // predicate it owns (proxy liveness: `this._previewProxy === proxy`). This
+  // flips to false at the exact instant _stopProxy() nulls the manager's proxy
+  // reference — the same moment the old _isStopping used to be set — so behavior
+  // is preserved across stop()/exit, while the process-error path (which does NOT
+  // call _stopProxy) keeps serving, matching the prior `_isStopping = false` there.
+  // Defaults to always-serving so a bare proxy (no manager) still works.
+  private _isServing: () => boolean = () => true;
   private _sockets = new Set<net.Socket>();
 
   get isIsolatedMode(): boolean {
     return this._isIsolatedMode;
+  }
+
+  /**
+   * Inject the serving-state predicate. DevServerManager passes a closure over
+   * its own proxy ownership so there is one source of truth for "are we serving":
+   * the proxy short-circuits requests whenever the manager is not serving through
+   * it, without the proxy mirroring that state in a private flag.
+   */
+  setIsServing(isServing: () => boolean): void {
+    this._isServing = isServing;
   }
 
   constructor(targetPort: number, projectRoot?: string) {
@@ -113,7 +131,6 @@ export class PreviewProxy {
    */
   async start(): Promise<void> {
     if (this._server) return;
-    this._isStopping = false;
     this._viteBase = await this._readViteBase();
     this._isRemixProject = await this._detectRemixProject();
 
@@ -148,7 +165,6 @@ export class PreviewProxy {
    * Stop the proxy server
    */
   stop(): void {
-    this._isStopping = true;
     for (const socket of this._sockets) {
       socket.destroy();
     }
@@ -166,7 +182,7 @@ export class PreviewProxy {
    * Retries up to 5 times for /test-preview 404/503 to handle dev server FSWatch lag.
    */
   private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse, retryCount = 0): void {
-    if (this._isStopping) {
+    if (!this._isServing()) {
       clientRes.writeHead(503);
       clientRes.end();
       return;
@@ -389,7 +405,7 @@ export class PreviewProxy {
    * Handle WebSocket upgrade: bidirectional proxy to target
    */
   private _handleUpgrade(req: http.IncomingMessage, clientSocket: net.Socket, head: Buffer): void {
-    if (this._isStopping || !this._server) {
+    if (!this._isServing() || !this._server) {
       clientSocket.destroy();
       return;
     }
@@ -420,7 +436,7 @@ export class PreviewProxy {
     this._trackSocket(targetSocket);
 
     targetSocket.on('error', (err) => {
-      if (!this._isStopping) {
+      if (this._isServing()) {
         console.error('[PreviewProxy] WS proxy error:', err.message);
       }
       clientSocket.destroy();

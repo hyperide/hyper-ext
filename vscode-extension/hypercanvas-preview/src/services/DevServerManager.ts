@@ -287,13 +287,20 @@ export class DevServerManager {
       this._port = await this._findFreePort(startPort);
 
       // Start preview proxy for script injection (error detection)
-      this._previewProxy = new PreviewProxy(this._port, this._projectPath);
+      const proxy = new PreviewProxy(this._port, this._projectPath);
+      // Single source of truth for "are we serving" (HYP-370 Phase 4): the proxy
+      // serves only while this manager still owns it. _stopProxy() nulls
+      // _previewProxy at the exact instant the old proxy._isStopping used to flip,
+      // so behavior is preserved (stop()/exit short-circuit; the process-error
+      // path, which does not call _stopProxy, keeps serving as before).
+      proxy.setIsServing(() => this._previewProxy === proxy);
+      this._previewProxy = proxy;
       // Apply isolated mode that may have been set before proxy was created
       // (PreviewModeManager.startWatching() fires before dev server starts)
       if (this._pendingIsolatedMode) {
-        this._previewProxy.setIsolatedMode(true);
+        proxy.setIsolatedMode(true);
       }
-      await this._previewProxy.start();
+      await proxy.start();
       console.log(`[HyperIDE] PreviewProxy started on port ${this._previewProxy.port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
       console.log(
