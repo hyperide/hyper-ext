@@ -724,7 +724,7 @@ Start with full maps + gzip. Add delta updates only if profiling shows issues.
 
 **Problem:** `_debugSource.fileName` contains the path as seen by the build tool inside the
 Docker container: `/app/src/Card.tsx`. The server runs on the host and knows the project at
-`/Users/ultra/work/project/src/Card.tsx`. The proxy rewrites URLs but `_debugSource` is
+`/home/user/project/src/Card.tsx`. The proxy rewrites URLs but `_debugSource` is
 embedded at compile time — it can't be rewritten by the proxy.
 
 **Solution:** `NodeMapService` maintains a `containerPrefix → hostPrefix` mapping, derived from

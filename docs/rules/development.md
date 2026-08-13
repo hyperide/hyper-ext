@@ -29,8 +29,9 @@ CLI: `linear issue create --team HYP --title "..." --description "..." --no-inte
 
 ## Этап 2. Реализация в worktree
 
-- Worktree создаётся **только** в `/Users/ultra/work/hyper-canvas-draft-worktrees/`.
-  НЕ в `.claude/worktrees/` и НЕ внутри основного репозитория — это нарушение.
+- Worktree создаётся **только** в соседней папке `../hyper-canvas-draft-worktrees/`
+  (sibling рядом с основным чекаутом). НЕ в `.claude/worktrees/` и НЕ внутри основного
+  репозитория — это нарушение.
 - **TDD обязателен:**
   1. Пишем failing-тест (красный).
   2. Запускаем — убеждаемся, что падает по нужной причине.
@@ -43,10 +44,10 @@ CLI: `linear issue create --team HYP --title "..." --description "..." --no-inte
 - Scope тестов: `client lib server shared vscode-extension`.
 - Правки только через Edit/Write; **никаких `sed`/`perl`/`awk`** для редактирования файлов.
 - **E2E живёт в ОТДЕЛЬНОМ репо `ext-test-projects/`** — клонируется **рядом** с этим
-  репо (по умолчанию `/Users/ultra/work/ext-test-projects/`, sibling-чекаут, НЕ внутри
-  hyper-canvas-draft и не сабмодуль). Это неотъемлемая часть процесса, не внешний
+  репо (по умолчанию `../ext-test-projects/`, sibling-чекаут, НЕ внутри
+  основного репо и не сабмодуль). Это неотъемлемая часть процесса, не внешний
   прожект. Поэтому `ext-test-projects/` и `bun run test:docker` НЕ найдутся из чистого
-  клона одного hyper-canvas-draft — сначала склонируй ext-test-projects рядом. Прогон
+  клона одного основного репо — сначала склонируй ext-test-projects рядом. Прогон
   оттуда: `HYPER_E2E_SHARDS=1 bun run test:docker`.
 - **Таймауты — зло.** Раздутые `timeout` / `poll interval` в e2e маскируют настоящий
   баг (флак, гонку, медленный старт). Запрещено «лечить» падение увеличением таймаута.

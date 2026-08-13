@@ -38,8 +38,8 @@ describe('isForeignExtensionError', () => {
   it('returns false for stack from extension in development (no .vscode/extensions/ path)', () => {
     const err = new Error('dev mode error');
     err.stack = `Error: dev mode error
-    at /Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview/out/extension.js:200:10
-    at DevServerManager.start (/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview/out/services/DevServerManager.js:50:3)`;
+    at /home/dev/project/vscode-extension/hypercanvas-preview/out/extension.js:200:10
+    at DevServerManager.start (/home/dev/project/vscode-extension/hypercanvas-preview/out/services/DevServerManager.js:50:3)`;
     expect(isForeignExtensionError(err)).toBe(false);
   });
 

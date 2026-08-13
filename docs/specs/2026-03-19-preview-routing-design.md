@@ -445,7 +445,7 @@ declared, and Tier 1/2 work correctly.
 2. `previewFileManager.ensurePreviewFiles()` — idempotent, generates required files
 3. URL update or postMessage — no `refresh()` hard reload
 
-### SaaS (`hyper-canvas-draft`)
+### SaaS (`hyperide`)
 
 - `client/main.tsx` — remove `isPreviewPath` check and `__canvas_preview__` import.
 - `client/CanvasPreviewEntry.tsx` — delete (dead code).

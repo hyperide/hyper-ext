@@ -1,4 +1,4 @@
-# OXC Migration Analysis — hyper-canvas-draft
+# OXC Migration Analysis — hyperide
 
 > Создан: 2026-05-16  
 > Цель: оценить целесообразность перехода на OXC (oxc.rs) вместо текущего стека

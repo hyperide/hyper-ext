@@ -174,10 +174,10 @@ Run #29 with `--memory-swap -1` is the first run that should cover all of these.
 
 1. `./vscode-extension/hypercanvas-preview/build-and-install.sh patch` — rebuild
 2. Run the matching debug script via Playwright (`launchVSCode` harness), e.g.:
-   - Tamagui write bug → `bun run /Users/ultra/work/ext-test-projects/debug-tamagui-write.ts`
-   - Webview errors → `bun run /Users/ultra/work/ext-test-projects/debug-webview-errors.ts`
-   - Bulka 404 → `bun run /Users/ultra/work/ext-test-projects/capture-bulka-cdp.ts`
-   - General overlay/style → `bun run /Users/ultra/work/ext-test-projects/debug-overlay-pi5.ts`
+   - Tamagui write bug → `bun run ../ext-test-projects/debug-tamagui-write.ts`
+   - Webview errors → `bun run ../ext-test-projects/debug-webview-errors.ts`
+   - Bulka 404 → `bun run ../ext-test-projects/capture-bulka-cdp.ts`
+   - General overlay/style → `bun run ../ext-test-projects/debug-overlay-pi5.ts`
 3. Read output: extension-host logs, `[exthost:stdout]` lines, disk file contents.
 4. Only launch Docker run after step 3 confirms the fix works.
 
@@ -480,11 +480,11 @@ UI-фичи которые появятся в будущем (сейчас `NOT
 | Commit     | Repo               | Fix                                                              |
 | ---------- | ------------------ | ---------------------------------------------------------------- |
 | `1522602`  | ext-test-projects  | Tamagui poll resilience + dirty tab 500ms→2000ms                 |
-| `b3bf206e` | hyper-canvas-draft | SSR mock adapter for Remix routes                                |
+| `b3bf206e` | hyperide | SSR mock adapter for Remix routes                                |
 | `804eea3`  | ext-test-projects  | Vite refresh fallback: HMR 60s → force refresh → 180s            |
 | `08ed413`  | ext-test-projects  | Editor.ts file picker: 3×1s retry → 6×3s (post-workspace-switch) |
 | `4f802bd`  | ext-test-projects  | docker --init + --memory-swap -1                                 |
-| `a1ac0698` | hyper-canvas-draft | ext v0.1.29 built                                                |
+| `a1ac0698` | hyperide | ext v0.1.29 built                                                |
 | `6df6548`  | ext-test-projects  | undo-redo: redo-stack wait 8s→15s for Docker watcher lag         |
 
 ---
@@ -1000,7 +1000,7 @@ Note: `f85f4d3` + `aeb693c` don't help when write never reaches disk. They only 
 Run ID: `run-20260430-102713-33653` — 3 shards, started 10:27 CEST.
 
 ```bash
-cd /Users/ultra/work/ext-test-projects && HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.sh
+cd ../ext-test-projects && HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.sh
 ```
 
 **Fixes active in run #39** (all previous + new):
@@ -1089,7 +1089,7 @@ reads all `.ts/.tsx` under `src/`. Changed both tests to use it.
 
 ### Commits
 
-- `67e42b12`: fix(ast): read cross-file contentBeforeWrite before write for undo tracking (hyper-canvas-draft)
+- `67e42b12`: fix(ast): read cross-file contentBeforeWrite before write for undo tracking (hyperide)
 - `9ee30f4` (ext-test-projects): fix(e2e): scan all src files for change detection in undo-redo tests
 
 ### ext v0.1.41 built and installed
@@ -1101,7 +1101,7 @@ reads all `.ts/.tsx` under `src/`. Changed both tests to use it.
 Run ID: `run-20260430-163057-39937` — 3 shards, ext v0.1.41.
 
 ```bash
-cd /Users/ultra/work/ext-test-projects && HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.sh
+cd ../ext-test-projects && HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.sh
 ```
 
 **Fixes active in run #42** (all previous + new):

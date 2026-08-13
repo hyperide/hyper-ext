@@ -1,4 +1,4 @@
-# Security Audit Report: hyper-canvas-draft
+# Security Audit Report: hyperide
 
 **Date:** December 13, 2025
 **Auditor:** Claude (Automated Security Assessment)
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This security audit of hyper-canvas-draft identified **5 CRITICAL**, **4 HIGH**, and **3 MEDIUM** severity vulnerabilities. The most severe issues involve **command injection** in Docker management, **path traversal** in file operations, and **insufficient container isolation**.
+This security audit of hyperide identified **5 CRITICAL**, **4 HIGH**, and **3 MEDIUM** severity vulnerabilities. The most severe issues involve **command injection** in Docker management, **path traversal** in file operations, and **insufficient container isolation**.
 
 **Key Finding:** JWT authentication is properly implemented and secure. Token tampering attacks are not possible without knowledge of the `JWT_SECRET`.
 

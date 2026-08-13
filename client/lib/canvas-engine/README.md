@@ -375,4 +375,4 @@ Tests cover:
 
 ## License
 
-Part of hyper-canvas-draft project.
+Part of the HyperIDE project.
