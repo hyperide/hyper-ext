@@ -179,7 +179,8 @@ export default function LeftSidebar({
   const hasPagesContent = components.pageGroups.some((g) => g.components.length > 0);
   const hasComponentsContent =
     components.atomGroups.some((g) => g.components.length > 0) ||
-    components.compositeGroups.some((g) => g.components.length > 0);
+    components.compositeGroups.some((g) => g.components.length > 0) ||
+    (components.subProjects?.some((sp) => sp.supported) ?? false);
   const hasElementsContent = elementsTree.length > 0;
   const hasTestsContent = testGroups.length > 0;
 
@@ -347,6 +348,8 @@ export default function LeftSidebar({
             hasContent={hasComponentsContent}
             atomGroups={components.atomGroups}
             compositeGroups={components.compositeGroups}
+            isMonorepo={components.isMonorepo}
+            subProjects={components.subProjects}
             activePath={componentsActivePath}
             loadingComponent={componentNav.loadingComponent}
             onComponentClick={onComponentItemClick}

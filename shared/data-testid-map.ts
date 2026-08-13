@@ -94,6 +94,8 @@ export const TID = {
     pageItem: (name: string) => `hyper-explorer-page-${name}`,
     testItem: (name: string) => `hyper-explorer-test-${name}`,
     runTestsButton: 'hyper-explorer-run-tests',
+    subProject: (name: string) => `hyper-explorer-subproject-${name}`,
+    subProjectUnsupported: (name: string) => `hyper-explorer-subproject-unsupported-${name}`,
   },
 
   // AI Chat

@@ -3,8 +3,9 @@ import { IconChevronDown, IconComponents, IconPlus, IconRefresh, IconSearch } fr
 import cn from 'clsx';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
-import type { ComponentGroup, ComponentListItem } from '../../../../lib/component-scanner/types';
+import type { ComponentGroup, ComponentListItem, SubProject } from '../../../../lib/component-scanner/types';
 import { ComponentGroupList } from '../../ComponentGroupList';
+import { SubProjectAccordion } from './SubProjectAccordion';
 
 type SetupReason = 'no-ai-config' | 'no-paths' | 'empty-scan';
 
@@ -22,11 +23,15 @@ interface ComponentsSectionProps {
   onCreateComponent?: () => void;
   isVSCode: boolean;
   setupReason?: SetupReason | null;
+  isMonorepo?: boolean;
+  subProjects?: SubProject[];
 }
 
 export function ComponentsSection({
   collapsed,
   hasContent,
+  isMonorepo,
+  subProjects,
   atomGroups,
   compositeGroups,
   activePath,
@@ -137,39 +142,49 @@ export function ComponentsSection({
               />
             </div>
           )}
-          <div className="flex flex-col gap-1 px-2">
-            {searchQuery && !hasSearchResults ? (
-              <div data-testid="hyper-explorer-no-results" className="px-2 py-3 text-center">
-                <span className="text-xs text-muted-foreground">No components match "{searchQuery}"</span>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-1">
-                  <IconChevronDown className="w-2 h-2 text-muted-foreground" stroke={1.5} />
-                  <span className="text-xs font-[510] text-[#7A7A7A]">Atom components</span>
+          {isMonorepo && subProjects && subProjects.length > 0 ? (
+            <SubProjectAccordion
+              subProjects={subProjects}
+              activePath={activePath}
+              loadingComponent={loadingComponent}
+              onComponentClick={onComponentClick}
+              searchQuery={searchQuery}
+            />
+          ) : (
+            <div className="flex flex-col gap-1 px-2">
+              {searchQuery && !hasSearchResults ? (
+                <div data-testid="hyper-explorer-no-results" className="px-2 py-3 text-center">
+                  <span className="text-xs text-muted-foreground">No components match "{searchQuery}"</span>
                 </div>
-                <ComponentGroupList
-                  groups={filteredAtoms}
-                  activeComponentPath={activePath}
-                  loadingComponentPath={loadingComponent}
-                  onComponentClick={onComponentClick}
-                  searchQuery={searchQuery}
-                />
+              ) : (
+                <>
+                  <div className="flex items-center gap-1">
+                    <IconChevronDown className="w-2 h-2 text-muted-foreground" stroke={1.5} />
+                    <span className="text-xs font-[510] text-[#7A7A7A]">Atom components</span>
+                  </div>
+                  <ComponentGroupList
+                    groups={filteredAtoms}
+                    activeComponentPath={activePath}
+                    loadingComponentPath={loadingComponent}
+                    onComponentClick={onComponentClick}
+                    searchQuery={searchQuery}
+                  />
 
-                <div className="flex items-center gap-1 mt-2">
-                  <IconChevronDown className="w-2 h-2 text-muted-foreground" stroke={1.5} />
-                  <span className="text-xs font-[510] text-[#7A7A7A]">Composite components</span>
-                </div>
-                <ComponentGroupList
-                  groups={filteredComposites}
-                  activeComponentPath={activePath}
-                  loadingComponentPath={loadingComponent}
-                  onComponentClick={onComponentClick}
-                  searchQuery={searchQuery}
-                />
-              </>
-            )}
-          </div>
+                  <div className="flex items-center gap-1 mt-2">
+                    <IconChevronDown className="w-2 h-2 text-muted-foreground" stroke={1.5} />
+                    <span className="text-xs font-[510] text-[#7A7A7A]">Composite components</span>
+                  </div>
+                  <ComponentGroupList
+                    groups={filteredComposites}
+                    activeComponentPath={activePath}
+                    loadingComponentPath={loadingComponent}
+                    onComponentClick={onComponentClick}
+                    searchQuery={searchQuery}
+                  />
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

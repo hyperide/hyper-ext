@@ -53,6 +53,8 @@ export function useComponentsData(): UseComponentsDataResult {
               atomGroups: result.atomGroups || [],
               compositeGroups: result.compositeGroups || [],
               pageGroups: result.pageGroups || [],
+              isMonorepo: result.isMonorepo,
+              subProjects: result.subProjects,
             });
             setLoadedOnce(true);
           } else {

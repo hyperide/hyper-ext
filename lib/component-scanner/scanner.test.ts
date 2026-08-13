@@ -558,3 +558,135 @@ describe('ComponentScanner.detectProjectStructure — monorepo', () => {
     expect(allPaths.every((p) => !p.match(/\/(apps|targets|packages|libs)\//))).toBe(true);
   });
 });
+
+describe('ComponentScanner.getComponentsData — sub-project grouping (HYP-391)', () => {
+  const SUBPROJ_DIR = path.join(TMP_DIR, 'subproj');
+
+  afterAll(() => {
+    fs.rmSync(SUBPROJ_DIR, { recursive: true, force: true });
+  });
+
+  function createSubprojProject(name: string, files: Record<string, string>): string {
+    const root = path.join(SUBPROJ_DIR, name);
+    for (const [filePath, content] of Object.entries(files)) {
+      const fullPath = path.join(root, filePath);
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, content);
+    }
+    return root;
+  }
+
+  it('returns isMonorepo=true and subProjects array for Nx workspace', async () => {
+    const root = createSubprojProject('nx-multi', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'targets/web/package.json': '{"dependencies":{"react":"19"}}',
+      'targets/web/src/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+      'targets/web/src/components/ConlocaCard.tsx': 'export function ConlocaCard() { return <div/>; }',
+      'targets/admin/package.json': '{"dependencies":{"react":"19"}}',
+      'targets/admin/src/AdminPanel.tsx': 'export function AdminPanel() { return <div/>; }',
+      'targets/admin/src/components/DataTable.tsx': 'export function DataTable() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    expect(result.isMonorepo).toBe(true);
+    expect(result.subProjects).toBeDefined();
+    expect(result.subProjects!.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('each sub-project has name, path, supported=true for React packages', async () => {
+    const root = createSubprojProject('nx-react-packages', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'targets/web/package.json': '{"dependencies":{"react":"19"}}',
+      'targets/web/src/HomePage.tsx': 'export function HomePage() { return <div/>; }',
+      'targets/admin/package.json': '{"dependencies":{"react":"19"}}',
+      'targets/admin/src/Dashboard.tsx': 'export function Dashboard() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    const webProject = result.subProjects?.find((p) => p.name === 'web');
+    expect(webProject).toBeDefined();
+    expect(webProject!.supported).toBe(true);
+    expect(webProject!.path).toMatch(/targets[/\\]web/);
+
+    const adminProject = result.subProjects?.find((p) => p.name === 'admin');
+    expect(adminProject).toBeDefined();
+    expect(adminProject!.supported).toBe(true);
+  });
+
+  it('marks non-React sub-project as unsupported with reason', async () => {
+    const root = createSubprojProject('nx-mixed', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'targets/web/package.json': '{"dependencies":{"react":"19"}}',
+      'targets/web/src/App.tsx': 'export function App() { return <div/>; }',
+      'targets/api/package.json': '{"dependencies":{"express":"4","fastify":"4"}}',
+      'targets/api/src/server.ts': 'export const app = {};',
+      'targets/mobile/package.json': '{"dependencies":{"vue":"3"}}',
+      'targets/mobile/src/App.vue': '<template><div/></template>',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    const apiProject = result.subProjects?.find((p) => p.name === 'api');
+    expect(apiProject).toBeDefined();
+    expect(apiProject!.supported).toBe(false);
+    expect(apiProject!.unsupportedReason).toBeTruthy();
+
+    const mobileProject = result.subProjects?.find((p) => p.name === 'mobile');
+    expect(mobileProject).toBeDefined();
+    expect(mobileProject!.supported).toBe(false);
+    expect(mobileProject!.unsupportedReason).toMatch(/vue/i);
+  });
+
+  it('each supported sub-project has its own component groups', async () => {
+    const root = createSubprojProject('nx-per-project-groups', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'targets/web/package.json': '{"dependencies":{"react":"19"}}',
+      'targets/web/src/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+      'targets/web/src/components/ConlocaCard.tsx': 'export function ConlocaCard() { return <div/>; }',
+      'targets/admin/package.json': '{"dependencies":{"react":"19"}}',
+      'targets/admin/src/AdminPanel.tsx': 'export function AdminPanel() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    const webProject = result.subProjects?.find((p) => p.name === 'web');
+    expect(webProject).toBeDefined();
+    const webComponentNames = [
+      ...webProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...webProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    expect(webComponentNames.some((n) => n.includes('LoginScreen'))).toBe(true);
+    expect(webComponentNames.some((n) => n.includes('ConlocaCard'))).toBe(true);
+
+    const adminProject = result.subProjects?.find((p) => p.name === 'admin');
+    expect(adminProject).toBeDefined();
+    const adminComponentNames = [
+      ...adminProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...adminProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    expect(adminComponentNames.some((n) => n.includes('AdminPanel'))).toBe(true);
+  });
+
+  it('non-monorepo returns isMonorepo=false and no subProjects', async () => {
+    const root = createSubprojProject('plain-react', {
+      'package.json': '{"dependencies":{"react":"19"},"devDependencies":{"vite":"6"}}',
+      'src/App.tsx': 'export function App() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    expect(result.isMonorepo).toBeFalsy();
+    expect(!result.subProjects || result.subProjects.length === 0).toBe(true);
+  });
+});

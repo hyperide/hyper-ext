@@ -5,7 +5,7 @@
  * hit the same endpoint. This utility ensures concurrent calls share
  * one in-flight request and supports cancellation on project switch.
  */
-import type { ComponentGroup } from '../../lib/component-scanner/types';
+import type { ComponentGroup, SubProject } from '../../lib/component-scanner/types';
 import { authFetch } from './authFetch';
 
 export interface ComponentsAPIResponse {
@@ -14,6 +14,8 @@ export interface ComponentsAPIResponse {
   atomGroups?: ComponentGroup[];
   compositeGroups?: ComponentGroup[];
   pageGroups?: ComponentGroup[];
+  isMonorepo?: boolean;
+  subProjects?: SubProject[];
 }
 
 let inflightPromise: Promise<ComponentsAPIResponse> | null = null;

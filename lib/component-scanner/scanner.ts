@@ -15,6 +15,7 @@ import type {
   ProjectStructure,
   ProjectStructurePaths,
   ProjectStructureStore,
+  SubProject,
 } from './types.js';
 
 /** Next.js App Router special files that cannot be rendered in canvas preview */
@@ -596,7 +597,174 @@ export class ComponentScanner {
     const atomGroups = this.buildGroups(paths.atomComponentsPaths, projectRoot, 'component');
     const compositeGroups = this.buildGroups(paths.compositeComponentsPaths, projectRoot, 'component', atomDirPaths);
     const pageGroups = this.buildGroups(paths.pagesPaths, projectRoot, 'page');
-    return { atomGroups, compositeGroups, pageGroups };
+
+    const isMonorepo = this.isMonorepoRoot(projectRoot);
+    if (!isMonorepo) {
+      return { atomGroups, compositeGroups, pageGroups, isMonorepo: false };
+    }
+
+    // In monorepo mode all components live in sub-projects; flat groups would duplicate them.
+    const subProjects = this.detectSubProjects(projectRoot);
+    return { atomGroups: [], compositeGroups: [], pageGroups: [], isMonorepo: true, subProjects };
+  }
+
+  /** Enumerate sub-packages in a monorepo and build per-sub-project component groups. */
+  private detectSubProjects(projectRoot: string): SubProject[] {
+    const subProjects: SubProject[] = [];
+    const WORKSPACE_DIRS = ['targets', 'apps', 'packages', 'libs', 'services'];
+
+    for (const workspaceDir of WORKSPACE_DIRS) {
+      const workspacePath = path.join(projectRoot, workspaceDir);
+      if (!fs.existsSync(workspacePath)) continue;
+
+      let pkgEntries: fs.Dirent[];
+      try {
+        pkgEntries = fs.readdirSync(workspacePath, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const pkg of pkgEntries) {
+        if (!pkg.isDirectory() || SKIP_DIRS.has(pkg.name)) continue;
+        const subPkgPath = path.join(workspacePath, pkg.name);
+        const subPkgRelative = path.join(workspaceDir, pkg.name);
+        subProjects.push(this.buildSubProject(pkg.name, subPkgRelative, subPkgPath, projectRoot));
+      }
+    }
+
+    return subProjects;
+  }
+
+  private buildSubProject(name: string, relativePath: string, absPath: string, projectRoot: string): SubProject {
+    const { supported, unsupportedReason } = this.checkSubProjectSupport(absPath);
+
+    if (!supported) {
+      return {
+        name,
+        path: relativePath,
+        supported: false,
+        unsupportedReason,
+        atomGroups: [],
+        compositeGroups: [],
+        pageGroups: [],
+      };
+    }
+
+    // Detect paths scoped to this sub-project only
+    const structure = this.detectProjectStructureInScope(absPath, projectRoot);
+    const atomDirPaths = new Set(
+      structure.atomComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
+    );
+    const atomGroups = this.buildGroups(structure.atomComponentsPaths, projectRoot, 'component');
+    const compositeGroups = this.buildGroups(
+      structure.compositeComponentsPaths,
+      projectRoot,
+      'component',
+      atomDirPaths,
+    );
+    const pageGroups = this.buildGroups(structure.pagesPaths, projectRoot, 'page');
+
+    return { name, path: relativePath, supported: true, atomGroups, compositeGroups, pageGroups };
+  }
+
+  /** Check whether a sub-project directory is React-based and HyperIDE-compatible. */
+  private checkSubProjectSupport(subPkgPath: string): { supported: boolean; unsupportedReason?: string } {
+    const pkgJsonPath = path.join(subPkgPath, 'package.json');
+    let deps: Record<string, string> = {};
+    if (fs.existsSync(pkgJsonPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
+        deps = { ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies };
+      } catch {
+        // ignore parse errors
+      }
+    }
+
+    if (deps['vue'] || deps['@vue/core']) {
+      return { supported: false, unsupportedReason: 'Vue.js projects not supported' };
+    }
+    if (deps['svelte']) {
+      return { supported: false, unsupportedReason: 'Svelte projects not supported' };
+    }
+    if (deps['@angular/core']) {
+      return { supported: false, unsupportedReason: 'Angular projects not supported' };
+    }
+
+    // Check for React
+    if (deps['react'] || deps['react-native']) {
+      return { supported: true };
+    }
+
+    // No explicit framework — check if any .tsx/.jsx files exist under src/
+    const hasTsx = this.hasFileRecursiveExt(subPkgPath, ['.tsx', '.jsx']);
+    if (hasTsx) return { supported: true };
+
+    return { supported: false, unsupportedReason: 'No React components found' };
+  }
+
+  /** Detect project structure scoped to a single sub-package directory. */
+  private detectProjectStructureInScope(subPkgRoot: string, workspaceRoot: string): ProjectStructurePaths {
+    const atoms: string[] = [];
+    const composites: string[] = [];
+    const pages: string[] = [];
+    const framework = this.detectFramework(subPkgRoot);
+
+    for (const srcDirName of ['src', 'app']) {
+      const srcPath = path.join(subPkgRoot, srcDirName);
+      if (!fs.existsSync(srcPath)) continue;
+
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(srcPath, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (SKIP_DIRS.has(entry.name) || NON_COMPONENT_DIRS.has(entry.name)) continue;
+        const entryPath = path.join(srcPath, entry.name);
+        const entryName = entry.name.toLowerCase();
+
+        if (PAGE_DIR_NAMES.has(entryName)) {
+          pages.push(entryPath);
+          continue;
+        }
+        if (entryName === 'components') {
+          this.categorizeComponentsDir(entryPath, atoms, composites);
+          continue;
+        }
+        if (entryName === 'features' || entryName === 'modules') {
+          composites.push(entryPath);
+          continue;
+        }
+      }
+
+      // Fallback: PascalCase .tsx at src/ root → pages
+      const isSubPkgSrc = !srcPath.endsWith(path.join(workspaceRoot, 'src'));
+      if (srcDirName === 'src' && framework === 'react' && (pages.length === 0 || isSubPkgSrc)) {
+        const hasTsxAtRoot = entries.some(
+          (e) => e.isFile() && (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) && /^[A-Z]/.test(e.name),
+        );
+        if (hasTsxAtRoot) pages.push(srcPath);
+      }
+    }
+
+    return { atomComponentsPaths: atoms, compositeComponentsPaths: composites, pagesPaths: pages };
+  }
+
+  private hasFileRecursiveExt(dir: string, exts: string[]): boolean {
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const e of entries) {
+        if (SKIP_DIRS.has(e.name)) continue;
+        if (e.isFile() && exts.some((ext) => e.name.endsWith(ext))) return true;
+        if (e.isDirectory() && this.hasFileRecursiveExt(path.join(dir, e.name), exts)) return true;
+      }
+    } catch {
+      // ignore
+    }
+    return false;
   }
 
   private buildGroups(

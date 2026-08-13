@@ -14,11 +14,30 @@ export interface ComponentGroup {
   components: ComponentListItem[];
 }
 
+/** A single sub-project within a monorepo workspace */
+export interface SubProject {
+  /** Display name — last segment of the sub-package dir (e.g. "web", "admin") */
+  name: string;
+  /** Relative path from workspace root (e.g. "targets/web") */
+  path: string;
+  /** Whether HyperIDE can preview this sub-project (React required) */
+  supported: boolean;
+  /** Human-readable reason when supported=false */
+  unsupportedReason?: string;
+  atomGroups: ComponentGroup[];
+  compositeGroups: ComponentGroup[];
+  pageGroups: ComponentGroup[];
+}
+
 /** All component groups by category */
 export interface ComponentsData {
   atomGroups: ComponentGroup[];
   compositeGroups: ComponentGroup[];
   pageGroups: ComponentGroup[];
+  /** True when the workspace root is a monorepo (Nx, Turbo, pnpm workspaces, Lerna) */
+  isMonorepo?: boolean;
+  /** One entry per detected sub-package; only present for monorepos */
+  subProjects?: SubProject[];
 }
 
 /** Cached project structure paths */
