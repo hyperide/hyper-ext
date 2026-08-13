@@ -468,14 +468,14 @@ describe('detectTailwindExplicitSize', () => {
     expect(detectTailwindExplicitSize('hover:md:w-12 dark:hover:md:h-8')).toEqual({ width: true, height: true });
   });
 
-  it('detects w-[length:50px] with CSS type-hint arbitrary value', () => {
-    expect(detectTailwindExplicitSize('w-[length:50px] h-[percentage:50%]')).toEqual({ width: true, height: true });
+  it('detects w-[length:50px] but not h-[percentage:50%] (percentage is not pixel-resizable)', () => {
+    expect(detectTailwindExplicitSize('w-[length:50px] h-[percentage:50%]')).toEqual({ width: true, height: false });
   });
 
-  it('detects stacked variant with CSS type-hint: md:w-[length:50px]', () => {
+  it('detects stacked variant md:w-[length:50px] but not hover:h-[percentage:50%]', () => {
     expect(detectTailwindExplicitSize('md:w-[length:50px] hover:h-[percentage:50%]')).toEqual({
       width: true,
-      height: true,
+      height: false,
     });
   });
 
@@ -503,57 +503,158 @@ describe('detectTailwindExplicitSize', () => {
     expect(detectTailwindExplicitSize('size-full')).toEqual({ width: false, height: false });
   });
 
-  // min-w / max-w / basis
-  it('detects min-w-0 as explicit width', () => {
-    expect(detectTailwindExplicitSize('min-w-0')).toEqual({ width: true, height: false });
+  // Constraint classes (min-w / max-w / basis / min-h / max-h) only cap or seed the box;
+  // the width/height itself stays `auto`, so they are NOT pixel-resizable. This supersedes
+  // #296 (which mistakenly equated a constraint with an explicit size — see the Tweet.tsx
+  // Action bar bug). The per-form non-resizable assertions live in the
+  // "special / non-pixel dimensions" describe block below; here we cover only the
+  // combination / variant forms not duplicated there.
+  it('does not detect the combination min-w-0 max-h-48 (constraints only)', () => {
+    expect(detectTailwindExplicitSize('min-w-0 max-h-48')).toEqual({ width: false, height: false });
   });
 
-  it('does not detect max-w-full (keyword)', () => {
-    expect(detectTailwindExplicitSize('max-w-full')).toEqual({ width: false, height: false });
+  it('does not detect responsive-prefixed constraints md:min-w-4 lg:max-h-8', () => {
+    expect(detectTailwindExplicitSize('md:min-w-4 lg:max-h-8')).toEqual({ width: false, height: false });
+  });
+});
+
+/**
+ * A pixel resize handle should only appear when the element's authored dimension is an
+ * explicit, fixed, pixel-resizable length. A handle that writes `width: <N>px` is
+ * meaningless on a box whose width is `auto` / intrinsic / percentage — the element does
+ * not track the cursor (see the Tweet.tsx Action bar bug below). So:
+ *   - constraint classes (min-w / max-w / basis / min-h / max-h) only cap or seed the box;
+ *     they never SET the width/height, which stays `auto` → no handle.
+ *   - non-pixel arbitrary values (w-[50%], w-[auto], w-[min-content], …) resolve to a
+ *     container-relative / intrinsic size, not a draggable pixel value → no handle.
+ */
+describe('detectTailwindExplicitSize — special / non-pixel dimensions get no resize handle', () => {
+  // Regression: react-vite-tw4-twitter Tweet.tsx Action bar
+  //   <div className="flex items-center justify-between mt-3 max-w-[425px] -ml-2">
+  // computes to width:auto (no explicit width) — a width handle there does nothing.
+  it('does not mark a max-w-[425px]-only element width-resizable (Tweet Action bar bug)', () => {
+    expect(detectTailwindExplicitSize('flex items-center justify-between mt-3 max-w-[425px] -ml-2')).toEqual({
+      width: false,
+      height: false,
+    });
   });
 
-  it('detects max-w-96 as explicit width', () => {
-    expect(detectTailwindExplicitSize('max-w-96')).toEqual({ width: true, height: false });
+  it('does not mark constraint-only width classes resizable (min-w / max-w / basis)', () => {
+    expect(detectTailwindExplicitSize('min-w-0')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('max-w-96')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('max-w-[800px]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('basis-4')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('basis-[200px]')).toEqual({ width: false, height: false });
   });
 
-  it('detects max-w-[800px] arbitrary as explicit width', () => {
-    expect(detectTailwindExplicitSize('max-w-[800px]')).toEqual({ width: true, height: false });
+  it('does not mark constraint-only height classes resizable (min-h / max-h)', () => {
+    expect(detectTailwindExplicitSize('min-h-0')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('max-h-48')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('max-h-[500px]')).toEqual({ width: false, height: false });
   });
 
-  it('does not detect basis-1/2 (fraction)', () => {
-    expect(detectTailwindExplicitSize('basis-1/2')).toEqual({ width: false, height: false });
+  it('still marks an explicit width resizable even alongside a max-w constraint', () => {
+    expect(detectTailwindExplicitSize('w-[300px] max-w-[425px]')).toEqual({ width: true, height: false });
+    expect(detectTailwindExplicitSize('w-48 max-w-96 h-12')).toEqual({ width: true, height: true });
   });
 
-  it('detects basis-4 as explicit width', () => {
-    expect(detectTailwindExplicitSize('basis-4')).toEqual({ width: true, height: false });
+  it('does not mark percentage arbitrary values resizable (w-[50%], h-[percentage:50%])', () => {
+    expect(detectTailwindExplicitSize('w-[50%]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('w-[length:50px] h-[percentage:50%]')).toEqual({ width: true, height: false });
   });
 
-  it('detects basis-[200px] arbitrary as explicit width', () => {
-    expect(detectTailwindExplicitSize('basis-[200px]')).toEqual({ width: true, height: false });
+  it('does not mark intrinsic-keyword arbitrary values resizable (auto, min/max/fit-content)', () => {
+    expect(detectTailwindExplicitSize('w-[auto]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('w-[min-content]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('w-[max-content]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('h-[fit-content]')).toEqual({ width: false, height: false });
   });
 
-  // min-h / max-h
-  it('does not detect min-h-screen (keyword)', () => {
-    expect(detectTailwindExplicitSize('min-h-screen')).toEqual({ width: false, height: false });
+  it('still marks absolute-length arbitrary values resizable (px / rem / em)', () => {
+    expect(detectTailwindExplicitSize('w-[425px]')).toEqual({ width: true, height: false });
+    expect(detectTailwindExplicitSize('w-[10rem] h-[3em]')).toEqual({ width: true, height: true });
   });
 
-  it('detects min-h-0 as explicit height', () => {
-    expect(detectTailwindExplicitSize('min-h-0')).toEqual({ width: false, height: true });
+  it('marks the full set of absolute / font-relative units resizable (pt/pc/in/cm/mm/q/ex/ch)', () => {
+    expect(detectTailwindExplicitSize('w-[72pt]')).toEqual({ width: true, height: false });
+    expect(detectTailwindExplicitSize('w-[1in] h-[2cm]')).toEqual({ width: true, height: true });
+    expect(detectTailwindExplicitSize('w-[10mm] h-[6pc]')).toEqual({ width: true, height: true });
+    expect(detectTailwindExplicitSize('w-[4q] h-[3ex]')).toEqual({ width: true, height: true });
+    expect(detectTailwindExplicitSize('w-[2ch]')).toEqual({ width: true, height: false });
+    expect(detectTailwindExplicitSize('w-[1.5rem] h-[.5em]')).toEqual({ width: true, height: true });
   });
 
-  it('detects max-h-48 as explicit height', () => {
-    expect(detectTailwindExplicitSize('max-h-48')).toEqual({ width: false, height: true });
+  it('marks root-relative + extra font-relative units resizable (lh/rlh/cap/rcap/ic/ric/rex/rch)', () => {
+    expect(detectTailwindExplicitSize('w-[2lh] h-[1rlh]')).toEqual({ width: true, height: true });
+    expect(detectTailwindExplicitSize('w-[1cap] h-[3ic]')).toEqual({ width: true, height: true });
+    expect(detectTailwindExplicitSize('w-[2rex] h-[2rch]')).toEqual({ width: true, height: true });
+    expect(detectTailwindExplicitSize('w-[1rcap] h-[2ric]')).toEqual({ width: true, height: true });
   });
 
-  it('detects max-h-[500px] arbitrary as explicit height', () => {
-    expect(detectTailwindExplicitSize('max-h-[500px]')).toEqual({ width: false, height: true });
+  // Unitless `0` is a valid CSS length (`width: 0`) — keep parity with the numeric class `w-0`.
+  // Other unitless magnitudes (`w-[5]`) are invalid CSS and must NOT be resizable.
+  it('marks unitless zero resizable (w-[0]) but not other unitless magnitudes (w-[5])', () => {
+    expect(detectTailwindExplicitSize('w-[0]')).toEqual({ width: true, height: false });
+    expect(detectTailwindExplicitSize('w-[0] h-[0]')).toEqual({ width: true, height: true });
+    expect(detectTailwindExplicitSize('w-[5]')).toEqual({ width: false, height: false });
   });
 
-  it('detects combination min-w-0 max-h-48 as both axes', () => {
-    expect(detectTailwindExplicitSize('min-w-0 max-h-48')).toEqual({ width: true, height: true });
+  // The `length:` type hint is stripped, then the value runs through the same allow-list:
+  // a fixed-length hint stays resizable; a viewport / percentage hint does not.
+  it('validates the length: type-hint value against the allow-list (px/rem yes, vw/% no)', () => {
+    expect(detectTailwindExplicitSize('w-[length:10px]')).toEqual({ width: true, height: false });
+    expect(detectTailwindExplicitSize('w-[length:2rem] h-[length:3em]')).toEqual({ width: true, height: true });
+    expect(detectTailwindExplicitSize('w-[length:50vw]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('w-[percentage:50%]')).toEqual({ width: false, height: false });
   });
 
-  it('detects responsive-prefixed md:min-w-4 lg:max-h-8', () => {
-    expect(detectTailwindExplicitSize('md:min-w-4 lg:max-h-8')).toEqual({ width: true, height: true });
+  // Viewport-relative units track the viewport, not a fixed px length — a px-committing handle
+  // is meaningless on them (same bug class as the Tweet Action bar). Allow-list excludes them.
+  it('does not mark viewport-unit arbitrary values resizable (vw / vh / vmin / vmax)', () => {
+    expect(detectTailwindExplicitSize('w-[100vw]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('h-[100vh]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('w-[50vmin] h-[50vmax]')).toEqual({ width: false, height: false });
+  });
+
+  // Runtime / derived expressions resolve at render time, not to a fixed length.
+  it('does not mark runtime / derived arbitrary values resizable (calc / var / clamp)', () => {
+    expect(detectTailwindExplicitSize('w-[calc(100%_-_2rem)]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('w-[var(--sidebar-width)]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('h-[var(--radix-select-trigger-height)]')).toEqual({
+      width: false,
+      height: false,
+    });
+    expect(detectTailwindExplicitSize('w-[clamp(10rem,50%,40rem)]')).toEqual({ width: false, height: false });
+  });
+
+  // fr / stretch / container-query units are flex/intrinsic/container-driven, not fixed lengths.
+  it('does not mark fr / stretch / container-query arbitrary values resizable', () => {
+    expect(detectTailwindExplicitSize('w-[1fr]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('w-[stretch]')).toEqual({ width: false, height: false });
+    expect(detectTailwindExplicitSize('w-[50cqw] h-[50cqh]')).toEqual({ width: false, height: false });
+  });
+});
+
+describe('computeOverlayRects — resizable gating on special dimensions', () => {
+  it('does not set resizable on a max-w-[425px]-only selection (Tweet Action bar)', () => {
+    const el = mockElement(
+      { left: 0, top: 0, width: 425, height: 32 },
+      'flex items-center justify-between max-w-[425px]',
+    );
+    const resolver = createResolver(new Map([['action-bar', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['action-bar'], hoveredId: null }, resolver);
+
+    expect(result.overlayRects[0].type).toBe('selection');
+    expect(result.overlayRects[0].resizable).toBeUndefined();
+  });
+
+  it('still sets resizable when an explicit width sits next to a max-w constraint', () => {
+    const el = mockElement({ left: 0, top: 0, width: 300, height: 32 }, 'w-[300px] max-w-[425px]');
+    const resolver = createResolver(new Map([['fixed', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['fixed'], hoveredId: null }, resolver);
+
+    expect(result.overlayRects[0].resizable).toEqual({ width: true, height: false });
   });
 });

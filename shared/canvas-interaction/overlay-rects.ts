@@ -10,10 +10,21 @@ import { clearTracingDebugOnce, tracingDebugOnce } from './tracing-debug';
 import type { OverlayElementResolver, OverlayRect, PlaceholderRect } from './types';
 
 /**
- * Detect whether a Tailwind class list contains explicit fixed-size classes per axis.
- * Matches: w-{n}, min-w-{n}, max-w-{n}, basis-{n}, h-{n}, min-h-{n}, max-h-{n} (numeric),
- * -px variants, and arbitrary-value [...] forms.
- * Does NOT match keyword sizes: auto, full, screen, min, max, fit.
+ * Detect whether a Tailwind class list authors an explicit, pixel-resizable size per axis.
+ *
+ * A canvas resize handle commits `width: <N>px` / `height: <N>px`, so it is only meaningful
+ * when the element's width/height is an explicit fixed pixel length. We therefore match ONLY:
+ *   w-{n} / h-{n} / size-{n} (numeric), the -px variants, and absolute-length arbitrary
+ *   values like w-[425px] / h-[10rem].
+ *
+ * We deliberately do NOT match:
+ *   - keyword sizes (auto, full, screen, min, max, fit, fractions like w-1/2) — intrinsic
+ *     / container-relative, not a draggable pixel value;
+ *   - constraint classes (min-w-*, max-w-*, basis-*, min-h-*, max-h-*) — they only cap or
+ *     seed the box; the width/height itself stays `auto`, so a pixel drag does nothing
+ *     (e.g. Tweet.tsx Action bar `max-w-[425px]` with no explicit width — supersedes #296);
+ *   - non-pixel arbitrary values (w-[50%], w-[auto], w-[min-content], …) — see
+ *     {@link isPixelResizableArbitraryValue}.
  *
  * Design intent for variant-prefixed classes (e.g. md:w-12, hover:md:w-12):
  * We treat these as "this size class exists and can be edited", regardless of whether
@@ -34,12 +45,7 @@ export function detectTailwindExplicitSize(className: string | undefined): { wid
     const colonIdx = cls.lastIndexOf(':', searchEnd - 1);
     const bare = colonIdx !== -1 ? cls.slice(colonIdx + 1) : cls;
     if (!width && isTailwindSizeClass(bare, 'w')) width = true;
-    if (!width && isTailwindSizeClass(bare, 'min-w')) width = true;
-    if (!width && isTailwindSizeClass(bare, 'max-w')) width = true;
-    if (!width && isTailwindSizeClass(bare, 'basis')) width = true;
     if (!height && isTailwindSizeClass(bare, 'h')) height = true;
-    if (!height && isTailwindSizeClass(bare, 'min-h')) height = true;
-    if (!height && isTailwindSizeClass(bare, 'max-h')) height = true;
     if ((!width || !height) && isTailwindSizeClass(bare, 'size')) {
       width = true;
       height = true;
@@ -55,8 +61,38 @@ function isTailwindSizeClass(cls: string, axis: string): boolean {
   const rest = cls.slice(prefix.length);
   if (!rest) return false;
   if (rest === 'px') return true;
-  if (rest[0] === '[') return true;
+  if (rest[0] === '[') return isPixelResizableArbitraryValue(rest);
   return rest[0] >= '0' && rest[0] <= '9' && !rest.includes('/');
+}
+
+/**
+ * A fixed CSS length: unitless `0`, or a numeric magnitude followed by an absolute (px, cm,
+ * mm, q, in, pc, pt) or font-relative (em, rem, ex, rex, cap, rcap, ch, rch, ic, ric, lh, rlh)
+ * length unit — the complete set of CSS units that resolve to a fixed px value. ONLY these are
+ * pixel-resizable: a resize handle commits `<dim>: <N>px`, which can meaningfully replace a
+ * fixed length but NOT a value that is viewport-, container-, content-, or runtime-derived.
+ * This is an allow-list, so anything unlisted is rejected: percentages (`%`), viewport units
+ * (vw/vh/vmin/vmax/vi/vb/dvh/…), container-query units (cqw/cqh/…), `fr`, intrinsic keywords
+ * (auto/min/max/fit-content, stretch), and runtime expressions (`calc()`/`var()`/`clamp()`/`env()`).
+ */
+const FIXED_LENGTH_ARBITRARY_VALUE =
+  /^(?:0|(?:\d+|\d*\.\d+)(?:px|cm|mm|q|in|pc|pt|rem|em|rex|ex|rcap|cap|rch|ch|ric|ic|rlh|lh))$/i;
+
+/**
+ * Whether a Tailwind arbitrary value (the `[...]` form) authors a fixed, pixel-resizable
+ * length. A resize handle writes `<dim>: <N>px`, so only an absolute / font-relative length
+ * can be pixel-dragged. Percentages, viewport/container units, intrinsic keywords (auto,
+ * min/max/fit-content), `fr`, and runtime expressions (`calc()`, `var()`, …) are not fixed
+ * lengths — dragging them in pixels is meaningless — so they get no handle.
+ *
+ * Accepts an optional CSS type hint (`[length:50px]`, `[percentage:50%]`) and validates the
+ * value AFTER the hint.
+ */
+function isPixelResizableArbitraryValue(bracket: string): boolean {
+  let value = bracket.replace(/^\[/, '').replace(/\]$/, '').trim();
+  const hintIdx = value.indexOf(':');
+  if (hintIdx !== -1) value = value.slice(hintIdx + 1).trim();
+  return FIXED_LENGTH_ARBITRARY_VALUE.test(value);
 }
 
 export interface OverlayComputeState {
