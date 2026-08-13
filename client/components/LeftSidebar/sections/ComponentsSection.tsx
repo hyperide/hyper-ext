@@ -21,7 +21,6 @@ interface ComponentsSectionProps {
   onReload: () => void;
   isReloading: boolean;
   onCreateComponent?: () => void;
-  isVSCode: boolean;
   setupReason?: SetupReason | null;
   isMonorepo?: boolean;
   subProjects?: SubProject[];
@@ -42,7 +41,6 @@ export function ComponentsSection({
   onReload,
   isReloading,
   onCreateComponent,
-  isVSCode,
   setupReason,
   currentSubProjectPath,
 }: ComponentsSectionProps) {
@@ -94,17 +92,17 @@ export function ComponentsSection({
           >
             <IconRefresh className={cn('w-4 h-4', { 'animate-spin': isReloading })} stroke={1.5} />
           </button>
-          {!isVSCode && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCreateComponent?.();
-              }}
-            >
-              <IconPlus className="w-4 h-4" stroke={1.5} />
-            </button>
-          )}
+          <button
+            type="button"
+            data-testid={TID.explorer.createComponentButton}
+            title="New component"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCreateComponent?.();
+            }}
+          >
+            <IconPlus className="w-4 h-4" stroke={1.5} />
+          </button>
           {hasContent && (
             <button
               type="button"

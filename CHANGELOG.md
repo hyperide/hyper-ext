@@ -4,6 +4,10 @@ All notable changes to HyperCanvas Preview are documented here.
 
 ## [Unreleased]
 
+### Features
+
+- **Guided "New component" flow in the Explorer, on both platforms (ext + SaaS)** — the Pages/Components "+" affordance (now also shown in the VS Code extension) opens one dialog with a plain-language type picker (Building block / Section / Page), a name field with live validation and collision detection, and an auto-picked target folder; on success the file is written from a shared Tailwind-first template and the component opens in the canvas preview. Templates, naming validation, target-dir resolution, and the contained exclusive file write live in `shared/component-create/` and run in BOTH hosts — the SaaS `POST /api/create-component` route and the extension host's `component:create` message — so the platforms stay at parity. Monorepo-aware: the page fallback derives from the active sub-project, and the extension honors the scanned monorepo ancestor root for sibling-sub-project writes (HYP-1184)
+
 ### Bug fixes
 
 ## [0.1.71] — 2026-07-15

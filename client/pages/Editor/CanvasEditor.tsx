@@ -448,8 +448,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     handleOpenPanel,
     handleComponentClick,
     handleOpenInsertPanel,
-    handleCreatePage,
-    handleCreateComponent,
     handleElementPosition,
   } = usePanelManagement({
     engine,
@@ -736,8 +734,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                 onHoverElement={handleHoverElement}
                 hoveredId={hoveredId}
                 onOpenPanel={handleOpenPanel}
-                onCreatePage={handleCreatePage}
-                onCreateComponent={handleCreateComponent}
               />
             </div>
 

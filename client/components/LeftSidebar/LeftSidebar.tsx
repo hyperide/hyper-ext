@@ -1,7 +1,13 @@
 import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type Layout, Panel, Group as PanelGroup, useDefaultLayout } from 'react-resizable-panels';
+import {
+  type GroupImperativeHandle,
+  type Layout,
+  Panel,
+  Group as PanelGroup,
+  useDefaultLayout,
+} from 'react-resizable-panels';
 // SaaS-only imports — conditionally used when engine is available
 import { useComponentMetaOptional } from '@/contexts/ComponentMetaContext';
 import { useAnimatedPanelCollapse } from '@/hooks/useAnimatedPanelCollapse';
@@ -9,9 +15,12 @@ import { useSidebarPanelLayout } from '@/hooks/useSidebarPanelLayout';
 import { useCanvasEngineOptional } from '@/lib/canvas-engine';
 import { resolveNodeRefToUuid } from '@/lib/element-tracing/id-bridge';
 import { usePlatformContext } from '@/lib/platform';
+import { useCreateComponent } from '@/lib/platform/create-component';
 import { panelLayoutStorage } from '@/lib/storage';
 import { useGitStore } from '@/stores/gitStore';
+import type { ComponentKind, CreatedComponent } from '../../../shared/component-create/types';
 import type { ComponentListItem } from '../../../lib/component-scanner/types';
+import { CreateComponentDialog } from '../CreateComponentDialog';
 import SidebarHeader from '../SidebarHeader';
 import { SourceControlSection } from '../SourceControlSection';
 import { TestGenerationModal } from '../TestGenerationModal';
@@ -40,16 +49,13 @@ function isUsablePanelLayout(layout: Layout | undefined, panelIds: readonly stri
   });
 }
 
-export default function LeftSidebar({
-  onElementPosition,
-  onHoverElement,
-  hoveredId,
-  onOpenPanel,
-  onCreatePage,
-  onCreateComponent,
-}: LeftSidebarProps) {
+export default function LeftSidebar({ onElementPosition, onHoverElement, hoveredId, onOpenPanel }: LeftSidebarProps) {
   const engine = useCanvasEngineOptional();
   const isVSCode = usePlatformContext() === 'vscode-webview';
+
+  // Guided "New component" flow (HYP-1184) — internal to the sidebar so it
+  // works identically in the SaaS editor and the VS Code webview.
+  const [createDialogKind, setCreateDialogKind] = useState<ComponentKind | null>(null);
 
   // SaaS-only: ComponentMeta context (provides meta, loadComponent, etc.)
   // In VS Code these are handled by compat hooks internally
@@ -104,6 +110,23 @@ export default function LeftSidebar({
       componentNav.onComponentClick(component);
     },
     [componentNav],
+  );
+
+  // Guided "New component" flow (HYP-1184): the dialog stays transport-agnostic;
+  // the hook picks SaaS route vs extension-host RPC by platform.
+  const createComponent = useCreateComponent();
+  const handleCreateComponentFile = useCallback(
+    (kind: ComponentKind, name: string, dirPath: string) => createComponent({ kind, name, dirPath }),
+    [createComponent],
+  );
+
+  const handleComponentCreated = useCallback(
+    (component: CreatedComponent, kind: ComponentKind) => {
+      loadComponents();
+      setSelectionSource(kind === 'page' ? 'pages' : 'components');
+      componentNav.onComponentClick({ name: component.name, path: component.relativePath });
+    },
+    [loadComponents, componentNav],
   );
 
   const currentComponentPath = engine ? meta?.relativeFilePath : (componentNav.activePath ?? undefined);
@@ -280,7 +303,7 @@ export default function LeftSidebar({
         className="flex-1"
         defaultLayout={defaultLayout}
         onLayoutChange={onLayoutChange}
-        groupRef={groupRef as unknown as React.Ref<import('react-resizable-panels').GroupImperativeHandle>}
+        groupRef={groupRef as React.Ref<GroupImperativeHandle>}
       >
         {!isVSCode && (
           <>
@@ -327,8 +350,7 @@ export default function LeftSidebar({
             loadingComponent={componentNav.loadingComponent}
             onComponentClick={onPageClick}
             onToggle={() => handleUserToggle('pages', pagesPanel.toggle, pagesPanelRef)}
-            onCreatePage={onCreatePage}
-            isVSCode={isVSCode}
+            onCreatePage={() => setCreateDialogKind('page')}
           />
         </Panel>
         <ResizeHandle onPointerUp={() => handleResizeEnd(['pages', 'components'])} />
@@ -357,8 +379,7 @@ export default function LeftSidebar({
             onToggle={() => handleUserToggle('components', componentsPanel.toggle, componentsPanelRef)}
             onReload={loadComponents}
             isReloading={isLoadingComponents}
-            onCreateComponent={onCreateComponent}
-            isVSCode={isVSCode}
+            onCreateComponent={() => setCreateDialogKind('atom')}
             setupReason={setupReason}
           />
         </Panel>
@@ -412,6 +433,22 @@ export default function LeftSidebar({
           />
         </Panel>
       </PanelGroup>
+
+      {/* Guided "New component" dialog (HYP-1184) */}
+      {createDialogKind !== null && (
+        <CreateComponentDialog
+          open
+          initialKind={createDialogKind}
+          onClose={() => setCreateDialogKind(null)}
+          atomGroups={components.atomGroups}
+          compositeGroups={components.compositeGroups}
+          pageGroups={components.pageGroups}
+          subProjects={components.subProjects}
+          activeSubProjectPath={components.activeSubProjectPath}
+          onCreate={handleCreateComponentFile}
+          onCreated={handleComponentCreated}
+        />
+      )}
 
       {/* Test Generation Modal */}
       {currentComponentPath && (

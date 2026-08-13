@@ -9,6 +9,9 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { extractComponentPropsTypes } from '@lib/component-props/extract-props-types';
+import { createComponentFile } from '@shared/component-create/create-component-file';
+import { CreateComponentUserError } from '@shared/component-create/errors';
+import type { ComponentKind } from '@shared/component-create/types';
 import { extractTamaguiTokens, isTamaguiProject, nodeTamaguiFsHost } from '@lib/tamagui/extract-tokens';
 import { generateTailwindClasses, getConflictingPrefixes } from '@lib/tailwind/generator';
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
@@ -64,6 +67,13 @@ export class PanelRouter {
   private _postEditDiagnosticWatcher?: PostEditDiagnosticWatcher;
   private _context: vscode.ExtensionContext;
   private _currentWebview: vscode.Webview | null = null;
+  /**
+   * Monorepo ancestor root from the last successful getComponentGroups() scan
+   * (HYP-909 boundary). Read by the 'component:create' handler so a component
+   * created into a sibling sub-project (`../sibling/...` dirPath, legit when VS
+   * Code is opened at a leaf) passes containment exactly where sibling edits do.
+   */
+  private _lastScanMonorepoRoot: string | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
   /**
    * Fetches the LIVE applied className of an element from the preview iframe (HYP-544).
@@ -323,6 +333,7 @@ export class PanelRouter {
         const monorepoRoot = result.data.monorepoRoot ?? null;
         scanForAstBridge.setAdditionalWorkspaceRoot(monorepoRoot);
         scanForStyleReadService.setAdditionalWorkspaceRoot(monorepoRoot);
+        this._lastScanMonorepoRoot = monorepoRoot;
         return result;
       }
       // Workspace changed mid-scan (root string OR service identity) — loop to re-scan for
@@ -480,6 +491,40 @@ export class PanelRouter {
         });
       } catch (e) {
         webview.postMessage({ type: 'component:response', requestId, success: false, error: String(e) });
+      }
+      return true;
+    }
+
+    // Guided "New component" flow (HYP-1184) — the SAME shared template/validation/
+    // containment logic the SaaS POST /api/create-component route runs, executed here
+    // against the current workspace root. `this.workspaceRoot` (getter) refreshes the
+    // workspace first, so a folder switch mid-dialog can't write into the stale root.
+    if (type === 'component:create') {
+      const { requestId, kind, name, dirPath } = message as {
+        requestId: string;
+        kind: ComponentKind;
+        name: string;
+        dirPath?: string;
+      };
+      try {
+        const component = await createComponentFile({
+          projectRoot: this.workspaceRoot,
+          containmentRoots: this._lastScanMonorepoRoot ? [this._lastScanMonorepoRoot] : undefined,
+          kind,
+          name,
+          dirPath,
+        });
+        webview.postMessage({ type: 'component:response', requestId, success: true, data: component });
+      } catch (e) {
+        // Only the shared validators' plain-language messages reach the dialog —
+        // unexpected fs errors get a generic message (their text embeds host paths).
+        webview.postMessage({
+          type: 'component:response',
+          requestId,
+          success: false,
+          error:
+            e instanceof CreateComponentUserError ? e.message : 'Could not create the component — please try again.',
+        });
       }
       return true;
     }
@@ -1011,5 +1056,8 @@ export class PanelRouter {
     this._astBridge.astService.setProjectDefaultCssSystem(undefined);
     this._componentService = this._createComponentService(workspaceRoot);
     this._styleReadService = this._createStyleReadService(workspaceRoot);
+    // Drop the OLD workspace's monorepo write boundary — a create against the new
+    // workspace must not inherit containment into the previous project's tree.
+    this._lastScanMonorepoRoot = null;
   }
 }

@@ -11,6 +11,7 @@ import type { SharedEditorState } from '../../../lib/types';
 import type { ConsoleLevel, DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
 import type { I18nBindingResult, I18nLibrary } from '../../../shared/i18n-text/types';
 import type { RuntimeError } from '../../../shared/runtime-error';
+import type { ComponentKind } from '../../../shared/component-create/types';
 import type { StyleForwardingWarning } from '../../../shared/types/style-forwarding-warning';
 
 // ============================================================================
@@ -225,6 +226,12 @@ export type PlatformMessage =
   | { type: 'component:open'; name: string; path: string }
   | { type: 'component:list'; requestId: string }
   | { type: 'component:listGroups'; requestId: string }
+  // Guided "New component" flow (HYP-1184). The webview sends kind+name (and
+  // optionally an explicit project-relative dirPath); the extension host runs
+  // the shared @shared/component-create logic off disk and answers on
+  // `component:response` with { name, relativePath }. The SaaS twin is the
+  // POST /api/create-component route — same shared logic, same payload.
+  | { type: 'component:create'; requestId: string; kind: ComponentKind; name: string; dirPath?: string }
   | { type: 'component:tests'; requestId: string; componentPath: string }
   | {
       type: 'component:parse';

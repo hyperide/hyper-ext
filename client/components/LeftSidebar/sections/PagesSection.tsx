@@ -15,7 +15,6 @@ interface PagesSectionProps {
   onComponentClick: (component: ComponentListItem) => void;
   onToggle: () => void;
   onCreatePage?: () => void;
-  isVSCode: boolean;
 }
 
 export function PagesSection({
@@ -27,7 +26,6 @@ export function PagesSection({
   onComponentClick,
   onToggle,
   onCreatePage,
-  isVSCode,
 }: PagesSectionProps) {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -61,17 +59,17 @@ export function PagesSection({
           </span>
         </button>
         <div className="flex items-center gap-1.5">
-          {!isVSCode && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCreatePage?.();
-              }}
-            >
-              <IconPlus className="w-4 h-4" stroke={1.5} />
-            </button>
-          )}
+          <button
+            type="button"
+            data-testid={TID.explorer.createPageButton}
+            title="New page"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCreatePage?.();
+            }}
+          >
+            <IconPlus className="w-4 h-4" stroke={1.5} />
+          </button>
           {hasContent && (
             <button
               type="button"

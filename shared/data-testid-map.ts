@@ -127,6 +127,12 @@ export const TID = {
     runTestsButton: 'hyper-explorer-run-tests',
     subProject: (name: string) => `hyper-explorer-subproject-${name}`,
     subProjectUnsupported: (name: string) => `hyper-explorer-subproject-unsupported-${name}`,
+    createComponentButton: 'hyper-explorer-create-component',
+    createPageButton: 'hyper-explorer-create-page',
+    createComponentDialog: 'hyper-explorer-create-component-dialog',
+    createComponentKind: (kind: string) => `hyper-explorer-create-component-kind-${kind}`,
+    createComponentNameInput: 'hyper-explorer-create-component-name',
+    createComponentSubmit: 'hyper-explorer-create-component-submit',
   },
 
   // AI Chat

@@ -5,7 +5,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { CanvasEngine } from '@/lib/canvas-engine';
-import { useOpenAIChat } from '@/lib/platform/PlatformContext';
 
 interface UsePanelManagementProps {
   engine: CanvasEngine;
@@ -24,8 +23,6 @@ interface UsePanelManagementReturn {
   handleOpenPanel: (id: string) => void;
   handleComponentClick: (componentType: string) => void;
   handleOpenInsertPanel: (componentType: string, componentFilePath?: string) => void;
-  handleCreatePage: () => void;
-  handleCreateComponent: () => void;
   handleElementPosition: (id: string, y: number) => void;
 }
 
@@ -33,7 +30,6 @@ interface UsePanelManagementReturn {
  * Manages floating panels state (ComponentNavigator, InsertInstance)
  */
 export function usePanelManagement({ engine, selectedIds }: UsePanelManagementProps): UsePanelManagementReturn {
-  const openAIChat = useOpenAIChat();
   const [elementY, setElementY] = useState<number>(0);
   const [panelOpenForId, setPanelOpenForId] = useState<string | null>(null);
   const [showInsertPanel, setShowInsertPanel] = useState(false);
@@ -80,14 +76,6 @@ export function usePanelManagement({ engine, selectedIds }: UsePanelManagementPr
     setPanelOpenForId(null); // Close navigator if open
   }, []);
 
-  const handleCreatePage = useCallback(() => {
-    openAIChat({ prompt: 'Create a new page component', forceNewChat: true });
-  }, [openAIChat]);
-
-  const handleCreateComponent = useCallback(() => {
-    openAIChat({ prompt: 'Create a new component', forceNewChat: true });
-  }, [openAIChat]);
-
   return {
     elementY,
     panelOpenForId,
@@ -100,8 +88,6 @@ export function usePanelManagement({ engine, selectedIds }: UsePanelManagementPr
     handleOpenPanel,
     handleComponentClick,
     handleOpenInsertPanel,
-    handleCreatePage,
-    handleCreateComponent,
     handleElementPosition,
   };
 }

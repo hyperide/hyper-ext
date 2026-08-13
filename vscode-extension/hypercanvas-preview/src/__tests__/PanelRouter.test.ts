@@ -277,6 +277,131 @@ describe('PanelRouter', () => {
     );
   });
 
+  // HYP-1184 — guided "New component" flow: the host runs the shared
+  // @shared/component-create logic and answers on component:response.
+  // node:fs/promises is module-mocked above (mkdir/writeFile resolve), so the
+  // success path exercises routing + payload shape without touching disk.
+  describe('component:create', () => {
+    it('creates the file and responds with the relative path', async () => {
+      const wv = createMockWebview();
+      const handled = await router.routeMessage(
+        { type: 'component:create', requestId: 'c1', kind: 'atom', name: 'Badge' },
+        wv as never,
+      );
+      expect(handled).toBe(true);
+      expect(wv.messages[0]).toEqual({
+        type: 'component:response',
+        requestId: 'c1',
+        success: true,
+        data: { name: 'Badge', relativePath: 'components/Badge.tsx' },
+      });
+    });
+
+    it('honours an explicit dirPath', async () => {
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'component:create', requestId: 'c2', kind: 'atom', name: 'Pill', dirPath: 'src/components/ui' },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'component:response',
+          requestId: 'c2',
+          success: true,
+          data: { name: 'Pill', relativePath: 'src/components/ui/Pill.tsx' },
+        }),
+      );
+    });
+
+    it('rejects an invalid name with the shared plain-language error', async () => {
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'component:create', requestId: 'c3', kind: 'atom', name: 'badge' },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'component:response',
+          requestId: 'c3',
+          success: false,
+          error: expect.stringMatching(/capital letter/i),
+        }),
+      );
+    });
+
+    it('rejects dirPath escaping the workspace', async () => {
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'component:create', requestId: 'c4', kind: 'atom', name: 'Badge', dirPath: '../outside' },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({ type: 'component:response', requestId: 'c4', success: false }),
+      );
+    });
+
+    it('rejects an unknown kind with a clean picker message (not a template TypeError)', async () => {
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'component:create', requestId: 'c5', kind: 'widget', name: 'Badge' },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'component:response',
+          requestId: 'c5',
+          success: false,
+          error: expect.stringMatching(/building block, a section, or a page/i),
+        }),
+      );
+    });
+
+    it('creates a page kind with a default-export template path', async () => {
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'component:create', requestId: 'c6', kind: 'page', name: 'DashboardPage' },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'component:response',
+          requestId: 'c6',
+          success: true,
+          data: { name: 'DashboardPage', relativePath: 'pages/DashboardPage.tsx' },
+        }),
+      );
+    });
+
+    it('allows a sibling-subproject dirPath contained by the scanned monorepo root', async () => {
+      // Simulate a completed scan that discovered a monorepo ancestor (HYP-909):
+      // getComponentGroups is the single call site that records the boundary.
+      (router.componentService.scanComponentGroups as ReturnType<typeof mock>).mockImplementationOnce(() =>
+        Promise.resolve({ data: { monorepoRoot: '/' }, needsSetup: false }),
+      );
+      await router.getComponentGroups();
+
+      const wv = createMockWebview();
+      await router.routeMessage(
+        {
+          type: 'component:create',
+          requestId: 'c7',
+          kind: 'atom',
+          name: 'Sibling',
+          dirPath: '../sibling/src/components',
+        },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'component:response',
+          requestId: 'c7',
+          success: true,
+          data: { name: 'Sibling', relativePath: '../sibling/src/components/Sibling.tsx' },
+        }),
+      );
+    });
+  });
+
   // HYP-909 follow-up (review-diff on #622): getComponentGroups() must be the
   // single place that threads ComponentsData.monorepoRoot into AstBridge (→
   // UndoRedoService), on EVERY scan — both widening when a monorepoRoot is
