@@ -2,6 +2,14 @@
 
 All notable changes to HyperCanvas Preview are documented here.
 
+## [0.1.51] — 2026-05-28
+
+### Bug fixes
+
+- **Git exclude in monorepos** — `ensureGitExclude` now walks up to find the actual `.git/` root instead of only checking `projectRoot`; fixes generated preview files showing up in `git status` for packages nested inside a monorepo; also adds `.hyperide/` and `*.samples.tsx` to the exclude list (`6b830ae2`)
+
+---
+
 ## [0.1.50] — 2026-05-28
 
 ### Bug fixes
