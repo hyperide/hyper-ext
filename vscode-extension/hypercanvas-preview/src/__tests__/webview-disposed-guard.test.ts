@@ -21,7 +21,7 @@
 
 import { describe, expect, it, mock } from 'bun:test';
 import * as vscode from 'vscode';
-import { isWebviewDisposedError, postToWebviewSafe } from '../webview-post';
+import { isWebviewDisposedError, postToWebviewSafe, readWebviewSafe } from '../webview-post';
 import { injectGeneratedSampleProps, watchSampleInFile } from '../preview-panel-sample';
 import { setupPanel, type PanelSetupDeps } from '../preview-panel-setup';
 import { PreviewPanel } from '../PreviewPanel';
@@ -29,6 +29,7 @@ import { RightPanelProvider } from '../RightPanelProvider';
 import { AIChatPanelProvider } from '../AIChatPanelProvider';
 import type { PanelRouter } from '../PanelRouter';
 import type { StateHub } from '../StateHub';
+import type { ColorProbeRequest } from '../services/color-probe-types';
 
 function createStateHub() {
   const state = { currentComponent: null, insertTargetId: null, selectedIds: [] };
@@ -40,6 +41,17 @@ function disposedPostMessage() {
   return mock(() => {
     throw new Error('Webview is disposed');
   });
+}
+
+/** A WebviewPanel whose `webview` GETTER throws — VS Code's real disposed-panel behavior. */
+function throwingGetterPanel(): vscode.WebviewPanel {
+  const panel = { dispose: mock(() => {}) };
+  Object.defineProperty(panel, 'webview', {
+    get() {
+      throw new Error('Webview is disposed');
+    },
+  });
+  return panel as unknown as vscode.WebviewPanel;
 }
 
 /**
@@ -57,7 +69,12 @@ function disposedWebviewView() {
 /** Reach the private `_view` field of a sidebar provider in tests. */
 type WithView = { _view: vscode.WebviewView | undefined };
 
-function createPreviewPanelWithDisposedWebview() {
+/**
+ * Construct a real PreviewPanel and inject `fakePanel` as its private `_panel`. The
+ * individual factories below only differ in HOW the fake panel is broken (postMessage
+ * throws vs. the `webview` getter throws), so the shared construction lives here.
+ */
+function instantiatePreviewPanelWithPanel(fakePanel: unknown): PreviewPanel {
   Object.assign(vscode.workspace, {
     workspaceFolders: [{ uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 }],
   });
@@ -71,12 +88,26 @@ function createPreviewPanelWithDisposedWebview() {
     } as unknown as PanelRouter,
     {} as vscode.ExtensionContext,
   );
+  Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: fakePanel });
+  return panel;
+}
+
+function createPreviewPanelWithDisposedWebview() {
   const postMessage = disposedPostMessage();
-  const dispose = mock(() => {});
-  Object.assign(panel as PreviewPanel & { _panel: unknown }, {
-    _panel: { dispose, webview: { postMessage } },
-  });
+  const panel = instantiatePreviewPanelWithPanel({ dispose: mock(() => {}), webview: { postMessage } });
   return { panel, postMessage };
+}
+
+/**
+ * A PreviewPanel whose cached `_panel` is non-null but whose `webview` GETTER throws —
+ * exactly what VS Code's real `WebviewPanel.webview` does after the panel is disposed.
+ *
+ * A STRICTER disposal model than `createPreviewPanelWithDisposedWebview` (which makes only
+ * `postMessage` throw): a site that reads `this._panel?.webview` blows up the instant it
+ * touches the getter, before any disposed-safe post. See `readWebviewSafe` (webview-post.ts).
+ */
+function createPreviewPanelWithThrowingWebviewGetter() {
+  return { panel: instantiatePreviewPanelWithPanel(throwingGetterPanel()) };
 }
 
 describe('isWebviewDisposedError', () => {
@@ -130,6 +161,53 @@ describe('postToWebviewSafe', () => {
     expect(postToWebviewSafe(panel, { type: 'x' })).toBe(true);
     expect(postMessage).toHaveBeenCalledWith({ type: 'x' });
   });
+
+  it('survives a panel whose webview GETTER throws (read routed through readWebviewSafe)', () => {
+    // A disposed panel throws when its `webview` getter is read, BEFORE postMessage. The
+    // getter read must itself be guarded, else the throw escapes the safe poster.
+    const onDisposed = mock(() => {});
+    const panel = throwingGetterPanel();
+    let result: boolean | undefined;
+    expect(() => {
+      result = postToWebviewSafe(panel, { type: 'x' }, onDisposed);
+    }).not.toThrow();
+    expect(result).toBe(false);
+    expect(onDisposed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('readWebviewSafe', () => {
+  it('returns the webview on a live panel', () => {
+    const webview = { postMessage: mock(() => Promise.resolve(true)) };
+    const panel = { webview } as unknown as vscode.WebviewPanel;
+    expect(readWebviewSafe(panel)).toBe(webview as unknown as vscode.Webview);
+  });
+
+  it('returns undefined for an undefined panel without calling onDisposed', () => {
+    const onDisposed = mock(() => {});
+    expect(readWebviewSafe(undefined, onDisposed)).toBeUndefined();
+    expect(onDisposed).not.toHaveBeenCalled();
+  });
+
+  it('returns undefined and invokes onDisposed when the webview getter throws', () => {
+    const onDisposed = mock(() => {});
+    let result: vscode.Webview | undefined;
+    expect(() => {
+      result = readWebviewSafe(throwingGetterPanel(), onDisposed);
+    }).not.toThrow();
+    expect(result).toBeUndefined();
+    expect(onDisposed).toHaveBeenCalledTimes(1);
+  });
+
+  it('rethrows errors that are NOT the disposed-webview race', () => {
+    const panel = {} as unknown as vscode.WebviewPanel;
+    Object.defineProperty(panel, 'webview', {
+      get() {
+        throw new Error('some other failure');
+      },
+    });
+    expect(() => readWebviewSafe(panel)).toThrow('some other failure');
+  });
 });
 
 describe('PreviewPanel reuse-after-dispose guard', () => {
@@ -149,6 +227,66 @@ describe('PreviewPanel reuse-after-dispose guard', () => {
     const { panel } = createPreviewPanelWithDisposedWebview();
     Object.assign(panel as PreviewPanel & { _devServerRunning: boolean }, { _devServerRunning: false });
     expect(() => panel.setComponentParam('src/App.tsx', 'src/App.tsx')).not.toThrow();
+  });
+});
+
+describe('PreviewPanel disposed _panel.webview getter guard (#72)', () => {
+  // These sites read `this._panel?.webview` directly. The `?.` guards `undefined`,
+  // NOT a disposed-but-non-null panel: the `.webview` getter itself throws
+  // `Webview is disposed`. Under E2E load the panel is torn down between specs while an
+  // inspector color-write / screenshot RPC / goToCode is mid-flight, so the getter throws
+  // and the benign lifecycle race bleeds a `Webview is disposed` console error into the
+  // next spec's capture window (commands.spec / extension-lifecycle reds, #72). Each site
+  // must treat the disposed getter as "no panel" and degrade to its existing no-panel value.
+
+  const probeRequest: ColorProbeRequest = {
+    elementId: 'el-1',
+    prefixes: [],
+    cssProp: 'color',
+    requestedColor: '#fff',
+  };
+
+  it('requestLiveClassName resolves null instead of throwing', async () => {
+    const { panel } = createPreviewPanelWithThrowingWebviewGetter();
+    await expect(panel.requestLiveClassName('el-1')).resolves.toBeNull();
+  });
+
+  it('requestProbeColorCandidates resolves [] instead of throwing', async () => {
+    const { panel } = createPreviewPanelWithThrowingWebviewGetter();
+    await expect(panel.requestProbeColorCandidates(probeRequest)).resolves.toEqual([]);
+  });
+
+  it('takeScreenshot resolves null instead of throwing', async () => {
+    const { panel } = createPreviewPanelWithThrowingWebviewGetter();
+    await expect(panel.takeScreenshot('el-1')).resolves.toBeNull();
+  });
+
+  it('goToCodeSelected does not throw when the panel is disposed across the location await', async () => {
+    const { panel } = createPreviewPanelWithThrowingWebviewGetter();
+    // Drive the goToCode path: a selection is present and the AST resolves a location, so the
+    // method reaches the post-await `_panel.webview` read — the disposed-getter race site.
+    Object.assign(panel as PreviewPanel & { _currentComponent: string; _stateHub: StateHub }, {
+      _currentComponent: 'src/App.tsx',
+      _stateHub: { state: { selectedIds: ['el-1'] }, onChange: mock(() => () => {}) } as unknown as StateHub,
+    });
+    Object.assign(panel as PreviewPanel & { _panelRouter: PanelRouter }, {
+      _panelRouter: {
+        astBridge: { astService: { getElementLocation: mock(() => Promise.resolve({ line: 1, column: 0 })) } },
+      } as unknown as PanelRouter,
+    });
+    await expect(panel.goToCodeSelected()).resolves.toBeUndefined();
+  });
+
+  it('_getHtmlForWebview returns the no-panel fallback instead of throwing', () => {
+    const { panel } = createPreviewPanelWithThrowingWebviewGetter();
+    const html = (panel as PreviewPanel & { _getHtmlForWebview: () => string })._getHtmlForWebview();
+    expect(html).toContain('Preview is not available.');
+  });
+
+  it('clears the stale _panel so the next createOrShow rebuilds after a disposed-getter read', async () => {
+    const { panel } = createPreviewPanelWithThrowingWebviewGetter();
+    await panel.takeScreenshot('el-1');
+    expect((panel as PreviewPanel & { _panel: unknown })._panel).toBeUndefined();
   });
 });
 

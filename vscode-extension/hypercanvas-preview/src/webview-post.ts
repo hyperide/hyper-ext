@@ -35,6 +35,36 @@ export function isWebviewDisposedError(err: unknown): boolean {
 }
 
 /**
+ * Read a panel's `webview` getter, tolerating a disposed panel.
+ *
+ * A cached `WebviewPanel` reference can outlive its webview: VS Code disposes the panel
+ * and nulls the host's cached field only later, in an ASYNC `onDidDispose`. In that window
+ * `panel` is non-null but `panel.webview` is dead, and the `webview` GETTER ITSELF throws
+ * `Webview is disposed` — `panel?.webview` guards only `panel === undefined`, not "disposed".
+ *
+ * Sites that read the getter directly (RPC entry points, HTML generation) would throw on
+ * that read, BEFORE ever reaching `postToWebviewSafe`. This treats a disposed getter exactly
+ * like a missing panel: it invokes `onDisposed` (so the caller can drop the stale reference)
+ * and returns `undefined`. Any OTHER error rethrows — it is not the lifecycle race this guards.
+ */
+export function readWebviewSafe(
+  panel: vscode.WebviewPanel | undefined,
+  onDisposed?: () => void,
+): vscode.Webview | undefined {
+  if (!panel) return undefined;
+  try {
+    // The getter itself throws on a disposed panel — that is what this try guards.
+    return panel.webview;
+  } catch (err) {
+    if (isWebviewDisposedError(err)) {
+      onDisposed?.();
+      return undefined;
+    }
+    throw err;
+  }
+}
+
+/**
  * Post a message to the panel's webview, tolerating a disposed webview.
  *
  * Returns `true` when the post was attempted on a live panel (the post itself is
@@ -42,14 +72,18 @@ export function isWebviewDisposedError(err: unknown): boolean {
  * was no panel or the webview was disposed. On a disposed webview, `onDisposed` is
  * invoked so the caller can clear its stale reference; the error is NOT rethrown.
  * Any OTHER error is rethrown unchanged (it is not the lifecycle race this guards).
+ *
+ * The `panel.webview` GETTER itself throws on a disposed panel (see `readWebviewSafe`),
+ * so the getter read is routed through `readWebviewSafe` — guarding only `postMessage`
+ * would still let a disposed-getter throw escape before any message is sent.
  */
 export function postToWebviewSafe(
   panel: vscode.WebviewPanel | undefined,
   message: unknown,
   onDisposed?: () => void,
 ): boolean {
-  if (!panel) return false;
-  return postToWebviewRawSafe(panel.webview, message, onDisposed);
+  const webview = readWebviewSafe(panel, onDisposed);
+  return postToWebviewRawSafe(webview, message, onDisposed);
 }
 
 /**

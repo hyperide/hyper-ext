@@ -45,6 +45,7 @@ import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
 import { PanelRouter } from './PanelRouter';
 import { normalizeSampleComponentName, PreviewPanel } from './PreviewPanel';
+import { isWebviewDisposedError } from './webview-post';
 import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
 import { DevServerManager } from './services/DevServerManager';
@@ -1254,6 +1255,12 @@ export function activate(context: vscode.ExtensionContext) {
       })
       .catch((err) => {
         if (ac.signal.aborted) return;
+        // A panel torn down mid-chain (workspace switch / tab close / E2E teardown between
+        // specs) is a benign webview-lifecycle race, not a real failure: the per-call posters
+        // already swallow it and drop the stale panel. Defense-in-depth so any future
+        // ensure-chain step that reads a disposed webview can't bleed `Webview is disposed`
+        // into the console (and the E2E capture window). Real errors still surface (#72).
+        if (isWebviewDisposedError(err)) return;
         console.error('[HyperIDE] Failed to ensure sample/preview:', err);
       });
   }

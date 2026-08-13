@@ -60,7 +60,7 @@ import {
 import { SyncPositionService } from './services/SyncPositionService';
 import type { DevServerRuntimeError, UnsupportedProjectError } from './types';
 import { generatePreviewHtml } from './preview-html';
-import { postToWebviewSafe } from './webview-post';
+import { postToWebviewSafe, readWebviewSafe } from './webview-post';
 
 export { normalizeSampleComponentName };
 
@@ -602,7 +602,7 @@ export class PreviewPanel {
    * requestLiveClassName. The `elementId` MUST be the iframe-relative id (findElementsByRef).
    */
   requestProbeColorCandidates(request: ColorProbeRequest): Promise<ColorProbeCandidate[]> {
-    const webview = this._panel?.webview;
+    const webview = this._liveWebview();
     if (!webview || !request.elementId || !request.requestedColor) return Promise.resolve([]);
 
     const requestId = `colorprobe-${Date.now()}-${this._generateRandomId(6)}`;
@@ -654,7 +654,7 @@ export class PreviewPanel {
    * reads the element the user is editing, not always the first rendered instance.
    */
   requestLiveClassName(elementId: string, itemIndex?: number | null): Promise<string | null> {
-    const webview = this._panel?.webview;
+    const webview = this._liveWebview();
     if (!webview || !elementId) return Promise.resolve(null);
 
     const requestId = `classname-${Date.now()}-${this._generateRandomId(6)}`;
@@ -693,7 +693,7 @@ export class PreviewPanel {
    * Returns base64 PNG data URL, or null if screenshot failed.
    */
   takeScreenshot(elementId?: string): Promise<string | null> {
-    const webview = this._panel?.webview;
+    const webview = this._liveWebview();
     if (!webview) return Promise.resolve(null);
 
     const requestId = `screenshot-${Date.now()}-${this._generateRandomId(6)}`;
@@ -1111,6 +1111,15 @@ export class PreviewPanel {
     this._panel = undefined;
   }
   /**
+   * Read the panel's webview defensively. The RPC entry points, `goToCodeSelected`, and
+   * `_getHtmlForWebview` read the getter directly, before any disposed-safe post; on a
+   * disposed panel `readWebviewSafe` neutralizes the getter throw and `_clearDisposedPanel`
+   * drops the stale reference so the next createOrShow rebuilds. See `readWebviewSafe`.
+   */
+  private _liveWebview(): vscode.Webview | undefined {
+    return readWebviewSafe(this._panel, () => this._clearDisposedPanel());
+  }
+  /**
    * Update iframe component URL param without a hard reload.
    * Triggers navigation to /test-preview?component=<previewComponentPath>.
    *
@@ -1214,14 +1223,16 @@ export class PreviewPanel {
   public async goToCodeSelected(): Promise<void> {
     const selectedIds = await this._waitForSelectedIds();
     const componentPath = this._currentComponent;
-    const panel = this._panel;
-    if (!componentPath || !selectedIds?.length || !panel) return;
+    if (!componentPath || !selectedIds?.length || !this._panel) return;
 
     const loc = await this._panelRouter.astBridge.astService.getElementLocation(componentPath, selectedIds[0]);
-    if (loc) {
+    // Re-read the webview AFTER the await: the panel can be disposed during getElementLocation
+    // and the getter throws on a disposed panel (see `_liveWebview`). Abort cleanly if so.
+    const webview = this._liveWebview();
+    if (loc && webview) {
       await handleEditorMessage(
         { type: 'editor:goToCode', path: componentPath, line: loc.line, column: loc.column + 1 },
-        panel.webview,
+        webview,
       );
     }
   }
@@ -1523,7 +1534,7 @@ export class PreviewPanel {
     return this._generateRandomId(32);
   }
   private _getHtmlForWebview(): string {
-    const webview = this._panel?.webview;
+    const webview = this._liveWebview();
     if (!webview) {
       return '<!DOCTYPE html><html><body><p>Preview is not available.</p></body></html>';
     }
