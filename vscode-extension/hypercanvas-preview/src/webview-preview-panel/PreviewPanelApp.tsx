@@ -389,6 +389,9 @@ function PreviewContent() {
           onConfigureAIKey={() => {
             canvas.sendEvent({ type: 'errorBoundary:configureAIKey' });
           }}
+          onGeneratePreviewWrapper={() => {
+            canvas.sendEvent({ type: 'errorBoundary:generatePreviewWrapper' });
+          }}
           onClose={clearComponentError}
         />
       )}

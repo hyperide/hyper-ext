@@ -24,7 +24,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { detectPreviewProviders } from '../extension-provider-detection';
+import { parse as babelParse } from '@babel/parser';
+import { detectPreviewProviders, walkAst } from '../extension-provider-detection';
 
 async function writeProject(files: Record<string, string>): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'provider-detect-'));
@@ -604,5 +605,45 @@ createRoot(document.getElementById('root')!).render(
 
     const wrap = await detectPreviewProviders(root);
     expect(wrap).toBeUndefined();
+  });
+});
+
+// HYP-880 review finding: walkAst's signature grew from `(n) => void` to
+// `(n) => void | false` (returning `false` skips descending into that node's
+// children) so preview-wrapper-scaffold.ts can stop at nested function/class
+// boundaries. Pin both halves of the contract: existing void-returning visitors
+// must keep descending exactly as before (backward compat), and a visitor that
+// returns `false` must actually prune.
+describe('walkAst', () => {
+  it('a void-returning visitor still descends into every node (backward compat)', () => {
+    const ast = babelParse('function f() { function g() { return <Inner/>; } return <Outer/>; }', {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    });
+    const seen: string[] = [];
+    walkAst(ast, (n) => {
+      if (n.type === 'JSXElement' && n.openingElement.name.type === 'JSXIdentifier') {
+        seen.push(n.openingElement.name.name);
+      }
+      // No return value (void) — must not be treated as a prune signal.
+    });
+    // Pre-order: `g` (containing Inner) is the FIRST statement in f's body, visited
+    // before the second statement (`return <Outer/>`).
+    expect(seen).toEqual(['Inner', 'Outer']);
+  });
+
+  it('a visitor returning `false` prunes that subtree', () => {
+    const ast = babelParse('function f() { function g() { return <Inner/>; } return <Outer/>; }', {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    });
+    const seen: string[] = [];
+    walkAst(ast, (n) => {
+      if (n.type === 'FunctionDeclaration' && n.id?.name === 'g') return false; // prune g's body
+      if (n.type === 'JSXElement' && n.openingElement.name.type === 'JSXIdentifier') {
+        seen.push(n.openingElement.name.name);
+      }
+    });
+    expect(seen).toEqual(['Outer']);
   });
 });

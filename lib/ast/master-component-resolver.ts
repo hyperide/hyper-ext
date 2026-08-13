@@ -83,8 +83,13 @@ function packageNameFromSpecifier(specifier: string): string {
 /**
  * Apply a tsconfig path-alias map to a specifier. Returns the rewritten
  * (absolute) base path without extension, or null when no alias matches.
+ *
+ * Exported for reuse by the HYP-880 static preview-wrapper scaffold, which needs
+ * the exact same alias resolution when following `import App from '@/App'`-style
+ * entry imports (previously relative-only — a common Vite/Next `@/*` alias would
+ * silently stop the provider-chain walk and degrade to the bare fallback).
  */
-function applyAlias(specifier: string, aliasMap: Record<string, string> | undefined): string | null {
+export function applyAlias(specifier: string, aliasMap: Record<string, string> | undefined): string | null {
   if (!aliasMap) return null;
 
   // TypeScript resolves the MOST specific (longest) matching pattern, not the

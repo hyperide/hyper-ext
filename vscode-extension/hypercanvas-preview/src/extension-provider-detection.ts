@@ -7,7 +7,7 @@ import type { SSRMockConfig } from '@lib/preview-generator';
 import type { ProviderWrapConfig } from '@lib/preview-generator/types';
 import { VSCodeFileIO } from './vscode-file-io';
 
-interface ProviderContextFile {
+export interface ProviderContextFile {
   relativePath: string;
   content: string;
 }
@@ -251,8 +251,17 @@ function prependStyleImports(
  * are dropped when the preview replaces main.tsx, so we collect just those.
  * Stops at the first render-entry file so a non-entry file's CSS isn't pulled in.
  * Local paths are rebased to the preview dir; package paths are kept verbatim.
+ *
+ * Exported for reuse by preview-wrapper-scaffold.ts's static (no-AI) scaffold
+ * (HYP-880 review finding): the AI-generation prompt already asks for the entry's
+ * global CSS, so the static scaffold needs the same source of truth — otherwise a
+ * Mantine/Tamagui-style app renders unstyled even after its providers are filled in.
  */
-function collectEntryStyleImports(root: string, previewDir: string, contextFiles: ProviderContextFile[]): string[] {
+export function collectEntryStyleImports(
+  root: string,
+  previewDir: string,
+  contextFiles: ProviderContextFile[],
+): string[] {
   for (const file of contextFiles) {
     let ast: t.File;
     try {
@@ -288,7 +297,7 @@ function isReplicableProviderElement(element: t.JSXElement): boolean {
   return /^[A-Z]/.test(name) && !NON_PROVIDER_WRAPPERS.has(name);
 }
 
-interface RebaseContext {
+export interface RebaseContext {
   ast: t.File;
   root: string;
   previewDir: string;
@@ -330,7 +339,7 @@ function buildProviderWrap(
 }
 
 /** The verbatim source of a non-self-closing opening tag (e.g. `<MantineProvider theme={theme}>`), or null if unpositioned. */
-function sliceOpeningTag(opening: t.JSXOpeningElement, content: string): string | null {
+export function sliceOpeningTag(opening: t.JSXOpeningElement, content: string): string | null {
   if (typeof opening.start !== 'number' || typeof opening.end !== 'number') return null;
   return content.slice(opening.start, opening.end);
 }
@@ -359,7 +368,7 @@ function resolveAttributeImports(opening: t.JSXOpeningElement, ctx: RebaseContex
 }
 
 /** Resolve the import line that brings `name` into the entry file (rebased to the preview dir), or null. */
-function resolveImportLine(name: string, ctx: RebaseContext): string | null {
+export function resolveImportLine(name: string, ctx: RebaseContext): string | null {
   for (const stmt of ctx.ast.program.body) {
     if (stmt.type !== 'ImportDeclaration') continue;
     const rebase = () => rebaseImportPath(ctx.root, ctx.previewDir, ctx.sourceRelativePath, stmt.source.value);
@@ -378,7 +387,7 @@ function resolveImportLine(name: string, ctx: RebaseContext): string | null {
 }
 
 /** Collect the JSX argument of every ReactDOM mount call in the file. */
-function collectRenderJSXArguments(ast: t.File): Array<t.JSXElement | t.JSXFragment> {
+export function collectRenderJSXArguments(ast: t.File): Array<t.JSXElement | t.JSXFragment> {
   const args: Array<t.JSXElement | t.JSXFragment> = [];
   walkAst(ast, (node) => {
     if (node.type !== 'CallExpression') return;
@@ -440,7 +449,7 @@ function collectRenderElementChain(node: t.JSXElement | t.JSXFragment): t.JSXEle
  * `<MantineProvider><><App/></></MantineProvider>` — instead of stopping at the
  * provider and treating it as the leaf (which dropped the provider entirely).
  */
-function jsxElementChildren(node: t.JSXElement | t.JSXFragment): Array<t.JSXElement | t.JSXFragment> {
+export function jsxElementChildren(node: t.JSXElement | t.JSXFragment): Array<t.JSXElement | t.JSXFragment> {
   return node.children.filter(
     (child): child is t.JSXElement | t.JSXFragment => child.type === 'JSXElement' || child.type === 'JSXFragment',
   );
@@ -451,9 +460,14 @@ function jsxTagName(name: t.JSXOpeningElement['name']): string | null {
   return name.type === 'JSXIdentifier' ? name.name : null;
 }
 
-/** Depth-first visit of every AST node (generic key-walk; position/comment keys skipped). */
-function walkAst(node: t.Node, visit: (n: t.Node) => void): void {
-  visit(node);
+/**
+ * Depth-first visit of every AST node (generic key-walk; position/comment keys skipped).
+ * `visit` may return `false` to skip descending into that node's children — used by callers
+ * that need to stay within one function's own scope (e.g. finding ITS `return` statements
+ * without picking up a nested closure's; HYP-880 review finding).
+ */
+export function walkAst(node: t.Node, visit: (n: t.Node) => void | false): void {
+  if (visit(node) === false) return;
   for (const key of Object.keys(node)) {
     if (key === 'loc' || key === 'start' || key === 'end' || key === 'leadingComments' || key === 'trailingComments') {
       continue;
@@ -510,7 +524,7 @@ async function getPreviewDir(root: string): Promise<string> {
   }
 }
 
-async function readProviderContextFiles(root: string): Promise<ProviderContextFile[]> {
+export async function readProviderContextFiles(root: string): Promise<ProviderContextFile[]> {
   const result: ProviderContextFile[] = [];
   const frontendRoot = await detectFrontendRoot(root);
   const rootPrefixes = frontendRoot !== 'src' ? [frontendRoot, 'src'] : ['src'];

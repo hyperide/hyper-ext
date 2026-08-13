@@ -6,7 +6,9 @@
  * Assumptions: an AI key gives the best wrapper (one with the real providers).
  * Invariant (e2e #11): ensureIsolationWrapper ALWAYS leaves a valid
  *              `.hyperide/preview.tsx` on disk — a real AI wrapper when one can
- *              be generated and parses, otherwise a minimal pass-through
+ *              be generated and parses; otherwise a static provider-scaffold
+ *              template (HYP-880, pass-through at runtime with the detected
+ *              provider stack commented out); otherwise a minimal pass-through
  *              fallback — so isolated mode never wedges on an empty preview.
  */
 
@@ -16,6 +18,7 @@ import { callAI, resolveAIConfig } from '@lib/ai-client';
 import { parseCode } from '@lib/ast/parser';
 import * as t from '@babel/types';
 import * as vscode from 'vscode';
+import { buildPreviewWrapperScaffold, SCAFFOLD_MARKER } from './preview-wrapper-scaffold';
 
 /**
  * Human-readable annotation embedded in the pass-through FALLBACK wrapper so a
@@ -198,42 +201,77 @@ async function readExistingWrapper(wrapperPath: string): Promise<string | null> 
  * Returns the outcome so callers can decide whether to surface their own
  * messaging:
  * - 'exists'   — a real (AI or manual) wrapper was already present, nothing
- *                written. A prior pass-through fallback does NOT count as
- *                'exists' — it is replaceable so recovery can upgrade it.
- * - 'written'  — a valid AI-generated wrapper was written (possibly UPGRADING a
- *                previous fallback once an AI key became available).
- * - 'fallback' — AI generation was unavailable or produced unusable output, so
- *                a minimal pass-through wrapper was written instead. A guidance
- *                message was shown so the user can configure AI / author their
- *                own providers — but the preview renders the component (or its
- *                own clean error) rather than staying empty (e2e #11).
+ *                written. A prior pass-through fallback / unedited static
+ *                scaffold does NOT count as 'exists' — both are replaceable so
+ *                recovery can upgrade them.
+ * - 'written'  — a valid AI-generated wrapper was written AUTOMATICALLY
+ *                (possibly UPGRADING a previous fallback/scaffold once an AI
+ *                key became available). This is the tg#5900 auto-fix path: AI
+ *                configured + provider error → fixed with no manual click.
+ * - 'scaffold' — AI was unavailable, but static analysis of the entry files
+ *                found the app's provider chain: an HONEST template was written
+ *                (providers + imports commented out with TODO stubs; HYP-880),
+ *                active code is a pass-through so the preview still renders
+ *                and the manual fix is uncomment-and-fill, not archeology.
+ * - 'fallback' — neither AI nor static analysis produced anything: the minimal
+ *                pass-through wrapper was written instead, with a guidance
+ *                message — the preview renders the component (or its own clean
+ *                error) rather than staying empty (e2e #11).
  */
 export async function ensureIsolationWrapper(
   workspaceRoot: string,
   context: vscode.ExtensionContext,
-): Promise<'exists' | 'written' | 'fallback'> {
+): Promise<'exists' | 'written' | 'scaffold' | 'fallback'> {
   const wrapperPath = path.join(workspaceRoot, '.hyperide', 'preview.tsx');
   // A real wrapper (AI-generated earlier, or hand-authored) must NOT be
-  // clobbered. ONLY the byte-exact canonical pass-through fallback is replaceable
-  // — otherwise a no-key/AI-failure fallback would permanently block the real
-  // provider wrapper once the user configures a key. Exact-match (not a marker
-  // substring) so a fallback the USER has since edited is preserved, not
-  // overwritten, even though it still carries the @hyperide-fallback annotation.
+  // clobbered. Replaceable content is ONLY (a) the byte-exact canonical
+  // pass-through fallback or (b) a byte-exact UNEDITED static scaffold (the
+  // generator is deterministic for unchanged entry files, so regenerating and
+  // comparing detects "still ours"). Exact-match (not a marker substring) so a
+  // fallback/scaffold the USER has since edited is preserved, not overwritten,
+  // even though it still carries its @hyperide-* annotation. A scaffold whose
+  // entry files have since changed also stops matching and is preserved — the
+  // conservative direction.
   const existing = await readExistingWrapper(wrapperPath);
-  if (existing !== null && existing !== FALLBACK_WRAPPER) return 'exists';
+  // Fast path: a real wrapper (AI-written or hand-authored) never carries the scaffold
+  // marker — skip the expensive entry-file parse + BFS test-helper scan entirely on the hot
+  // "already isolated" path (this runs on every provider-error signal; HYP-880 review
+  // finding). Only build the scaffold when it could actually be needed for the byte-exact
+  // "still ours" comparison below.
+  if (existing !== null && existing !== FALLBACK_WRAPPER && !existing.includes(SCAFFOLD_MARKER)) {
+    return 'exists';
+  }
+  const scaffold = await buildScaffoldSafely(workspaceRoot);
+  const replaceable = existing === null || existing === FALLBACK_WRAPPER || existing === scaffold;
+  if (!replaceable) return 'exists';
 
   const content = await generatePreviewWrapper(workspaceRoot, context);
   if (content && isValidWrapper(content)) {
     await writePreviewWrapper(workspaceRoot, content);
+    void vscode.window.showInformationMessage(
+      'HyperIDE: auto-generated .hyperide/preview.tsx with your app’s providers so the preview renders inside them.',
+    );
     return 'written';
   }
 
-  // No usable AI wrapper (no key, generation failed, or invalid output): write a
-  // pass-through fallback so isolated mode still renders SOMETHING. Without this,
-  // `.hyperide/preview.tsx` is never created, the app renders without providers,
+  // No usable AI wrapper (no key, generation failed, or invalid output): write
+  // the static scaffold when provider analysis found a chain, else the minimal
+  // pass-through fallback. Either way `.hyperide/preview.tsx` EXISTS and is
+  // valid — without that the app renders without providers,
   // ComponentErrorBoundary returns null, and the preview wedges empty for 320s.
-  // Idempotent: if the canonical fallback is already on disk (a prior retry),
-  // don't rewrite it — that would needlessly re-fire the FSWatch and re-prompt.
+  // Idempotent: if the same content is already on disk (a prior retry), don't
+  // rewrite it — that would needlessly re-fire the FSWatch and re-prompt.
+  if (scaffold && isValidWrapper(scaffold)) {
+    if (existing !== scaffold) {
+      await writePreviewWrapper(workspaceRoot, scaffold);
+      void vscode.window.showInformationMessage(
+        'HyperIDE: this component needs providers from your app shell. A wrapper template with the ' +
+          'detected providers was created at .hyperide/preview.tsx — fill its TODO stubs, or configure ' + // HYP-880: literal user-facing text, not a dev leftover
+          'an AI key to generate one automatically.',
+      );
+    }
+    return 'scaffold';
+  }
   if (existing !== FALLBACK_WRAPPER) {
     await writePreviewWrapper(workspaceRoot, FALLBACK_WRAPPER);
     void vscode.window.showInformationMessage(
@@ -243,6 +281,21 @@ export async function ensureIsolationWrapper(
     );
   }
   return 'fallback';
+}
+
+/**
+ * Static scaffold content for the workspace, or null when analysis finds no
+ * providers or throws (analysis is best-effort; a parse crash must never take
+ * down the wrapper-recovery path that guards the e2e #11 invariant).
+ */
+async function buildScaffoldSafely(workspaceRoot: string): Promise<string | null> {
+  try {
+    const scaffold = await buildPreviewWrapperScaffold(workspaceRoot);
+    return scaffold?.content ?? null;
+  } catch (error) {
+    console.warn('[WrapperGenerator] static scaffold analysis failed — falling back:', error);
+    return null;
+  }
 }
 
 // ============================================================================

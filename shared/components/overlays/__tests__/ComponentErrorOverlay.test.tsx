@@ -103,6 +103,41 @@ describe('ComponentErrorOverlay', () => {
       expect(onConfigureAIKey).toHaveBeenCalledTimes(1);
     });
 
+    // tg#5900 — the card states the error plainly; no "not caused by missing
+    // props" negation copy.
+    it('describes the crash without the "not caused by" negation', () => {
+      const { queryByText, getByText } = render(<ComponentErrorOverlay {...providerErrorProps} />);
+      expect(getByText('Component crashed at runtime:')).toBeTruthy();
+      expect(queryByText(/not caused by/)).toBeNull();
+    });
+
+    // HYP-880 — "Generate preview wrapper" scaffolds .hyperide/preview.tsx.
+    it('shows Generate preview wrapper for provider errors when the platform wires it', () => {
+      const onGeneratePreviewWrapper = mock(() => {});
+      const { getByTestId } = render(
+        <ComponentErrorOverlay {...providerErrorProps} onGeneratePreviewWrapper={onGeneratePreviewWrapper} />,
+      );
+      fireEvent.click(getByTestId(TID.preview.componentErrorGenerateWrapper));
+      expect(onGeneratePreviewWrapper).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides Generate preview wrapper when the callback is not provided (SaaS)', () => {
+      const { queryByTestId } = render(<ComponentErrorOverlay {...providerErrorProps} />);
+      expect(queryByTestId(TID.preview.componentErrorGenerateWrapper)).toBeNull();
+    });
+
+    it('hides Generate preview wrapper for non-provider runtime errors', () => {
+      const { queryByTestId } = render(
+        <ComponentErrorOverlay
+          {...baseProps}
+          error="boom from a useEffect"
+          propsSchema={[]}
+          onGeneratePreviewWrapper={() => {}}
+        />,
+      );
+      expect(queryByTestId(TID.preview.componentErrorGenerateWrapper)).toBeNull();
+    });
+
     it('classifies an empty resolved schema + hint-free error as runtime too', () => {
       const { getByTestId, queryByTestId } = render(
         <ComponentErrorOverlay {...baseProps} error="boom from a useEffect" propsSchema={[]} />,

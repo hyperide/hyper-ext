@@ -305,8 +305,9 @@ export type PlatformMessage =
 
   // Component-error overlay actions (preview webview → extension host).
   // Emitted by the shared ComponentErrorOverlay when the user creates a sample
-  // from filled props, asks to configure an AI key, or when the overlay needs
-  // the component's prop schema to render typed fields (HYP-648).
+  // from filled props, asks to configure an AI key, asks to scaffold the
+  // isolation wrapper for a provider-context error (HYP-880), or when the
+  // overlay needs the component's prop schema to render typed fields (HYP-648).
   | {
       type: 'errorBoundary:createSample';
       componentPath: string;
@@ -314,6 +315,7 @@ export type PlatformMessage =
       propValues?: Record<string, unknown>;
     }
   | { type: 'errorBoundary:configureAIKey' }
+  | { type: 'errorBoundary:generatePreviewWrapper' }
   | { type: 'errorBoundary:getPropsSchema'; componentPath: string };
 
 // Helper type to extract message by type

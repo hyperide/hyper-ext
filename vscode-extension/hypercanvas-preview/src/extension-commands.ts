@@ -26,6 +26,7 @@ import { AstService } from './services/AstService';
 import { DevServerManager } from './services/DevServerManager';
 import { detectPackageManager, detectUnsupportedProject } from './services/ProjectDetector';
 import { computeSupportDimensionsForRoot } from './services/support-dimensions-detect';
+import { ensureIsolationWrapper } from './services/WrapperGenerator';
 import { VSCodeFileIO } from './vscode-file-io';
 import {
   detectConfiguredAgents,
@@ -862,6 +863,33 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`HyperIDE: Failed to set up project: ${msg}`);
+      }
+    }),
+  );
+
+  // HYP-880: scaffold/open the isolation wrapper for provider-context errors.
+  // The "Generate preview wrapper" button on the runtime-error card lands here
+  // (via preview-panel-message-router). ensureIsolationWrapper is AI-first: with
+  // a key configured it writes a complete wrapper automatically (the tg#5900
+  // auto-fix); without one it writes the static provider scaffold (or the
+  // minimal pass-through fallback). The file is then opened so the user can
+  // fill the TODO stubs (HYP-880) — an existing manual wrapper is never clobbered, only
+  // opened.
+  context.subscriptions.push(
+    register('hypercanvas.generatePreviewWrapper', async () => {
+      const root = ctx.getActiveProjectRoot();
+      try {
+        const outcome = await ensureIsolationWrapper(root, context);
+        const doc = await vscode.workspace.openTextDocument(join(root, '.hyperide', 'preview.tsx'));
+        await vscode.window.showTextDocument(doc, { preview: false });
+        if (outcome === 'exists') {
+          void vscode.window.showInformationMessage(
+            'HyperIDE: .hyperide/preview.tsx already exists — edit it to adjust the preview providers.',
+          );
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`HyperIDE: Failed to generate preview wrapper: ${msg}`);
       }
     }),
   );

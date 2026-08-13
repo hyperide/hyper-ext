@@ -39,6 +39,12 @@ interface ComponentErrorOverlayProps {
   unsatisfiedProps?: string[];
   onCreateSample: (sampleName: string, propValues?: Record<string, unknown>) => void;
   onConfigureAIKey: () => void;
+  /**
+   * Scaffold/open `.hyperide/preview.tsx` for a provider-context error (HYP-880).
+   * Optional: only platforms with a workspace to write into wire it (the VS Code
+   * webview); when absent the button is not rendered (SaaS).
+   */
+  onGeneratePreviewWrapper?: () => void;
   onClose: () => void;
 }
 
@@ -112,6 +118,7 @@ export function ComponentErrorOverlay(props: ComponentErrorOverlayProps) {
         componentName={componentNameFromPath(props.componentPath)}
         error={error}
         onConfigureAIKey={props.onConfigureAIKey}
+        onGeneratePreviewWrapper={props.onGeneratePreviewWrapper}
         onClose={props.onClose}
       />
     );
@@ -124,19 +131,28 @@ export function ComponentErrorOverlay(props: ComponentErrorOverlayProps) {
  * message and, for provider-context errors, points at the isolation wrapper
  * (`.hyperide/preview.tsx`) as the actual fix. Always dismissable — a live
  * render (or the app-mode fallback) may be sitting right behind the backdrop.
+ *
+ * Provider-error actions (HYP-880, tg#5900): with an AI key the extension has
+ * ALREADY auto-generated the wrapper by the time this card is read (HYP-487
+ * recovery path) — the card is the manual fallback. "Generate preview wrapper"
+ * scaffolds/opens `.hyperide/preview.tsx` (host command; rendered only when the
+ * platform wires the callback — the VS Code webview does, SaaS doesn't).
  */
 function RuntimeErrorCard({
   componentName,
   error,
   onConfigureAIKey,
+  onGeneratePreviewWrapper,
   onClose,
 }: {
   componentName: string;
   error: string;
   onConfigureAIKey: () => void;
+  onGeneratePreviewWrapper?: () => void;
   onClose: () => void;
 }) {
   const providerError = isProviderContextError(error);
+  const showGenerateWrapper = providerError && onGeneratePreviewWrapper !== undefined;
   return (
     <div data-testid={TID.preview.componentErrorOverlay} style={backdropStyle}>
       <div style={cardStyle}>
@@ -146,24 +162,34 @@ function RuntimeErrorCard({
             &times;
           </button>
         </div>
-        <p style={subtitleStyle}>This component crashed at runtime — the error is not caused by missing props.</p>
+        <p style={subtitleStyle}>Component crashed at runtime:</p>
         <pre data-testid={TID.preview.componentErrorRuntimeMessage} style={runtimeErrorMessageStyle}>
           {error}
         </pre>
         {providerError && (
           <p style={noPropsHintStyle}>
-            The component reads a React context whose provider is not mounted in the isolated preview. HyperIDE can
-            generate <code style={attentionCodeStyle}>.hyperide/preview.tsx</code> with your app&apos;s providers when
-            an AI provider is configured — or edit that file manually to wrap previews in the providers from your app
-            entry.
+            The component reads a React context whose provider is not mounted in the isolated preview. The fix lives in{' '}
+            <code style={attentionCodeStyle}>.hyperide/preview.tsx</code>: Generate preview wrapper scaffolds it from
+            the providers detected in your app; with an AI key configured, HyperIDE generates and applies it
+            automatically.
           </p>
         )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {showGenerateWrapper && (
+            <button
+              type="button"
+              data-testid={TID.preview.componentErrorGenerateWrapper}
+              style={primaryButtonStyle}
+              onClick={onGeneratePreviewWrapper}
+            >
+              Generate preview wrapper
+            </button>
+          )}
           {providerError && (
             <button
               type="button"
               data-testid={TID.preview.componentErrorConfigureAI}
-              style={primaryButtonStyle}
+              style={showGenerateWrapper ? secondaryButtonStyle : primaryButtonStyle}
               onClick={onConfigureAIKey}
             >
               Configure AI Key

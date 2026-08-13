@@ -174,6 +174,92 @@ describe('ensureIsolationWrapper', () => {
     expect(await readWrapper(root)).not.toContain('@hyperide-fallback');
   });
 
+  // HYP-880 review finding: the fast-path + byte-compare "still ours" check is the
+  // least-tested new logic — an UNEDITED static scaffold (not a fallback) must also
+  // upgrade to the AI wrapper once a key becomes available, exactly like a fallback
+  // does above. Uses real entry-file fixtures so the first run genuinely produces a
+  // 'scaffold' outcome (not 'fallback') before the AI key appears.
+  it('upgrades a prior UNEDITED scaffold to the AI wrapper once a key becomes available', async () => {
+    await fs.mkdir(path.join(root, 'src'), { recursive: true });
+    await fs.writeFile(
+      path.join(root, 'src', 'main.tsx'),
+      [
+        "import { createRoot } from 'react-dom/client';",
+        "import { ThemeProvider } from 'styled-components';",
+        "import { theme } from './theme';",
+        "import App from './App';",
+        '',
+        "createRoot(document.getElementById('root')!).render(",
+        '  <ThemeProvider theme={theme}>',
+        '    <App />',
+        '  </ThemeProvider>,',
+        ');',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await fs.writeFile(path.join(root, 'src', 'App.tsx'), 'export default function App() { return <div/>; }\n', 'utf8');
+    await fs.writeFile(path.join(root, 'src', 'theme.ts'), 'export const theme = {};\n', 'utf8');
+
+    // First run: no key → static scaffold (not the bare fallback).
+    const first = await ensureIsolationWrapper(root, fakeContext(undefined));
+    expect(first).toBe('scaffold');
+    expect(await readWrapper(root)).toContain('@hyperide-scaffold');
+
+    // Second run: key + valid AI wrapper → must REPLACE the unedited scaffold.
+    const aiWrapper = [
+      '// @hyperide-managed',
+      "import type { ReactNode } from 'react';",
+      "import { ThemeProvider } from 'styled-components';",
+      "import { theme } from '../src/theme';",
+      'export function PreviewWrapper({ children }: { children: ReactNode }) {',
+      '  return <ThemeProvider theme={theme}>{children}</ThemeProvider>;',
+      '}',
+    ].join('\n');
+    aiBehavior = () => Promise.resolve(aiWrapper);
+
+    const second = await ensureIsolationWrapper(root, fakeContext());
+    expect(second).toBe('written');
+    expect(await readWrapper(root)).toBe(aiWrapper);
+    expect(await readWrapper(root)).not.toContain('@hyperide-scaffold');
+  });
+
+  // A scaffold the USER has since edited (marker still present, bytes changed) must
+  // be PRESERVED even once an AI key becomes available — same rule as an edited
+  // fallback (R1 above), now exercised for the fast-path's marker check specifically.
+  it('does not clobber a scaffold the user has edited, even once a key becomes available', async () => {
+    await fs.mkdir(path.join(root, 'src'), { recursive: true });
+    await fs.writeFile(
+      path.join(root, 'src', 'main.tsx'),
+      [
+        "import { createRoot } from 'react-dom/client';",
+        "import { ThemeProvider } from 'styled-components';",
+        "import { theme } from './theme';",
+        "import App from './App';",
+        '',
+        "createRoot(document.getElementById('root')!).render(",
+        '  <ThemeProvider theme={theme}>',
+        '    <App />',
+        '  </ThemeProvider>,',
+        ');',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await fs.writeFile(path.join(root, 'src', 'App.tsx'), 'export default function App() { return <div/>; }\n', 'utf8');
+    await fs.writeFile(path.join(root, 'src', 'theme.ts'), 'export const theme = {};\n', 'utf8');
+
+    await ensureIsolationWrapper(root, fakeContext(undefined));
+    const edited = `${await readWrapper(root)}\n// user note\n`;
+    await fs.writeFile(path.join(root, '.hyperide', 'preview.tsx'), edited, 'utf8');
+
+    aiBehavior = () =>
+      Promise.resolve('// @hyperide-managed\nexport function PreviewWrapper({ children }) { return children; }');
+    const outcome = await ensureIsolationWrapper(root, fakeContext());
+    expect(outcome).toBe('exists');
+    expect(await readWrapper(root)).toBe(edited);
+  });
+
   // P2 (codex review): the preview bundle does `import { PreviewWrapper }`, so an
   // AI default-export or a missing export parses but breaks the bundle. Reject it.
   it('falls back when the AI wrapper uses a default export (no named PreviewWrapper)', async () => {

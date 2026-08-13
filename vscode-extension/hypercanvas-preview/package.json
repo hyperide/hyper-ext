@@ -204,6 +204,10 @@
         "title": "Hyper: Show Dev Server Output"
       },
       {
+        "command": "hypercanvas.generatePreviewWrapper",
+        "title": "Hyper: Generate Preview Wrapper (.hyperide/preview.tsx)"
+      },
+      {
         "command": "hypercanvas.configureAIKey",
         "title": "Hyper: Configure AI API Key"
       },

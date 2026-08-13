@@ -19,6 +19,7 @@ export const TID = {
     componentErrorConfigureAI: 'hyper-preview-component-error-configure-ai',
     componentErrorAttentionProps: 'hyper-preview-component-error-attention-props',
     componentErrorRuntimeMessage: 'hyper-preview-component-error-runtime-message',
+    componentErrorGenerateWrapper: 'hyper-preview-component-error-generate-wrapper',
     componentErrorDismiss: 'hyper-preview-component-error-dismiss',
     loadingOverlay: 'hyper-preview-loading-overlay',
     loadingTimeout: 'hyper-preview-loading-timeout',

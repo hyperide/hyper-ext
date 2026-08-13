@@ -206,6 +206,12 @@ export async function routeMessage(deps: MessageRouterDeps, message: unknown, we
     vscode.commands.executeCommand('hypercanvas.configureAIKey');
     return;
   }
+  // HYP-880: "Generate preview wrapper" on the provider-error card — scaffold
+  // (or AI-generate, when a key is configured) `.hyperide/preview.tsx` and open it.
+  if (msg.type === 'errorBoundary:generatePreviewWrapper') {
+    vscode.commands.executeCommand('hypercanvas.generatePreviewWrapper');
+    return;
+  }
   if (msg.type === 'errorBoundary:getPropsSchema') {
     const componentPath = msg.componentPath as string | undefined;
     if (componentPath) {
