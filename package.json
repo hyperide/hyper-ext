@@ -109,7 +109,7 @@
     "@types/react-dom": "^18.3.7",
     "@types/shell-quote": "^1.7.5",
     "@types/ws": "^8.18.1",
-    "@typescript/native-preview": "^7.0.0-dev.20260516.1",
+    "@typescript/native-preview": "7.0.0-dev.20260602.1",
     "autoprefixer": "^10.4.21",
     "bun-plugin-tailwind": "^0.1.2",
     "class-variance-authority": "^0.7.1",
