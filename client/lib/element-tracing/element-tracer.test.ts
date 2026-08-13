@@ -166,6 +166,16 @@ describe('ElementTracer', () => {
     tracer.dispose();
   });
 
+  it('should dispose the transport itself — a reconnecting transport must stop (HYP-594)', () => {
+    const disposeFn = mock();
+    const disposableTransport = { ...mockTransport(), dispose: disposeFn };
+    const t = new ElementTracer(mockAdapter(), disposableTransport);
+
+    t.dispose();
+
+    expect(disposeFn).toHaveBeenCalledTimes(1);
+  });
+
   describe('resolveClickLocal', () => {
     const cachedNode: NodeMapEntry = {
       nodeRef: '/app/src/App.tsx:0',

@@ -174,6 +174,25 @@ describe('parseDebugStack', () => {
     expect(result?.column).toBe(0);
   });
 
+  // HYP-594: the SaaS platform serves the project dev server through the
+  // /project-preview/<projectId>/ proxy — that prefix leaks into the module
+  // URLs of React 19 _debugStack frames and must not reach lookups.
+  it('strips the SaaS proxy prefix /project-preview/<projectId>/', () => {
+    const err = {
+      stack: `Error\n    at Hero (http://localhost:8080/project-preview/0a1b2c3d-4e5f-6789-abcd-ef0123456789/src/components/Hero.tsx:19:21)`,
+    } as Error;
+    const result = parseDebugStack(err);
+    expect(result).toEqual({ fileName: 'src/components/Hero.tsx', line: 19, column: 20 });
+  });
+
+  it('strips the SaaS proxy prefix when the URL carries a Vite HMR query', () => {
+    const err = {
+      stack: `Error\n    at Hero (https://app.example.com/project-preview/deadbeef-0000-1111-2222-333344445555/src/App.tsx?t=1760000000000:5:9)`,
+    } as Error;
+    const result = parseDebugStack(err);
+    expect(result).toEqual({ fileName: 'src/App.tsx', line: 5, column: 8 });
+  });
+
   // Next.js (Turbopack/webpack) gives compiled chunk paths in the stack —
   // these are not source files and cannot be opened in the editor.
   it('returns null for Next.js Turbopack compiled chunk path', () => {

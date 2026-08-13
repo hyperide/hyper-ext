@@ -32,6 +32,18 @@ export function stripContainerPrefix(fileName: string): string {
   return fileName;
 }
 
+/**
+ * Strip the SaaS preview proxy prefix: "project-preview/{projectId}/src/…" → "src/…".
+ * The platform serves the project dev server through /project-preview/<uuid>/
+ * (server/proxy/project-preview.ts) and that prefix leaks into React 19 _debugStack
+ * module URLs and source-map-resolved paths — node-map and AST lookups expect
+ * project-relative paths. A leading slash is accepted (URL pathname form).
+ * Returns the input unchanged when no prefix matches.
+ */
+export function stripPreviewProxyPrefix(fileName: string): string {
+  return fileName.replace(/^\/?project-preview\/[a-f0-9-]+\//, '');
+}
+
 /** Convert any backslash separators to forward slashes. */
 function toForwardSlashes(p: string): string {
   return p.includes('\\') ? p.replace(/\\/g, '/') : p;

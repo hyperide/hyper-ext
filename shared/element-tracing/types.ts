@@ -131,6 +131,8 @@ export interface TracingTransport {
   onMessage(handler: (msg: TracingServerMessage) => void): () => void;
   readonly connected: boolean;
   onConnectionChange(handler: (connected: boolean) => void): () => void;
+  /** Tear down the underlying channel; reconnecting transports MUST stop reconnecting (HYP-594). */
+  dispose?(): void;
 }
 
 /* ─── Sync state ─────────────────────────────────────────────────── */

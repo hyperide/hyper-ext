@@ -6,6 +6,7 @@
  * These are React internals stable since React 16 but not part of public API.
  */
 
+import { stripPreviewProxyPrefix } from './path-normalization';
 import type { SourceLocation } from './types';
 
 /* ─── Types ──────────────────────────────────────────────────────── */
@@ -230,6 +231,11 @@ export function parseDebugStack(err: Error): SourceLocation | null {
     // Strip NodePod virtual path prefix: "__virtual__/{podId}/{port}/src/..."
     // NodePod serves files via SW at /__virtual__/{randomId}/{vitePort}/...
     fileName = fileName.replace(/^__virtual__\/[^/]+\/\d+\//, '');
+
+    // Strip the SaaS preview proxy prefix ("project-preview/{projectId}/src/…") —
+    // it leaks into React 19 _debugStack module URLs, while node-map and AST
+    // lookups expect project-relative paths.
+    fileName = stripPreviewProxyPrefix(fileName);
 
     return {
       fileName,

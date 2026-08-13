@@ -6,6 +6,7 @@
  */
 
 import { resolveCallSiteTarget } from '../../../shared/canvas-interaction/resolve-source';
+import { clearTracingDebugOnce, tracingDebugOnce } from '../../../shared/canvas-interaction/tracing-debug';
 import type { LocalResolveResult, TracingResolver } from '../../../shared/canvas-interaction/types';
 import { getFiberFromDOM } from '../../../shared/element-tracing/fiber-internals';
 import { toProjectRelative } from '../../../shared/element-tracing/path-normalization';
@@ -118,6 +119,13 @@ export class ElementTracer implements TracingResolver {
       if (directResult) return directResult;
     }
 
+    // Silent-death point: no node-map match locally — selection now depends entirely
+    // on the async server resolve-element round trip.
+    console.debug('[tracing] resolveClickLocal: no node-map match — falling back to server resolve-element', {
+      resolvedSource: resolvedTarget.source,
+      directSource: source,
+      itemIndex,
+    });
     const requestId = `req-${++this._requestCounter}`;
     this._transport.send({ type: 'resolve-element', requestId, source, itemIndex });
     return null;
@@ -261,6 +269,19 @@ export class ElementTracer implements TracingResolver {
    * When null, returns all elements rendered at that source location.
    */
   findDOMElements(nodeRef: string, itemIndex: number | null): HTMLElement[] {
+    const elements = this._findDOMElementsInner(nodeRef, itemIndex);
+    // Silent-death point: overlay/selection callers get [] and draw nothing. Once-per-key —
+    // the overlay resolver calls this inside the RAF loop.
+    const missKey = `findDOMElements:${nodeRef}:${itemIndex}`;
+    if (elements.length === 0) {
+      tracingDebugOnce(missKey, 'findDOMElements: no DOM elements for nodeRef', nodeRef, 'itemIndex', itemIndex);
+    } else {
+      clearTracingDebugOnce(missKey);
+    }
+    return elements;
+  }
+
+  private _findDOMElementsInner(nodeRef: string, itemIndex: number | null): HTMLElement[] {
     for (const entries of this._nodeMaps.values()) {
       const entry = entries.find((e) => e.nodeRef === nodeRef);
       if (entry) {
@@ -303,6 +324,9 @@ export class ElementTracer implements TracingResolver {
 
   dispose(): void {
     this._disposeTransport();
+    // A reconnecting transport must be torn down too, or it keeps a ghost WS
+    // client alive after iframe reloads / project switches (HYP-594).
+    this._transport.dispose?.();
     this._nodeMaps.clear();
     this._selectionHandlers.clear();
     this._nodeMapUpdateHandlers.clear();

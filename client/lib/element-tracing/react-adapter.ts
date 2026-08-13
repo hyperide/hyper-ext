@@ -26,14 +26,30 @@ import {
   traceToRoot,
 } from './fiber-utils';
 
+export interface ReactAdapterOptions {
+  /**
+   * Platform-specific fiber → source resolver (e.g. module source maps in SaaS,
+   * server/client chunk maps in the extension). Falls back to raw fiber parsing
+   * (findNearestSourceLocation) when absent or when it returns null.
+   */
+  resolveFiberSource?: (fiber: Fiber) => SourceLocation | null;
+}
+
 export class ReactAdapter implements FrameworkAdapter {
   readonly name = 'react';
   private sourceIndex: FiberSourceIndex | null = null;
   private readonly doc: Document | null;
+  private readonly resolveFiberSource: ((fiber: Fiber) => SourceLocation | null) | null;
   private projectRoot: string | undefined;
 
-  constructor(doc?: Document) {
+  constructor(doc?: Document, options: ReactAdapterOptions = {}) {
     this.doc = doc ?? null;
+    this.resolveFiberSource = options.resolveFiberSource ?? null;
+  }
+
+  /** Injected resolver first, raw fiber parsing as fallback. */
+  private resolveSourceLocation(fiber: Fiber): SourceLocation | null {
+    return this.resolveFiberSource?.(fiber) ?? findNearestSourceLocation(fiber);
   }
 
   setProjectRoot(projectRoot: string): void {
@@ -62,7 +78,7 @@ export class ReactAdapter implements FrameworkAdapter {
   getSourceLocation(element: HTMLElement): SourceLocation | null {
     const fiber = getFiberFromDOM(element);
     if (fiber === null) return null;
-    return findNearestSourceLocation(fiber);
+    return this.resolveSourceLocation(fiber);
   }
 
   getComponentChain(element: HTMLElement): ComponentInfo[] {
@@ -76,7 +92,7 @@ export class ReactAdapter implements FrameworkAdapter {
   getItemIndex(element: HTMLElement): number {
     const fiber = getFiberFromDOM(element);
     if (fiber === null) return 0;
-    return getItemIndexFromFiber(fiber);
+    return getItemIndexFromFiber(fiber, this.resolveFiberSource ?? undefined);
   }
 
   walkComponentTree(rootElement: HTMLElement): ComponentTreeNode[] {
@@ -95,6 +111,7 @@ export class ReactAdapter implements FrameworkAdapter {
       const doc = this.doc ?? document;
       this.sourceIndex = new FiberSourceIndex(() => this.findHostRootFiber(doc), doc, {
         projectRoot: this.projectRoot,
+        resolveFiberSource: this.resolveFiberSource ?? undefined,
       });
     }
     return this.sourceIndex;
@@ -164,7 +181,7 @@ export class ReactAdapter implements FrameworkAdapter {
 
   private fiberToComponentInfo(fiber: Fiber): ComponentInfo {
     const name = getFiberDisplayName(fiber);
-    const source = findNearestSourceLocation(fiber);
+    const source = this.resolveSourceLocation(fiber);
 
     const serializedProps: Record<string, string> = {};
     for (const [key, value] of Object.entries(fiber.memoizedProps)) {
@@ -197,7 +214,7 @@ export class ReactAdapter implements FrameworkAdapter {
       return nodes;
     }
 
-    const source = findNearestSourceLocation(fiber);
+    const source = this.resolveSourceLocation(fiber);
 
     const host = findHostFiber(fiber);
     const domElement = host !== null && host.stateNode instanceof HTMLElement ? host.stateNode : null;

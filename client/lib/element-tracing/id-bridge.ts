@@ -77,6 +77,14 @@ export function resolveNodeRefToUuid(id: string, engine: CanvasEngine): string {
     const astNode = findAstNodeBySourceLoc(tree, source.line, source.column);
     if (astNode) return astNode.id;
   }
+  // Silent-death point: the nodeRef has a source location but no AST node matches it —
+  // inspector/style flows that need a UUID will silently fall back to the raw nodeRef.
+  console.debug(
+    '[tracing] id-bridge: no AST node at',
+    `${source.fileName}:${source.line}:${source.column}`,
+    'for nodeRef',
+    id,
+  );
   return id;
 }
 
@@ -119,8 +127,25 @@ export function resolveUuidToNodeRef(id: string, engine: CanvasEngine): string {
   }
   if (!astNode?.loc) return id;
 
-  // Search the tracer's source index for a matching source location
   const sourceIndex = tracer.buildSourceKeyIndex();
+
+  // Cross-file collision guard (HYP-594): several tracked files can host an element at
+  // the same line:column (live repro: src/App.tsx h1 and src/components/Hero.tsx h1,
+  // both at 4:6). The positional scan below returns whichever file's node map arrived
+  // first — possibly a file with no fibers in the preview, so the overlay never draws.
+  // Prefer the entry from the currently rendered component file when one exists.
+  if (tracer.renderedFile) {
+    const renderedEntry = sourceIndex.get(
+      tracer.makeSourceKey({
+        fileName: tracer.renderedFile,
+        line: astNode.loc.start.line,
+        column: astNode.loc.start.column,
+      }),
+    );
+    if (renderedEntry) return renderedEntry.nodeRef;
+  }
+
+  // Search the tracer's source index for a matching source location
   for (const [, entry] of sourceIndex) {
     if (entry.source.line === astNode.loc.start.line && entry.source.column === astNode.loc.start.column) {
       return entry.nodeRef;

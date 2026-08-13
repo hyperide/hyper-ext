@@ -7,12 +7,15 @@
  */
 
 import { findNearestSourceLocation } from '@shared/element-tracing/fiber-internals';
+import { getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-index';
+import type { SourceLocation } from '@shared/element-tracing/types';
 import { useEffect, useRef, useState } from 'react';
 import { setActiveTracer } from '@/lib/element-tracing/active-tracer';
 import { ElementTracer } from '@/lib/element-tracing/element-tracer';
 import { FiberSourceIndex, hookIntoReactCommits } from '@/lib/element-tracing/fiber-source-index';
 import type { Fiber } from '@/lib/element-tracing/fiber-utils';
 import { FiberTag, getFiberFromDOM } from '@/lib/element-tracing/fiber-utils';
+import { ModuleSourceMapResolver } from '@/lib/element-tracing/module-source-map-resolver';
 import { ReactAdapter } from '@/lib/element-tracing/react-adapter';
 import { WSTracingTransport } from '@/lib/element-tracing/ws-tracing-transport';
 
@@ -134,7 +137,19 @@ export function useElementTracer({
         return;
       }
 
-      const adapter = new ReactAdapter(doc);
+      // React 19 _debugStack frames carry Vite-TRANSFORMED module coords (HYP-594) —
+      // map them back to ORIGINAL source coords through the module's own source map so
+      // FiberSourceIndex keys and click resolution match server AST/node-map positions.
+      // Mirrors the extension's iframe-resolver composition: platform source-map
+      // resolver first, raw fiber parsing as fallback.
+      let invalidateSourceIndex: (() => void) | null = null;
+      const moduleSourceMapResolver = new ModuleSourceMapResolver({
+        onResolved: () => invalidateSourceIndex?.(),
+      });
+      const resolveFiberSource = (fiber: Fiber): SourceLocation | null =>
+        moduleSourceMapResolver.resolveFiberSource(fiber) ?? getOwnFiberSourceLocation(fiber);
+
+      const adapter = new ReactAdapter(doc, { resolveFiberSource });
 
       // Patch: ReactAdapter.getSourceIndex() internally uses findReactRoot which has
       // `instanceof HTMLElement` (Bun-cached, fails cross-realm). Override sourceIndex
@@ -160,9 +175,15 @@ export function useElementTracer({
         }
         return null;
       };
-      const sourceIndex = new FiberSourceIndex(crossRealmRootProvider, doc);
+      const sourceIndex = new FiberSourceIndex(crossRealmRootProvider, doc, { resolveFiberSource });
+      invalidateSourceIndex = () => sourceIndex.invalidate();
       // Replace adapter's sourceIndex with our cross-realm safe one
       (adapter as unknown as { sourceIndex: FiberSourceIndex }).sourceIndex = sourceIndex;
+
+      // Pre-warm source maps for the already-rendered tree so the first click resolves
+      // with source coords instead of raw transformed coords.
+      const rootFiber = crossRealmRootProvider();
+      if (rootFiber !== null) moduleSourceMapResolver.warmFiberTree(rootFiber);
 
       const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/element-tracing/${projectId}`;
       const transport = new WSTracingTransport(() => new WebSocket(wsUrl));

@@ -120,6 +120,8 @@ function findHostFiber(fiber: Fiber): Fiber | null {
 
 export class FiberSourceIndex {
   private index: Map<string, HTMLElement[]> | null = null;
+  /** Rescue debug-line dedupe — overlay RAF loops repeat the same missed lookup every frame. */
+  private readonly loggedRescues = new Set<string>();
   private readonly rootProvider: RootFiberProvider;
   private readonly doc: Document;
   private readonly resolveFiberSource: (fiber: Fiber) => SourceLocation | null;
@@ -141,11 +143,12 @@ export class FiberSourceIndex {
   setProjectRoot(projectRoot: string | undefined): void {
     if (this.projectRoot === projectRoot) return;
     this.projectRoot = projectRoot;
-    this.index = null;
+    this.invalidate();
   }
 
   invalidate(): void {
     this.index = null;
+    this.loggedRescues.clear();
   }
 
   findDOMElement(source: SourceLocation, itemIndex: number): HTMLElement | null {
@@ -157,9 +160,49 @@ export class FiberSourceIndex {
     this.ensureBuilt();
     if (this.index === null) return [];
 
-    const matches = this.index.get(this.makeKey(source));
-    if (!matches) return [];
-    return matches.filter((el) => this.doc.contains(el));
+    const key = this.makeKey(source);
+    const matches = this.index.get(key);
+    if (matches) return matches.filter((el) => this.doc.contains(el));
+    return this.findDOMElementsAcrossPathFormats(source, key);
+  }
+
+  /**
+   * Exact-key miss fallback: scan for entries at the same (line, column) whose
+   * fileName matches across path formats (segment-boundary suffix). Rescues
+   * lookups when index keys and query paths disagree on canonicalization —
+   * e.g. a source map emitting basename-only sources ("Hero.tsx") vs node-map
+   * project-relative paths ("src/components/Hero.tsx"), HYP-594. Exact lookup
+   * stays first for hot-path performance; this scan only runs on miss.
+   */
+  private findDOMElementsAcrossPathFormats(source: SourceLocation, missedKey: string): HTMLElement[] {
+    if (this.index === null || !source.fileName) return [];
+
+    const queryFileName = this.normalizeFileName(source.fileName);
+    const rescued: HTMLElement[] = [];
+    let matchedKey: string | null = null;
+
+    for (const [key, elements] of this.index) {
+      const candidate = parseSourceKey(key);
+      if (candidate === null) continue;
+      if (candidate.line !== source.line || candidate.column !== source.column) continue;
+      if (!pathsMatchAcrossFormats(candidate.fileName, queryFileName)) continue;
+
+      const live = elements.filter((el) => this.doc.contains(el));
+      if (live.length === 0) continue;
+      rescued.push(...live);
+      matchedKey ??= key;
+    }
+
+    if (rescued.length > 0 && !this.loggedRescues.has(missedKey)) {
+      this.loggedRescues.add(missedKey);
+      // Signals fileName canonicalization drift between index keys and query paths
+      // — the rescue keeps selection alive, but the drift itself is worth fixing.
+      console.debug('[tracing] FiberSourceIndex exact-key miss rescued by cross-format path match', {
+        queried: missedKey,
+        matched: matchedKey,
+      });
+    }
+    return rescued;
   }
 
   findClosestLineDOMElements(source: SourceLocation): HTMLElement[] {

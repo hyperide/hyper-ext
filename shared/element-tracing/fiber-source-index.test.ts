@@ -9,7 +9,7 @@
  * After the fix, both paths use the same resolution chain, so walk-up via Shift+Enter reaches root.
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import type { DebugSource, Fiber } from './fiber-internals';
 import { debugSourceToLocation, FiberTag } from './fiber-internals';
 import { FiberSourceIndex, getOwnFiberSourceLocation, sourceKeyFromLocation } from './fiber-source-index';
@@ -505,6 +505,115 @@ describe('FiberSourceIndex.findClosestSourceDOMElements', () => {
       expect(out!.lineDistance).toBe(0);
       expect(out!.columnDistance).toBe(0);
     } finally {
+      cleanup();
+    }
+  });
+});
+
+/* ─── findDOMElements cross-format fallback ─────────────────────────── */
+
+// Safety net for fileName canonicalization drift (HYP-594): the index can be keyed
+// with a basename-only path (a source map whose sources=["Hero.tsx"] resolved verbatim)
+// while node-map-driven queries use project-relative paths — or vice versa. The exact
+// Map lookup stays first; on miss, a pathsMatchAcrossFormats scan at the same
+// (line, column) must rescue the lookup and emit a '[tracing]' debug line.
+describe('FiberSourceIndex.findDOMElements cross-format fallback', () => {
+  function setupSingle(indexFileName: string, line: number, column: number) {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const hostFiber: Fiber = {
+      tag: FiberTag.HostComponent,
+      type: 'div',
+      stateNode: el,
+      return: null,
+      child: null,
+      sibling: null,
+      memoizedProps: {},
+      // SourceLocation column is 0-based, DebugSource columnNumber is 1-based
+      _debugSource: { fileName: indexFileName, lineNumber: line, columnNumber: column + 1 },
+      _debugOwner: null,
+    };
+    const root: Fiber = {
+      tag: FiberTag.HostRoot,
+      type: null,
+      stateNode: null,
+      return: null,
+      child: hostFiber,
+      sibling: null,
+      memoizedProps: {},
+      _debugSource: null,
+      _debugOwner: null,
+    };
+    hostFiber.return = root;
+    const index = new FiberSourceIndex(() => root, document);
+    return { index, el, cleanup: () => el.remove() };
+  }
+
+  it('rescues a project-relative query against a basename-only index key', () => {
+    const { index, el, cleanup } = setupSingle('Hero.tsx', 6, 6);
+    const debugSpy = spyOn(console, 'debug').mockImplementation(() => {});
+    try {
+      const found = index.findDOMElements({ fileName: 'src/components/Hero.tsx', line: 6, column: 6 });
+      expect(found).toEqual([el]);
+      expect(debugSpy.mock.calls.some((c) => String(c[0]).includes('[tracing]'))).toBe(true);
+    } finally {
+      debugSpy.mockRestore();
+      cleanup();
+    }
+  });
+
+  it('rescues a basename query against a project-relative index key', () => {
+    const { index, el, cleanup } = setupSingle('src/components/Hero.tsx', 6, 6);
+    const debugSpy = spyOn(console, 'debug').mockImplementation(() => {});
+    try {
+      const found = index.findDOMElements({ fileName: 'Hero.tsx', line: 6, column: 6 });
+      expect(found).toEqual([el]);
+    } finally {
+      debugSpy.mockRestore();
+      cleanup();
+    }
+  });
+
+  it('findDOMElement(itemIndex) goes through the same fallback', () => {
+    const { index, el, cleanup } = setupSingle('Hero.tsx', 6, 6);
+    const debugSpy = spyOn(console, 'debug').mockImplementation(() => {});
+    try {
+      expect(index.findDOMElement({ fileName: 'src/components/Hero.tsx', line: 6, column: 6 }, 0)).toBe(el);
+      expect(index.findDOMElement({ fileName: 'src/components/Hero.tsx', line: 6, column: 6 }, 1)).toBeNull();
+    } finally {
+      debugSpy.mockRestore();
+      cleanup();
+    }
+  });
+
+  it('does not rescue when line or column differ', () => {
+    const { index, cleanup } = setupSingle('Hero.tsx', 6, 6);
+    try {
+      expect(index.findDOMElements({ fileName: 'src/components/Hero.tsx', line: 7, column: 6 })).toEqual([]);
+      expect(index.findDOMElements({ fileName: 'src/components/Hero.tsx', line: 6, column: 5 })).toEqual([]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('does not rescue a partial-segment suffix (Hero.tsx vs MyHero.tsx)', () => {
+    const { index, cleanup } = setupSingle('src/components/MyHero.tsx', 6, 6);
+    try {
+      expect(index.findDOMElements({ fileName: 'Hero.tsx', line: 6, column: 6 })).toEqual([]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('exact-key hit stays on the fast path without the rescue debug line', () => {
+    const { index, el, cleanup } = setupSingle('src/components/Hero.tsx', 6, 6);
+    const debugSpy = spyOn(console, 'debug').mockImplementation(() => {});
+    try {
+      const found = index.findDOMElements({ fileName: 'src/components/Hero.tsx', line: 6, column: 6 });
+      expect(found).toEqual([el]);
+      expect(debugSpy.mock.calls.length).toBe(0);
+    } finally {
+      debugSpy.mockRestore();
       cleanup();
     }
   });

@@ -6,6 +6,7 @@
  */
 
 import { isContainerEmpty, MIN_PLACEHOLDER_HEIGHT } from './empty-container-placeholders';
+import { clearTracingDebugOnce, tracingDebugOnce } from './tracing-debug';
 import type { OverlayElementResolver, OverlayRect, PlaceholderRect } from './types';
 
 /**
@@ -118,6 +119,15 @@ export function computeOverlayRects(
   for (const id of state.selectedIds) {
     const itemIndex = getItemIndex(state.selectedItemIndices, id);
     const elements = resolver.findElements(id, itemIndex);
+
+    // Silent-death point: a selected id resolving to zero elements means no selection
+    // overlay is drawn at all. Once-per-key — this runs inside the RAF loop.
+    const missKey = `overlay-rects:${id}:${itemIndex}`;
+    if (elements.length === 0) {
+      tracingDebugOnce(missKey, 'overlay-rects: no elements for selected id', id, 'itemIndex', itemIndex);
+    } else {
+      clearTracingDebugOnce(missKey);
+    }
 
     for (let i = 0; i < elements.length; i++) {
       const rect = elements[i].getBoundingClientRect();

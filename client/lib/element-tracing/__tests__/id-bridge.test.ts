@@ -122,6 +122,53 @@ describe('resolveUuidToNodeRef', () => {
     expect(result).toBe('src/App.tsx:2');
   });
 
+  // Live-stand repro (HYP-594): src/App.tsx h1 and src/components/Hero.tsx h1 both sit
+  // at the same line:column, and the positional scan returned whichever file's node map
+  // arrived first (src/App.tsx) — so tree-selecting the rendered component's h1 queried
+  // a file with no fibers in the preview and the outline never drew. The entry from the
+  // currently rendered file must win.
+  it('prefers the rendered file when several files share line:column (cross-file collision)', () => {
+    const tracerWithRenderedFile = mockTracer as { renderedFile?: string | null; makeSourceKey?: unknown };
+    tracerWithRenderedFile.renderedFile = 'src/components/Hero.tsx';
+    tracerWithRenderedFile.makeSourceKey = (s: { fileName: string; line: number; column: number }) =>
+      `${s.fileName}:${s.line}:${s.column}`;
+    mockBuildSourceKeyIndex.mockReturnValueOnce(
+      new Map([
+        ['src/App.tsx:7:6', { nodeRef: 'src/App.tsx:1', source: { fileName: 'src/App.tsx', line: 7, column: 6 } }],
+        [
+          'src/components/Hero.tsx:7:6',
+          { nodeRef: 'src/components/Hero.tsx:2', source: { fileName: 'src/components/Hero.tsx', line: 7, column: 6 } },
+        ],
+      ]),
+    );
+    try {
+      const result = resolveUuidToNodeRef('uuid-button-1', mockEngine as never);
+      expect(result).toBe('src/components/Hero.tsx:2');
+    } finally {
+      tracerWithRenderedFile.renderedFile = null;
+      delete tracerWithRenderedFile.makeSourceKey;
+    }
+  });
+
+  it('falls back to the positional scan when the rendered file has no entry at that loc', () => {
+    const tracerWithRenderedFile = mockTracer as { renderedFile?: string | null; makeSourceKey?: unknown };
+    tracerWithRenderedFile.renderedFile = 'src/components/Hero.tsx';
+    tracerWithRenderedFile.makeSourceKey = (s: { fileName: string; line: number; column: number }) =>
+      `${s.fileName}:${s.line}:${s.column}`;
+    mockBuildSourceKeyIndex.mockReturnValueOnce(
+      new Map([
+        ['src/App.tsx:7:6', { nodeRef: 'src/App.tsx:2', source: { fileName: 'src/App.tsx', line: 7, column: 6 } }],
+      ]),
+    );
+    try {
+      const result = resolveUuidToNodeRef('uuid-button-1', mockEngine as never);
+      expect(result).toBe('src/App.tsx:2');
+    } finally {
+      tracerWithRenderedFile.renderedFile = null;
+      delete tracerWithRenderedFile.makeSourceKey;
+    }
+  });
+
   it('should return original id when UUID not found in AST', () => {
     const result = resolveUuidToNodeRef('nonexistent-uuid', mockEngine as never);
     expect(result).toBe('nonexistent-uuid');

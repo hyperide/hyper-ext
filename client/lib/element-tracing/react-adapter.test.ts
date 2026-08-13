@@ -139,4 +139,48 @@ describe('ReactAdapter', () => {
       expect(adapter.getItemIndex(el)).toBe(1);
     });
   });
+
+  // HYP-594: SaaS injects a module-source-map resolver so click resolution and the
+  // component chain report ORIGINAL source coords, not Vite-transformed module coords.
+  describe('resolveFiberSource option', () => {
+    it('getSourceLocation prefers the injected resolver over raw fiber parsing', () => {
+      const mapped = { fileName: 'src/components/Hero.tsx', line: 4, column: 6 };
+      const withResolver = new ReactAdapter(undefined, { resolveFiberSource: () => mapped });
+      const fiber = mockFiber({
+        _debugStack: {
+          stack: 'Error\n    at Hero (http://localhost:8080/src/components/Hero.tsx:19:21)',
+        } as Error,
+      });
+      const el = withFiber(fiber);
+
+      expect(withResolver.getSourceLocation(el)).toEqual(mapped);
+    });
+
+    it('getSourceLocation falls back to raw fiber parsing when the resolver misses', () => {
+      const withResolver = new ReactAdapter(undefined, { resolveFiberSource: () => null });
+      const fiber = mockFiber({
+        _debugStack: {
+          stack: 'Error\n    at Hero (http://localhost:8080/src/components/Hero.tsx:19:21)',
+        } as Error,
+      });
+      const el = withFiber(fiber);
+
+      expect(withResolver.getSourceLocation(el)).toEqual({ fileName: 'src/components/Hero.tsx', line: 19, column: 20 });
+    });
+
+    it('getComponentChain sources go through the injected resolver', () => {
+      const mapped = { fileName: 'src/App.tsx', line: 2, column: 1 };
+      const withResolver = new ReactAdapter(undefined, { resolveFiberSource: () => mapped });
+      const appFiber = mockFiber({
+        tag: 0,
+        type: function App() {},
+        _debugStack: { stack: 'Error\n    at App (http://localhost:8080/src/App.tsx:30:11)' } as Error,
+      });
+      const divFiber = mockFiber({ tag: 5, return: appFiber });
+      appFiber.child = divFiber;
+
+      const chain = withResolver.getComponentChain(withFiber(divFiber));
+      expect(chain.find((c) => c.name === 'App')?.source).toEqual(mapped);
+    });
+  });
 });
