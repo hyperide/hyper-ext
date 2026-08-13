@@ -49,6 +49,7 @@ import {
 } from './preview-path-utils';
 import { isValidTypeScript, PreviewGenerationError } from './preview-validation';
 import { parseAppEntrySet, parseExistingPreview } from './preview-validation';
+import { patchViteConfigForReactDedupe } from './vite-config-react-dedupe';
 
 export { PreviewGenerationError } from './preview-validation';
 export { isValidTypeScript } from './preview-validation';
@@ -806,6 +807,14 @@ export class PreviewFileManager {
    * Ensure framework-specific route file(s) exist for App Shell mode.
    * Idempotent — skips files that already contain @hyperide-managed.
    * Does not overwrite user files (P3-3).
+   *
+   * SIDE EFFECT (Remix only): also patches the user's own `vite.config.{ts,js,mjs}` to add
+   * `resolve.dedupe` + extend `optimizeDeps.include` (React/Remix client set), fixing the
+   * dual-React hydration crash on cold dev-server start. Idempotent + best-effort (a patch
+   * failure is swallowed and never breaks preview generation). This is a real edit to a user
+   * file — same as SaaS's container-startup patch — but it's union-merge-only and writes
+   * nothing once the entries are present, so it does not churn the file on repeated calls.
+   *
    * Returns 'ok' | 'ok-files-written' | 'unsupported' | 'needs-patch'.
    * 'ok-files-written' means new/updated files were written (HMR will fire).
    */
@@ -814,6 +823,21 @@ export class PreviewFileManager {
     const { framework } = detection;
 
     if (framework === 'unknown') return 'unsupported';
+
+    // Remix (Vite 6, React 18.3, SSR) previews flakily crash on cold dev-server start with a
+    // dual-React hydration error: a late dep re-optimization bumps the browserHash and forces a
+    // full reload during which the iframe mixes chunks from two optimize generations, so
+    // @remix-run/react's React !== react-dom's React → null dispatcher. Patch the user's own
+    // vite.config (the ext runs their `npm run dev`) to pin a single React identity via
+    // resolve.dedupe + pre-bundle the React/Remix client set. Best-effort + idempotent — a patch
+    // failure must never break preview generation. Scoped to Remix to keep blast radius minimal.
+    if (framework === 'remix') {
+      try {
+        await patchViteConfigForReactDedupe(this.io, this.projectRoot);
+      } catch {
+        // Non-fatal — preview generation proceeds without the dedupe patch.
+      }
+    }
 
     if (framework === 'webpack' || framework === 'vite-spa-jsx-router' || framework === 'bun') {
       // No file-based routing convention — router is defined in JSX code.

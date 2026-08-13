@@ -46,6 +46,7 @@ mock.module('node:fs', () => ({
   },
 }));
 const {
+  anyDirtyDocIsViteConfig,
   appendScriptCliArgs,
   buildInstallCommand,
   devScriptDeclaresPort,
@@ -54,6 +55,36 @@ const {
   portInjectionArgs,
   shouldRepairDependencies,
 } = await import('../services/DevServerManager');
+
+describe('anyDirtyDocIsViteConfig (dirty vite.config guard for the best-effort dedupe patch)', () => {
+  const ROOT = '/proj';
+  it('returns true when a dirty doc is a vite.config candidate under the project root', () => {
+    expect(anyDirtyDocIsViteConfig(ROOT, ['/proj/vite.config.ts'])).toBe(true);
+    expect(anyDirtyDocIsViteConfig(ROOT, ['/proj/vite.config.mts'])).toBe(true);
+    expect(anyDirtyDocIsViteConfig(ROOT, ['/proj/src/App.tsx', '/proj/vite.config.js'])).toBe(true);
+  });
+
+  it('returns false when no dirty doc is a vite.config (so the patch proceeds)', () => {
+    expect(anyDirtyDocIsViteConfig(ROOT, [])).toBe(false);
+    expect(anyDirtyDocIsViteConfig(ROOT, ['/proj/src/App.tsx', '/proj/package.json'])).toBe(false);
+  });
+
+  it('does not match a vite.config OUTSIDE the project root (different project / parent dir)', () => {
+    expect(anyDirtyDocIsViteConfig(ROOT, ['/other/vite.config.ts'])).toBe(false);
+    expect(anyDirtyDocIsViteConfig(ROOT, ['/proj/sub/vite.config.ts'])).toBe(false);
+  });
+
+  it('matches a case-mismatched path on a case-insensitive FS (macOS/Windows) — no clobber of the dirty buffer', () => {
+    // VS Code can report the project root and an open doc with different casing for the SAME file.
+    // On a case-insensitive FS the guard MUST still fire (a miss = silent persist of unsaved edits).
+    expect(anyDirtyDocIsViteConfig('/Proj', ['/proj/vite.config.ts'], true)).toBe(true);
+    expect(anyDirtyDocIsViteConfig(ROOT, ['/proj/VITE.CONFIG.TS'], true)).toBe(true);
+    // On a case-sensitive FS the differently-cased path is genuinely a different file → no match.
+    expect(anyDirtyDocIsViteConfig('/Proj', ['/proj/vite.config.ts'], false)).toBe(false);
+    // A genuine match holds regardless of the flag.
+    expect(anyDirtyDocIsViteConfig(ROOT, ['/proj/vite.config.ts'], false)).toBe(true);
+  });
+});
 
 describe('devScriptDeclaresPort', () => {
   it('detects a CLI --port / -p flag (the only reliable pin)', () => {

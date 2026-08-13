@@ -6,14 +6,44 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
+import { join } from 'node:path';
+import { detectFramework } from '@lib/preview-generator/framework-routing';
+import { VITE_CONFIG_CANDIDATES } from '@lib/preview-generator/vite-config-ast';
+import { patchViteConfigForReactDedupe } from '@lib/preview-generator/vite-config-react-dedupe';
 import * as vscode from 'vscode';
 import { ERROR_PATTERNS, SUCCESS_PATTERNS } from '../../../../shared/log-patterns';
 import type { RuntimeError } from '../../../../shared/runtime-error';
 import type { DevServerState, DevServerStatus, ProjectType } from '../types';
+import { VSCodeFileIO } from '../vscode-file-io';
 import { clearOwnedDevServer, reapStaleOwnedDevServer, recordOwnedDevServer } from './devServerOrphanRegistry';
 import { findFreePort, probeOpen } from './netProbe';
 import { PreviewProxy } from './PreviewProxy';
 import { detectPackageManager, getPackageScripts, getProjectInfo } from './ProjectDetector';
+
+/**
+ * Pure predicate behind {@link DevServerManager._hasDirtyViteConfig}: do any of the dirty open
+ * documents' absolute paths point at a vite.config candidate under `projectPath`? Extracted so the
+ * dirty-buffer guard is unit-testable without a process-global `vscode` mock (which leaks across the
+ * extension's bun test files — see this suite's header / HYP-579). Matches every candidate filename,
+ * a superset of the single file the patcher writes, so it never clobbers an unsaved config.
+ *
+ * Comparison is CASE-INSENSITIVE on macOS/Windows (default APFS/NTFS are case-insensitive): VS Code
+ * can report `_projectPath` and an open doc's `fsPath` with different casing for the SAME file, and a
+ * case-sensitive miss here would let the patch proceed and clobber the dirty buffer — the exact
+ * data-loss this guard prevents. The false direction we MUST avoid is a false-negative (missed
+ * dirty file → clobber), so on a case-insensitive platform we fold case before comparing.
+ * `caseInsensitiveFs` defaults to the host platform but is an explicit param so the fold is
+ * unit-testable per platform.
+ */
+export function anyDirtyDocIsViteConfig(
+  projectPath: string,
+  dirtyDocPaths: readonly string[],
+  caseInsensitiveFs: boolean = process.platform === 'darwin' || process.platform === 'win32',
+): boolean {
+  const fold = (p: string): string => (caseInsensitiveFs ? p.toLowerCase() : p);
+  const candidatePaths = new Set(VITE_CONFIG_CANDIDATES.map((name) => fold(join(projectPath, name))));
+  return dirtyDocPaths.some((p) => candidatePaths.has(fold(p)));
+}
 
 const MAX_LOG_ENTRIES = 200;
 // Strips all ANSI/VT escape sequences: CSI (ESC[...final), OSC (ESC]...BEL/ST), and bare ESC+char.
@@ -302,6 +332,55 @@ export class DevServerManager {
   }
 
   /**
+   * Best-effort: if this is a Remix project, patch its vite.config to pin a single React
+   * identity (resolve.dedupe + optimizeDeps.include) so the dev server reads dedupe at cold
+   * boot. Must run BEFORE spawn (see callsite in start()). Never throws — a framework-detect,
+   * IO-construct, or patch failure must not block dev-server start; we log and move on.
+   *
+   * Scope: detects + patches at `_projectPath` (the dev-server target). For a monorepo where
+   * the root `dev` script boots a Remix app in a subpackage (e.g. `apps/web`), the root won't
+   * classify as Remix and this no-ops — the cold-start dual-React fix is missed for that layout.
+   * The original ensurePreviewFiles() patch has the same single-root scope; making the patch
+   * monorepo-aware (resolving the concrete sub-app the dev command runs) is a separate follow-up.
+   *
+   * Dirty-buffer guard: this patches an UNMANAGED user file as an automatic side effect of preview
+   * start. VSCodeFileIO reads the open editor buffer for a dirty document and force-syncs it on
+   * write, so patching while the user has UNSAVED edits in vite.config would silently persist those
+   * edits to disk (and could clobber/race a mid-edit). We skip the best-effort patch in that case
+   * rather than touch the unsaved buffer — the dev server still boots; the dedupe is re-applied on a
+   * later start once the user has saved. See P2 on PR #504 / VSCodeFileIO read/write semantics.
+   */
+  private async _patchViteConfigIfRemix(): Promise<void> {
+    try {
+      const io = new VSCodeFileIO();
+      const { framework } = await detectFramework(this._projectPath, io);
+      if (framework !== 'remix') return;
+      if (this._hasDirtyViteConfig()) {
+        this._outputChannel.appendLine(
+          '[DevServer] vite.config dedupe patch skipped: config has unsaved edits (will retry on next start)',
+        );
+        return;
+      }
+      const patched = await patchViteConfigForReactDedupe(io, this._projectPath);
+      if (patched) {
+        this._outputChannel.appendLine('[DevServer] Patched vite.config for React dedupe (Remix dual-React fix)');
+      }
+    } catch (err) {
+      this._outputChannel.appendLine(`[DevServer] vite.config dedupe patch skipped: ${String(err)}`);
+    }
+  }
+
+  /**
+   * Is any of the project's vite.config candidates open with UNSAVED edits? Guards the best-effort
+   * dedupe patch from persisting a user's dirty editor buffer to disk (VSCodeFileIO reads/writes the
+   * dirty buffer). Delegates the path matching to {@link anyDirtyDocIsViteConfig} (unit-tested).
+   */
+  private _hasDirtyViteConfig(): boolean {
+    const dirtyDocPaths = vscode.workspace.textDocuments.filter((d) => d.isDirty).map((d) => d.uri.fsPath);
+    return anyDirtyDocIsViteConfig(this._projectPath, dirtyDocPaths);
+  }
+
+  /**
    * Start the dev server
    */
   async start(dependencyRepairAttempted = false): Promise<DevServerState> {
@@ -337,6 +416,21 @@ export class DevServerManager {
       const projectInfo = await getProjectInfo(this._projectPath);
       const scripts = await getPackageScripts(this._projectPath);
       const packageManager = await detectPackageManager(this._projectPath);
+
+      // Patch the user's vite.config (resolve.dedupe + optimizeDeps.include) BEFORE we spawn
+      // their dev server. Remix (Vite 6, SSR) previews flakily crash on COLD start with a
+      // dual-React hydration error; the fix is to pin a single React identity in vite.config
+      // ON DISK. Vite reads resolve.dedupe only at cold boot and never re-reads it without a
+      // restart — so PreviewFileManager.ensurePreviewFiles()'s patch (which runs on
+      // component-select, AFTER this spawn) lands too late for the first cold start. Patching
+      // here, before spawn, is the only place it takes effect on the very first boot.
+      //
+      // Gated to Remix via the shared detectFramework() (same gate ensurePreviewFiles uses) —
+      // no churn of non-Remix users' configs at dev-server start. The patcher is idempotent
+      // (writes nothing once the entries are present) and best-effort (never throws). NOTE: if
+      // a dev server is ALREADY running we returned early above; re-patching a booted server
+      // would not re-read it (a restart would be needed) — out of scope for the cold-start bug.
+      await this._patchViteConfigIfRemix();
 
       // Determine dev command — truthiness check on scripts[devScript] is intentional:
       // getPackageScripts returns Record<string, string>, so truthy ≡ key exists with value
