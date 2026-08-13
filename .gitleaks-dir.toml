@@ -1,0 +1,37 @@
+# .gitleaks-dir.toml — gitleaks config for `gitleaks dir` (working-tree-only) scans ONLY.
+#
+# Extends the shared .gitleaks.toml (same ruleset, same vetted-false-positive allowlist)
+# and adds ONE additional allowlist: gitignored dependency/build directories that
+# `gitleaks dir` walks (it scans the literal filesystem and does not honor .gitignore)
+# but every other scan mode (`gitleaks git`, `--staged`) never sees anyway, since nothing
+# is normally TRACKED under these paths:
+#   - node_modules/: third-party dependency source, needed on disk locally for
+#     typecheck/lint/test to run (ci/local-checks.sh's gh-ship billing-block fallback,
+#     HYP-1126) — unlike secret-scan.yml's CI job, which runs `gitleaks dir .` on a
+#     pristine `actions/checkout` with no install step and so never sees it.
+#   - vscode-extension/hypercanvas-preview/out/, vscode-extension/hypercanvas-code-server/out/,
+#     dist/, dist-ssr/, .cache/: build/cache output this repo's own .gitignore already
+#     declares. out/ specifically: a minified bundle's obfuscated identifiers
+#     (`SUPPRESS_TRACING_KEY=`, `isAttributeKey=`, ...) trip the generic-api-key rule.
+#     This list mirrors .gitignore's own build-output entries — if .gitignore adds a new
+#     build/cache directory, add it here too.
+#
+# Deliberately scoped to THIS file (dir-mode only), not folded into the shared
+# .gitleaks.toml: a global exclusion there would also blind `gitleaks git --staged`
+# (the pre-commit hook) and `full` history mode to a `git add -f`'d file under one of
+# these paths — exactly the finding those modes exist to catch. Only the working-tree
+# walk, which can't distinguish tracked from untracked filesystem noise, needs this.
+
+[extend]
+path = ".gitleaks.toml"
+
+[allowlist]
+description = "gitignored build/dependency directories, dir-mode scans only (see header)."
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)vscode-extension/hypercanvas-preview/out/''',
+  '''(^|/)vscode-extension/hypercanvas-code-server/out/''',
+  '''(^|/)dist/''',
+  '''(^|/)dist-ssr/''',
+  '''(^|/)\.cache/''',
+]

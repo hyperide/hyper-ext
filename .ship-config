@@ -1,0 +1,10 @@
+# Read by gh ship's local CI-fallback gate (agent-tools ci/ship/ship.sh) when GitHub
+# Actions is billing-blocked / structurally down. Points the fallback at this repo's
+# own ci/local-checks.sh, which mirrors ci.yml's real jobs (typecheck, lint, tests,
+# extension production build) plus the leftover-grep / secret-scan / dependency-audit
+# gates — instead of silently falling back to a bare `npm test` (tests only, no
+# typecheck/lint/ext-build coverage). See ci/local-checks.sh header for details.
+#
+# Only SHIP_LOCAL_TEST_DIR / SHIP_LOCAL_TEST_CMD are recognized; committed content at
+# HEAD is trusted the same as rig.yaml/package.json (see ship.sh's _ship_config_load).
+SHIP_LOCAL_TEST_CMD=ci/local-checks.sh

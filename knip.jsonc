@@ -176,12 +176,18 @@
       //   (1.59.0-alpha-…); declaring it directly would conflict with that pin, so we
       //   rely on the transitive copy and silence the unlisted-dependency flag — same
       //   rationale as the `playwright` binary below.
+      // lefthook: git-hook-manager CLI, driven entirely by lefthook.yml + .lefthook/*
+      //   scripts via core.hooksPath — never a static JS/TS import, so knip always
+      //   flags it as unused. Found blocking `bun run lint` (and therefore
+      //   ci/local-checks.sh's gh-ship billing-block fallback, HYP-1126) via a fresh
+      //   clone; discovered because real CI hasn't gated a merge in over a week.
       "ignoreDependencies": [
         "@playwright/mcp",
         "playwright-core",
         "@swc/core",
         "@hookform/resolvers",
         "bun-plugin-tailwind",
+        "lefthook",
       ],
       // The `playwright` binary (postinstall: `npx playwright install chromium`) is
       // provided transitively by @playwright/mcp, which pins a prerelease

@@ -49,3 +49,20 @@ regexes = [
 #   '''(^|/)__tests__/.*''',            # unit-test fixtures
 #   '''(^|/)docs/.*\.md$''',            # documentation placeholders
 # ]
+
+# Dependency/build-directory exclusions for `gitleaks dir` (working-tree-only) scans live
+# in .gitleaks-dir.toml, NOT here — this base config stays GLOBAL (git/--staged/full
+# history, i.e. every mode that only ever sees TRACKED content) so a `git add -f`'d file
+# under node_modules/, an out/ dir, dist/, etc. is still scanned by every mode except the
+# working-tree walk that can't tell tracked from untracked filesystem noise anyway. See
+# .gitleaks-dir.toml's header for the dir-mode rationale. Previously these paths were
+# excluded HERE (all modes) — moved out because a global exclusion silently blinds the
+# git-history and --staged pre-commit scans to a force-added file under one of these
+# paths, which is exactly the class of finding those modes exist to catch.
+#
+# Deliberately NOT excluding .env/.env.* anywhere (not here, not in .gitleaks-dir.toml):
+# this [allowlist] is GLOBAL, and an .env-shaped path exclusion would blind the
+# `gitleaks git --staged` pre-commit hook and the `full` history mode to a real secret
+# that actually got committed — which is exactly the case those modes exist to catch. A
+# residual: a `dir`-mode ship-time scan can false-block on a real, correctly-gitignored
+# local .env that was never going to be part of the PR being merged either way.
