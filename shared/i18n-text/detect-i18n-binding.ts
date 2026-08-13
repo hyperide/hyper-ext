@@ -4,13 +4,13 @@
  * Accepts source text and a source location pointing at a JSX child node,
  * and determines whether it is a recognized i18n call or element.
  */
-import { parse } from '@babel/parser';
-import _traverse, { type NodePath } from '@babel/traverse';
-import type * as t from '@babel/types';
-import type { DetectI18nBindingParams, I18nBindingDetected, I18nBindingDetectionResult, I18nLibrary } from './types';
+import { parse } from "@babel/parser";
+import _traverse, { type NodePath } from "@babel/traverse";
+import type * as t from "@babel/types";
+import type { DetectI18nBindingParams, I18nBindingDetected, I18nBindingDetectionResult, I18nLibrary } from "./types";
 
 export interface CalleeOrigin {
-  kind: 'import' | 'hook-destructure' | 'local-declaration' | 'unknown';
+  kind: "import" | "hook-destructure" | "local-declaration" | "unknown";
   /** Module specifier when kind === 'import'. */
   importFrom?: string;
   /** Hook function name when kind === 'hook-destructure'. */
@@ -25,11 +25,11 @@ export function resolveCalleeOrigin(source: string, calleeName: string): CalleeO
   let ast: t.File;
   try {
     ast = parse(source, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
     }) as t.File;
   } catch {
-    return { kind: 'unknown' };
+    return { kind: "unknown" };
   }
 
   let importResult: CalleeOrigin | null = null;
@@ -41,8 +41,8 @@ export function resolveCalleeOrigin(source: string, calleeName: string): CalleeO
       ImportDeclaration(path: NodePath<t.ImportDeclaration>) {
         if (importResult) return;
         for (const spec of path.node.specifiers) {
-          if (spec.type === 'ImportSpecifier' && spec.local.name === calleeName) {
-            importResult = { kind: 'import', importFrom: path.node.source.value };
+          if (spec.type === "ImportSpecifier" && spec.local.name === calleeName) {
+            importResult = { kind: "import", importFrom: path.node.source.value };
             return;
           }
         }
@@ -52,15 +52,15 @@ export function resolveCalleeOrigin(source: string, calleeName: string): CalleeO
         const { id, init } = path.node;
 
         // Hook destructure: const { calleeName } = someHook() or const { key: calleeName } = someHook()
-        if (!hookResult && id.type === 'ObjectPattern' && init?.type === 'CallExpression') {
+        if (!hookResult && id.type === "ObjectPattern" && init?.type === "CallExpression") {
           const hookCallee = init.callee;
-          const hookName = hookCallee.type === 'Identifier' ? hookCallee.name : null;
+          const hookName = hookCallee.type === "Identifier" ? hookCallee.name : null;
           if (hookName) {
             for (const prop of id.properties) {
-              if (prop.type === 'ObjectProperty') {
-                const localName = prop.value.type === 'Identifier' ? (prop.value as t.Identifier).name : null;
+              if (prop.type === "ObjectProperty") {
+                const localName = prop.value.type === "Identifier" ? (prop.value as t.Identifier).name : null;
                 if (localName === calleeName) {
-                  hookResult = { kind: 'hook-destructure', hookName };
+                  hookResult = { kind: "hook-destructure", hookName };
                   return;
                 }
               }
@@ -69,14 +69,14 @@ export function resolveCalleeOrigin(source: string, calleeName: string): CalleeO
         }
 
         // Local declaration: const calleeName = ...
-        if (!localResult && id.type === 'Identifier' && (id as t.Identifier).name === calleeName) {
-          localResult = { kind: 'local-declaration' };
+        if (!localResult && id.type === "Identifier" && (id as t.Identifier).name === calleeName) {
+          localResult = { kind: "local-declaration" };
         }
       },
 
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         if (!localResult && path.node.id?.name === calleeName) {
-          localResult = { kind: 'local-declaration' };
+          localResult = { kind: "local-declaration" };
         }
       },
     });
@@ -84,20 +84,20 @@ export function resolveCalleeOrigin(source: string, calleeName: string): CalleeO
     // Ignore traverse errors (e.g. duplicate declarations in malformed source)
   }
 
-  return importResult ?? hookResult ?? localResult ?? { kind: 'unknown' };
+  return importResult ?? hookResult ?? localResult ?? { kind: "unknown" };
 }
 
 // @ts-expect-error - babel/traverse ESM/CJS interop
 const traverse = _traverse.default || _traverse;
 
 // Names accepted for any recognized library (including react-intl's formatMessage).
-const KNOWN_CALL_NAMES = new Set(['t', 'translate', 'msg', 'i18n', 'formatMessage']);
+const KNOWN_CALL_NAMES = new Set(["t", "translate", "msg", "i18n", "formatMessage"]);
 // Names accepted for 'custom' library detection: generic wrappers only, not library-specific ones.
-const CUSTOM_CALL_NAMES = new Set(['t', 'translate', 'msg', 'i18n']);
+const CUSTOM_CALL_NAMES = new Set(["t", "translate", "msg", "i18n"]);
 
 const JSX_COMPONENT_LIBRARY: Partial<Record<string, I18nLibrary>> = {
-  FormattedMessage: 'react-intl',
-  Trans: 'lingui',
+  FormattedMessage: "react-intl",
+  Trans: "lingui",
 };
 
 export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingDetectionResult {
@@ -106,11 +106,11 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
   let ast: t.File;
   try {
     ast = parse(source, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
     }) as t.File;
   } catch {
-    return { kind: 'unsupported', reason: 'unknown-wrapper' };
+    return { kind: "unsupported", reason: "unknown-wrapper" };
   }
 
   const { line, column } = location;
@@ -123,54 +123,57 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       if (!nodeLoc || nodeLoc.start.line !== line || nodeLoc.start.column !== column) return;
 
       if (library === null) {
-        found = { kind: 'unsupported', reason: 'unknown-wrapper' };
+        found = { kind: "unsupported", reason: "unknown-wrapper" };
         return;
       }
 
       const calleeName = extractCalleeName(path.node.callee);
-      const acceptedNames = library === 'custom' ? CUSTOM_CALL_NAMES : KNOWN_CALL_NAMES;
+      const acceptedNames = library === "custom" ? CUSTOM_CALL_NAMES : KNOWN_CALL_NAMES;
       if (!calleeName || !acceptedNames.has(calleeName)) {
-        found = { kind: 'unsupported', reason: 'unknown-wrapper' };
+        found = { kind: "unsupported", reason: "unknown-wrapper" };
         return;
       }
 
       const firstArg = path.node.arguments[0];
       if (!firstArg) {
-        found = { kind: 'unsupported', reason: 'unknown-wrapper' };
+        found = { kind: "unsupported", reason: "unknown-wrapper" };
         return;
       }
 
-      if (firstArg.type === 'ObjectExpression') {
+      if (firstArg.type === "ObjectExpression") {
         const key = extractIdFromObject(firstArg);
         if (key === null) {
-          found = { kind: 'unsupported', reason: 'non-string-id' };
+          found = { kind: "unsupported", reason: "non-string-id" };
         } else if (key === false) {
-          found = { kind: 'unsupported', reason: 'dynamic-key' };
+          found = { kind: "unsupported", reason: "dynamic-key" };
         } else {
           found = makeDetected(library, key, nodeLoc.start);
         }
         return;
       }
 
-      if (firstArg.type === 'StringLiteral') {
+      if (firstArg.type === "StringLiteral") {
         const secondArg = path.node.arguments[1];
-        if (secondArg !== undefined && secondArg.type !== 'ObjectExpression') {
-          found = { kind: 'unsupported', reason: 'dynamic-key' };
+        if (secondArg !== undefined && secondArg.type !== "ObjectExpression") {
+          found = { kind: "unsupported", reason: "dynamic-key" };
           return;
         }
         const inlineNamespace =
           secondArg !== undefined ? extractNsFromObject(secondArg as t.ObjectExpression) : undefined;
         if (inlineNamespace === null) {
-          found = { kind: 'unsupported', reason: 'dynamic-key' };
+          found = { kind: "unsupported", reason: "dynamic-key" };
           return;
         }
         // Inline namespace wins; fall back to hook-level namespace when absent.
-        const namespace = inlineNamespace ?? (calleeName ? resolveHookNamespace(source, calleeName) : undefined);
+        // Scope the hook lookup to the call's nearest enclosing binding so that
+        // multiple components reusing the same local name (e.g. `t`) each resolve
+        // against their own useTranslation(...) declarator, not the first in file.
+        const namespace = inlineNamespace ?? (calleeName ? resolveHookNamespace(source, calleeName, path) : undefined);
         found = makeDetected(library, firstArg.value, nodeLoc.start, namespace);
         return;
       }
 
-      found = { kind: 'unsupported', reason: 'dynamic-key' };
+      found = { kind: "unsupported", reason: "dynamic-key" };
     },
 
     TaggedTemplateExpression(path: NodePath<t.TaggedTemplateExpression>) {
@@ -179,14 +182,14 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       if (!nodeLoc || nodeLoc.start.line !== line || nodeLoc.start.column !== column) return;
 
       if (library === null) {
-        found = { kind: 'unsupported', reason: 'unknown-wrapper' };
+        found = { kind: "unsupported", reason: "unknown-wrapper" };
         return;
       }
 
-      const tagName = path.node.tag.type === 'Identifier' ? path.node.tag.name : null;
-      const acceptedTagNames = library === 'custom' ? CUSTOM_CALL_NAMES : KNOWN_CALL_NAMES;
+      const tagName = path.node.tag.type === "Identifier" ? path.node.tag.name : null;
+      const acceptedTagNames = library === "custom" ? CUSTOM_CALL_NAMES : KNOWN_CALL_NAMES;
       if (!tagName || !acceptedTagNames.has(tagName)) {
-        found = { kind: 'unsupported', reason: 'unknown-wrapper' };
+        found = { kind: "unsupported", reason: "unknown-wrapper" };
         return;
       }
 
@@ -199,7 +202,7 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
         }
       }
 
-      found = { kind: 'unsupported', reason: 'dynamic-key' };
+      found = { kind: "unsupported", reason: "dynamic-key" };
     },
 
     JSXElement(path: NodePath<t.JSXElement>) {
@@ -208,22 +211,22 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       if (!nodeLoc || nodeLoc.start.line !== line || nodeLoc.start.column !== column) return;
 
       const openingName = path.node.openingElement.name;
-      const componentName = openingName.type === 'JSXIdentifier' ? openingName.name : null;
+      const componentName = openingName.type === "JSXIdentifier" ? openingName.name : null;
       if (!componentName) {
-        found = { kind: 'unsupported', reason: 'unknown-wrapper' };
+        found = { kind: "unsupported", reason: "unknown-wrapper" };
         return;
       }
 
       // Library-specific JSX components are not custom wrappers — reject them when library is 'custom'.
-      if (library === 'custom' && JSX_COMPONENT_LIBRARY[componentName] !== undefined) {
-        found = { kind: 'unsupported', reason: 'unknown-wrapper' };
+      if (library === "custom" && JSX_COMPONENT_LIBRARY[componentName] !== undefined) {
+        found = { kind: "unsupported", reason: "unknown-wrapper" };
         return;
       }
 
       const componentLibrary = JSX_COMPONENT_LIBRARY[componentName] ?? null;
       const resolvedLibrary = componentLibrary;
       if (!resolvedLibrary) {
-        found = { kind: 'unsupported', reason: 'unknown-wrapper' };
+        found = { kind: "unsupported", reason: "unknown-wrapper" };
         return;
       }
 
@@ -232,33 +235,33 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       let idAttr: t.JSXAttribute | null = null;
       for (let i = 0; i < attrs.length; i++) {
         const a = attrs[i];
-        if (a.type === 'JSXAttribute' && a.name.type === 'JSXIdentifier' && a.name.name === 'id') {
+        if (a.type === "JSXAttribute" && a.name.type === "JSXIdentifier" && a.name.name === "id") {
           lastIdAttrIndex = i;
           idAttr = a;
         }
       }
 
       if (!idAttr || !idAttr.value) {
-        found = { kind: 'unsupported', reason: 'non-string-id' };
+        found = { kind: "unsupported", reason: "non-string-id" };
         return;
       }
 
       // A spread attribute after the last id could override it — treat as non-string-id.
-      if (attrs.slice(lastIdAttrIndex + 1).some((a) => a.type === 'JSXSpreadAttribute')) {
-        found = { kind: 'unsupported', reason: 'non-string-id' };
+      if (attrs.slice(lastIdAttrIndex + 1).some((a) => a.type === "JSXSpreadAttribute")) {
+        found = { kind: "unsupported", reason: "non-string-id" };
         return;
       }
 
-      if (idAttr.value.type === 'StringLiteral') {
+      if (idAttr.value.type === "StringLiteral") {
         found = makeDetected(resolvedLibrary, idAttr.value.value, nodeLoc.start);
         return;
       }
 
-      found = { kind: 'unsupported', reason: 'non-string-id' };
+      found = { kind: "unsupported", reason: "non-string-id" };
     },
   });
 
-  return found ?? { kind: 'unsupported', reason: 'unknown-wrapper' };
+  return found ?? { kind: "unsupported", reason: "unknown-wrapper" };
 }
 
 function makeDetected(
@@ -267,7 +270,7 @@ function makeDetected(
   start: { line: number; column: number },
   namespace?: string,
 ): I18nBindingDetected {
-  return { kind: 'i18n', library, key, namespace, sourceLocation: { line: start.line, column: start.column } };
+  return { kind: "i18n", library, key, namespace, sourceLocation: { line: start.line, column: start.column } };
 }
 
 /** Returns namespace string for static ns prop, null for dynamic ns prop, undefined when no ns prop. */
@@ -280,10 +283,10 @@ function extractNsFromObject(obj: t.ObjectExpression): string | null | undefined
   for (let i = 0; i < properties.length; i++) {
     const p = properties[i];
     if (
-      p.type === 'ObjectProperty' &&
+      p.type === "ObjectProperty" &&
       !p.computed &&
-      ((p.key.type === 'Identifier' && (p.key as t.Identifier).name === 'ns') ||
-        (p.key.type === 'StringLiteral' && (p.key as t.StringLiteral).value === 'ns'))
+      ((p.key.type === "Identifier" && (p.key as t.Identifier).name === "ns") ||
+        (p.key.type === "StringLiteral" && (p.key as t.StringLiteral).value === "ns"))
     ) {
       lastNsIndex = i;
       lastNsProp = p as t.ObjectProperty;
@@ -292,7 +295,7 @@ function extractNsFromObject(obj: t.ObjectExpression): string | null | undefined
 
   if (lastNsProp === null) {
     // No static ns property — a spread or computed key might still supply one, treat as dynamic.
-    return properties.some((p) => p.type === 'SpreadElement' || (p.type === 'ObjectProperty' && p.computed))
+    return properties.some((p) => p.type === "SpreadElement" || (p.type === "ObjectProperty" && p.computed))
       ? null
       : undefined;
   }
@@ -301,18 +304,18 @@ function extractNsFromObject(obj: t.ObjectExpression): string | null | undefined
   if (
     properties
       .slice(lastNsIndex + 1)
-      .some((p) => p.type === 'SpreadElement' || (p.type === 'ObjectProperty' && p.computed))
+      .some((p) => p.type === "SpreadElement" || (p.type === "ObjectProperty" && p.computed))
   )
     return null;
 
   // The last ns property wins and is not overridden by any later spread.
-  if (lastNsProp.value.type !== 'StringLiteral') return null;
+  if (lastNsProp.value.type !== "StringLiteral") return null;
   return lastNsProp.value.value;
 }
 
 function extractCalleeName(callee: t.Expression | t.V8IntrinsicIdentifier): string | null {
-  if (callee.type === 'Identifier') return callee.name;
-  if (callee.type === 'MemberExpression' && callee.property.type === 'Identifier') {
+  if (callee.type === "Identifier") return callee.name;
+  if (callee.type === "MemberExpression" && callee.property.type === "Identifier") {
     return callee.property.name;
   }
   return null;
@@ -328,10 +331,10 @@ function extractIdFromObject(obj: t.ObjectExpression): string | false | null {
   for (let i = 0; i < properties.length; i++) {
     const p = properties[i];
     if (
-      p.type === 'ObjectProperty' &&
+      p.type === "ObjectProperty" &&
       !p.computed &&
-      ((p.key.type === 'Identifier' && (p.key as t.Identifier).name === 'id') ||
-        (p.key.type === 'StringLiteral' && (p.key as t.StringLiteral).value === 'id'))
+      ((p.key.type === "Identifier" && (p.key as t.Identifier).name === "id") ||
+        (p.key.type === "StringLiteral" && (p.key as t.StringLiteral).value === "id"))
     ) {
       lastIdIndex = i;
       lastIdProp = p as t.ObjectProperty;
@@ -344,18 +347,18 @@ function extractIdFromObject(obj: t.ObjectExpression): string | false | null {
   if (
     properties
       .slice(lastIdIndex + 1)
-      .some((p) => p.type === 'SpreadElement' || (p.type === 'ObjectProperty' && p.computed))
+      .some((p) => p.type === "SpreadElement" || (p.type === "ObjectProperty" && p.computed))
   )
     return false;
 
-  if (lastIdProp.value.type !== 'StringLiteral') return false;
+  if (lastIdProp.value.type !== "StringLiteral") return false;
   return lastIdProp.value.value;
 }
 
 /** Hook function names that accept a namespace as their first argument. */
 const HOOK_NS_PROVIDERS = new Set([
-  'useTranslation', // react-i18next
-  'useI18n', // vue-i18n (sometimes used in TS/TSX projects)
+  "useTranslation", // react-i18next
+  "useI18n", // vue-i18n (sometimes used in TS/TSX projects)
 ]);
 
 /**
@@ -367,18 +370,35 @@ const HOOK_NS_PROVIDERS = new Set([
  *   const { t } = useTranslation()                     → undefined
  *   const { t } = useTranslation(dynamicVar)            → undefined (treat as unresolvable)
  *
- * Only flat-file scanning — no scope analysis. If the same local name is declared
- * multiple times in different scopes, the first matching declarator wins.
+ * When `callPath` (the NodePath of the matched `t(...)` call) is supplied, the
+ * lookup uses lexical scope: it resolves the nearest enclosing binding for
+ * `calleeName` and reads the namespace off that exact declarator. This is what
+ * lets two components in one file reuse the same local name (`t`) yet resolve to
+ * their own useTranslation(...) namespaces.
+ *
+ * Without `callPath` (legacy / external callers), it falls back to flat-file
+ * scanning with no scope analysis: the first matching declarator wins.
  *
  * Returns undefined when the hook takes no first argument, has a dynamic first
  * argument, or when `calleeName` is not found as a hook destructure.
  */
-export function resolveHookNamespace(source: string, calleeName: string): string | undefined {
+export function resolveHookNamespace(
+  source: string,
+  calleeName: string,
+  callPath?: NodePath<t.CallExpression>,
+): string | undefined {
+  // Preferred path: scope-aware resolution from the matched call's binding.
+  if (callPath) {
+    const scoped = resolveHookNamespaceFromScope(callPath, calleeName);
+    if (scoped !== NO_BINDING) return scoped;
+    // No lexical binding found (e.g. global `t`) — fall through to flat scan.
+  }
+
   let ast: t.File;
   try {
     ast = parse(source, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
     }) as t.File;
   } catch {
     return undefined;
@@ -390,41 +410,8 @@ export function resolveHookNamespace(source: string, calleeName: string): string
     traverse(ast, {
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         if (result !== undefined) return;
-        const { id, init } = path.node;
-
-        if (id.type !== 'ObjectPattern' || init?.type !== 'CallExpression') return;
-
-        // Check that the hook is a recognized namespace-providing hook.
-        const hookCallee = init.callee;
-        const hookName = hookCallee.type === 'Identifier' ? hookCallee.name : null;
-        if (!hookName || !HOOK_NS_PROVIDERS.has(hookName)) return;
-
-        // Check that calleeName is destructured from this hook.
-        const hasCallee = id.properties.some(
-          (prop) =>
-            prop.type === 'ObjectProperty' &&
-            prop.value.type === 'Identifier' &&
-            (prop.value as t.Identifier).name === calleeName,
-        );
-        if (!hasCallee) return;
-
-        // Extract namespace from the hook's first argument.
-        const firstArg = init.arguments[0];
-        if (!firstArg) return; // useTranslation() — no namespace
-
-        if (firstArg.type === 'StringLiteral') {
-          result = firstArg.value;
-          return;
-        }
-
-        if (firstArg.type === 'ObjectExpression') {
-          const ns = extractNsFromObject(firstArg);
-          // null = dynamic ns (spread/computed), undefined = no ns prop — either way: undefined
-          result = typeof ns === 'string' ? ns : undefined;
-          return;
-        }
-
-        // Dynamic first argument (variable, template literal, etc.) — leave as undefined.
+        const ns = nsFromDeclarator(path.node, calleeName);
+        if (ns !== NO_BINDING) result = ns;
       },
     });
   } catch {
@@ -432,6 +419,71 @@ export function resolveHookNamespace(source: string, calleeName: string): string
   }
 
   return result;
+}
+
+/** Sentinel: the declarator does not bind `calleeName` to a namespace-providing hook. */
+const NO_BINDING = Symbol("no-binding");
+
+/**
+ * Resolve the namespace from the nearest enclosing lexical binding for `calleeName`.
+ *
+ * When a lexical binding IS found, scope is authoritative: returns the namespace
+ * string, or undefined when the binding is not a resolvable namespace-providing
+ * hook destructure. It does NOT fall through to a file-wide scan in that case —
+ * doing so could attach another component's namespace to this call.
+ *
+ * Returns NO_BINDING only when no lexical binding exists at all (e.g. a global
+ * `t`), so the caller may fall back to flat-file scanning.
+ */
+function resolveHookNamespaceFromScope(
+  callPath: NodePath<t.CallExpression>,
+  calleeName: string,
+): string | undefined | typeof NO_BINDING {
+  const binding = callPath.scope.getBinding(calleeName);
+  if (!binding) return NO_BINDING;
+  if (binding.path.node.type !== "VariableDeclarator") return undefined;
+  const ns = nsFromDeclarator(binding.path.node as t.VariableDeclarator, calleeName);
+  // Binding exists but isn't a hook destructure → authoritatively no namespace.
+  return ns === NO_BINDING ? undefined : ns;
+}
+
+/**
+ * Extract the namespace declared by a `const { calleeName } = useTranslation(...)`
+ * declarator. Returns NO_BINDING when the declarator is not such a hook destructure
+ * binding `calleeName`; otherwise the namespace string or undefined.
+ */
+function nsFromDeclarator(node: t.VariableDeclarator, calleeName: string): string | undefined | typeof NO_BINDING {
+  const { id, init } = node;
+  if (id.type !== "ObjectPattern" || init?.type !== "CallExpression") return NO_BINDING;
+
+  // Check that the hook is a recognized namespace-providing hook.
+  const hookCallee = init.callee;
+  const hookName = hookCallee.type === "Identifier" ? hookCallee.name : null;
+  if (!hookName || !HOOK_NS_PROVIDERS.has(hookName)) return NO_BINDING;
+
+  // Check that calleeName is destructured from this hook.
+  const hasCallee = id.properties.some(
+    (prop) =>
+      prop.type === "ObjectProperty" &&
+      prop.value.type === "Identifier" &&
+      (prop.value as t.Identifier).name === calleeName,
+  );
+  if (!hasCallee) return NO_BINDING;
+
+  // Extract namespace from the hook's first argument.
+  const firstArg = init.arguments[0];
+  if (!firstArg) return undefined; // useTranslation() — no namespace
+
+  if (firstArg.type === "StringLiteral") return firstArg.value;
+
+  if (firstArg.type === "ObjectExpression") {
+    const ns = extractNsFromObject(firstArg);
+    // null = dynamic ns (spread/computed), undefined = no ns prop — either way: undefined
+    return typeof ns === "string" ? ns : undefined;
+  }
+
+  // Dynamic first argument (variable, template literal, etc.) — no resolvable ns.
+  return undefined;
 }
 
 /**
@@ -446,8 +498,8 @@ export function resolveCalleeOriginAtLocation(
   let ast: t.File;
   try {
     ast = parse(source, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
     }) as t.File;
   } catch {
     return null;
