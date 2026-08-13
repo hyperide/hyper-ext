@@ -677,6 +677,38 @@ describe('ComponentScanner.getComponentsData — sub-project grouping (HYP-391)'
     expect(adminComponentNames.some((n) => n.includes('AdminPanel'))).toBe(true);
   });
 
+  // HYP-393: sub-package src/ as pages root + src/components/ as composites
+  // ConlocaCard must NOT appear in pageGroups — only in compositeGroups
+  it('ConlocaCard in src/components/ must not appear in pageGroups (HYP-393)', async () => {
+    const root = createSubprojProject('hyp-393-dedup', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'targets/web/package.json': '{"dependencies":{"react":"19"}}',
+      'targets/web/src/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+      'targets/web/src/components/ConlocaCard.tsx': 'export function ConlocaCard() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    expect(result.isMonorepo).toBe(true);
+    const webProject = result.subProjects?.find((p) => p.name === 'web');
+    expect(webProject).toBeDefined();
+    expect(webProject!.supported).toBe(true);
+
+    // LoginScreen (directly in src/) → pageGroups
+    const pageNames = webProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name));
+    expect(pageNames.some((n) => n.includes('LoginScreen'))).toBe(true);
+
+    // ConlocaCard (in src/components/) → compositeGroups, NOT pageGroups
+    const compositeNames = webProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name));
+    expect(compositeNames.some((n) => n.includes('ConlocaCard'))).toBe(true);
+
+    // KEY ASSERTION: ConlocaCard must NOT appear in pages
+    const pageNamesStr = pageNames.join(',');
+    expect(pageNamesStr).not.toContain('ConlocaCard');
+  });
+
   it('non-monorepo returns isMonorepo=false and no subProjects', async () => {
     const root = createSubprojProject('plain-react', {
       'package.json': '{"dependencies":{"react":"19"},"devDependencies":{"vite":"6"}}',

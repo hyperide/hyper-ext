@@ -548,7 +548,12 @@ export class ComponentScanner {
   /**
    * Scan a directory for page files with Next.js special file filtering.
    */
-  private scanPagesDirectory(dirPath: string, categoryRoot: string, projectRoot: string): ComponentListItem[] {
+  private scanPagesDirectory(
+    dirPath: string,
+    categoryRoot: string,
+    projectRoot: string,
+    skipDirs?: Set<string>,
+  ): ComponentListItem[] {
     const components: ComponentListItem[] = [];
     if (!fs.existsSync(dirPath)) return components;
 
@@ -558,7 +563,8 @@ export class ComponentScanner {
       const fullPath = path.join(dirPath, entry.name);
 
       if (entry.isDirectory()) {
-        components.push(...this.scanPagesDirectory(fullPath, categoryRoot, projectRoot));
+        if (skipDirs?.has(entry.name)) continue;
+        components.push(...this.scanPagesDirectory(fullPath, categoryRoot, projectRoot, skipDirs));
       } else if (entry.isFile()) {
         const baseName = entry.name.replace(/\.(tsx?|jsx?)$/, '');
         if (
@@ -656,13 +662,16 @@ export class ComponentScanner {
       structure.atomComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
     );
     const atomGroups = this.buildGroups(structure.atomComponentsPaths, projectRoot, 'component');
+    const compositeDirPaths = new Set(
+      structure.compositeComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
+    );
     const compositeGroups = this.buildGroups(
       structure.compositeComponentsPaths,
       projectRoot,
       'component',
       atomDirPaths,
     );
-    const pageGroups = this.buildGroups(structure.pagesPaths, projectRoot, 'page');
+    const pageGroups = this.buildGroups(structure.pagesPaths, projectRoot, 'page', compositeDirPaths);
 
     return { name, path: relativePath, supported: true, atomGroups, compositeGroups, pageGroups };
   }
@@ -825,7 +834,12 @@ export class ComponentScanner {
 
       const components =
         kind === 'page'
-          ? this.scanPagesDirectory(categoryPath, categoryPath, projectRoot)
+          ? this.scanPagesDirectory(
+              categoryPath,
+              categoryPath,
+              projectRoot,
+              applicableSkips.size > 0 ? applicableSkips : undefined,
+            )
           : this.scanComponentDirectory(
               categoryPath,
               categoryPath,
