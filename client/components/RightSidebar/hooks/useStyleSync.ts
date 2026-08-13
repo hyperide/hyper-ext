@@ -191,6 +191,11 @@ export function useStyleSync({
             cssProperties,
             beforeSnapshot,
             backendPromise,
+            // Verification must read the underlying style, not the instant
+            // patch applied above — otherwise it "verifies" before HMR lands
+            // and finishSync clears the patch into a flash of the old style
+            // (HYP-636).
+            suppressFastPatch: (fn) => engine.fastPatch.measureWithoutPatch(fn),
             onVerified: finishSync,
             onNotApplied: (ctx) => {
               finishSync();

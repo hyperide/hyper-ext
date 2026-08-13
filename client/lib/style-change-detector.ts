@@ -10,6 +10,11 @@ import { getComputedStylesFromIframe, getPreviewIframe } from './dom-utils';
 // 300ms is an empirically chosen compromise: usually enough for HMR + React
 // to re-render on typical dev machines without making the UI feel sluggish.
 const POST_HMR_DELAY_MS = 300;
+// Extra POST_HMR_DELAY_MS-spaced re-checks while waiting for a slow HMR
+// (HYP-636). Verification reads the patch-suppressed computed style, which
+// only changes when the real class lands — re-check a few times before
+// falling back to the disruptive full iframe reload.
+const HMR_VERIFY_MAX_RETRIES = 4;
 // Show "AI analyzing..." toast after this
 const LONG_WAIT_MS = 3000;
 // Max wait before giving up
@@ -92,6 +97,15 @@ interface StyleVerificationParams {
   cssProperties: string[];
   beforeSnapshot: Record<string, string> | null;
   backendPromise?: Promise<void>;
+  /**
+   * Runs a measurement with the instant fast-patch suppressed (HYP-636).
+   * The patch's !important rule reflects the requested styles immediately, so
+   * comparing patched computed styles against beforeSnapshot would "verify"
+   * the patch itself before the real class lands — and clearing the patch on
+   * that fake pass flashes the element back to its old style. When provided,
+   * every after-snapshot is captured through this wrapper.
+   */
+  suppressFastPatch?: <T>(fn: () => T) => T;
   onVerified: () => void;
   onNotApplied: (ctx: StyleNotAppliedContext) => void;
   onTimeout: () => void;
@@ -111,6 +125,7 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
     cssProperties,
     beforeSnapshot,
     backendPromise,
+    suppressFastPatch,
     onVerified,
     onNotApplied,
     onTimeout,
@@ -144,9 +159,17 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
   // Capture narrowed non-null value for closures below (tsc can't narrow closure-captured vars)
   const validBeforeSnapshot = beforeSnapshot;
 
+  // Read the underlying computed style, not the fast-patch overlay (HYP-636).
+  function captureAfterSnapshot(): Record<string, string> | null {
+    const capture = () => captureComputedStyles(elementId, cssProperties);
+    return suppressFastPatch ? suppressFastPatch(capture) : capture();
+  }
+
+  let hmrRetriesLeft = HMR_VERIFY_MAX_RETRIES;
+
   function verifyStyles(): void {
     if (cancelled) return;
-    const afterSnapshot = captureComputedStyles(elementId, cssProperties);
+    const afterSnapshot = captureAfterSnapshot();
     if (!afterSnapshot) {
       // Element gone — HMR removed it. Clear syncing.
       finish();
@@ -159,7 +182,15 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
       onVerified();
       return;
     }
-    // Styles not yet applied — caller will force-reload
+    if (hmrRetriesLeft > 0) {
+      // Backend acked but the real class hasn't reached the iframe yet — HMR
+      // can be slower than the server response. Re-check instead of reloading;
+      // the fast patch keeps the element visually correct while we wait.
+      hmrRetriesLeft--;
+      addTimer(verifyStyles, POST_HMR_DELAY_MS);
+      return;
+    }
+    // Styles still not applied after the HMR wait budget — force-reload
     forceReloadAndVerify();
   }
 
@@ -176,7 +207,7 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
       iframe.removeEventListener('load', handleLoad);
       addTimer(() => {
         if (cancelled) return;
-        const afterSnapshot = captureComputedStyles(elementId, cssProperties);
+        const afterSnapshot = captureAfterSnapshot();
         if (!afterSnapshot) {
           finish();
           onVerified();

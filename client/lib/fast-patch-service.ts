@@ -65,6 +65,24 @@ export class FastPatchService {
     this.flush();
   }
 
+  /**
+   * Run a synchronous measurement with all patch rules disabled, so callers
+   * can read the underlying computed style — what the page renders without
+   * the patch (HYP-636: style verification must not be satisfied by the
+   * patch's own !important rule). The rules are restored before returning;
+   * the browser never paints mid-task, so the user sees no flash.
+   */
+  measureWithoutPatch<T>(fn: () => T): T {
+    const styleEl = this.getStyleElement();
+    if (!styleEl) return fn();
+    styleEl.disabled = true;
+    try {
+      return fn();
+    } finally {
+      styleEl.disabled = false;
+    }
+  }
+
   clearAll(): void {
     for (const { element } of this.patches.values()) {
       element.removeAttribute(PATCH_ATTR);
@@ -88,12 +106,19 @@ export class FastPatchService {
     styleEl.textContent = rules.join('\n');
   }
 
+  private getStyleElement(): HTMLStyleElement | null {
+    const iframe = getPreviewIframe();
+    const doc = iframe?.contentDocument;
+    if (!doc) return null;
+    return doc.getElementById(STYLE_ID) as HTMLStyleElement | null;
+  }
+
   private getOrCreateStyleElement(): HTMLStyleElement | null {
     const iframe = getPreviewIframe();
     const doc = iframe?.contentDocument;
     if (!doc) return null;
 
-    let el = doc.getElementById(STYLE_ID) as HTMLStyleElement | null;
+    let el = this.getStyleElement();
     if (!el) {
       el = doc.createElement('style') as HTMLStyleElement;
       el.id = STYLE_ID;

@@ -29,7 +29,7 @@ function makeEl(): FakeEl {
 }
 
 let resolved: Record<string, FakeEl | null> = {};
-let mockStyleEl: { textContent: string; id: string } | null = null;
+let mockStyleEl: { textContent: string; id: string; disabled?: boolean } | null = null;
 let hasIframe = true;
 
 mock.module('@/lib/dom-utils', () => ({
@@ -132,5 +132,45 @@ describe('FastPatchService (tracer bridge)', () => {
     const el = makeEl();
     resolved['elem-1'] = el;
     expect(() => service.applyPatch('elem-1', { color: 'red' })).not.toThrow();
+  });
+
+  describe('measureWithoutPatch (HYP-636)', () => {
+    it('disables the patch stylesheet during the measurement and restores it after', () => {
+      const el = makeEl();
+      resolved['elem-1'] = el;
+      service.applyPatch('elem-1', { backgroundColor: 'red' });
+
+      let disabledDuringMeasure: boolean | undefined;
+      const result = service.measureWithoutPatch(() => {
+        disabledDuringMeasure = mockStyleEl?.disabled;
+        return 'measured';
+      });
+
+      expect(disabledDuringMeasure).toBe(true);
+      expect(result).toBe('measured');
+      expect(mockStyleEl?.disabled).toBe(false);
+    });
+
+    it('re-enables the stylesheet even when the measurement throws', () => {
+      const el = makeEl();
+      resolved['elem-1'] = el;
+      service.applyPatch('elem-1', { backgroundColor: 'red' });
+
+      expect(() =>
+        service.measureWithoutPatch(() => {
+          throw new Error('boom');
+        }),
+      ).toThrow('boom');
+      expect(mockStyleEl?.disabled).toBe(false);
+    });
+
+    it('runs the measurement untouched when no patch stylesheet exists', () => {
+      expect(service.measureWithoutPatch(() => 'plain')).toBe('plain');
+    });
+
+    it('runs the measurement untouched when the preview iframe is missing', () => {
+      hasIframe = false;
+      expect(service.measureWithoutPatch(() => 'plain')).toBe('plain');
+    });
   });
 });

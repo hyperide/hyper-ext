@@ -19,6 +19,7 @@ import {
   detectUnchangedProperties,
   getCSSProperty,
   getUniqueCSSProperties,
+  startStyleVerification,
 } from '../style-change-detector';
 
 describe('getCSSProperty', () => {
@@ -96,6 +97,110 @@ describe('detectUnchangedProperties', () => {
 
   it('should handle empty objects', () => {
     expect(detectUnchangedProperties({}, {})).toEqual([]);
+  });
+});
+
+describe('startStyleVerification — slow HMR vs fast patch (HYP-636)', () => {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // Simulated preview state: the fast-patch !important rule shows the NEW
+  // color immediately, while the underlying (real) style only changes when
+  // HMR lands. `suppressed` models FastPatchService.measureWithoutPatch.
+  let underlyingColor = 'rgb(255, 255, 255)';
+  let patchActive = true;
+  let suppressed = false;
+
+  const suppressFastPatch = <T>(fn: () => T): T => {
+    suppressed = true;
+    try {
+      return fn();
+    } finally {
+      suppressed = false;
+    }
+  };
+
+  beforeEach(() => {
+    underlyingColor = 'rgb(255, 255, 255)';
+    patchActive = true;
+    suppressed = false;
+    mockComputedStyle = {
+      getPropertyValue: () => (patchActive && !suppressed ? 'rgb(255, 0, 0)' : underlyingColor),
+    } as unknown as CSSStyleDeclaration;
+  });
+
+  it('does not verify while only the fast patch satisfies the comparison, then verifies once HMR lands', async () => {
+    let verified = 0;
+    let notApplied = 0;
+    let timedOut = 0;
+
+    const cleanup = startStyleVerification({
+      elementId: 'el-1',
+      filePath: '/src/App.tsx',
+      styles: { backgroundColor: 'red' },
+      cssProperties: ['backgroundColor'],
+      beforeSnapshot: { backgroundColor: 'rgb(255, 255, 255)' },
+      backendPromise: Promise.resolve(),
+      suppressFastPatch,
+      onVerified: () => {
+        verified++;
+      },
+      onNotApplied: () => {
+        notApplied++;
+      },
+      onTimeout: () => {
+        timedOut++;
+      },
+    });
+
+    // Backend acked but HMR is slow: only the patch's !important rule shows
+    // red; the underlying style is still white. Verifying here is the bug —
+    // finishSync would clear the patch and flash the element white.
+    await sleep(450);
+    expect(verified).toBe(0);
+
+    // HMR lands: the real class paints red without the patch.
+    underlyingColor = 'rgb(255, 0, 0)';
+    await sleep(500);
+    expect(verified).toBe(1);
+    expect(notApplied).toBe(0);
+    expect(timedOut).toBe(0);
+
+    cleanup();
+  });
+
+  it('falls back to onNotApplied after bounded retries when the real style never changes', async () => {
+    let verified = 0;
+    let notApplied = 0;
+    let unchangedProps: string[] = [];
+
+    const cleanup = startStyleVerification({
+      elementId: 'el-1',
+      filePath: '/src/App.tsx',
+      styles: { backgroundColor: 'red' },
+      cssProperties: ['backgroundColor'],
+      beforeSnapshot: { backgroundColor: 'rgb(255, 255, 255)' },
+      backendPromise: Promise.resolve(),
+      suppressFastPatch,
+      onVerified: () => {
+        verified++;
+      },
+      onNotApplied: (ctx) => {
+        notApplied++;
+        unchangedProps = ctx.unchangedProperties;
+      },
+      onTimeout: () => {},
+    });
+
+    // Underlying style never changes (CSS specificity failure). After the
+    // bounded HMR retries, the pipeline force-reloads; getPreviewIframe is
+    // mocked to null here, so it must surface onNotApplied — not a fake
+    // "verified" from the patch rule.
+    await sleep(2300);
+    expect(verified).toBe(0);
+    expect(notApplied).toBe(1);
+    expect(unchangedProps).toEqual(['backgroundColor']);
+
+    cleanup();
   });
 });
 
