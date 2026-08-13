@@ -236,6 +236,87 @@ export async function resolveRunnableTargets(projectPath: string): Promise<strin
 }
 
 /**
+ * Disambiguate multiple runnable monorepo targets (resolveRunnableTargets) using a file path
+ * the CALLER has already identified as "what the user is looking at" — e.g. the previewed
+ * component (preferred) or the active editor. This function itself has no opinion on WHICH
+ * file to use; extension.ts's `resolveOpenFilePath` owns that precedence.
+ *
+ * HYP-1104: when a monorepo root has 2+ equally-runnable sub-projects (e.g. targets/web AND
+ * targets/admin both ship their own dev script + React), prepareDevServerTarget in
+ * extension.ts used to ALWAYS defer to a blocking `vscode.window.showQuickPick`, even when the
+ * caller already knows exactly which target the user means (they have a file open inside one
+ * of them). An automated context (E2E/CI) can never answer that modal, so the dev-server start
+ * hangs until DevServerControls' 90s poll times out. This resolves the obvious case without
+ * guessing: if `openFilePath` sits inside exactly one containment CHAIN of candidate target
+ * directories, return the most specific (deepest) one; otherwise return null so the caller
+ * falls back to the QuickPick (unchanged behavior — never guess across a real ambiguity).
+ *
+ * Path containment is prefix-matched on the RESOLVED (absolute, normalized) paths with a
+ * trailing separator boundary, so a target directory whose name is a string-prefix of a
+ * sibling (`targets/web` vs `targets/web-admin`) can never falsely match the sibling's file.
+ * Comparison is case-INSENSITIVE off Linux (matching `path.resolve`'s own platform-native
+ * behavior is not enough here — macOS/Windows filesystems are case-preserving but
+ * case-insensitive, and VS Code's `uri.fsPath` casing does not always match the casing a
+ * directory scan produced) so a casing difference can't silently defeat the match and
+ * regress to the exact QuickPick hang this function exists to avoid.
+ *
+ * Two or more matches can only happen when the candidate target directories NEST (one
+ * contains another) — sibling directories can never both contain the same file. In that case
+ * the deepest (longest resolved path) match is the unambiguous, most-specific answer, not a
+ * real ambiguity.
+ */
+export function pickRunnableTargetForFile(targets: string[], openFilePath: string | undefined): string | null {
+  if (!openFilePath) return null;
+  const comparable = (p: string) => (process.platform === 'linux' ? p : p.toLowerCase());
+  const normalizedFile = path.resolve(openFilePath);
+  const fileKey = comparable(normalizedFile);
+  const matches = targets.filter((target) => {
+    const targetKey = comparable(path.resolve(target));
+    return fileKey === targetKey || fileKey.startsWith(targetKey + path.sep);
+  });
+  if (matches.length === 0) return null;
+  return matches.reduce((deepest, candidate) => (candidate.length > deepest.length ? candidate : deepest));
+}
+
+/**
+ * Editor URI schemes whose `fsPath` is a real, locally-runnable project file. `file` covers a
+ * plain local workspace; `vscode-remote` covers Remote-SSH / Dev Containers / Codespaces, where
+ * the dev server still runs on the SAME host the extension host is attached to, so the fsPath is
+ * just as usable for containment matching (HYP-1104). Deliberately EXCLUDES `vscode-vfs`
+ * (Remote Repositories / GitHub virtual filesystem): there is no local checkout to run a dev
+ * server against, so treating its fsPath as a real target would be wrong.
+ */
+export function isResolvableEditorScheme(scheme: string): boolean {
+  return scheme === 'file' || scheme === 'vscode-remote';
+}
+
+/**
+ * Disambiguate multiple runnable monorepo targets using ALL currently visible editors, not just
+ * one. `resolveOpenFilePath` (extension.ts) already prefers StateHub, then the active editor —
+ * this is the next fallback: when neither is available (or doesn't resolve to a target), check
+ * whether the visible editors that DO fall inside a target all agree on the SAME one. A visible
+ * editor that matches no target at all (README.md, a config file, docs — anything outside every
+ * candidate directory) casts no vote either way; it is not evidence of ambiguity, since plenty of
+ * legitimately-open tabs never live inside any monorepo target. Agreement among the matching
+ * tabs is still a strong, non-guessing signal (e.g. two files open side-by-side, both inside
+ * `targets/web`, with a third tab open on the repo README). A SPLIT — visible editors
+ * implicating 2+ DISTINCT targets (e.g. one tab in `targets/web`, another in `targets/admin`) —
+ * IS a real ambiguity: return null so the caller falls back to the QuickPick rather than silently
+ * picking whichever target happens to be first in the array.
+ */
+export function pickRunnableTargetForVisibleEditors(targets: string[], visibleFilePaths: string[]): string | null {
+  const comparable = (p: string) => (process.platform === 'linux' ? p : p.toLowerCase());
+  const resolvedMatches = new Set<string>();
+  for (const filePath of visibleFilePaths) {
+    const match = pickRunnableTargetForFile(targets, filePath);
+    if (match) resolvedMatches.add(comparable(path.resolve(match)));
+  }
+  if (resolvedMatches.size !== 1) return null;
+  const [onlyMatchKey] = resolvedMatches;
+  return targets.find((target) => comparable(path.resolve(target)) === onlyMatchKey) ?? null;
+}
+
+/**
  * Detect project type from package.json dependencies and config files
  */
 export async function detectProjectType(projectPath: string): Promise<ProjectType> {

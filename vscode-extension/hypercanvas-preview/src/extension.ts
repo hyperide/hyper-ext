@@ -72,6 +72,9 @@ import {
   detectUIKit,
   detectUnsupportedProject,
   getPackageScripts,
+  isResolvableEditorScheme,
+  pickRunnableTargetForFile,
+  pickRunnableTargetForVisibleEditors,
   readPackageJson,
   resolveRunnableTargets,
 } from './services/ProjectDetector';
@@ -1496,6 +1499,54 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   /**
+   * Best-effort absolute path to the file/component the user is currently looking at, in
+   * priority order:
+   *   1. StateHub's `currentComponent` — the component the user has actually SELECTED for
+   *      preview. This is the strongest signal and takes precedence over the active editor
+   *      for the same reason PreviewPanel._initializeComponent treats it as authoritative
+   *      (PreviewPanel.ts): the re-root-on-select path (resolveAndRerootToComponent) is
+   *      asynchronous, so the active editor can transiently still point at a DIFFERENT file
+   *      than the one StateHub already committed to previewing (HYP-1104 review P1) — using
+   *      the stale editor there would risk auto-picking the wrong monorepo target.
+   *   2. The active text editor, restricted to a resolvable scheme (`file` or `vscode-remote` —
+   *      see `isResolvableEditorScheme`) so an untitled/git-diff/output-channel/virtual-fs editor
+   *      (whose fsPath is synthetic or unreachable, not a real local project file) can't feed a
+   *      bogus containment match.
+   * Deliberately does NOT fall back to an arbitrary visible/background tab the way
+   * PreviewPanel._resolveComponentPath does for component-path extraction: which tab happens
+   * to be first is not a reliable signal of intent for this decision — with multiple tabs open
+   * across different monorepo targets, a background tab could silently determine which app
+   * boots (HYP-1104 review). That case is instead handled explicitly by
+   * `pickRunnableTargetForVisibleEditors` in `prepareDevServerTarget`, which requires ALL visible
+   * editors to agree on one target rather than picking whichever is first. Returns undefined when
+   * nothing is open/selected — the caller then falls back to the visible-editor check, then the
+   * QuickPick.
+   */
+  const resolveOpenFilePath = (): string | undefined => {
+    const stateComponentPath = stateHub?.state.currentComponent?.path;
+    if (stateComponentPath) {
+      const repoRoot = workspaceFolderRoot();
+      return isAbsolute(stateComponentPath) ? stateComponentPath : join(repoRoot, stateComponentPath);
+    }
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor && isResolvableEditorScheme(activeEditor.document.uri.scheme)) {
+      return activeEditor.document.uri.fsPath;
+    }
+    return undefined;
+  };
+
+  /**
+   * All currently visible editors' fsPaths, restricted to resolvable schemes (see
+   * `isResolvableEditorScheme`). Feeds `pickRunnableTargetForVisibleEditors` — the
+   * multiple-visible-editors-agree fallback in `prepareDevServerTarget`, used only when neither
+   * StateHub nor the active editor (resolveOpenFilePath) resolves a target.
+   */
+  const resolveVisibleFilePaths = (): string[] =>
+    vscode.window.visibleTextEditors
+      .filter((editor) => isResolvableEditorScheme(editor.document.uri.scheme))
+      .map((editor) => editor.document.uri.fsPath);
+
+  /**
    * Make the dev-server start path monorepo-aware for the start-BEFORE-select gap
    * (HYP-431). The designed flow re-roots the preview/dev axis on component select
    * (resolveAndRerootToComponent). But if a monorepo is opened at the repo ROOT and
@@ -1508,8 +1559,19 @@ export function activate(context: vscode.ExtensionContext) {
    *   - active root already runnable (post-select, or single-package) → no-op.
    *   - exactly one runnable target → re-root to it (same end-state as selecting a
    *     component in that target, so the designed flow stays consistent).
-   *   - multiple runnable targets → DEFER: do not guess which app to boot. The
-   *     caller surfaces an actionable message (manual) or skips (autostart).
+   *   - multiple runnable targets, and the file the user already has open (StateHub's
+   *     component or the active editor) sits inside exactly one of them (HYP-1104) → re-root
+   *     to THAT one. This is the common multi-app-monorepo shape (e.g. separate web + admin
+   *     frontends): the user already told us which app they mean by opening/previewing a
+   *     file in it, so asking again via a blocking QuickPick is an unnecessary extra click —
+   *     and in an automated context (E2E/CI) nothing can ever answer that modal, so start()
+   *     just hangs.
+   *   - multiple runnable targets, no StateHub/active-editor match, but every VISIBLE editor
+   *     agrees on one target → re-root to it. Handles split-view tabs into the same target
+   *     with no active editor selected.
+   *   - multiple runnable targets, no match at all (or visible editors implicate 2+ distinct
+   *     targets) → DEFER: do not guess which app to boot. The caller surfaces an actionable
+   *     message (manual) or skips (autostart).
    *   - no runnable target → no-op; the existing "No dev or start script" error
    *     from start() stands.
    *
@@ -1537,6 +1599,19 @@ export function activate(context: vscode.ExtensionContext) {
       return { kind: 'ready' };
     }
     if (targets.length > 1) {
+      const openFileMatch = pickRunnableTargetForFile(targets, resolveOpenFilePath());
+      if (openFileMatch) {
+        await rerootPreviewPipeline(openFileMatch);
+        return { kind: 'ready' };
+      }
+      // Neither StateHub nor the active editor resolved a target — check whether ALL visible
+      // editors agree on one anyway (e.g. two split-view tabs both inside targets/web). Only a
+      // single agreed target counts; a real split across targets falls through to the QuickPick.
+      const visibleEditorMatch = pickRunnableTargetForVisibleEditors(targets, resolveVisibleFilePaths());
+      if (visibleEditorMatch) {
+        await rerootPreviewPipeline(visibleEditorMatch);
+        return { kind: 'ready' };
+      }
       return { kind: 'ambiguous', targets };
     }
     return { kind: 'ready' }; // no runnable target — existing "No dev or start script" error stands

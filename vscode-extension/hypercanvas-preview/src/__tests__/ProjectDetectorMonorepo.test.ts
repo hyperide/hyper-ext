@@ -35,8 +35,16 @@ function setup(files: Record<string, string>) {
   for (const [p, content] of Object.entries(files)) fsFiles.set(p, content);
 }
 
-const { detectRepoType, detectProjectType, detectCssSystem, resolveRunnableTargets, computeCapabilities } =
-  await import('../services/ProjectDetector');
+const {
+  detectRepoType,
+  detectProjectType,
+  detectCssSystem,
+  resolveRunnableTargets,
+  computeCapabilities,
+  pickRunnableTargetForFile,
+  isResolvableEditorScheme,
+  pickRunnableTargetForVisibleEditors,
+} = await import('../services/ProjectDetector');
 
 function pkgWithScripts(scripts: Record<string, string>): string {
   return JSON.stringify({ scripts });
@@ -275,6 +283,149 @@ describe('resolveRunnableTargets', () => {
       }),
     });
     expect(await resolveRunnableTargets(ROOT)).toEqual([]);
+  });
+});
+
+// ─── pickRunnableTargetForFile (HYP-1104) ────────────────────────────────────
+//
+// Disambiguates multiple runnable monorepo targets (e.g. targets/web AND
+// targets/admin both have their own dev script + React) using the file the
+// user already has open/is previewing — instead of always forcing a blocking
+// QuickPick. Conloca-mini-monorepo (targets/web + targets/admin, both
+// runnable) is the reproducing shape: opening the root and previewing
+// targets/web/src/app/HomeScreen.tsx must auto-pick targets/web, not hang on
+// a modal an automated E2E run can never answer.
+
+describe('pickRunnableTargetForFile', () => {
+  const WEB = `${ROOT}/targets/web`;
+  const ADMIN = `${ROOT}/targets/admin`;
+
+  it('picks the single target whose directory contains the open file', () => {
+    const openFile = `${ROOT}/targets/web/src/app/HomeScreen.tsx`;
+    expect(pickRunnableTargetForFile([WEB, ADMIN], openFile)).toBe(WEB);
+  });
+
+  it('picks the other target when the open file lives there instead', () => {
+    const openFile = `${ROOT}/targets/admin/src/Dashboard.tsx`;
+    expect(pickRunnableTargetForFile([WEB, ADMIN], openFile)).toBe(ADMIN);
+  });
+
+  it('returns null when no file is open (falls back to asking the user)', () => {
+    expect(pickRunnableTargetForFile([WEB, ADMIN], undefined)).toBeNull();
+  });
+
+  it('returns null when the open file is outside every target', () => {
+    const openFile = `${ROOT}/README.md`;
+    expect(pickRunnableTargetForFile([WEB, ADMIN], openFile)).toBeNull();
+  });
+
+  it('resolves even with a single candidate passed (not gated on the >1 ambiguity count)', () => {
+    const openFile = `${ROOT}/targets/web/src/App.tsx`;
+    expect(pickRunnableTargetForFile([WEB], openFile)).toBe(WEB);
+  });
+
+  it('does not false-match a target whose path is a prefix of a sibling (targets/web vs targets/web-admin)', () => {
+    const WEB_ADMIN = `${ROOT}/targets/web-admin`;
+    const openFile = `${ROOT}/targets/web-admin/src/App.tsx`;
+    expect(pickRunnableTargetForFile([WEB, WEB_ADMIN], openFile)).toBe(WEB_ADMIN);
+  });
+
+  // Review finding (opus/codex/fable HYP-1104): sibling directories can never both contain
+  // the same file, but NESTED candidate targets can — e.g. a root app target that itself
+  // contains a runnable inner package. In that case the deepest (most specific) match is the
+  // unambiguous answer, not a real ambiguity that should fall back to the QuickPick.
+  it('picks the deepest (most specific) target when candidates nest', () => {
+    const OUTER = `${ROOT}/targets/web`;
+    const INNER = `${ROOT}/targets/web/vendor/embedded-widget`;
+    const openFile = `${ROOT}/targets/web/vendor/embedded-widget/src/Widget.tsx`;
+    expect(pickRunnableTargetForFile([OUTER, INNER], openFile)).toBe(INNER);
+  });
+
+  // Review finding (opus/fable HYP-1104): macOS/Windows filesystems are case-preserving but
+  // case-INSENSITIVE, and VS Code's uri.fsPath casing is not guaranteed to match the casing a
+  // directory scan produced. An exact-case comparison would silently return null here and
+  // regress to the QuickPick hang this function exists to prevent. On Linux (case-sensitive
+  // filesystem) a real casing mismatch would never occur from a legitimate scan, and treating
+  // one as a match would be the WRONG behavior there — so this test pins the platform split
+  // itself rather than a single universal answer.
+  it('matches case-insensitively off Linux; stays case-sensitive on Linux', () => {
+    const openFile = `${ROOT}/Targets/Web/src/App.tsx`;
+    const expected = process.platform === 'linux' ? null : WEB;
+    expect(pickRunnableTargetForFile([WEB, ADMIN], openFile)).toBe(expected);
+  });
+});
+
+// ─── isResolvableEditorScheme (HYP-1104) ─────────────────────────────────────
+//
+// A local `file` editor and a Remote-SSH/Dev Containers/Codespaces `vscode-remote` editor
+// both point at a real, locally-runnable project file, so both must be able to feed the
+// open-file containment match. `vscode-vfs` (Remote Repositories virtual filesystem) has no
+// local checkout to run a dev server against, so it must be excluded.
+
+describe('isResolvableEditorScheme', () => {
+  it('accepts the plain local file scheme', () => {
+    expect(isResolvableEditorScheme('file')).toBe(true);
+  });
+
+  it('accepts vscode-remote (Remote-SSH / Dev Containers / Codespaces)', () => {
+    expect(isResolvableEditorScheme('vscode-remote')).toBe(true);
+  });
+
+  it('rejects vscode-vfs (Remote Repositories virtual filesystem)', () => {
+    expect(isResolvableEditorScheme('vscode-vfs')).toBe(false);
+  });
+
+  it('rejects an untitled/git-diff/output-channel style scheme', () => {
+    expect(isResolvableEditorScheme('untitled')).toBe(false);
+    expect(isResolvableEditorScheme('git')).toBe(false);
+    expect(isResolvableEditorScheme('output')).toBe(false);
+  });
+});
+
+// ─── pickRunnableTargetForVisibleEditors (HYP-1104) ──────────────────────────
+//
+// Fallback used when neither StateHub's current component nor the active editor resolves a
+// target: check whether every VISIBLE editor agrees on the same one. Agreement across
+// multiple open tabs (e.g. two split-view files both inside targets/web) is still a
+// non-guessing signal; a real split across distinct targets must return null so the caller
+// falls back to the blocking QuickPick instead of picking array order.
+
+describe('pickRunnableTargetForVisibleEditors', () => {
+  const WEB = `${ROOT}/targets/web`;
+  const ADMIN = `${ROOT}/targets/admin`;
+
+  it('resolves when a single visible editor matches one target', () => {
+    const visible = [`${ROOT}/targets/web/src/App.tsx`];
+    expect(pickRunnableTargetForVisibleEditors([WEB, ADMIN], visible)).toBe(WEB);
+  });
+
+  it('resolves when multiple visible editors all agree on the same target', () => {
+    const visible = [`${ROOT}/targets/web/src/App.tsx`, `${ROOT}/targets/web/src/HomeScreen.tsx`];
+    expect(pickRunnableTargetForVisibleEditors([WEB, ADMIN], visible)).toBe(WEB);
+  });
+
+  it('returns null when there are zero visible-editor matches', () => {
+    const visible = [`${ROOT}/README.md`];
+    expect(pickRunnableTargetForVisibleEditors([WEB, ADMIN], visible)).toBeNull();
+  });
+
+  it('returns null when no editors are visible at all', () => {
+    expect(pickRunnableTargetForVisibleEditors([WEB, ADMIN], [])).toBeNull();
+  });
+
+  it('returns null when visible editors implicate two distinct targets (real ambiguity)', () => {
+    const visible = [`${ROOT}/targets/web/src/App.tsx`, `${ROOT}/targets/admin/src/Dashboard.tsx`];
+    expect(pickRunnableTargetForVisibleEditors([WEB, ADMIN], visible)).toBeNull();
+  });
+
+  // Review finding (codex, HYP-1104): a visible editor outside every target (README.md, a
+  // config file, docs) casts no vote either way — it is NOT evidence of ambiguity, since
+  // plenty of legitimately-open tabs never live inside any monorepo target. Mixing one such
+  // non-matching tab with one clearly-matching tab must still resolve to the matching target,
+  // not fall through to null as if the non-matching tab disagreed.
+  it('ignores a visible editor outside every target when exactly one other editor matches', () => {
+    const visible = [`${ROOT}/README.md`, `${ROOT}/targets/web/src/App.tsx`];
+    expect(pickRunnableTargetForVisibleEditors([WEB, ADMIN], visible)).toBe(WEB);
   });
 });
 
