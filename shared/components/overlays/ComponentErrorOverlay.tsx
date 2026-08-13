@@ -17,7 +17,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TID } from '../../data-testid-map';
 import { extractPropsFromError } from './extract-props-from-error';
-import { PropsForm, type SimplePropInfo } from './PropsForm';
+import { computeInitialPropValues, PropsForm, type SimplePropInfo } from './PropsForm';
 
 interface ComponentErrorOverlayProps {
   componentPath: string;
@@ -97,7 +97,19 @@ export function ComponentErrorOverlay({
   const [sampleCreated, setSampleCreated] = useState(false);
   const [formKey, setFormKey] = useState(0);
   const [sampleName, setSampleName] = useState('SampleDefault');
-  const [hasAnyProps, setHasAnyProps] = useState(false);
+  // Seed from the exact values PropsForm will mount with (cached values, or the
+  // auto-generated values for required props) so a pre-filled form starts with the
+  // correct 'Create Sample' label instead of flashing 'Create Empty Sample' until
+  // PropsForm's first onChange lands. Kept in sync below via handlePropsChange.
+  const [hasAnyProps, setHasAnyProps] = useState(() =>
+    Object.values(
+      computeInitialPropValues({
+        propsSchema: propsSchema ?? null,
+        extractedPropNames: extractedProps,
+        initialValues: cachedValues,
+      }),
+    ).some(isFilled),
+  );
 
   // Listen for sample deletion from file watcher.
   // This message arrives from the VS Code extension host over the webview channel,
@@ -340,6 +352,8 @@ const sampleNameInputStyle: CSSProperties = {
   borderRadius: 4,
   outline: 'none',
   fontFamily: 'var(--overlay-font-mono)',
+  boxSizing: 'border-box',
+  minWidth: 0,
 };
 
 const hintStyle: CSSProperties = {

@@ -68,6 +68,9 @@ body.vscode-light {
   --overlay-input-bg: var(--vscode-input-background);
   --overlay-input-fg: var(--vscode-input-foreground);
   --overlay-input-border: var(--vscode-input-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.2)));
+  /* Elevated card surface for grouped inputs (inner Props card) — distinct from
+     the input background, mirrors --card (editorWidget background). */
+  --overlay-surface: var(--vscode-editorWidget-background, var(--vscode-dropdown-background));
   --overlay-warning: var(--vscode-editorWarning-foreground, #f59e0b);
   --overlay-font: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
   --overlay-font-mono: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, monospace);

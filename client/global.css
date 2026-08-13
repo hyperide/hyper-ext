@@ -76,9 +76,14 @@
     --overlay-accent-fg: hsl(var(--primary-foreground));
     --overlay-destructive: hsl(var(--destructive));
     --overlay-link: hsl(var(--primary));
-    --overlay-input-bg: hsl(var(--input));
+    /* Inputs recess to the page background (matches client/components/ui/input.tsx
+       `bg-background`); the surrounding props card uses `--overlay-surface` so the two
+       elevations never collapse — critical in dark mode where `--input` == `--muted`. */
+    --overlay-input-bg: hsl(var(--background));
     --overlay-input-fg: hsl(var(--foreground));
     --overlay-input-border: hsl(var(--border));
+    /* Elevated card surface for grouped inputs (inner Props card) */
+    --overlay-surface: hsl(var(--muted));
     --overlay-warning: #f59e0b;
     --overlay-font: system-ui, -apple-system, sans-serif;
     --overlay-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;

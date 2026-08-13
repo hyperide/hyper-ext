@@ -42,6 +42,47 @@ import {
 export type { SimplePropInfo } from './prop-type-utils';
 export { canGenerateSomeValue, getGenerateAllAvailability } from './prop-generators';
 
+/**
+ * Build the de-duplicated field list the way PropsForm renders it: from the
+ * schema when present, otherwise from the extracted prop names (all required).
+ * Internal — the shared entry points are PropsForm itself and
+ * `computeInitialPropValues` (which predicts the form's initial state).
+ */
+function buildPropFields(
+  propsSchema: SimplePropInfo[] | null,
+  extractedPropNames: string[],
+): Array<{ name: string; typeInfo: PropTypeInfo }> {
+  const rawFields: Array<{ name: string; typeInfo: PropTypeInfo }> = propsSchema
+    ? propsSchema.map((p) => ({ name: p.name, typeInfo: toPropTypeInfo(p) }))
+    : extractedPropNames.map((name) => ({ name, typeInfo: { type: 'unknown' as const, required: true } }));
+  const seen = new Set<string>();
+  return rawFields.filter((f) => {
+    if (seen.has(f.name)) return false;
+    seen.add(f.name);
+    return true;
+  });
+}
+
+/**
+ * Compute the values PropsForm starts with — the SINGLE source of truth shared by
+ * the form's `useState` initializer and any consumer that needs to know whether the
+ * form will mount pre-filled (e.g. the overlay's Create Sample / Create Empty label).
+ */
+export function computeInitialPropValues(input: {
+  propsSchema: SimplePropInfo[] | null;
+  extractedPropNames: string[];
+  initialValues?: Record<string, unknown>;
+}): Record<string, unknown> {
+  const { propsSchema, extractedPropNames, initialValues } = input;
+  if (initialValues && Object.keys(initialValues).length > 0) return initialValues;
+  const fields = buildPropFields(propsSchema, extractedPropNames);
+  const hasRequired = fields.some((f) => f.typeInfo.required);
+  if (hasRequired && fields.length > 0) {
+    return generateObjectValues(fields);
+  }
+  return {};
+}
+
 interface PropsFormProps {
   propsSchema: SimplePropInfo[] | null;
   extractedPropNames: string[];
@@ -59,24 +100,11 @@ export function PropsForm({
   resetKey,
   initialValues,
 }: PropsFormProps) {
-  const rawFields: Array<{ name: string; typeInfo: PropTypeInfo }> = propsSchema
-    ? propsSchema.map((p) => ({ name: p.name, typeInfo: toPropTypeInfo(p) }))
-    : extractedPropNames.map((name) => ({ name, typeInfo: { type: 'unknown' as const, required: true } }));
-  const seen = new Set<string>();
-  const fields = rawFields.filter((f) => {
-    if (seen.has(f.name)) return false;
-    seen.add(f.name);
-    return true;
-  });
+  const fields = buildPropFields(propsSchema, extractedPropNames);
 
-  const [values, setValues] = useState<Record<string, unknown>>(() => {
-    if (initialValues && Object.keys(initialValues).length > 0) return initialValues;
-    const hasRequired = fields.some((f) => f.typeInfo.required);
-    if (hasRequired && fields.length > 0) {
-      return generateObjectValues(fields);
-    }
-    return {};
-  });
+  const [values, setValues] = useState<Record<string, unknown>>(() =>
+    computeInitialPropValues({ propsSchema, extractedPropNames, initialValues }),
+  );
   const [focusPath, setFocusPath] = useState<string | null>(null);
 
   const initialNotifiedRef = useRef(false);

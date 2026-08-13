@@ -8,7 +8,10 @@
 import type { CSSProperties } from 'react';
 
 export const formContainerStyle: CSSProperties = {
-  background: 'var(--overlay-input-bg)',
+  // Elevated surface for the inner Props card. MUST differ from `--overlay-input-bg`
+  // so the inputs sitting on it read as inputs (in dark mode `--input` and the page
+  // background otherwise collapse to one flat block). See theme.ts `--overlay-surface`.
+  background: 'var(--overlay-surface)',
   borderRadius: 8,
   padding: 16,
   marginBottom: 16,
@@ -16,6 +19,9 @@ export const formContainerStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 10,
+  // Keep the card's own box model from being widened by padding/border.
+  boxSizing: 'border-box',
+  minWidth: 0,
 };
 
 export const formLabelStyle: CSSProperties = {
@@ -110,6 +116,9 @@ export const inputStyle: CSSProperties = {
   borderRadius: 4,
   outline: 'none',
   fontFamily: 'var(--overlay-font-mono)',
+  // border-box so `width: 100%` is padding+border aware and the input (plus its
+  // inline gen/rand button) never spills past the inner Props card's right edge.
+  boxSizing: 'border-box',
 };
 
 export const selectStyle: CSSProperties = {
@@ -122,6 +131,7 @@ export const selectStyle: CSSProperties = {
   borderRadius: 4,
   outline: 'none',
   fontFamily: 'var(--overlay-font-mono)',
+  boxSizing: 'border-box',
 };
 
 export const checkboxLabelStyle: CSSProperties = {
@@ -192,6 +202,8 @@ export const popoverTriggerStyle: CSSProperties = {
   color: 'var(--overlay-fg)',
   fontSize: 12,
   fontFamily: 'var(--overlay-font-mono)',
+  boxSizing: 'border-box',
+  minWidth: 0,
   flex: 1,
 };
 
@@ -276,6 +288,7 @@ export const jsonTextareaStyle: CSSProperties = {
   fontFamily: 'var(--overlay-font-mono)',
   resize: 'vertical' as const,
   minHeight: 60,
+  boxSizing: 'border-box',
 };
 
 export const jsonErrorStyle: CSSProperties = {

@@ -19,6 +19,7 @@ const REQUIRED_VARS: readonly OverlayCSSVarName[] = [
   '--overlay-input-bg',
   '--overlay-input-fg',
   '--overlay-input-border',
+  '--overlay-surface',
   '--overlay-warning',
   '--overlay-font',
   '--overlay-font-mono',

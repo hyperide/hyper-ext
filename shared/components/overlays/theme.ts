@@ -31,6 +31,10 @@ export type OverlayCSSVarName =
   | '--overlay-input-bg'
   | '--overlay-input-fg'
   | '--overlay-input-border'
+  // Elevated card/surface behind grouped inputs (the inner Props card). MUST be a
+  // different elevation from `--overlay-input-bg` so inputs sitting on it read as
+  // inputs; in SaaS dark `--input` and the page bg otherwise collapse to one block.
+  | '--overlay-surface'
   | '--overlay-warning'
   | '--overlay-font'
   | '--overlay-font-mono'
