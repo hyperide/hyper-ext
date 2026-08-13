@@ -62,6 +62,32 @@ describe('hasSuccessInLogs', () => {
     expect(hasSuccessInLogs('Local:   http://localhost:5173/')).toBe(true);
   });
 
+  it('detects Vite HMR rebuild markers', () => {
+    expect(hasSuccessInLogs('12:00:00 [vite] hmr update /src/App.tsx')).toBe(true);
+    expect(hasSuccessInLogs('12:00:00 [vite] page reload src/main.tsx')).toBe(true);
+  });
+
+  it('detects Next.js post-HMR markers', () => {
+    expect(hasSuccessInLogs('✓ Compiled in 312ms (1234 modules)')).toBe(true);
+    expect(hasSuccessInLogs('compiled client and server successfully')).toBe(true);
+  });
+
+  it('detects esbuild rebuilt marker', () => {
+    expect(hasSuccessInLogs('[watch] build finished, rebuilt in 45ms')).toBe(true);
+  });
+
+  it('returns false for "compiled with errors" (must be classified as error, not success)', () => {
+    expect(hasSuccessInLogs('Failed to compile.\ncompiled with 1 error')).toBe(false);
+  });
+
+  it('classifies a webpack "compiled with N error(s)" summary as an error', () => {
+    // Regression: /webpack.*compiled/ matches this as success; the error must win.
+    expect(hasErrorsInLogs('webpack compiled with 1 error')).toBe(true);
+    expect(hasErrorsInLogs('webpack compiled with 3 errors')).toBe(true);
+    // A warnings-only summary is NOT an error.
+    expect(hasErrorsInLogs('webpack compiled with 2 warnings')).toBe(false);
+  });
+
   it('returns false for error-only logs', () => {
     expect(hasSuccessInLogs('error TS2345: something broke')).toBe(false);
   });

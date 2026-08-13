@@ -863,7 +863,12 @@ export const GET_DIAGNOSTICS: ToolDefinition = {
           '"server" = current dev server logs, "server_previous" = logs before last restart (K8s), ' +
           '"console" = browser console output from preview iframe, ' +
           '"runtime_error" = current framework error overlay state, ' +
-          '"build_status" = wait for build to settle and report status, ' +
+          '"build_status" = WAIT (up to ~40s) for the next dev-server build to settle, then report ' +
+          'the outcome (succeeded / failed / idle / timed-out) with the relevant log excerpt plus the ' +
+          'container status. Returns as soon as a success or error signal appears in NEW log output after ' +
+          'the call (stale pre-call signals are ignored); returns quickly as "idle" if the dev server is ' +
+          'silent (no build in progress); times out gracefully if a build is emitting output but never ' +
+          'settles. Use after an edit to confirm the build recovered. ' +
           '"events" = K8s events (SaaS only).',
       },
       lines: {
