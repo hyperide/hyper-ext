@@ -104,6 +104,38 @@ export function createSequencedReroot(deps: {
   };
 }
 
+/**
+ * Resolve the component identifier consumed at the StateHub bus boundary
+ * (extension.ts handleComponentSelected) before it is fed to the sample
+ * scaffold / JSX tag.
+ *
+ * The `currentComponent` patch carries both a `name` and a `path`. In-extension
+ * producers (PreviewPanel._setCurrentComponent, onOpenComponent) strip the file
+ * extension from `name`, so the common path is already clean. But the bus is
+ * open: an EXTERNAL sender (SaaS bridge, MCP, RightPanelProvider's
+ * `component:open`, a future client, or a hand-built state patch) can put a raw
+ * filename like `Foo.tsx` or `components/Foo.tsx` into `name`. Trusting it
+ * verbatim leaks `.tsx` / path segments into the generated JSX tag (HYP-460).
+ *
+ * `path` is the file-path source of truth, so when `name` looks like a filename
+ * — it carries a source-file extension or a path separator — re-derive the
+ * identifier from the path basename (extension stripped) instead of trusting
+ * `name`. A clean name (e.g. `Button`) or a dotted member expression with no
+ * file extension (e.g. `Accordion.Item`) is kept verbatim. When `path` is empty
+ * we have nothing better, so fall back to `name`.
+ *
+ * normalizeSampleComponentName stays as defense-in-depth downstream; this
+ * boundary check just stops the smell at the source of truth.
+ */
+const SOURCE_FILE_EXTENSION = /\.(?:tsx?|jsx?|mjs|cjs)$/i;
+
+export function resolveComponentIdentifier(name: string, path: string): string {
+  const looksLikeFilename = SOURCE_FILE_EXTENSION.test(name) || /[\\/]/.test(name);
+  if (!looksLikeFilename || !path) return name;
+  const basename = path.split(/[\\/]/).pop() ?? path;
+  return basename.replace(SOURCE_FILE_EXTENSION, '');
+}
+
 export type SelfHealComponentParams = { componentPath: string; previewComponentPath: string };
 
 /**

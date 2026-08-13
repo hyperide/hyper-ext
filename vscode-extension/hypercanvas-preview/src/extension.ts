@@ -38,6 +38,7 @@ import { goToCode } from './EditorBridge';
 import {
   createSequencedReroot,
   isForeignExtensionError,
+  resolveComponentIdentifier,
   resolveSelfHealComponentParams,
   serializeRejectionReason,
 } from './extension-utils';
@@ -1095,7 +1096,13 @@ export function activate(context: vscode.ExtensionContext) {
     currentWorkspaceRoot: string,
   ): void {
     const componentPath = patch.currentComponent?.path ?? absSelectedComponent;
-    const componentName = patch.currentComponent?.name ?? '';
+    // Boundary validation (HYP-459): the StateHub bus is open — an external
+    // sender (SaaS bridge, MCP, RightPanelProvider component:open, a future
+    // client, a raw state patch) may carry a raw filename like `Foo.tsx` in
+    // `name`. Re-derive the identifier from the file-path source of truth when
+    // `name` looks like a filename, rather than trusting it verbatim.
+    // normalizeSampleComponentName stays as defense-in-depth.
+    const componentName = resolveComponentIdentifier(patch.currentComponent?.name ?? '', componentPath);
     const sampleComponentName = normalizeSampleComponentName(componentName);
 
     // Auto-open Preview Panel if not already visible.
