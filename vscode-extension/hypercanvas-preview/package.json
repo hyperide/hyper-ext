@@ -147,7 +147,7 @@
           "type": "webview",
           "id": "hypercanvas.aiChatView",
           "name": "AI Chat",
-          "visibility": "visible"
+          "visibility": "collapsed"
         }
       ],
       "hypercanvas-preview-container": [
@@ -163,6 +163,10 @@
       {
         "command": "hypercanvas.openPreview",
         "title": "Hyper: Open Preview"
+      },
+      {
+        "command": "hypercanvas.toggleCodeCanvasLayout",
+        "title": "Hyper: Toggle Code/Canvas Layout"
       },
       {
         "command": "hypercanvas.refreshPreview",

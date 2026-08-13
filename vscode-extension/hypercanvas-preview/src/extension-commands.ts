@@ -62,8 +62,50 @@ export interface CommandContext {
   getWorkspaceRoot: () => string | null;
 }
 
+/**
+ * Reveal the Hyper Canvas companion side panels on canvas activation (HYP-804 /
+ * tg#5070): the Hyper Explorer (activity-bar container) and the Inspector
+ * (secondary side bar), so the canvas opens with its full editing surface.
+ *
+ * Intentionally does NOT touch the AI Chat view — chat is hidden by default
+ * (package.json `aiChatView` visibility `"collapsed"`) and is opened on demand via
+ * `hypercanvas.openAIChat`. `.focus` is VS Code's only reveal mechanism for a
+ * WebviewView, so revealing the Inspector also moves keyboard focus there — the same
+ * behavior the standalone `hypercanvas.openExplorer` / `hypercanvas.openInspector`
+ * commands already have. Fire-and-forget: a reveal failure must not break Open Preview.
+ */
+function revealCanvasSidePanels(ctx: CommandContext): void {
+  void vscode.commands.executeCommand('hypercanvas.explorerView.focus');
+  void ctx.rightPanelProvider?.focusAndEnsureReady();
+}
+
+/**
+ * Arrange the editor area for the live-edit demo (HYP-804 / tg#5073): the Hyper
+ * Canvas preview sits in the SECOND editor group, oriented either below the code
+ * (`canvasOnBottom` → vertical rows: code on top, canvas on bottom) or beside it
+ * (horizontal columns: code left, canvas right).
+ *
+ * Implemented with `vscode.setEditorLayout` (group GEOMETRY only) rather than pinning
+ * the panel to a fixed group, so a user can still drag the canvas tab freely between
+ * groups — the layout is an authoring affordance, not a lock. `createOrShow(Two)`
+ * first guarantees the canvas lives in group 2 (splitting a single-group layout if
+ * needed); `setEditorLayout` then only re-orients the two groups.
+ */
+async function applyCodeCanvasLayout(ctx: CommandContext, canvasOnBottom: boolean): Promise<void> {
+  ctx.previewPanel?.createOrShow(vscode.ViewColumn.Two);
+  // orientation 1 = vertical (rows, top→bottom); 0 = horizontal (columns, left→right).
+  await vscode.commands.executeCommand('vscode.setEditorLayout', {
+    orientation: canvasOnBottom ? 1 : 0,
+    groups: [{}, {}],
+  });
+}
+
 export function registerCommands(context: vscode.ExtensionContext, workspaceRoot: string, ctx: CommandContext): void {
   const getCurrentRoot = () => ctx.getWorkspaceRoot() ?? workspaceRoot;
+  // Per-activation toggle state for hypercanvas.toggleCodeCanvasLayout. A simple flip
+  // flag; a manual drag can desync it by one press, which is acceptable for a demo/
+  // authoring affordance (the next press re-applies a deterministic layout regardless).
+  let canvasOnBottom = false;
   // Open preview
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openPreview', () => {
@@ -80,6 +122,20 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
       if (state?.status === 'running' && state.url) {
         ctx.previewPanel?.setPreviewUrl(state.url);
       }
+      // Activating Hyper Canvas brings up its companion editing panels (HYP-804 /
+      // tg#5070): the Explorer + Inspector are revealed; the AI Chat stays hidden by
+      // default (see revealCanvasSidePanels / package.json aiChatView visibility).
+      revealCanvasSidePanels(ctx);
+    }),
+  );
+
+  // Toggle the Code/Canvas editor layout (HYP-804 / tg#5073): flip between
+  // code-left/canvas-right and code-top/canvas-bottom (vertically stacked groups) so a
+  // demo can show the code change live ABOVE the canvas as a style edit lands.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.toggleCodeCanvasLayout', async () => {
+      canvasOnBottom = !canvasOnBottom;
+      await applyCodeCanvasLayout(ctx, canvasOnBottom);
     }),
   );
 
