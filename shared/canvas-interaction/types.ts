@@ -65,6 +65,14 @@ export interface LocalResolveResult {
  */
 export interface TracingResolver {
   getSourceLocation(element: HTMLElement): SourceLocation | null;
+  /**
+   * Provenance-safe variant of getSourceLocation: resolves ONLY via a real source
+   * map hit or a React 18 `_debugSource`, never a raw React 19 `_debugStack` line
+   * (a Vite-transformed-module position useless for AST lookup). Returns null when
+   * only the raw fallback is available (e.g. cold source map). Optional — callers
+   * that need cold-safe resolution (the decorative drag path) use it; others may omit.
+   */
+  getMappedSourceLocation?(element: HTMLElement): SourceLocation | null;
   getItemIndex(element: HTMLElement): number;
   resolveClickLocal(element: HTMLElement): LocalResolveResult | null;
   findDOMElement(source: SourceLocation, itemIndex: number): HTMLElement | null;

@@ -260,6 +260,158 @@ describe('resolveDragSource', () => {
   });
 
   /**
+   * ROOT-CAUSE REGRESSION (HYP-49 / DR-NN-1 / DR-16): React 19 + Vite dev.
+   *
+   * A decorative span's parent host div carries NO `_debugSource` (React 19);
+   * its source lives in `_debugStack`, whose top user frame points into the
+   * VITE-TRANSFORMED module — a line number far past the real file's EOF
+   * (observed live: `TestElements.tsx:443:31` for a ~300-line file). The raw
+   * fiber read (`findNearestSourceLocation`) returns that un-sourcemapped
+   * position, so AstService.moveElement can't find a node there → "source not
+   * found" → ZERO file write → the drag silently fails.
+   *
+   * The fix routes decorative resolution through the SOURCE-MAP-AWARE
+   * `getSourceLocation(parent)` FIRST (Step 2a), which translates the transformed
+   * position back to the real source line — exactly the path that already makes
+   * non-decorative drags work.
+   *
+   * This test exercises the REAL `findNearestSourceLocation` (not a mock) on a
+   * fiber whose `_debugStack` resolves to a wrong/transformed line, while the
+   * sourcemap-aware resolver returns the correct line. Pre-fix: result is the
+   * raw transformed line (443). Post-fix: result is the real source line (179).
+   */
+  /**
+   * Models the real React 19 + Vite extension resolver, where:
+   *  - getSourceLocation returns the RAW transformed-module line (443) when the
+   *    client source map is COLD (its `findNearestSourceLocation` fallback), and
+   *    the real source line (179) only once the map is WARM.
+   *  - getMappedSourceLocation (the provenance-safe resolver) returns the real line
+   *    ONLY on a map hit, and null while cold — never the raw 443.
+   */
+  const REAL_SOURCE: SourceLocation = { fileName: 'src/components/TestElements.tsx', line: 179, column: 8 };
+  const RAW_TRANSFORMED: SourceLocation = { fileName: 'src/components/TestElements.tsx', line: 443, column: 31 };
+
+  function makeDecorativeSpanInDiv() {
+    const parent = makeEl({ tagName: 'DIV' });
+    (parent as unknown as Record<string, unknown>).parentElement = {
+      tagName: 'BODY',
+      parentElement: null,
+    };
+    const emojiSpan = makeEl({ tagName: 'SPAN' }, { 'aria-hidden': 'true' });
+    (emojiSpan as unknown as Record<string, unknown>).parentElement = parent;
+    return { parent, emojiSpan };
+  }
+
+  it('decorative element resolves via the provenance-safe mapped source (warm map) (HYP-49)', () => {
+    const { parent, emojiSpan } = makeDecorativeSpanInDiv();
+
+    // WARM: getSourceLocation already returns the real line; the mapped resolver does too.
+    const getSourceLocation = mock((el: HTMLElement): SourceLocation | null => (el === parent ? REAL_SOURCE : null));
+    const getMappedSourceLocation = mock((el: HTMLElement): SourceLocation | null =>
+      el === parent ? REAL_SOURCE : null,
+    );
+
+    const result = resolveDragSource(
+      emojiSpan,
+      getSourceLocation,
+      'src/components/TestElements.tsx',
+      getMappedSourceLocation,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.el).toBe(parent);
+    expect(result?.source.line).toBe(179);
+    // The provenance-safe resolver is the one consulted for the decorative parent.
+    expect(getMappedSourceLocation).toHaveBeenCalledWith(parent);
+  });
+
+  /**
+   * COLD-CACHE REGRESSION (review finding): when the client source map is cold,
+   * getSourceLocation falls back to the RAW transformed line (443) — useless for AST
+   * lookup. The decorative path must NOT commit it. getMappedSourceLocation returns
+   * null (no map hit, no React-18 _debugSource), so the resolver must FAIL SAFE
+   * (return null = no garbage write), never resolve to 443.
+   */
+  it('decorative element fails safe (null) on a cold source map instead of committing the raw transformed line', () => {
+    const { parent, emojiSpan } = makeDecorativeSpanInDiv();
+
+    // Attach a React-19 fiber to the parent whose ONLY source is a _debugStack with the
+    // raw Vite-transformed line (443). This is what `findNearestSourceLocation` (the raw
+    // Step 2b path) would return if it ran — exactly the garbage the guard must prevent.
+    const transformedStack = new Error();
+    transformedStack.stack = [
+      'Error',
+      '    at node_modules/.vite/deps/react_jsx-dev-runtime.js?v=abc:192:83',
+      '    at http://localhost:5173/src/components/TestElements.tsx:444:32', // 1-based → 443 line via parseDebugStack col, real raw frame
+      '    at node_modules/.vite/deps/react-dom_client.js?v=abc:12867:12',
+    ].join('\n');
+    const parentFiber = makeFiber({ tag: 5, type: 'div', _debugSource: null, _debugStack: transformedStack });
+    (parent as unknown as Record<string, unknown>).__reactFiber$xyz = parentFiber;
+
+    // COLD: getSourceLocation returns the RAW transformed line (the bug source);
+    // the provenance-safe resolver returns null (no map hit, React 19 _debugStack only).
+    const getSourceLocation = mock((el: HTMLElement): SourceLocation | null =>
+      el === parent ? RAW_TRANSFORMED : null,
+    );
+    const getMappedSourceLocation = mock((_el: HTMLElement): SourceLocation | null => null);
+
+    const result = resolveDragSource(
+      emojiSpan,
+      getSourceLocation,
+      'src/components/TestElements.tsx',
+      getMappedSourceLocation,
+    );
+
+    // Fail safe — must NOT return the raw transformed line. Without the skip-raw guard,
+    // Step 2b's findNearestSourceLocation would resolve the parent fiber's _debugStack to
+    // line 444 (the transformed frame) and `result` would be non-null with that garbage.
+    expect(result).toBeNull();
+    // And it must have consulted the provenance-safe resolver for the decorative parent.
+    expect(getMappedSourceLocation).toHaveBeenCalledWith(parent);
+  });
+
+  /**
+   * React 18 projects: getMappedSourceLocation returns the real `_debugSource` line
+   * even with cold/absent source maps, so decorative drags keep working there.
+   */
+  it('decorative element resolves via mapped resolver for React 18 _debugSource (cold map)', () => {
+    const { parent, emojiSpan } = makeDecorativeSpanInDiv();
+
+    const getSourceLocation = mock((_el: HTMLElement): SourceLocation | null => null);
+    // React 18: mapped resolver returns the real _debugSource-derived line.
+    const getMappedSourceLocation = mock((el: HTMLElement): SourceLocation | null =>
+      el === parent ? REAL_SOURCE : null,
+    );
+
+    const result = resolveDragSource(
+      emojiSpan,
+      getSourceLocation,
+      'src/components/TestElements.tsx',
+      getMappedSourceLocation,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.el).toBe(parent);
+    expect(result?.source.line).toBe(179);
+  });
+
+  /**
+   * Backward compatibility: a caller that does NOT supply getMappedSourceLocation
+   * keeps the legacy behavior (decorative resolves via getSourceLocation + raw fiber).
+   */
+  it('decorative element falls back to legacy getSourceLocation when no mapped resolver is given', () => {
+    const { parent, emojiSpan } = makeDecorativeSpanInDiv();
+    const getSourceLocation = mock((el: HTMLElement): SourceLocation | null => (el === parent ? REAL_SOURCE : null));
+
+    // No 4th arg → legacy path.
+    const result = resolveDragSource(emojiSpan, getSourceLocation, 'src/components/TestElements.tsx');
+
+    expect(result).not.toBeNull();
+    expect(result?.el).toBe(parent);
+    expect(result?.source.line).toBe(179);
+  });
+
+  /**
    * Decorative element with null parentElement: Step 2 must be skipped entirely.
    * Without the fix, the code would pass the decorative element itself to
    * getFiberFromDOM, violating the invariant that decorative elements are never

@@ -99,26 +99,47 @@ export function resolveOwnServerSourceMap(fiber: Fiber): SourceLocation | null {
 export function resolveViaClientSourceMap(fiber: Fiber): SourceLocation | null {
   let current: Fiber | null = fiber;
   while (current !== null) {
-    if (current._debugStack) {
-      for (const frame of extractClientChunkFrames(current._debugStack)) {
-        const key = `${frame.url}:${frame.line}:${frame.col}`;
-        if (clientInternalFrames.has(key)) continue; // React-internal frame — skip to next
-        const cached = clientSourceMapCache.get(key);
-        if (cached) {
-          // The synthetic preview entry (__canvas_preview__.tsx) renders every user
-          // component; Vite source maps can collapse a compiled position back to it.
-          // It is never a valid go-to-code target — skip it so the caller falls back
-          // to the element's own fiber source (the real component file). (HYP-429)
-          if (isSyntheticPreviewPath(cached.fileName)) continue;
-          return cached; // resolved to user source file
-        }
-        if (cached === null) return null; // warmed but unresolvable — don't walk ancestors
-        // undefined: warm-up still in flight, try next frame
-      }
-    }
+    const own = resolveOwnClientSourceMap(current);
+    if (own.resolved !== undefined) return own.resolved; // hit (location) or warmed-unresolvable (null)
+    // own.resolved === undefined: this fiber's frame warm-up is still in flight → walk to ancestor.
     current = (current.return as Fiber | null | undefined) ?? null;
   }
   return null;
+}
+
+/**
+ * Resolve the client source map for a SINGLE fiber's own `_debugStack` frames —
+ * NEVER walks the `.return` chain. Distinguishes three states:
+ *   - `{ resolved: SourceLocation }` — a frame mapped to a real user source file.
+ *   - `{ resolved: null }` — a frame is warmed but unresolvable (a definitive miss).
+ *   - `{ resolved: undefined }` — no frame is cached yet (warm-up still in flight).
+ *
+ * `resolveViaClientSourceMap` walks ancestors only on the `undefined` state. Callers
+ * that must NOT attribute an element to an ancestor's source (the provenance-safe
+ * decorative drag path, HYP-49) use this own-fiber lookup directly and treat both
+ * `null` and `undefined` as "no own source" → fail safe + warm, never an ancestor line.
+ */
+export function resolveOwnClientSourceMap(fiber: Fiber): { resolved: SourceLocation | null | undefined } {
+  if (!fiber._debugStack) return { resolved: undefined };
+  for (const frame of extractClientChunkFrames(fiber._debugStack)) {
+    const key = `${frame.url}:${frame.line}:${frame.col}`;
+    if (clientInternalFrames.has(key)) continue; // React-internal frame — skip to next
+    const cached = clientSourceMapCache.get(key);
+    if (cached) {
+      // The synthetic preview entry (__canvas_preview__.tsx) renders every user
+      // component; Vite source maps can collapse a compiled position back to it.
+      // It is never a valid go-to-code target — skip it so the caller falls back
+      // to the element's own fiber source (the real component file). (HYP-429)
+      if (isSyntheticPreviewPath(cached.fileName)) continue;
+      return { resolved: cached }; // resolved to user source file
+    }
+    // Warmed but unresolvable: a definitive miss for this fiber. Mirrors the original
+    // `resolveViaClientSourceMap` which returned null here (and stopped walking ancestors).
+    if (cached === null) return { resolved: null };
+    // undefined: this frame's warm-up is still in flight; keep checking later frames.
+  }
+  // No frame produced a hit and none was a definitive miss → warm-up still in flight.
+  return { resolved: undefined };
 }
 
 /** Check if a fiber has server chunk frames that are not yet resolved.

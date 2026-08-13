@@ -1,6 +1,12 @@
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
 import type { LocalResolveResult, TracingResolver } from '@shared/canvas-interaction/types';
-import { type Fiber, getFiberFromDOM, stripNodePodPrefix } from '@shared/element-tracing/fiber-internals';
+import {
+  debugSourceToLocation,
+  type Fiber,
+  findNearestDebugSource,
+  getFiberFromDOM,
+  stripNodePodPrefix,
+} from '@shared/element-tracing/fiber-internals';
 import { FiberSourceIndex, getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-index';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import {
@@ -8,6 +14,7 @@ import {
   clientSourceMapCache,
   extractClientChunkFrames,
   hasUnresolvedServerFrames,
+  resolveOwnClientSourceMap,
   resolveOwnServerSourceMap,
   resolveViaClientSourceMap,
   resolveViaServerSourceMap,
@@ -36,6 +43,38 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
         return resolveCallSiteSource(loc, fiber, ctx.renderedComponentPath);
       }
       return loc;
+    },
+
+    // Provenance-safe source resolution: returns a location ONLY when it comes
+    // from a real source map hit (React 18 or 19) OR a React 18 `_debugSource`
+    // (already a real source position). It deliberately NEVER falls back to a raw
+    // React 19 `_debugStack` line, which under Vite dev is a *transformed-module*
+    // position (past the on-disk EOF) and is useless for AST lookup. Used by the
+    // decorative drag path, which must not commit a raw cold-cache line: when the
+    // client source map is still cold, this returns null so the resolver fails safe
+    // (no garbage write) instead of resolving to the transformed line. (HYP-49)
+    getMappedSourceLocation(element: HTMLElement): SourceLocation | null {
+      const fiber = getFiberFromDOM(element);
+      if (fiber === null) return null;
+      // OWN-fiber-only lookups (no `.return` walk). resolveViaClientSourceMap walks
+      // ancestors when this fiber's own frame is cold, which for a decorative parent
+      // would return an UNRELATED ancestor's source — the exact wrong-element rewrite
+      // this path exists to avoid. So we resolve only the element's own frames and fail
+      // safe (warm + null) when its own source map is cold. (HYP-49)
+      const smLoc = resolveOwnServerSourceMap(fiber) ?? resolveOwnClientSourceMap(fiber).resolved ?? null;
+      if (smLoc) return resolveCallSiteSource(smLoc, fiber, ctx.renderedComponentPath);
+      // React 18: `_debugSource` (and memo/forwardRef wrapper types) is a real
+      // source position; `findNearestDebugSource` reads only those, never `_debugStack`.
+      const ds = findNearestDebugSource(fiber);
+      if (ds) return resolveCallSiteSource(debugSourceToLocation(ds), fiber, ctx.renderedComponentPath);
+      // No mapped source AND no React 18 `_debugSource` → React 19 with a cold source
+      // map. Returning null makes the decorative drag fail safe, but if the map was never
+      // warmed (initial prewarm missed/in-flight) the drag would be a silent no-op with
+      // nothing fetching the map. Kick off warming (idempotent; same hooks the click path
+      // and React-commit prewarm use) so a subsequent drag resolves once the map lands.
+      ctx.warmServerChunkFrames(fiber);
+      ctx.warmFiberChunkFrames(fiber);
+      return null;
     },
 
     getItemIndex(element: HTMLElement): number {

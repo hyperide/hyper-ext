@@ -111,6 +111,11 @@ export function _dragPointerDown(ctx: DragHandlerContext, e: PointerEvent): void
     target,
     (el) => ctx.iframeResolver.getSourceLocation(el),
     ctx.renderedComponentPath,
+    // Provenance-safe resolver so a decorative drag never commits a raw React 19
+    // `_debugStack` (Vite-transformed) line on a cold source map (HYP-49).
+    ctx.iframeResolver.getMappedSourceLocation
+      ? (el) => ctx.iframeResolver.getMappedSourceLocation?.(el) ?? null
+      : undefined,
   );
   if (!resolved) return;
 
@@ -292,6 +297,11 @@ function _resolveDrop(ctx: DragHandlerContext, e: PointerEvent): ResolvedDrop | 
     target,
     (el) => ctx.iframeResolver.getSourceLocation(el),
     ctx.renderedComponentPath,
+    // Same provenance-safe resolver as the drag-source side so a decorative DROP
+    // target never resolves to a raw transformed line on a cold source map (HYP-49).
+    ctx.iframeResolver.getMappedSourceLocation
+      ? (el) => ctx.iframeResolver.getMappedSourceLocation?.(el) ?? null
+      : undefined,
   );
   if (!resolved || !_dragSourceEl) return null;
 

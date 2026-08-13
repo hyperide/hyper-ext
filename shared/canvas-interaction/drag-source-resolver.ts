@@ -5,13 +5,16 @@
  * Assumptions: called in design mode on user-initiated pointerdown events;
  *   DOM element may be decorative (emoji, aria-hidden) with no direct source.
  *
- * Resolves the draggable element and its source location using three strategies:
- * 1. Primary: TracingResolver.getSourceLocation (source-map-aware, may be cold).
- * 2. Fallback: direct _debugSource read via findNearestSourceLocation (always
- *    available in React 18 Babel / Vite projects; no source maps required).
- *    Runs BEFORE step 3 — see inline comment.
- * 3. Last resort: walk up to the nearest ancestor with a source (aria-hidden
- *    wrappers, expression-only text nodes that slipped past steps 1 and 2).
+ * Resolves the draggable element and its source location using these strategies:
+ * 1.  Primary: TracingResolver.getSourceLocation on the target (source-map-aware,
+ *     may be cold). Skipped for decorative (aria-hidden) elements.
+ * 2a. Decorative only: source-map-aware getSourceLocation on the PARENT element.
+ *     Must precede the raw fiber read — see the inline comment for why (React 19 +
+ *     Vite dev returns an un-sourcemapped transformed-module line otherwise).
+ * 2b. Fallback: direct _debugSource read via findNearestSourceLocation (React 18
+ *     Babel / Vite; _debugSource is already a real source position there).
+ * 3.  Last resort: walk up to the nearest ancestor with a source (aria-hidden
+ *     wrappers, expression-only text nodes that slipped past the steps above).
  *
  * IMPORTANT: we DO NOT walk further up "to a meaningful draggable / outer card".
  * Doing so makes drag-handle behaviour confusing — when the user drags an inner
@@ -38,12 +41,19 @@ export interface DragSourceResult {
  * @param target - The element directly under the pointer.
  * @param getSourceLocation - Resolver function (source-map-aware, may return null if cold).
  * @param renderedComponentPath - Currently rendered component path for call-site resolution.
+ * @param getMappedSourceLocation - Optional provenance-safe resolver: returns a source
+ *   ONLY from a real source-map hit or a React 18 `_debugSource`, never a raw React 19
+ *   `_debugStack` (Vite-transformed) line. The decorative path uses it so a cold source
+ *   map fails safe (null → no garbage write) instead of committing the transformed line.
+ *   When omitted (e.g. a caller without it), the decorative path falls back to the legacy
+ *   getSourceLocation + raw fiber read.
  * @returns The resolved drag source and element, or null if the element is not draggable.
  */
 export function resolveDragSource(
   target: HTMLElement,
   getSourceLocation: (el: HTMLElement) => SourceLocation | null,
   renderedComponentPath: string | null,
+  getMappedSourceLocation?: (el: HTMLElement) => SourceLocation | null,
 ): DragSourceResult | null {
   // Defense-in-depth: a pointerdown can land on a non-Element node (e.g. a Text node,
   // nodeType 3, when the pointer is over visible text). Such nodes have no getAttribute
@@ -63,16 +73,47 @@ export function resolveDragSource(
   let source = isDecorative ? null : getSourceLocation(target);
   let el: HTMLElement = target;
 
-  // Step 2: fallback to direct _debugSource read (React 18 Babel / Vite) when
-  // source maps are cold or unavailable. This always works for projects compiled
-  // with the React Babel plugin — no async warm-up needed.
-  // Must run BEFORE the ancestor walk-up (step 3), otherwise non-decorative
-  // elements like <img> incorrectly resolve to their parent's source location.
-  // For decorative elements, prefer the parent's fiber to avoid dragging the span itself.
-  if (!source) {
-    // For decorative elements, skip Step 2 entirely when parentElement is null —
-    // passing the decorative element itself to getFiberFromDOM would violate the
-    // invariant that decorative elements are never the drag target.
+  // Step 2a: for a decorative element, resolve via the PROVENANCE-SAFE resolver on
+  // its parent element.
+  //
+  // Why a provenance-safe resolver and not plain getSourceLocation: under React 19 +
+  // Vite dev, a host fiber carries no `_debugSource`; its source lives in `_debugStack`,
+  // whose top user frame points into the *Vite-transformed* module (e.g.
+  // `TestElements.tsx:443:31`), NOT the on-disk file (here only ~300 lines). When the
+  // client source map is COLD, getSourceLocation falls back to that raw transformed line
+  // — so the AST lookup lands past EOF and `moveElement` reports "source not found" → no
+  // write (the decorative-emoji drag bug, HYP-49 / DR-NN-1 / DR-16). getMappedSourceLocation
+  // returns a location ONLY from a real source-map hit or a React 18 `_debugSource`, never
+  // the raw `_debugStack`; on a cold map it returns null and we fail safe (no garbage write)
+  // rather than committing the transformed line. Non-decorative elements resolve via Step 1,
+  // so this only changes the decorative case. Falls back to plain getSourceLocation when the
+  // caller did not supply a mapped resolver.
+  if (!source && isDecorative && target.parentElement !== null) {
+    const resolveParent = getMappedSourceLocation ?? getSourceLocation;
+    const parentSource = resolveParent(target.parentElement);
+    if (parentSource) {
+      source = parentSource;
+      el = target.parentElement;
+    }
+  }
+
+  // Step 2b: fallback to direct _debugSource read (React 18 Babel / Vite) when
+  // source maps are cold or unavailable. This works for projects compiled with the
+  // React Babel plugin (React 18: `_debugSource` is already a real source position;
+  // no source map needed). Must run BEFORE the ancestor walk-up (step 3), otherwise
+  // non-decorative elements like <img> incorrectly resolve to their parent's source.
+  //
+  // SKIP for decorative elements when a mapped resolver is available: that path already
+  // covered React 18 `_debugSource` via getMappedSourceLocation, and the only thing
+  // findNearestSourceLocation could add for a decorative parent is the raw React 19
+  // `_debugStack` (transformed) line — the very garbage Step 2a exists to avoid. Letting
+  // it run would re-introduce the cold-cache bug, so for decorative we hold out for a
+  // mapped hit (or fail safe).
+  const skipRawForDecorative = isDecorative && getMappedSourceLocation !== undefined;
+  if (!source && !skipRawForDecorative) {
+    // For decorative elements, skip when parentElement is null — passing the
+    // decorative element itself to getFiberFromDOM would violate the invariant
+    // that decorative elements are never the drag target.
     const fiberTarget = isDecorative ? target.parentElement : target;
     if (fiberTarget !== null) {
       const fiber = getFiberFromDOM(fiberTarget);
@@ -86,12 +127,16 @@ export function resolveDragSource(
 
   // Step 3: walk up to the nearest ancestor with a source — last resort for
   // elements with no fiber source (aria-hidden wrappers, expression-only text nodes
-  // that slipped past steps 1 and 2).
+  // that slipped past steps 1 and 2). For decorative elements use the provenance-safe
+  // resolver too, so the ancestor walk cannot resurrect the raw React 19 `_debugStack`
+  // line that Steps 2a/2b held out against (HYP-49); for non-decorative the legacy
+  // getSourceLocation is preserved.
   if (!source) {
+    const resolveAncestor = isDecorative ? (getMappedSourceLocation ?? getSourceLocation) : getSourceLocation;
     const bodyEl = typeof document !== 'undefined' ? document.body : null;
     let cur = target.parentElement;
     while (cur && cur !== bodyEl) {
-      const ancestorSrc = getSourceLocation(cur);
+      const ancestorSrc = resolveAncestor(cur);
       if (ancestorSrc) {
         source = ancestorSrc;
         el = cur;
