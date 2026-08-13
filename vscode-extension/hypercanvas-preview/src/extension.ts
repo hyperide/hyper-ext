@@ -61,6 +61,11 @@ import { isWebviewDisposedError } from './webview-post';
 import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
 import { DevServerManager } from './services/DevServerManager';
+import {
+  clearPreviewRevivalSnapshot,
+  persistPreviewRevivalSnapshot,
+  revivePreviewAfterReload,
+} from './services/preview-revival';
 import { extractDesignTokens } from './services/DesignTokensService';
 import { getPrimitiveRenderableSampleInfo, shouldInjectGeneratedPropsForSelection } from './services/no-props-sample';
 import {
@@ -411,11 +416,42 @@ export function activate(context: vscode.ExtensionContext) {
       previewPanel?.requestComputedStyleSnapshot(elementId, cssProperties) ?? Promise.resolve(null),
   );
 
+  // HYP-1164: gate the post-reload preview revival on full activation wiring.
+  // VS Code may call deserializeWebviewPanel while activate() is still running;
+  // the revival needs the StateHub selection pipeline + dev-server status wiring,
+  // so it waits on this deferred (resolved at the end of activate).
+  let markActivationReady!: () => void;
+  const activationReady = new Promise<void>((resolve) => {
+    markActivationReady = resolve;
+  });
+
   // Register serializer for cross-restart persistence
   context.subscriptions.push(
     vscode.window.registerWebviewPanelSerializer(PreviewPanel.viewType, {
       async deserializeWebviewPanel(panel: vscode.WebviewPanel) {
         previewPanel?.restorePanel(panel);
+        // HYP-1164: the revive above rebuilds only the panel shell — everything
+        // that DROVE the preview (StateHub component, dev-server attachment)
+        // died with the extension host, so without this the canvas stays blank
+        // until a manual re-open. Re-materialize from the workspaceState
+        // snapshot: re-apply the selection (pipeline re-runs), re-root to the
+        // recorded sub-project, and start the dev server — the HYP-1160
+        // attach-first path adopts the surviving server (identity-verified via
+        // the orphan registry), or a fresh one spawns if it died.
+        void activationReady.then(async () => {
+          await revivePreviewAfterReload({
+            memento: context.workspaceState,
+            getActiveProjectRoot: () => activeWorkspaceRoot,
+            rerootPreviewPipeline,
+            startDevServer: async () => {
+              if (!devServerManager) return { status: 'error' as const, url: null };
+              return await devServerManager.start();
+            },
+            setPreviewUrl: (url) => previewPanel?.setPreviewUrl(url),
+            reselectComponent: (component) =>
+              stateHub?.applyUpdate({ currentComponent: { name: component.name, path: component.path } }),
+          });
+        });
       },
     }),
   );
@@ -751,6 +787,11 @@ export function activate(context: vscode.ExtensionContext) {
       diagnosticHub?.pushServerLogs(logs);
     });
 
+    // HYP-1164: tracks the previous published status so the revival-snapshot clear
+    // fires only on a REAL live→stopped teardown (user stop, cross-target reroot),
+    // not on the spurious 'stopped' publish a fresh manager emits when setProjectPath
+    // runs its no-op stop during the post-reload revival reroot.
+    let lastDevServerStatus: string | undefined;
     devServerManager.onStatusChange((state) => {
       const statusMap: Record<string, 'building' | 'ready' | 'error' | 'idle'> = {
         starting: 'building',
@@ -759,6 +800,25 @@ export function activate(context: vscode.ExtensionContext) {
         stopped: 'idle',
       };
       diagnosticHub?.setBuildStatus(statusMap[state.status] ?? 'idle');
+
+      // HYP-1164 revival snapshot: while a server is RUNNING the current selection
+      // is recoverable after a window reload — persist it. An explicit STOP clears
+      // the snapshot so revival never resurrects a server the user killed. 'error'
+      // keeps it: the crash killed the server, not the user's intent — revival
+      // re-inits a fresh one via the spawn path. The isDeactivating guard is
+      // load-bearing: deactivate()'s fire-and-forget dispose()->stop() transitions
+      // through 'stopped' on every window reload, and clearing there would wipe
+      // the snapshot the revival exists to consume.
+      if (state.status === 'running') {
+        persistRevivalSnapshot();
+      } else if (
+        state.status === 'stopped' &&
+        !isDeactivating &&
+        (lastDevServerStatus === 'running' || lastDevServerStatus === 'starting')
+      ) {
+        clearPreviewRevivalSnapshot(context.workspaceState);
+      }
+      lastDevServerStatus = state.status;
 
       // Notify preview panel when dev server stops so the status badge updates
       if (state.status === 'stopped' || state.status === 'error') {
@@ -1298,6 +1358,23 @@ export function activate(context: vscode.ExtensionContext) {
     );
   };
   startupSweep(modeManager, activeWorkspaceRoot);
+
+  // HYP-1164: persist the revival snapshot — the component + dev-server target +
+  // URL a post-reload revive needs to re-materialize the preview. Function-declared
+  // (hoisted): the dev-server onStatusChange wiring registered earlier calls it at
+  // runtime. Only writes while a server is actually running with a selection live —
+  // a stale snapshot is worse than none (revival would re-attach against dead intent).
+  function persistRevivalSnapshot(): void {
+    const component = stateHub?.state.currentComponent;
+    const devState = devServerManager?.getState();
+    if (!component?.path || devState?.status !== 'running' || !devState.url) return;
+    persistPreviewRevivalSnapshot(context.workspaceState, {
+      component: { name: component.name, path: component.path },
+      projectPath: activeWorkspaceRoot,
+      url: devState.url,
+      savedAt: Date.now(),
+    });
+  }
 
   // Re-root only the preview/dev axis (file manager, mode manager, dev server) to
   // `targetRoot`. Used for BOTH a workspace-folder change and a monorepo sub-project
@@ -1987,6 +2064,9 @@ export function activate(context: vscode.ExtensionContext) {
         // _currentComponent stays repo-relative (astBridge identity); the iframe URL uses
         // the sub-project-relative path (the dev server's preview registry key).
         previewPanel?.setComponentParam(repoRelativePath, relativePath);
+        // HYP-1164: refresh the revival snapshot with the now-canonical selection
+        // (component + active sub-project root) while the server is running.
+        persistRevivalSnapshot();
         // App-mode is NO LONGER engaged proactively here. Static router-shape detection
         // (isAppEntryCandidate) proves router SHAPE, not render FAILURE — a router-owning root can
         // still render usable UI as a plain component — so the upfront engage was rejected (the CTO
@@ -2147,6 +2227,9 @@ export function activate(context: vscode.ExtensionContext) {
   }, 3000).unref?.();
 
   console.log('[HyperIDE] Extension activated successfully');
+  // HYP-1164: unblock the post-reload preview revival scheduled by the webview
+  // panel serializer — all wiring it depends on now exists.
+  markActivationReady();
 }
 
 export async function deactivate() {
