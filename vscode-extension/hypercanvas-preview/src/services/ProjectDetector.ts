@@ -12,8 +12,32 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { ProjectInfo, ProjectType, RepoType, UnsupportedProjectError } from '../types';
-import { WRITABLE_CSS_SYSTEMS } from '../types';
+import { getWriterBackedCssSystemIds } from '@lib/style-adapters/registry';
+import type { CssSystem, ProjectInfo, ProjectType, RepoType, UnsupportedProjectError } from '../types';
+import { CSS_SYSTEM_TO_ADAPTER_ID } from '../types';
+
+/**
+ * The `CssSystemId`s that have a real NATIVE writer registered, computed ONCE from the shared
+ * adapter registry (spec §3.3). This is the single source of truth behind the writable gate — the
+ * detector never keeps its own list of editable systems.
+ */
+const WRITER_BACKED_CSS_SYSTEM_IDS = getWriterBackedCssSystemIds();
+
+/**
+ * Registry-derived writable predicate (spec §3.3 TO-BE: "a system is writable only when its
+ * [adapter] ... exists"). Translates the ext `CssSystem` to its lib `CssSystemId` (the
+ * cssFramework/designSystem axis crossing, §5.5) and reports writable iff that id owns a native,
+ * non-fallback writer.
+ *
+ * User impact: this is what stops the inspector from claiming emotion/styled-components are editable
+ * when no adapter exists — emotion no longer silently writes a foreign inline `style={{}}` into the
+ * user's file, and styled-components no longer dead-ends at the executor's `unsupported()` no-op.
+ * Both now show the honest readonly stub until their adapters land (Phase C+).
+ */
+function isCssSystemWritable(cssSystem: CssSystem): boolean {
+  const adapterId = CSS_SYSTEM_TO_ADAPTER_ID[cssSystem];
+  return adapterId !== null && WRITER_BACKED_CSS_SYSTEM_IDS.has(adapterId);
+}
 
 /**
  * Read and parse package.json from project directory.
@@ -471,14 +495,14 @@ export async function detectCssSystem(
   // Chakra UI is emotion-based: users list @emotion/react + @emotion/styled
   // DIRECTLY in package.json (peer-dep install pattern — required for v2, common
   // for v3), so `has('@emotion/...')` is true for Chakra projects. Chakra MUST be
-  // checked BEFORE the bare emotion fallback below — otherwise it resolves to
-  // writable 'emotion' and the inspector falsely claims its prop-based styling is
-  // editable via the emotion styled/css AST write path (it is not).
-  // 'chakra' is unsupported (not in WRITABLE_CSS_SYSTEMS) → readonly stub shows.
-  // Scoped to Chakra only. MUI (@mui/material) is also emotion-based and has the
-  // same shadowing, but whether MUI's emotion integration is AST-writable is a
-  // separate open question — intentionally left as-is here (out of scope), so MUI
-  // keeps resolving to 'emotion'. Do not reorder the @mui branch with this change.
+  // checked BEFORE the bare emotion fallback below so the project reports the
+  // correct system identity (chakra reads/deep-links differently than emotion).
+  // Both 'chakra' and 'emotion' now map to writer-less CssSystemIds, so the
+  // registry-derived writable gate (computeCapabilities → isCssSystemWritable)
+  // reports BOTH readonly → the readonly stub shows until their adapters land
+  // (§3.3 / D31). MUI (@mui/material) is also emotion-based and has the same
+  // shadowing; it keeps resolving to 'emotion' (also readonly) — do not reorder
+  // the @mui branch with this change.
   if (has('@chakra-ui/react')) return 'chakra';
   if (has('@emotion/react') || has('@emotion/styled')) return 'emotion';
 
@@ -584,7 +608,7 @@ export function computeCapabilities(
   projectType?: import('../types').ProjectType,
   repoType?: RepoType,
 ): import('../types').ProjectCapabilities {
-  const cssWritable = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
+  const cssWritable = isCssSystemWritable(cssSystem);
   const bundlerFullEdit = projectType ? FULL_EDIT_BUNDLERS.includes(projectType) : false;
   const canWriteStyles = cssWritable && bundlerFullEdit;
   const canRender = projectError === null;

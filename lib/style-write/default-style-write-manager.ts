@@ -5,10 +5,7 @@
  * Assumptions: inline-style remains registered as the universal fallback adapter.
  * Architecture: https://hyperide.github.io/reports/style-write-unification
  */
-import { cssModulesAdapter } from '@lib/style-adapters/css-modules';
-import { inlineStyleAdapter } from '@lib/style-adapters/inline-style';
-import { tailwindV4Adapter } from '@lib/style-adapters/tailwind-v4';
-import { tamaGuiAdapter } from '@lib/style-adapters/tamagui';
+import { DEFAULT_STYLE_ADAPTERS } from '@lib/style-adapters/registry';
 import { DefaultStyleWriteManager, type StyleWritePlanExecutor } from './style-write-manager';
 import { DefaultStyleWritePlanner } from './style-write-planner';
 import type { FrameworkStyleAdapter, StyleWriteManager } from './types';
@@ -27,7 +24,9 @@ export interface CreateDefaultStyleWriteManagerOptions {
  * fallback writer the planner falls through to (see DefaultStyleWritePlanner).
  */
 export function createDefaultStyleWriteManager(options: CreateDefaultStyleWriteManagerOptions): StyleWriteManager {
-  const adapters = options.adapters ?? [tailwindV4Adapter, cssModulesAdapter, tamaGuiAdapter, inlineStyleAdapter];
+  // Spec §3.3 (Adapters — System B): the default writer order lives in the shared registry so the
+  // write manager and the inspector's writable gate read from one source and can never disagree.
+  const adapters = options.adapters ?? [...DEFAULT_STYLE_ADAPTERS];
   return new DefaultStyleWriteManager({
     planner: new DefaultStyleWritePlanner(adapters),
     executor: options.executor,

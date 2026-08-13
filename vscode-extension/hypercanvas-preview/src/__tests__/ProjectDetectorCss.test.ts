@@ -73,19 +73,66 @@ describe('detectCssSystem — Chakra UI vs emotion', () => {
   });
 });
 
-describe('computeCapabilities — chakra is readonly', () => {
-  it('chakra → not writable → readonly when renderable', () => {
-    const caps = computeCapabilities('chakra', 'none', null, 'vite', 'simple');
+// HYP-796 (Phase A2): the writable gate is REGISTRY-DERIVED — a CssSystem is writable iff it maps to
+// a CssSystemId with a real native (non-fallback) writer in the adapter registry (spec §3.3 / D31).
+// Before this, emotion + styled-components were hand-listed writable with NO adapter: an emotion edit
+// silently polluted the file with a foreign inline `style={{}}` write, and a styled-components edit
+// dead-ended at the executor's `unsupported()` no-op. The gate now reports them honest-readonly.
+describe('computeCapabilities — registry-derived writable gate (HYP-796)', () => {
+  // Systems with NO native writer adapter → readonly (no inline pollution, no unsupported() throw).
+  const READONLY_SYSTEMS = [
+    'emotion', // was the silent-inline-pollution bug
+    'styled-components', // was the unsupported() dead-click bug
+    'chakra',
+    'mantine',
+    'mui',
+    'vanilla-extract',
+    'sass', // plain-css: no writer adapter
+    'pandacss',
+    'unocss',
+    'stylex',
+    'antd',
+    'fluentui',
+    'nextui',
+  ] as const;
+
+  for (const css of READONLY_SYSTEMS) {
+    it(`${css} → no native writer → readonly when renderable`, () => {
+      const caps = computeCapabilities(css, 'none', null, 'vite', 'simple');
+      expect(caps.canWriteStyles).toBe(false);
+      expect(caps.canRender).toBe(true);
+      expect(caps.readonly).toBe(true);
+    });
+  }
+
+  it('emotion specifically: NOT writable (the silent-inline-pollution lie is gone)', () => {
+    const caps = computeCapabilities('emotion', 'none', null, 'vite', 'simple');
     expect(caps.canWriteStyles).toBe(false);
-    expect(caps.canRender).toBe(true);
     expect(caps.readonly).toBe(true);
   });
 
-  it('emotion → writable → not readonly (guard)', () => {
-    const caps = computeCapabilities('emotion', 'none', null, 'vite', 'simple');
-    expect(caps.canWriteStyles).toBe(true);
-    expect(caps.readonly).toBe(false);
+  it('styled-components specifically: NOT writable (the unsupported() dead-click is gone)', () => {
+    const caps = computeCapabilities('styled-components', 'none', null, 'vite', 'simple');
+    expect(caps.canWriteStyles).toBe(false);
+    expect(caps.readonly).toBe(true);
   });
+
+  // Systems genuinely backed by a registered writer stay writable (no regression).
+  const WRITABLE_SYSTEMS = [
+    'tailwind', // tailwind-v4 writer
+    'cssmodules', // css-modules writer
+    'tamagui', // tamagui writer
+    'shadcn', // built on Tailwind → tailwind-v4 writer
+    'daisyui', // built on Tailwind → tailwind-v4 writer
+  ] as const;
+
+  for (const css of WRITABLE_SYSTEMS) {
+    it(`${css} → backed by a registered writer → writable, not readonly`, () => {
+      const caps = computeCapabilities(css, 'none', null, 'vite', 'simple');
+      expect(caps.canWriteStyles).toBe(true);
+      expect(caps.readonly).toBe(false);
+    });
+  }
 });
 
 describe('detectUIKit — Astro Tailwind', () => {

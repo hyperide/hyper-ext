@@ -320,11 +320,11 @@ describe('detectCssSystem — monorepo-aware (Nx)', () => {
   // chakra precedence to a single target, so the monorepo path must NOT prefer chakra:
   // a sibling that merely depends on @chakra-ui/react must not force the whole
   // workspace readonly. Proper per-target detection is the deferred follow-up (HYP-787).
-  it('does NOT force chakra/readonly when a chakra sibling coexists with a pure-emotion app', async () => {
+  it('does NOT force chakra identity when a chakra sibling coexists with a pure-emotion app', async () => {
     setup({
       [`${ROOT}/package.json`]: JSON.stringify({ devDependencies: { nx: '^19' } }),
       [`${ROOT}/nx.json`]: '{}',
-      // The renderable preview target: a pure-Emotion app (writable styling).
+      // The renderable preview target: a pure-Emotion app.
       [`${ROOT}/apps/web/package.json`]: pkg({
         react: '^19',
         '@emotion/react': '^11.14.0',
@@ -333,22 +333,24 @@ describe('detectCssSystem — monorepo-aware (Nx)', () => {
       // An unrelated sibling that merely depends on chakra.
       [`${ROOT}/packages/ui/package.json`]: pkg({ '@chakra-ui/react': '^3.34.0' }),
     });
-    // Merged map = {emotion, chakra}; must stay 'emotion' (writable) — not forced to
-    // 'chakra' by the sibling.
+    // Merged map = {emotion, chakra}; must stay 'emotion' (correct system identity) —
+    // not force-flipped to 'chakra' by the sibling. Identity matters for which reader /
+    // deep-link / future adapter applies, even though both are currently readonly.
     const cssSystem = await detectCssSystem(ROOT);
     expect(cssSystem).toBe('emotion');
-    // Prove the user-visible fix end-to-end: 'emotion' on a vite monorepo →
-    // canWriteStyles=true → NOT readonly → the Emotion app keeps style editing.
-    expect(computeCapabilities(cssSystem, 'none', null, 'vite', 'mono-nx').readonly).toBe(false);
+    // Post-HYP-796: emotion has no writer adapter, so the registry-derived gate reports
+    // it honest-readonly (pending the Phase C emotion adapter). The HYP-787 guard here is
+    // the detection IDENTITY above (not force-flipped to chakra), not the writable flag —
+    // chakra and emotion are uniformly readonly until their adapters land.
+    expect(computeCapabilities(cssSystem, 'none', null, 'vite', 'mono-nx').readonly).toBe(true);
   });
 
   // Known deferred limitation (HYP-787): a monorepo whose ONLY styled member is a
-  // genuine chakra package still resolves to its emotion peer-dep ('emotion', writable)
-  // rather than 'chakra' (readonly). Reverting the merged-map chakra check trades a
-  // false-readonly (breaks an Emotion app's editing — the regression above) for a
-  // false-writable on a chakra-only monorepo. The latter needs per-target detection
-  // (the selected target's OWN deps), tracked separately. This pins CURRENT behavior;
-  // it is NOT the desired end-state.
+  // genuine chakra package still resolves to its emotion peer-dep ('emotion') rather
+  // than 'chakra'. Post-HYP-796 both are readonly (neither has a writer adapter yet), so
+  // this is now a false-IDENTITY rather than a false-writable; it still needs per-target
+  // detection (the selected target's OWN deps), tracked separately. This pins CURRENT
+  // behavior; it is NOT the desired end-state.
   it('chakra-only monorepo sub-package resolves to emotion (deferred per-target limitation)', async () => {
     setup({
       [`${ROOT}/package.json`]: JSON.stringify({ devDependencies: { nx: '^19' } }),
@@ -367,8 +369,9 @@ describe('detectCssSystem — monorepo-aware (Nx)', () => {
   // chakra to pull emotion in transitively. readSubPackageDeps reads each member's own
   // declared deps, so the merged map has no @emotion/* here → the reverted emotion
   // branch does not fire → falls through to 'unknown' (readonly). This is SAFE for
-  // chakra (readonly is the correct outcome), but it differs from the emotion-listed
-  // case above, so pin it against accidental future change. Also subsumed by HYP-787.
+  // chakra (readonly is the correct outcome). Post-HYP-796 the emotion-listed case above
+  // is also readonly, so the two differ only in detected identity now — still pin this
+  // against accidental future change. Also subsumed by HYP-787.
   it('chakra sub-package with no explicit @emotion dep resolves to unknown (readonly, safe)', async () => {
     setup({
       [`${ROOT}/package.json`]: JSON.stringify({ devDependencies: { nx: '^19' } }),

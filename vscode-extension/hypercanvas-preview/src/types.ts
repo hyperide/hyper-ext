@@ -3,6 +3,7 @@
  * Defines messages, project types, and shared interfaces
  */
 
+import type { CssSystemId } from '@lib/style-read/types';
 import type { I18nLibrary } from '../../../shared/i18n-text/types';
 import type { ColorProbeCandidate } from './services/color-probe-types';
 
@@ -88,17 +89,48 @@ export type CssSystem =
   | 'sass'
   | 'unknown';
 
-/** CSS systems where the extension can read AND write styles via AST */
-export const WRITABLE_CSS_SYSTEMS: CssSystem[] = [
-  'tailwind',
-  'cssmodules',
-  'styled-components',
-  'emotion',
-  'tamagui',
-  'shadcn', // built on Tailwind
-  'daisyui', // built on Tailwind
-  'sass', // className-based, same as plain CSS
-];
+/**
+ * Maps a detected ext-side {@link CssSystem} to the lib-side `CssSystemId` whose adapter would OWN
+ * its writes (or `null` when no `CssSystemId`/adapter concept applies). This is the enum-translation
+ * the registry-derived writable gate consults; whether a system is actually editable is then derived
+ * from the writer registry (`getWriterBackedCssSystemIds`), NEVER hand-listed here.
+ *
+ * Ownership-collision rationale (spec §0.3 rule 3 — this map crosses capability domains):
+ * - cssFramework vs designSystem (§5.5): the ext `CssSystem` enum folds design systems
+ *   (mui/chakra/mantine) and utility layers (daisyui/shadcn) into single detection ids, while the lib
+ *   `CssSystemId` keys adapters by authoring channel. `shadcn`/`daisyui` resolve to `tailwind-v4`
+ *   because they are className/utility layers ON Tailwind (§5.5: "shadcn is a design system ... it
+ *   sits on top of Tailwind") — their writes land through the Tailwind writer, so they stay writable.
+ * - typed-but-unbuilt systems (§3.3 / D31): emotion, styled-components, mui→`mui-system`,
+ *   chakra→`chakra-ui`, mantine, vanilla-extract map to their OWN ids, which have a type and a default
+ *   `sourceForm` but no writer — so the gate reports them NOT-writable (honest readonly) until their
+ *   adapters land (Phase C+), instead of silently polluting the file with an inline write.
+ * - no-channel systems → `null`: atomic/utility CSS without a JSX-object channel (pandacss, unocss,
+ *   stylex) and design systems with no `CssSystemId` (antd, fluentui, nextui) have no native write
+ *   target here. `sass` maps to `plain-css`, which is also writer-less today, so it is honest-readonly
+ *   too (the same class of lie as emotion: className → stylesheet rule, no `.scss` writer exists).
+ */
+export const CSS_SYSTEM_TO_ADAPTER_ID: Record<CssSystem, CssSystemId | null> = {
+  tailwind: 'tailwind-v4',
+  cssmodules: 'css-modules',
+  'styled-components': 'styled-components', // typed-only, no writer → readonly (§3.3 / D31)
+  emotion: 'emotion', // typed-only, no writer → readonly (§3.3 / D31)
+  tamagui: 'tamagui',
+  'vanilla-extract': 'vanilla-extract', // typed-only, no writer → readonly
+  pandacss: null, // atomic/utility CSS; no dedicated CssSystemId/adapter
+  unocss: null, // atomic/utility CSS; no dedicated CssSystemId/adapter
+  stylex: null, // compile-time atomic; not in the 12-id taxonomy
+  mui: 'mui-system', // typed-only, no writer → readonly
+  antd: null, // ant-design; not in the 12-id taxonomy
+  chakra: 'chakra-ui', // typed-only, no writer → readonly
+  mantine: 'mantine', // typed-only, no writer → readonly
+  fluentui: null, // designSystem; no CssSystemId/adapter
+  nextui: null, // designSystem; no CssSystemId/adapter
+  daisyui: 'tailwind-v4', // built on Tailwind → Tailwind writer (stays writable)
+  shadcn: 'tailwind-v4', // design system on Tailwind (§5.5) → Tailwind writer (stays writable)
+  sass: 'plain-css', // className/stylesheet; plain-css has no writer → readonly
+  unknown: null,
+};
 
 /** What the extension can do with this project */
 export interface ProjectCapabilities {
