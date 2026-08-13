@@ -109,7 +109,7 @@ describe("LayoutSection toggle classes", () => {
 
   // HYP-374: asymmetric display-value bug — paddingTop="" but paddingBottom="2px"
   // means display shows "2px" but onNumericKeyDown receives paddingTop="" as currentValue.
-  // After fix: call site passes paddingTop||paddingBottom so currentValue matches display.
+  // The call site passes paddingTop||paddingBottom so currentValue matches the displayed value.
   it("passes display value (paddingTop||paddingBottom) as currentValue to onNumericKeyDown for vertical field", () => {
     const calls: Array<[React.KeyboardEvent<HTMLInputElement>, string, (v: string) => void, string]> = [];
     const { getByTestId } = render(
