@@ -49,6 +49,51 @@ describe('FillSection text controls', () => {
     expect(syncStyleChange).toHaveBeenCalledWith('fontSize', '16px');
   });
 
+  // HYP-1085: extend the HYP-1001 HintTooltip pattern from the Layout section to the Fill
+  // section — fill color, text color, and font size each show an in-DOM hint on hover.
+  it('shows an in-DOM hint for font size on hover (HYP-1085)', async () => {
+    const { findAllByText } = render(<FillSection {...defaultProps} />);
+    const sizeField = screen.getByTestId(TID.inspector.fontSize).closest('div') as HTMLElement;
+    fireEvent.pointerEnter(sizeField);
+    fireEvent.pointerMove(sizeField);
+    const found = await findAllByText(/Font size/);
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  it('shows an in-DOM hint for text color on hover (HYP-1085)', async () => {
+    const { findAllByText } = render(<FillSection {...defaultProps} />);
+    // HintTooltip wraps ColorCombobox in a plain <div> trigger (ColorCombobox doesn't spread
+    // arbitrary trigger props onto its root), so the hover listeners live on that wrapper.
+    const textColorField = screen.getByTestId(TID.inspector.fillTextColor).parentElement as HTMLElement;
+    fireEvent.pointerEnter(textColorField);
+    fireEvent.pointerMove(textColorField);
+    const found = await findAllByText('Text color');
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  it('shows an in-DOM hint for fill color on hover (HYP-1085)', async () => {
+    const { findAllByText } = render(<FillSection {...defaultProps} />);
+    const fillField = screen.getByTestId(TID.inspector.fillColorPicker).parentElement as HTMLElement;
+    fireEvent.pointerEnter(fillField);
+    fireEvent.pointerMove(fillField);
+    const found = await findAllByText(/Fill color/);
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  // Keyboard-focus parity: React's synthetic focus events bubble via focusin (unlike native
+  // `focus`), so a descendant control gaining focus (e.g. a button inside FillPicker) also
+  // fires the wrapping HintTooltip trigger's onFocus — tab-only users see the same hint hover
+  // users get, even though the wrapper <div> itself is never a tab stop.
+  it('shows the fill-color hint when a descendant control is keyboard-focused (HYP-1085)', async () => {
+    const { findAllByText } = render(<FillSection {...defaultProps} backgroundColor="#0066cc" />);
+    const fillRoot = screen.getByTestId(TID.inspector.fillColorPicker);
+    const focusableDescendant = fillRoot.querySelector('button, input') as HTMLElement;
+    expect(focusableDescendant).toBeTruthy();
+    fireEvent.focus(focusableDescendant);
+    const found = await findAllByText(/Fill color/);
+    expect(found.length).toBeGreaterThan(0);
+  });
+
   // Guards against the recurring "text color is display-only" false alarm: the QA
   // matrix harness cannot drive the text ColorCombobox (its hex input carries no
   // testid, so the harness aims .fill() at the non-input root <div> and reports

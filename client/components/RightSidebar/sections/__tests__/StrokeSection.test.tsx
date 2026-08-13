@@ -92,6 +92,60 @@ describe('StrokeSection', () => {
     expect(syncStyleChange).toHaveBeenCalledWith('borderStyle', 'dashed');
   });
 
+  // HYP-1085: extend the HYP-1001 HintTooltip pattern (in-DOM, Radix, capturable) from the
+  // Layout section to the Border (Stroke) section — color, width, and style each show a hint
+  // on hover, mirroring how the Layout section's fields already behave.
+  it('shows an in-DOM hint for border width on hover (HYP-1085)', async () => {
+    const { findAllByText } = render(
+      <StrokeSection strokes={[stroke]} onStrokesChange={mock()} syncStyleChange={mock()} />,
+    );
+    const widthField = screen.getByTestId(TID.inspector.strokeWidth).closest('label') as HTMLElement;
+    fireEvent.pointerEnter(widthField);
+    fireEvent.pointerMove(widthField);
+    const found = await findAllByText(/Border width/);
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  it('shows an in-DOM hint for border color on hover (HYP-1085)', async () => {
+    const { findAllByText } = render(
+      <StrokeSection strokes={[stroke]} onStrokesChange={mock()} syncStyleChange={mock()} />,
+    );
+    // HintTooltip wraps ColorCombobox in a plain <div> trigger (ColorCombobox doesn't spread
+    // arbitrary trigger props onto its root), so the hover listeners live on that wrapper.
+    const colorField = screen.getByTestId(TID.inspector.strokeColor).parentElement as HTMLElement;
+    fireEvent.pointerEnter(colorField);
+    fireEvent.pointerMove(colorField);
+    const found = await findAllByText('Border color');
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  it('shows an in-DOM hint for border style on hover (HYP-1085)', async () => {
+    const { findAllByText } = render(
+      <StrokeSection strokes={[stroke]} onStrokesChange={mock()} syncStyleChange={mock()} />,
+    );
+    const styleField = screen.getByTestId(TID.inspector.strokeStyle);
+    fireEvent.pointerEnter(styleField);
+    fireEvent.pointerMove(styleField);
+    const found = await findAllByText('Border style');
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  // Keyboard-focus parity (mirrors the equivalent FillSection test): React's synthetic focus
+  // events bubble via focusin, so a descendant control gaining focus (e.g. the link-toggle
+  // button inside ColorCombobox) also fires the wrapping HintTooltip trigger's onFocus — tab
+  // users see the same hint hover users get, even though the wrapper <div> is never a tab stop.
+  it('shows the border-color hint when a descendant control is keyboard-focused (HYP-1085)', async () => {
+    const { findAllByText } = render(
+      <StrokeSection strokes={[stroke]} onStrokesChange={mock()} syncStyleChange={mock()} />,
+    );
+    const colorRoot = screen.getByTestId(TID.inspector.strokeColor);
+    const focusableDescendant = colorRoot.querySelector('button, input') as HTMLElement;
+    expect(focusableDescendant).toBeTruthy();
+    fireEvent.focus(focusableDescendant);
+    const found = await findAllByText('Border color');
+    expect(found.length).toBeGreaterThan(0);
+  });
+
   it('add stroke writes plain hex to user CSS, not hsl(var(...))', () => {
     const syncStyleChange = mock(() => {});
     const onStrokesChange = mock(() => {});

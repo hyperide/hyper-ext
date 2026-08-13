@@ -8,6 +8,7 @@ import { TID } from '@shared/data-testid-map';
 import { IconMinus, IconPlus } from '@tabler/icons-react';
 import { memo, useCallback } from 'react';
 import { ColorCombobox } from '../../ui/color-combobox';
+import { HintTooltip } from '../../ui/hint-tooltip';
 import { NumericInput } from '../../ui/numeric-input';
 import type { StrokeItem } from '../types';
 
@@ -104,42 +105,57 @@ export const StrokeSection = memo(function StrokeSection({
         </button>
       </div>
       <div className="grid grid-cols-[1fr_72px_84px] gap-2">
-        <ColorCombobox
-          value={stroke.color ?? '#000000'}
-          onChange={(color) => updateStroke({ color }, [['borderColor', color]])}
-          tokenSystem="tailwind"
-          testId={TID.inspector.strokeColor}
-          className="h-7"
-        />
-        <label
-          htmlFor="hyper-inspector-stroke-width-input"
-          className="h-7 px-2 bg-muted rounded flex items-center gap-1 min-w-0"
-        >
-          <span className="text-[11px] text-muted-foreground shrink-0">W</span>
-          <NumericInput
-            id="hyper-inspector-stroke-width-input"
-            testId={TID.inspector.strokeWidth}
-            styleKey="borderWidth"
-            value={stroke.width ?? ''}
-            onChange={(val) => updateStroke({ width: val }, [['borderWidth', normalizeBorderWidth(val)]])}
-            className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0"
-            placeholder="1"
-          />
-        </label>
-        <select
-          data-testid={TID.inspector.strokeStyle}
-          value={stroke?.style ?? 'solid'}
-          onChange={(event) =>
-            updateStroke({ style: event.target.value as StrokeItem['style'] }, [['borderStyle', event.target.value]])
-          }
-          className="h-7 px-2 rounded bg-muted text-[11px] text-foreground border-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          <option value="solid">Solid</option>
-          <option value="dashed">Dashed</option>
-          <option value="dotted">Dotted</option>
-          <option value="double">Double</option>
-          <option value="none">None</option>
-        </select>
+        {/* HintTooltip's asChild (Radix Slot) merges its pointer/focus handlers as PROPS onto
+            whatever element it wraps — a plain DOM element applies them as real listeners, but
+            ColorCombobox doesn't spread arbitrary props onto its root, so those handlers would
+            be silently dropped without this wrapping <div>. Tracked as HYP-1086: teach
+            ColorCombobox/FillPicker to spread trigger props so this wrapper isn't needed. */}
+        <HintTooltip label="Border color">
+          <div>
+            <ColorCombobox
+              value={stroke.color ?? '#000000'}
+              onChange={(color) => updateStroke({ color }, [['borderColor', color]])}
+              tokenSystem="tailwind"
+              testId={TID.inspector.strokeColor}
+              className="h-7"
+            />
+          </div>
+        </HintTooltip>
+        <HintTooltip label="Border width — press ↑/↓ to nudge, Shift+↑/↓ for a bigger step">
+          <label
+            htmlFor="hyper-inspector-stroke-width-input"
+            className="h-7 px-2 bg-muted rounded flex items-center gap-1 min-w-0"
+          >
+            <span className="text-[11px] text-muted-foreground shrink-0">W</span>
+            <NumericInput
+              id="hyper-inspector-stroke-width-input"
+              testId={TID.inspector.strokeWidth}
+              styleKey="borderWidth"
+              value={stroke.width ?? ''}
+              onChange={(val) => updateStroke({ width: val }, [['borderWidth', normalizeBorderWidth(val)]])}
+              className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0"
+              placeholder="1"
+            />
+          </label>
+        </HintTooltip>
+        <HintTooltip label="Border style">
+          <select
+            data-testid={TID.inspector.strokeStyle}
+            value={stroke?.style ?? 'solid'}
+            onChange={(event) =>
+              updateStroke({ style: event.target.value as StrokeItem['style'] }, [
+                ['borderStyle', event.target.value],
+              ])
+            }
+            className="h-7 px-2 rounded bg-muted text-[11px] text-foreground border-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="solid">Solid</option>
+            <option value="dashed">Dashed</option>
+            <option value="dotted">Dotted</option>
+            <option value="double">Double</option>
+            <option value="none">None</option>
+          </select>
+        </HintTooltip>
       </div>
     </div>
   );

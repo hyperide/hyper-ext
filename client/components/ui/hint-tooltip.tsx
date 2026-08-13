@@ -23,10 +23,46 @@
  * (RightPanelApp has none — only PlatformProvider), and unit tests, without every render site
  * having to wire a provider. `asChild` merges onto the child, so NO extra wrapper DOM is
  * emitted and the caller's flex layout is preserved.
+ *
+ * PORTAL-BUBBLE GUARD (HYP-1085 follow-up — Codex + review-cli findings on PR #679): several
+ * call sites (FillSection's `FillPicker`, both `ColorCombobox` wrappers) wrap a control that
+ * itself opens a Radix Popover (linked-color-picker.tsx, image-background-picker.tsx), and that
+ * popover's content renders via a Portal to `document.body`. React bubbles events from portaled
+ * content through the REACT tree, not the DOM tree, so interacting inside the popover (typing a
+ * color search, dragging an image onto the drop zone) still reaches this trigger's
+ * onPointerMove/onFocus handlers even though the event's real DOM target lives outside this
+ * wrapper — reopening the unrelated hint over the user's popover.
+ *
+ * The naive fix (composing a guard handler that calls `event.preventDefault()` for
+ * out-of-subtree targets, tried in an earlier revision of this file) is unsafe: `preventDefault`
+ * marks the SAME shared native event object as prevented, which can cancel the popover's OWN
+ * default behavior for that event (e.g. touch-scrolling the color list, drag/drop on the image
+ * upload zone) — the fix would silently break the very popover it's supposed to leave alone.
+ * Instead we drive `open` ourselves from NATIVE `addEventListener` calls on the trigger's real
+ * DOM node (`useIsOverOwnSubtree`, tracking pointer-hover and focus-within as two INDEPENDENT
+ * flags OR'd together — a single shared flag would have the pointer still resting on the trigger
+ * clobbered back to "away" the moment focus moves into the popover, per an Opus review finding on
+ * an earlier revision). Native listeners follow REAL DOM bubbling — a portal's content is never a
+ * DOM descendant of this wrapper — so portal-interior interaction never touches them, no
+ * interception needed. We still let Radix's Tooltip.Root own hover-delay/focus timing
+ * (`open`/`onOpenChange`), but `handleOpenChange` rejects an "open" request only when we KNOW the
+ * trigger has a DOM node AND neither native flag is set — i.e. one caused by a bubbled portal
+ * event rather than genuine hover/focus of the trigger itself. If `children` doesn't forward its
+ * ref to a DOM node (so we never learn "over" ground truth), the guard fails OPEN rather than
+ * silently disabling the tooltip forever (also an Opus review finding). Closes are always
+ * accepted.
+ *
+ * Known accepted limitation: the guard tracks pointer/focus on the TRIGGER only, not on the
+ * tooltip's own (hoverable) content — if the user moves the pointer from the trigger onto the
+ * hint bubble itself, `pointerleave` clears `isPointerOverRef`. In practice this is harmless:
+ * Radix's `disableHoverableContent` is off by default, so Radix cancels the close rather than
+ * asking us to reopen while the pointer is over its content, and no regression has been observed.
  */
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import type { CSSProperties, ReactElement } from 'react';
+import { type CSSProperties, type ReactElement, useEffect, useRef, useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
+
+const OPEN_DELAY_MS = 150;
 
 interface HintTooltipProps {
   /** The hint text shown on hover/focus. */
@@ -50,11 +86,63 @@ const vscodeHintStyle: CSSProperties = {
   fontFamily: 'var(--vscode-font-family, inherit)',
 };
 
+/**
+ * Tracks real pointer-hover and focus-within of `node` via NATIVE listeners as two INDEPENDENT
+ * flags — see the file-level PORTAL-BUBBLE GUARD comment for why native (not React synthetic)
+ * listeners are required, and why the two states can't share one flag.
+ */
+function useIsOverOwnSubtree(node: HTMLElement | null) {
+  const isPointerOverRef = useRef(false);
+  const isFocusWithinRef = useRef(false);
+
+  useEffect(() => {
+    if (!node) return undefined;
+    const markPointerOver = () => {
+      isPointerOverRef.current = true;
+    };
+    const markPointerAway = () => {
+      isPointerOverRef.current = false;
+    };
+    const markFocusIn = () => {
+      isFocusWithinRef.current = true;
+    };
+    const markFocusOut = () => {
+      isFocusWithinRef.current = false;
+    };
+    node.addEventListener('pointerenter', markPointerOver);
+    node.addEventListener('pointerleave', markPointerAway);
+    node.addEventListener('focusin', markFocusIn);
+    node.addEventListener('focusout', markFocusOut);
+    return () => {
+      node.removeEventListener('pointerenter', markPointerOver);
+      node.removeEventListener('pointerleave', markPointerAway);
+      node.removeEventListener('focusin', markFocusIn);
+      node.removeEventListener('focusout', markFocusOut);
+    };
+  }, [node]);
+
+  return { isPointerOverRef, isFocusWithinRef };
+}
+
 export function HintTooltip({ label, children, side = 'top' }: HintTooltipProps) {
+  const [open, setOpen] = useState(false);
+  const [wrapperNode, setWrapperNode] = useState<HTMLElement | null>(null);
+  const { isPointerOverRef, isFocusWithinRef } = useIsOverOwnSubtree(wrapperNode);
+
+  const handleOpenChange = (next: boolean) => {
+    // Reject only when we have a real DOM node to check AND neither native flag confirms genuine
+    // hover/focus — a portal-bubbled reopen. No `wrapperNode` (child never forwarded its ref)
+    // means we have no ground truth to check against, so fail OPEN instead of disabling the hint.
+    if (next && wrapperNode && !isPointerOverRef.current && !isFocusWithinRef.current) return;
+    setOpen(next);
+  };
+
   return (
-    <TooltipProvider delayDuration={150}>
-      <Tooltip>
-        <TooltipTrigger asChild>{children}</TooltipTrigger>
+    <TooltipProvider delayDuration={OPEN_DELAY_MS}>
+      <Tooltip open={open} onOpenChange={handleOpenChange}>
+        <TooltipTrigger asChild ref={setWrapperNode}>
+          {children}
+        </TooltipTrigger>
         {/* Portal so the hint escapes the inspector panel's `overflow-hidden` containers —
             the shared TooltipContent does not portal on its own. */}
         <TooltipPrimitive.Portal>
