@@ -9,6 +9,7 @@
 import { describe, expect, it, mock } from 'bun:test';
 import type { FileIO } from '@lib/ast/file-io';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';
+import type { FiberTraceResult, StyleReadContext, StyleReadManager, StyleReadResult } from '@lib/style-read/types';
 import { StyleReadService } from '../services/StyleReadService';
 
 const SIMPLE_JSX = `const App = () => <div className="text-red"><span>hello</span></div>;`;
@@ -258,6 +259,66 @@ describe('StyleReadService', () => {
     expect(result.tagType).toBe('unknown');
     expect(fileIO.readFile).not.toHaveBeenCalled();
     expect(errors).toEqual([]);
+  });
+});
+
+// =============================================================================
+// fiberTrace source-class naming (HYP-545)
+// =============================================================================
+
+/**
+ * Captures the StyleReadContext handed to the read manager so a test can assert
+ * what the service actually puts into fiberTrace, which the public result hides.
+ */
+function makeTraceCapturingManager(): { manager: StyleReadManager; captured: StyleReadContext[] } {
+  const captured: StyleReadContext[] = [];
+  const emptyResult: StyleReadResult = {
+    sourceTabs: [],
+    properties: [],
+    surfaceDecision: { standardStyleInspector: 'enabled', propsEditor: 'hidden', reasons: [] },
+    activeConditions: { state: 'base' },
+    availableConditionAxes: { states: [], viewportKeys: [], themeAxes: [], containerKeys: [] },
+    diagnostics: [],
+  };
+  return {
+    captured,
+    manager: {
+      async read(context: StyleReadContext): Promise<StyleReadResult> {
+        captured.push(context);
+        return emptyResult;
+      },
+    },
+  };
+}
+
+describe('StyleReadService — fiberTrace source classes (HYP-545)', () => {
+  it('populates the AST-static source-class field, not a misnamed runtime field', async () => {
+    // The fiberTrace classes are derived from the JSX className AST (static string +
+    // static fragments of dynamic expressions), never from the live DOM. The field name
+    // must reflect that: staticSourceClasses, not runtimeClasses.
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(DYNAMIC_JSX, 'src/App.tsx');
+    const btnEntry = entries[0]; // button element with template-literal className
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', btnEntry.loc.line, btnEntry.loc.column);
+
+    const fileIO = makeFileIO({ [FILE_PATH]: DYNAMIC_JSX });
+    const { manager, captured } = makeTraceCapturingManager();
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap, manager);
+
+    await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(captured).toHaveLength(1);
+    const trace = captured[0].fiberTrace as FiberTraceResult;
+
+    // The new, honest field carries the static source fragments…
+    expect(trace.staticSourceClasses).toEqual(['px-4', 'py-2']);
+    // …the live-only conditional values are never in there (AST-static, not live DOM).
+    expect(trace.staticSourceClasses).not.toContain('bg-blue');
+    expect(trace.staticSourceClasses).not.toContain('bg-gray');
+    // The misnamed field no longer exists.
+    expect('runtimeClasses' in trace).toBe(false);
   });
 });
 

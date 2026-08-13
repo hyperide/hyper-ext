@@ -190,7 +190,7 @@ export class StyleReadService {
             line: searchLine,
             column: searchColumn,
           },
-          runtimeClasses: className ? className.split(/\s+/).filter(Boolean) : [],
+          staticSourceClasses: className ? className.split(/\s+/).filter(Boolean) : [],
         },
       });
 

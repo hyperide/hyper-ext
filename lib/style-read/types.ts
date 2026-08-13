@@ -275,7 +275,14 @@ export interface FiberTraceResult {
     line: number;
     column: number;
   };
-  runtimeClasses?: string[];
+  /**
+   * Class names extracted from the JSX `className` AST — the exact static string plus
+   * the static fragments of dynamic expressions. These are AST-static source classes,
+   * NOT the live DOM `element.className`: this read path has no DOM access, so it cannot
+   * see runtime-only classes (e.g. the active branch of a conditional). The name reflects
+   * the source, not a runtime value.
+   */
+  staticSourceClasses?: string[];
 }
 
 // --- Runtime Theme Context ---
