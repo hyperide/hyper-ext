@@ -246,8 +246,8 @@ export async function detectUIKit(
     return 'tamagui';
   }
 
-  // Check for Tailwind — bare dep or Astro integration (@astrojs/tailwind, @tailwindcss/vite)
-  if (deps.tailwindcss || deps['@astrojs/tailwind'] || deps['@tailwindcss/vite']) {
+  // Check for Tailwind
+  if (deps.tailwindcss) {
     return 'tailwind';
   }
 
@@ -299,8 +299,7 @@ export async function detectCssSystem(
   if (has('@fluentui/react-components') || has('@fluentui/react')) return 'fluentui';
 
   // Tailwind (bare — most common, check last so design systems win)
-  // @astrojs/tailwind = Astro integration; @tailwindcss/vite = Tailwind v4 in Vite/Astro
-  if (has('tailwindcss') || has('@astrojs/tailwind') || has('@tailwindcss/vite')) return 'tailwind';
+  if (has('tailwindcss')) return 'tailwind';
 
   // SASS/SCSS — detected by sass/node-sass dep. Extension treats it like
   // plain CSS (className-based, no special AST handling needed).
