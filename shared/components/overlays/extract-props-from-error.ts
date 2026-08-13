@@ -9,6 +9,7 @@
  *   when the component truly has no props (HYP-649 recovery pipeline).
  */
 
+import { isProviderContextError } from './classify-render-error';
 import type { SimplePropInfo } from './PropsForm';
 
 /**
@@ -43,11 +44,15 @@ export function extractPropsFromError(errorMsg: string): string[] {
  *   - The component's real propsSchema is loaded AND empty (not undefined — that
  *     means still loading).
  *   - The error message does not mention any specific prop names.
+ *   - The error is NOT a provider-context error (HYP-876): a missing
+ *     `<XProvider>` cannot be fixed by a sample, so writing one only pollutes
+ *     the user's source file and re-fires the same crash.
  */
 export function shouldAutoCreateEmptySampleFromError(
   propsSchema: SimplePropInfo[] | null | undefined,
   error: string,
 ): boolean {
   if (!Array.isArray(propsSchema) || propsSchema.length !== 0) return false;
+  if (isProviderContextError(error)) return false;
   return extractPropsFromError(error).length === 0;
 }

@@ -65,4 +65,57 @@ describe('ComponentErrorOverlay', () => {
     expect(onCreateSample).toHaveBeenCalledTimes(1);
     expect(onCreateSample.mock.calls[0][0]).toBe('SampleDefault');
   });
+
+  // HYP-876 — runtime-error card: a provider-context crash must NEVER render the
+  // props card ("This component requires props to render" / Create Empty Sample).
+  describe('runtime-error card (HYP-876)', () => {
+    const providerErrorProps = {
+      ...baseProps,
+      componentPath: 'src/app/account/AccountPage.tsx',
+      error: 'useWorkspace must be used inside <WorkspaceProvider>',
+    };
+
+    it('shows the real error message, not the requires-props copy', () => {
+      const { getByTestId, queryByText } = render(<ComponentErrorOverlay {...providerErrorProps} />);
+      expect(getByTestId(TID.preview.componentErrorRuntimeMessage).textContent).toContain(
+        'useWorkspace must be used inside <WorkspaceProvider>',
+      );
+      expect(queryByText(/requires props to render/)).toBeNull();
+      expect(queryByText(/Could not detect required prop names/)).toBeNull();
+    });
+
+    it('offers no Create Sample action and is dismissable via the Dismiss button', () => {
+      const onClose = mock(() => {});
+      const { getByTestId, queryByTestId } = render(
+        <ComponentErrorOverlay {...providerErrorProps} onClose={onClose} />,
+      );
+      expect(queryByTestId(TID.preview.componentErrorCreateSample)).toBeNull();
+      fireEvent.click(getByTestId(TID.preview.componentErrorDismiss));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the Configure AI Key action for provider-context errors', () => {
+      const onConfigureAIKey = mock(() => {});
+      const { getByTestId } = render(
+        <ComponentErrorOverlay {...providerErrorProps} onConfigureAIKey={onConfigureAIKey} />,
+      );
+      fireEvent.click(getByTestId(TID.preview.componentErrorConfigureAI));
+      expect(onConfigureAIKey).toHaveBeenCalledTimes(1);
+    });
+
+    it('classifies an empty resolved schema + hint-free error as runtime too', () => {
+      const { getByTestId, queryByTestId } = render(
+        <ComponentErrorOverlay {...baseProps} error="boom from a useEffect" propsSchema={[]} />,
+      );
+      expect(getByTestId(TID.preview.componentErrorRuntimeMessage).textContent).toContain('boom from a useEffect');
+      // Not a provider error — no AI-wrapper pitch, just an honest dismissable card.
+      expect(queryByTestId(TID.preview.componentErrorConfigureAI)).toBeNull();
+    });
+
+    it('still renders the props card when the error names props', () => {
+      const { getByTestId, queryByTestId } = render(<ComponentErrorOverlay {...baseProps} />);
+      expect(getByTestId(TID.preview.componentErrorCreateSample)).toBeTruthy();
+      expect(queryByTestId(TID.preview.componentErrorRuntimeMessage)).toBeNull();
+    });
+  });
 });

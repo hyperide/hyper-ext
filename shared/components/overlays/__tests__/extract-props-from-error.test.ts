@@ -51,4 +51,21 @@ describe('shouldAutoCreateEmptySampleFromError', () => {
   it('returns false when propsSchema has entries', () => {
     expect(shouldAutoCreateEmptySampleFromError([{ name: 'x', type: 'string', required: true }], 'err')).toBe(false);
   });
+
+  // HYP-876 — a missing provider cannot be fixed by a sample; auto-writing one
+  // pollutes the user's source file and re-fires the same crash in a loop.
+  it('returns false for a provider-context error even with empty schema', () => {
+    expect(shouldAutoCreateEmptySampleFromError([], 'useWorkspace must be used inside <WorkspaceProvider>')).toBe(
+      false,
+    );
+    expect(shouldAutoCreateEmptySampleFromError([], 'No QueryClient set, use QueryClientProvider to set one')).toBe(
+      false,
+    );
+    expect(
+      shouldAutoCreateEmptySampleFromError(
+        [],
+        'could not find react-redux context value; please ensure the component is wrapped in a <Provider>',
+      ),
+    ).toBe(false);
+  });
 });

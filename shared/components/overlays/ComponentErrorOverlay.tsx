@@ -17,6 +17,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TID } from '../../data-testid-map';
 import { isTrustedMessageOrigin } from '../../utils/trusted-message-origin';
+import { classifyRenderError, isProviderContextError } from './classify-render-error';
 import { extractPropsFromError } from './extract-props-from-error';
 import {
   computeInitialPropValues,
@@ -82,22 +83,116 @@ function isFilled(v: unknown): boolean {
   return true;
 }
 
-export function ComponentErrorOverlay({
-  componentPath,
+/** `src/app/Foo.tsx` → `Foo` — the card title for both overlay variants. */
+function componentNameFromPath(componentPath: string): string {
+  return (
+    componentPath
+      .split('/')
+      .pop()
+      ?.replace(/\.tsx?$/, '') ?? componentPath
+  );
+}
+
+/**
+ * Dispatcher: classify the caught render error and pick the card variant.
+ *
+ * HYP-876 — a provider-context crash ("useWorkspace must be used inside
+ * <WorkspaceProvider>") or any crash of a component whose prop schema resolved
+ * EMPTY is NOT a props problem; showing the props card ("This component
+ * requires props to render" + Create Empty Sample) for it is a lie no button
+ * can make true. Those errors get the honest runtime-error card instead.
+ */
+export function ComponentErrorOverlay(props: ComponentErrorOverlayProps) {
+  const { error, propsSchema } = props;
+  const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
+  const kind = classifyRenderError({ error, propsSchema, extractedProps });
+  if (kind === 'runtime') {
+    return (
+      <RuntimeErrorCard
+        componentName={componentNameFromPath(props.componentPath)}
+        error={error}
+        onConfigureAIKey={props.onConfigureAIKey}
+        onClose={props.onClose}
+      />
+    );
+  }
+  return <PropsErrorCard {...props} extractedProps={extractedProps} />;
+}
+
+/**
+ * Honest card for a render error that props cannot fix: shows the real error
+ * message and, for provider-context errors, points at the isolation wrapper
+ * (`.hyperide/preview.tsx`) as the actual fix. Always dismissable — a live
+ * render (or the app-mode fallback) may be sitting right behind the backdrop.
+ */
+function RuntimeErrorCard({
+  componentName,
   error,
+  onConfigureAIKey,
+  onClose,
+}: {
+  componentName: string;
+  error: string;
+  onConfigureAIKey: () => void;
+  onClose: () => void;
+}) {
+  const providerError = isProviderContextError(error);
+  return (
+    <div data-testid={TID.preview.componentErrorOverlay} style={backdropStyle}>
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <h3 style={titleStyle}>{componentName}</h3>
+          <button type="button" onClick={onClose} style={closeButtonStyle} title="Close" aria-label="Close">
+            &times;
+          </button>
+        </div>
+        <p style={subtitleStyle}>This component crashed at runtime — the error is not caused by missing props.</p>
+        <pre data-testid={TID.preview.componentErrorRuntimeMessage} style={runtimeErrorMessageStyle}>
+          {error}
+        </pre>
+        {providerError && (
+          <p style={noPropsHintStyle}>
+            The component reads a React context whose provider is not mounted in the isolated preview. HyperIDE can
+            generate <code style={attentionCodeStyle}>.hyperide/preview.tsx</code> with your app&apos;s providers when
+            an AI provider is configured — or edit that file manually to wrap previews in the providers from your app
+            entry.
+          </p>
+        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {providerError && (
+            <button
+              type="button"
+              data-testid={TID.preview.componentErrorConfigureAI}
+              style={primaryButtonStyle}
+              onClick={onConfigureAIKey}
+            >
+              Configure AI Key
+            </button>
+          )}
+          <button
+            type="button"
+            data-testid={TID.preview.componentErrorDismiss}
+            style={providerError ? secondaryButtonStyle : primaryButtonStyle}
+            onClick={onClose}
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PropsErrorCard({
+  componentPath,
+  extractedProps,
   propsSchema,
   unsatisfiedProps,
   onCreateSample,
   onConfigureAIKey,
   onClose,
-}: ComponentErrorOverlayProps) {
-  const componentName =
-    componentPath
-      .split('/')
-      .pop()
-      ?.replace(/\.tsx?$/, '') ?? componentPath;
-
-  const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
+}: Omit<ComponentErrorOverlayProps, 'error' | 'errorSeq'> & { extractedProps: string[] }) {
+  const componentName = componentNameFromPath(componentPath);
   // Feature #210 — props that need the user's attention: the union of props the
   // auto-sample generator couldn't satisfy and prop names parsed out of the actual
   // render error. Filtered to props that have an editable field, so the
@@ -330,6 +425,22 @@ const subtitleStyle: CSSProperties = {
   color: 'var(--overlay-muted)',
   fontSize: 12,
   margin: '0 0 20px',
+};
+
+const runtimeErrorMessageStyle: CSSProperties = {
+  color: 'var(--overlay-fg)',
+  fontFamily: 'var(--overlay-font-mono)',
+  fontSize: 11,
+  lineHeight: 1.5,
+  background: 'var(--overlay-code-bg)',
+  border: '1px solid var(--overlay-border)',
+  borderRadius: 6,
+  padding: '8px 10px',
+  margin: '0 0 16px',
+  maxHeight: '30vh',
+  overflow: 'auto',
+  whiteSpace: 'pre-wrap',
+  overflowWrap: 'anywhere',
 };
 
 const noPropsHintStyle: CSSProperties = {

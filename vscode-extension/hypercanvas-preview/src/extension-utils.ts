@@ -37,47 +37,13 @@ export function isForeignExtensionError(reason: unknown): boolean {
 }
 
 /**
- * Returns true when an error message is a React context-provider error —
- * the kind a hook like `useAuth` / `useFeatureFlags` throws when the
- * component renders OUTSIDE its provider tree.
- *
- * HYP-487: no-router Vite apps patch the entry file to mount the previewed
- * component via its own `createRoot`, bypassing `<App>` where the providers
- * live. The context hooks then throw and the preview is blank. Matching this
- * pattern lets the extension auto-generate the `.hyperide/preview.tsx`
- * wrapper (isolated mode) so the component renders inside its providers.
- *
- * Matches both real phrasings observed in conloca-app:
- *   "useAuth must be used inside <AuthProvider>"        (angle brackets)
- *   "useFeatureFlags must be used inside FeatureFlagsProvider"  (bare)
- * and the common "within (a) XProvider" variant. The `\w*Provider` anchor
- * keeps it from firing on generic "must be used" errors that don't name a
- * Provider (e.g. "useId must be used during render").
- *
- * DEFENSIVE BROADENING (HYP-487 follow-up — not observed in conloca-app):
- * the original regex matches ONLY the "must be used (inside|within) …Provider"
- * phrasing. Other libraries throw "missing provider" errors with different
- * wording; a component reaching one of those FIRST would slip the detector and
- * leave a silent blank preview with no guidance. We also recognise:
- *   - react-query: "No QueryClient set, use QueryClientProvider to set one"
- *   - react-redux: "could not find react-redux context value; … wrapped in a <Provider>"
- *   - generic:     "must be wrapped in <ThemeProvider>"
- * Note: in conloca-app this path is not actually reached — every previewed
- * component calls a conloca context hook (useWorkspace/useHostClient/
- * useFeatureFlags) BEFORE useQuery, so the FIRST throw is already a
- * "must be used inside <…Provider>" message the original regex matched. These
- * branches are hardening for other apps, not a fix for a confirmed conloca bug.
+ * Provider-context error detection (HYP-487) moved to the shared overlay layer
+ * (HYP-876): the webview's ComponentErrorOverlay now classifies render errors
+ * with the SAME predicate the host uses to trigger the auto-wrapper, so the two
+ * can never disagree on what counts as a provider error. Re-exported here to
+ * keep the host-side import path stable.
  */
-export function isProviderContextError(message: string | null | undefined): boolean {
-  if (!message) return false;
-  return (
-    /must be used (?:inside|within)\s+(?:an?\s+)?<?\w*Provider>?/.test(message) ||
-    // "(must be )?wrapped in (a/an) <XProvider>" — react-redux, many context libs
-    /wrapped in\s+(?:an?\s+)?<?\w*Provider>?/.test(message) ||
-    // react-query: "No QueryClient set, use QueryClientProvider to set one"
-    /\bNo QueryClient set\b/i.test(message)
-  );
-}
+export { isProviderContextError } from '@shared/components/overlays/classify-render-error';
 
 export type SerializedReason = { name: string; message: string; stack?: string; [key: string]: unknown } | string;
 
