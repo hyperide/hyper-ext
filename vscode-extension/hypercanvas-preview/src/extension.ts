@@ -55,7 +55,9 @@ import {
   detectRepoType,
   detectUIKit,
   detectUnsupportedProject,
+  getPackageScripts,
   readPackageJson,
+  resolveRunnableTargets,
 } from './services/ProjectDetector';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
 import { generatePreviewWrapper, writePreviewWrapper } from './services/WrapperGenerator';
@@ -73,6 +75,15 @@ let stateHub: StateHub | null = null;
 let panelRouter: PanelRouter | null = null;
 let diagnosticHub: DiagnosticHub | null = null;
 let diagnosticsChannel: vscode.OutputChannel | null = null;
+// Monorepo-aware dev-server start prep (HYP-431). Set by activate() so the
+// hypercanvas.startDevServer command (registered in registerCommands, a sibling
+// function with no access to activate()'s reroot closures) can resolve a runnable
+// sub-project target before launching, and re-root the preview/dev axis to a chosen
+// one. Returns 'ready' to proceed, or 'ambiguous' + candidate paths to let the user
+// pick. rerootToTarget re-roots to the user's choice after a QuickPick.
+let prepareDevServerTargetRef: (() => Promise<{ kind: 'ready' } | { kind: 'ambiguous'; targets: string[] }>) | null =
+  null;
+let rerootDevServerTargetRef: ((target: string) => Promise<void>) | null = null;
 let _prevDiagnosticSinkPath: string | undefined;
 let _diagnosticCaptureActive = false;
 
@@ -807,8 +818,14 @@ export function activate(context: vscode.ExtensionContext) {
   // componentService, or runProjectDetection — those stay repo-rooted so the Explorer
   // accordion spans all sub-projects and AST edits resolve against the repo root
   // (HYP-420; astBridge cannot move without breaking cross-target Explorer).
-  const rerootPreviewPipeline = (targetRoot: string): void => {
-    if (targetRoot === activeWorkspaceRoot) return;
+  // Returns the devServerManager.setProjectPath() promise so callers that start the
+  // dev server immediately after re-rooting (the start-before-select path, HYP-431)
+  // can await the path switch — setProjectPath stops the old server and only then
+  // updates _projectPath, so a non-awaited start() could read the stale repo root and
+  // fail with "No dev or start script". Callers that don't start eagerly (workspace
+  // reroot, component select) may ignore the return value.
+  const rerootPreviewPipeline = (targetRoot: string): Promise<void> => {
+    if (targetRoot === activeWorkspaceRoot) return Promise.resolve();
 
     modeManager.stopWatching();
     activeWorkspaceRoot = targetRoot;
@@ -817,7 +834,7 @@ export function activate(context: vscode.ExtensionContext) {
     modeManager.startWatching();
     void setupEntryFileWatcher(activeWorkspaceRoot, modeManager);
 
-    void devServerManager?.setProjectPath(activeWorkspaceRoot);
+    return devServerManager?.setProjectPath(activeWorkspaceRoot) ?? Promise.resolve();
   };
 
   // Heavy re-root for a genuine VS Code workspace-folder change: in addition to the
@@ -875,6 +892,60 @@ export function activate(context: vscode.ExtensionContext) {
     },
     reroot: (projectRoot) => rerootPreviewPipeline(projectRoot),
   });
+
+  /**
+   * Make the dev-server start path monorepo-aware for the start-BEFORE-select gap
+   * (HYP-431). The designed flow re-roots the preview/dev axis on component select
+   * (resolveAndRerootToComponent). But if a monorepo is opened at the repo ROOT and
+   * the dev server is started — or autostart fires — before any component is picked,
+   * the active root is still the repo root, which usually has no runnable dev/start
+   * script (only a target does), so start() fails with "No dev or start script".
+   *
+   * Resolve a runnable sub-project target and re-root to it so start() launches the
+   * right dev server:
+   *   - active root already runnable (post-select, or single-package) → no-op.
+   *   - exactly one runnable target → re-root to it (same end-state as selecting a
+   *     component in that target, so the designed flow stays consistent).
+   *   - multiple runnable targets → DEFER: do not guess which app to boot. The
+   *     caller surfaces an actionable message (manual) or skips (autostart).
+   *   - no runnable target → no-op; the existing "No dev or start script" error
+   *     from start() stands.
+   *
+   * Returns 'ready' when start may proceed, or 'ambiguous' with the candidate
+   * target paths when the caller must defer and ask the user to choose.
+   */
+  const prepareDevServerTarget = async (): Promise<{ kind: 'ready' } | { kind: 'ambiguous'; targets: string[] }> => {
+    // Already rooted at a runnable project (a component was selected, or this is a
+    // single-package project) — nothing to resolve. This early-return also keeps the
+    // sub-project scan below from ever running for ordinary single-package projects.
+    const activeScripts = await getPackageScripts(activeWorkspaceRoot);
+    if (activeScripts.dev || activeScripts.start) return { kind: 'ready' };
+
+    // The active root has no runnable script. Scan the conventional workspace dirs for
+    // sub-projects that do. We don't gate on detectRepoType here on purpose: it only
+    // recognizes array-form `workspaces` (missing the object form `{ packages: [...] }`)
+    // and is shared general code — scanning five dirs is cheap and works for every
+    // monorepo layout. Empty result ≡ not a (runnable) monorepo → let start()'s error stand.
+    const repoRoot = workspaceFolderRoot();
+    const targets = await resolveRunnableTargets(repoRoot);
+    if (targets.length === 1) {
+      // Await the reroot — setProjectPath stops the old server then swaps _projectPath;
+      // the caller starts immediately after, so it must not race the path switch.
+      await rerootPreviewPipeline(targets[0]);
+      return { kind: 'ready' };
+    }
+    if (targets.length > 1) {
+      return { kind: 'ambiguous', targets };
+    }
+    return { kind: 'ready' }; // no runnable target — existing "No dev or start script" error stands
+  };
+
+  // Expose the prep + reroot to the hypercanvas.startDevServer command, which lives
+  // in registerCommands (a sibling function without access to these closures).
+  prepareDevServerTargetRef = prepareDevServerTarget;
+  rerootDevServerTargetRef = (target: string) => rerootPreviewPipeline(target);
+  // Both refs are reset in deactivate() so a re-activation in the same host doesn't
+  // keep a stale closure over the previous activate()'s state.
 
   context.subscriptions.push({
     dispose: () => {
@@ -1267,12 +1338,31 @@ export function activate(context: vscode.ExtensionContext) {
   const autoStart = vscode.workspace.getConfiguration('hypercanvas.devServer').get<boolean>('autoStart', false);
 
   if (autoStart) {
-    devServerManager
-      .start()
-      .then((state) => {
-        if (state.status === 'running' && state.url) {
-          previewPanel?.setPreviewUrl(state.url);
+    // Monorepo-aware autostart (HYP-431): resolve a runnable sub-project target
+    // before launching. At the repo root of a monorepo there is usually no dev/start
+    // script, so a naive .start() would fail before any component is selected.
+    prepareDevServerTarget()
+      .then((prep) => {
+        if (prep.kind === 'ambiguous') {
+          // Don't guess which app to boot on autostart — surface an actionable prompt
+          // instead of silently dropping the request. The "Select project" button runs
+          // the start command, which shows a QuickPick of the runnable targets. Picking
+          // a component also works (the active root becomes runnable on select).
+          vscode.window
+            .showInformationMessage(
+              `HyperIDE: ${prep.targets.length} runnable projects found in this monorepo. Choose which dev server to start.`,
+              'Select project',
+            )
+            .then((choice) => {
+              if (choice === 'Select project') vscode.commands.executeCommand('hypercanvas.startDevServer');
+            });
+          return;
         }
+        return devServerManager?.start().then((state) => {
+          if (state?.status === 'running' && state.url) {
+            previewPanel?.setPreviewUrl(state.url);
+          }
+        });
       })
       .catch((err) => {
         // Without this catch, devServerManager.start() rejecting (port in use,
@@ -1302,6 +1392,11 @@ export async function deactivate() {
     devServerManager.dispose();
     devServerManager = null;
   }
+
+  // Drop the start-before-select closures (HYP-431) so a re-activation in the same
+  // host doesn't keep a stale closure over the previous activate()'s state.
+  prepareDevServerTargetRef = null;
+  rerootDevServerTargetRef = null;
 
   if (mcpServer) {
     mcpServer.dispose();
@@ -1509,6 +1604,25 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
       if (!devServerManager) {
         return;
+      }
+
+      // Monorepo-aware start (HYP-431): when opened at the repo root before any
+      // component is selected, resolve a runnable sub-project target. One target →
+      // re-root to it automatically; several → let the user pick which app to boot
+      // rather than guessing (starting the wrong app is worse than asking).
+      const prep = await prepareDevServerTargetRef?.();
+      if (prep?.kind === 'ambiguous') {
+        const repoRoot = getCurrentRoot();
+        const picked = await vscode.window.showQuickPick(
+          prep.targets.map((t) => ({ label: relative(repoRoot, t) || t, description: t, target: t })),
+          {
+            title: 'HyperIDE: Select a project to run',
+            placeHolder: 'Multiple runnable projects found — choose which dev server to start',
+          },
+        );
+        if (!picked) return; // user dismissed — don't start anything
+        // Await the reroot before start() below — see rerootPreviewPipeline note on the race.
+        await rerootDevServerTargetRef?.(picked.target);
       }
 
       await vscode.window.withProgress(

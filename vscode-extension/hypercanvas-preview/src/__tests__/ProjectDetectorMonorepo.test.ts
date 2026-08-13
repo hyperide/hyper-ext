@@ -35,7 +35,18 @@ function setup(files: Record<string, string>) {
   for (const [p, content] of Object.entries(files)) fsFiles.set(p, content);
 }
 
-const { detectRepoType, detectProjectType, detectCssSystem } = await import('../services/ProjectDetector');
+const { detectRepoType, detectProjectType, detectCssSystem, resolveRunnableTargets } =
+  await import('../services/ProjectDetector');
+
+function pkgWithScripts(scripts: Record<string, string>): string {
+  return JSON.stringify({ scripts });
+}
+
+// A runnable, renderable React front-end target: dev/start script + react dep.
+// resolveRunnableTargets only auto-picks renderable React members (HYP-434 P2).
+function reactTarget(scripts: Record<string, string>): string {
+  return JSON.stringify({ dependencies: { react: '^19' }, scripts });
+}
 
 const ROOT = '/workspace';
 
@@ -142,6 +153,117 @@ describe('detectCssSystem — targets/ directory (Conloca pattern)', () => {
       [`${ROOT}/libs/ui/package.json`]: pkg({ tailwindcss: '^3' }),
     });
     expect(await detectCssSystem(ROOT)).toBe('tailwind');
+  });
+});
+
+// ─── resolveRunnableTargets (start-before-select, HYP-431) ───────────────────
+
+describe('resolveRunnableTargets', () => {
+  it('returns the single target that has a dev script (conloca shape)', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({
+        workspaces: ['packages/*', 'targets/*'],
+        scripts: { 'dev:app': 'nx run @conloca/conloca-app:dev' },
+      }),
+      [`${ROOT}/nx.json`]: '{}',
+      // app target: runnable (dev + start) and a renderable React front-end
+      [`${ROOT}/targets/conloca-app/package.json`]: reactTarget({ dev: 'vite dev', start: 'vite dev' }),
+      // library packages: no scripts → not runnable
+      [`${ROOT}/packages/cms-spa/package.json`]: pkg(),
+      [`${ROOT}/packages/content-api/package.json`]: pkg(),
+    });
+    expect(await resolveRunnableTargets(ROOT)).toEqual([`${ROOT}/targets/conloca-app`]);
+  });
+
+  it('counts a target with only a start script as runnable', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ workspaces: ['apps/*'] }),
+      [`${ROOT}/apps/web/package.json`]: reactTarget({ start: 'react-scripts start' }),
+    });
+    expect(await resolveRunnableTargets(ROOT)).toEqual([`${ROOT}/apps/web`]);
+  });
+
+  it('returns multiple runnable targets when several have dev/start', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ workspaces: ['apps/*'] }),
+      [`${ROOT}/apps/web/package.json`]: reactTarget({ dev: 'vite dev' }),
+      [`${ROOT}/apps/admin/package.json`]: reactTarget({ dev: 'next dev' }),
+    });
+    const targets = await resolveRunnableTargets(ROOT);
+    expect(targets.sort()).toEqual([`${ROOT}/apps/admin`, `${ROOT}/apps/web`]);
+  });
+
+  it('returns empty when no sub-project has a dev/start script', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ workspaces: ['packages/*'] }),
+      [`${ROOT}/packages/lib-a/package.json`]: pkg(),
+      [`${ROOT}/packages/lib-b/package.json`]: pkgWithScripts({ build: 'tsc' }),
+    });
+    expect(await resolveRunnableTargets(ROOT)).toEqual([]);
+  });
+
+  it('scans all conventional workspace dirs (targets/apps/packages/libs/services)', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ devDependencies: { nx: '^22' } }),
+      [`${ROOT}/nx.json`]: '{}',
+      // renderable React front-end living under services/ — proves the services/ dir is scanned
+      [`${ROOT}/services/web/package.json`]: JSON.stringify({
+        dependencies: { react: '^19' },
+        scripts: { dev: 'vite dev' },
+      }),
+    });
+    expect(await resolveRunnableTargets(ROOT)).toEqual([`${ROOT}/services/web`]);
+  });
+
+  // P2 (codex, PR #281): a runnable backend package (dev script, no React) must NOT be
+  // auto-selected. Filtering it out makes the single-target list empty → caller defers
+  // ("No dev or start script" stands) instead of autostarting a non-renderable API server.
+  it('excludes a backend-only runnable target (dev script, no React)', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ workspaces: ['services/*'] }),
+      // Hono/Express API: has a dev script but no React → not renderable in the preview
+      [`${ROOT}/services/api/package.json`]: JSON.stringify({
+        dependencies: { hono: '^4' },
+        scripts: { dev: 'tsx watch src' },
+      }),
+    });
+    expect(await resolveRunnableTargets(ROOT)).toEqual([]);
+  });
+
+  it('keeps a renderable React target and drops a sibling backend target', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ workspaces: ['apps/*', 'services/*'] }),
+      [`${ROOT}/apps/web/package.json`]: JSON.stringify({
+        dependencies: { react: '^19' },
+        scripts: { dev: 'vite dev' },
+      }),
+      [`${ROOT}/services/api/package.json`]: JSON.stringify({
+        dependencies: { express: '^4' },
+        scripts: { dev: 'tsx watch src' },
+      }),
+    });
+    expect(await resolveRunnableTargets(ROOT)).toEqual([`${ROOT}/apps/web`]);
+  });
+
+  it('keeps a target with JSX source but no local react dep (React hoisted to root)', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ workspaces: ['apps/*'], dependencies: { react: '^19' } }),
+      // Member declares no react itself (hoisted to root) but ships .tsx source → renderable
+      [`${ROOT}/apps/web/package.json`]: pkgWithScripts({ dev: 'vite dev' }),
+      [`${ROOT}/apps/web/src/App.tsx`]: 'export const App = () => null;',
+    });
+    expect(await resolveRunnableTargets(ROOT)).toEqual([`${ROOT}/apps/web`]);
+  });
+
+  it('excludes non-React frontend frameworks (Vue) even with a dev script', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ workspaces: ['apps/*'] }),
+      [`${ROOT}/apps/vue-app/package.json`]: JSON.stringify({
+        dependencies: { vue: '^3' },
+        scripts: { dev: 'vite dev' },
+      }),
+    });
+    expect(await resolveRunnableTargets(ROOT)).toEqual([]);
   });
 });
 

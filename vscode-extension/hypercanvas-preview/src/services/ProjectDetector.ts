@@ -95,6 +95,109 @@ async function readSubPackageDeps(projectPath: string): Promise<Record<string, s
 }
 
 /**
+ * Conventional directories that hold monorepo member packages. Mirrors the
+ * WORKSPACE_DIRS list the component scanner uses for the SubProjectAccordion and
+ * the dirs readSubPackageDeps scans, so dev-server target resolution and the
+ * Explorer agree on what counts as a sub-project.
+ */
+const WORKSPACE_MEMBER_DIRS = ['targets', 'apps', 'packages', 'libs', 'services'] as const;
+
+/**
+ * Decide whether a monorepo member package is a renderable React front-end — the only
+ * kind we can show in the preview iframe. Mirrors the component scanner's
+ * `ComponentScanner.checkSubProjectSupport` (lib/component-scanner/scanner.ts), which is
+ * the source of truth for "is this sub-project supported": reject Vue/Svelte/Angular, then
+ * accept when react/react-native is declared OR the member ships `.tsx`/`.jsx` source files
+ * (React deps hoisted to the workspace root are common in monorepos, so a missing local dep
+ * is not proof a package is non-renderable). Kept in sync deliberately rather than imported —
+ * that method is a private, sync class method and this module is async + dependency-light.
+ */
+async function isRenderableReactTarget(memberPath: string, pkg: Record<string, unknown> | null): Promise<boolean> {
+  const deps = {
+    ...(pkg?.dependencies as Record<string, string> | undefined),
+    ...(pkg?.devDependencies as Record<string, string> | undefined),
+    ...(pkg?.peerDependencies as Record<string, string> | undefined),
+  };
+
+  // Non-React frontends the scanner explicitly rejects.
+  if (deps.vue || deps['@vue/core'] || deps.svelte || deps['@angular/core']) return false;
+
+  // React (web or native) declared locally → renderable in the preview.
+  if (deps.react || deps['react-native']) return true;
+
+  // No local React dep — fall back to scanning for JSX/TSX source, the same signal the
+  // scanner uses. Scoped to conventional source dirs (mirrors hasCssModuleFiles) so we
+  // never descend into node_modules.
+  return hasReactSourceFiles(memberPath);
+}
+
+/**
+ * Check whether a package directory ships React source (.tsx/.jsx) under its common
+ * source directories. Mirrors hasCssModuleFiles' scan shape so it stays compatible with
+ * the same fs.readdir behavior and avoids walking node_modules.
+ */
+async function hasReactSourceFiles(memberPath: string): Promise<boolean> {
+  const SOURCE_DIRS = ['src', 'app', 'pages', 'components'];
+  for (const dir of SOURCE_DIRS) {
+    try {
+      const entries = await fs.readdir(path.join(memberPath, dir), { recursive: true });
+      if (entries.some((e) => typeof e === 'string' && /\.(tsx|jsx)$/.test(e))) return true;
+    } catch {
+      // Directory doesn't exist — skip
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve monorepo member packages that can run a dev server AND render in the preview —
+ * i.e. have their own `dev`/`start` script and are a React front-end. Scans the
+ * conventional workspace dirs one level deep.
+ *
+ * Used by the dev-server start path (HYP-431) when a monorepo is opened at the repo
+ * ROOT and the server is started (or autostart fires) BEFORE any component is
+ * selected. The root often has no runnable dev/start script — only a target does —
+ * so start() would fail with "No dev or start script". This finds the runnable
+ * target(s) so the caller can re-root the preview/dev axis to the right sub-project
+ * (one target → start it; many → defer with an actionable message; none → let the
+ * existing error stand).
+ *
+ * The renderable filter (HYP-434 P2): a backend package (e.g. services/api with a `dev`
+ * script but no React — Express/Hono) is NOT a valid preview target. Auto-starting it
+ * would point the preview URL at an API server that never renders. So such packages are
+ * excluded here; if they are the only runnable members the result is empty → caller
+ * defers (same as the no-runnable-target path) instead of autostarting a non-renderable
+ * backend.
+ *
+ * Returns absolute paths of runnable, renderable member packages. Empty when none qualify
+ * (a monorepo of pure libraries, only non-renderable backends, or a single-package project).
+ */
+export async function resolveRunnableTargets(projectPath: string): Promise<string[]> {
+  const runnable: string[] = [];
+
+  for (const dir of WORKSPACE_MEMBER_DIRS) {
+    let entries: string[];
+    try {
+      entries = await fs.readdir(path.join(projectPath, dir));
+    } catch {
+      continue; // dir doesn't exist — skip
+    }
+
+    for (const entry of entries) {
+      const memberPath = path.join(projectPath, dir, entry);
+      // Read package.json once and derive both the scripts and the renderable check.
+      const pkg = await readPackageJson(memberPath);
+      const scripts = (pkg?.scripts as Record<string, string> | undefined) ?? {};
+      if ((scripts.dev || scripts.start) && (await isRenderableReactTarget(memberPath, pkg))) {
+        runnable.push(memberPath);
+      }
+    }
+  }
+
+  return runnable;
+}
+
+/**
  * Detect project type from package.json dependencies and config files
  */
 export async function detectProjectType(projectPath: string): Promise<ProjectType> {
