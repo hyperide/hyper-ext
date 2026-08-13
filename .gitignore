@@ -52,6 +52,7 @@ vscode-extension/hypercanvas-preview/out
 .hyperide/
 src/__canvas_preview__.tsx
 vscode-extension/hypercanvas-code-server/out
+vscode-extension/hypercanvas-preview/bun.lock
 *.vsix
 
 # Compiled JS alongside TS sources (esbuild/tsc artifacts)

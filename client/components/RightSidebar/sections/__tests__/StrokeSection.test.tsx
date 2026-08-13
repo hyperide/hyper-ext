@@ -47,7 +47,7 @@ describe('StrokeSection', () => {
     expect(screen.getByTestId(TID.inspector.strokeStyle)).toBeTruthy();
   });
 
-  it('syncs stroke width, style, and color edits', () => {
+  it('syncs stroke width and style edits', () => {
     const onStrokesChange = mock();
     const syncStyleChange = mock();
 
@@ -55,21 +55,17 @@ describe('StrokeSection', () => {
 
     fireEvent.change(screen.getByTestId(TID.inspector.strokeWidth), { target: { value: '3' } });
     fireEvent.change(screen.getByTestId(TID.inspector.strokeStyle), { target: { value: 'dashed' } });
-    fireEvent.change(screen.getByTestId(TID.inspector.strokeColor), { target: { value: '#ff0000' } });
 
     expect(syncStyleChange).toHaveBeenCalledWith('borderWidth', '3px');
     expect(syncStyleChange).toHaveBeenCalledWith('borderStyle', 'dashed');
-    expect(syncStyleChange).toHaveBeenCalledWith('borderColor', '#ff0000');
     expect(onStrokesChange).toHaveBeenCalled();
   });
 
-  it('keeps native color input valid for non-hex computed colors', () => {
-    const rgbStroke = { ...stroke, color: 'rgb(15, 23, 42)' };
+  it('renders ColorCombobox for stroke color with correct value', () => {
+    render(<StrokeSection strokes={[stroke]} onStrokesChange={mock()} syncStyleChange={mock()} />);
 
-    render(<StrokeSection strokes={[rgbStroke]} onStrokesChange={mock()} syncStyleChange={mock()} />);
-
-    const input = screen.getByTestId(TID.inspector.strokeColor) as HTMLInputElement;
-    expect(input.value).toBe('#000000');
+    const colorContainer = screen.getByTestId(TID.inspector.strokeColor);
+    expect(colorContainer).toBeTruthy();
   });
 
   it('allows border width values with explicit CSS units', () => {
@@ -80,5 +76,19 @@ describe('StrokeSection', () => {
     fireEvent.change(screen.getByTestId(TID.inspector.strokeWidth), { target: { value: '0.25rem' } });
 
     expect(syncStyleChange).toHaveBeenCalledWith('borderWidth', '0.25rem');
+  });
+
+  it('style select renders with current stroke style value', () => {
+    render(<StrokeSection strokes={[stroke]} onStrokesChange={mock(() => {})} syncStyleChange={mock(() => {})} />);
+    const select = screen.getByTestId(TID.inspector.strokeStyle) as HTMLSelectElement;
+    expect(select.value).toBe('solid');
+  });
+
+  it('style select change calls syncStyleChange with borderStyle', () => {
+    const syncStyleChange = mock(() => {});
+    const onStrokesChange = mock(() => {});
+    render(<StrokeSection strokes={[stroke]} onStrokesChange={onStrokesChange} syncStyleChange={syncStyleChange} />);
+    fireEvent.change(screen.getByTestId(TID.inspector.strokeStyle), { target: { value: 'dashed' } });
+    expect(syncStyleChange).toHaveBeenCalledWith('borderStyle', 'dashed');
   });
 });

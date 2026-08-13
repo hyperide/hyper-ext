@@ -304,4 +304,17 @@
     box-shadow: var(--toggle-active-shadow);
     border-radius: 4px;
   }
+
+  /* SYNC: vscode-extension/hypercanvas-preview/src/webview/styles.css — inspector-btn-active tokens */
+  .inspector-btn-active {
+    background-color: rgb(219 234 254); /* blue-100 */
+  }
+
+  .inspector-btn-active svg {
+    color: #3479de;
+  }
+
+  .dark .inspector-btn-active {
+    background-color: rgba(30, 58, 138, 0.3); /* blue-900/30 */
+  }
 }
