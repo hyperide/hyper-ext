@@ -337,11 +337,15 @@ export interface ToolResult {
 }
 
 /**
- * Message types for chat
+ * Message types for chat.
+ *
+ * History is persisted in the Anthropic block shape by both protocol paths:
+ * assistant turns may carry tool_use blocks, user turns may carry tool_result
+ * blocks (the follow-up "user" message of a tool round trip).
  */
 interface UserMessage {
   role: 'user';
-  content: string;
+  content: string | Array<{ type: 'text' | 'tool_result'; [key: string]: unknown }>;
 }
 
 interface AssistantMessage {

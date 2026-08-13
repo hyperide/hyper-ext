@@ -10,20 +10,21 @@
  * | Provider | callAI (text) | Server Agent (tools)         | Extension chat |
  * |----------|---------------|------------------------------|----------------|
  * | claude      | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
- * | glm         | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
- * | firepass    | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
- * | commandcode | Yes           | Yes (routed by model)        | claude-*: tools; OSS: text-only |
- * | openai      | Yes           | Yes (OpenAI function calling) | Text-only      |
+ * | glm         | Yes           | Yes (OpenAI function calling) | Yes (tools)    |
+ * | firepass    | Yes           | Yes (OpenAI function calling) | Yes (tools)    |
+ * | commandcode | Yes           | Yes (routed by model)        | Yes (tools)    |
+ * | openai      | Yes           | Yes (OpenAI function calling) | Yes (tools)    |
  * | proxy       | Yes           | Yes (litellm + Anthropic)    | Text-only      |
  * | opencode    | Yes (via SDK) | Yes (MCP bridge + SSE)       | Text-only      |
  *
- * Tool support per provider:
- * - claude/glm/firepass/proxy: Anthropic Messages API with native tool_use
- * - commandcode: routed by model in resolveAIConfig — claude-* models use Anthropic
- *   /messages (native tool_use), all other models use OpenAI /chat/completions
- *   (their /messages endpoint serves Anthropic models ONLY, wrong family = 400)
- * - openai: OpenAI Chat Completions with function calling (chatWithOpenAITools)
- * - opencode: Tools via SaaS MCP server (/api/mcp), streaming via promptAsync + event.subscribe
+ * Protocol policy: the Anthropic SDK / Messages API is reserved for the REAL
+ * Anthropic API (provider 'claude'). Every other gateway speaks OpenAI Chat
+ * Completions with function calling — server via chatWithOpenAITools, extension
+ * via FetchOpenAIProvider. The one exception: commandcode routes claude-* models
+ * to its Anthropic-compatible /messages (their gateway returns 400 for a claude
+ * model on /chat/completions and vice versa).
+ * Tool definitions ({name, description, input_schema: JSON Schema}) are
+ * SDK-neutral; each provider adapter does its own wire-format translation.
  */
 export type AIProvider = 'claude' | 'openai' | 'glm' | 'firepass' | 'commandcode' | 'proxy' | 'opencode';
 
@@ -32,12 +33,6 @@ export interface AIProviderDefaults {
   model: string;
   /** 'anthropic' = Anthropic Messages API, 'openai' = OpenAI Chat Completions */
   protocol: 'anthropic' | 'openai';
-  /**
-   * How the API key is sent on the Anthropic protocol. Default (undefined) is the
-   * `x-api-key` header; 'bearer' sends `Authorization: Bearer` instead (Fireworks
-   * accepts only bearer tokens on its Anthropic-compatible endpoint).
-   */
-  auth?: 'bearer';
 }
 
 export const AI_PROVIDER_DEFAULTS: Record<AIProvider, AIProviderDefaults> = {
@@ -47,15 +42,15 @@ export const AI_PROVIDER_DEFAULTS: Record<AIProvider, AIProviderDefaults> = {
     protocol: 'anthropic',
   },
   glm: {
-    baseURL: 'https://api.z.ai/api/anthropic',
+    // Coding-plan OpenAI endpoint — note the /v4 base, there is NO /v1 suffix.
+    baseURL: 'https://api.z.ai/api/coding/paas/v4',
     model: 'glm-4.7',
-    protocol: 'anthropic',
+    protocol: 'openai',
   },
   firepass: {
-    baseURL: 'https://api.fireworks.ai/inference',
+    baseURL: 'https://api.fireworks.ai/inference/v1',
     model: 'accounts/fireworks/routers/kimi-k2p6-turbo',
-    protocol: 'anthropic',
-    auth: 'bearer',
+    protocol: 'openai',
   },
   commandcode: {
     baseURL: 'https://api.commandcode.ai/provider',

@@ -667,7 +667,7 @@ export default function AISettings() {
                   placeholder="glm-4.7"
                   required
                 />
-                <p className="text-sm text-muted-foreground">Examples: glm-4.7, glm-4.6, glm-4</p>
+                <p className="text-sm text-muted-foreground">Examples: glm-5.1, glm-5-turbo, glm-4.7, glm-4.5-air</p>
               </div>
 
               <div className="space-y-2">

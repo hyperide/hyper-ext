@@ -31,18 +31,46 @@ describe('resolveAIConfig', () => {
     });
   });
 
-  it('should resolve glm provider with default baseURL', () => {
+  it('should resolve glm provider onto the OpenAI coding endpoint', () => {
+    // Anthropic SDK is reserved for the real Anthropic API; GLM speaks OpenAI
+    // chat completions at the coding-plan endpoint (no /v1 suffix — /v4!).
     const result = resolveAIConfig({
       provider: 'glm',
       apiKey: 'glm-key',
-      model: 'glm-4-flash',
+      model: 'glm-4.7',
     });
-    expect(result).not.toBeNull();
-    expect(result?.provider).toBe('anthropic');
-    expect(result?.baseURL).toBeDefined();
+    expect(result).toEqual({
+      apiKey: 'glm-key',
+      model: 'glm-4.7',
+      baseURL: 'https://api.z.ai/api/coding/paas/v4',
+      provider: 'openai',
+    });
   });
 
-  it('should resolve firepass provider with default baseURL and bearer auth', () => {
+  it('should migrate stored legacy anthropic-default baseURLs for glm/firepass', () => {
+    // Users have the old Anthropic-protocol defaults persisted in settings/DB;
+    // those must be treated as "default" and re-pointed at the OpenAI endpoints,
+    // not passed through as custom URLs.
+    const glm = resolveAIConfig({
+      provider: 'glm',
+      apiKey: 'k',
+      model: 'glm-4.7',
+      baseURL: 'https://api.z.ai/api/anthropic',
+    });
+    expect(glm?.baseURL).toBe('https://api.z.ai/api/coding/paas/v4');
+    expect(glm?.provider).toBe('openai');
+
+    const fw = resolveAIConfig({
+      provider: 'firepass',
+      apiKey: 'k',
+      model: 'accounts/fireworks/routers/kimi-k2p6-turbo',
+      baseURL: 'https://api.fireworks.ai/inference',
+    });
+    expect(fw?.baseURL).toBe('https://api.fireworks.ai/inference/v1');
+    expect(fw?.provider).toBe('openai');
+  });
+
+  it('should resolve firepass provider onto the OpenAI endpoint', () => {
     const result = resolveAIConfig({
       provider: 'firepass',
       apiKey: 'fw-key',
@@ -51,9 +79,8 @@ describe('resolveAIConfig', () => {
     expect(result).toEqual({
       apiKey: 'fw-key',
       model: 'accounts/fireworks/routers/kimi-k2p6-turbo',
-      baseURL: 'https://api.fireworks.ai/inference',
-      provider: 'anthropic',
-      authMethod: 'bearer',
+      baseURL: 'https://api.fireworks.ai/inference/v1',
+      provider: 'openai',
     });
   });
 
@@ -68,8 +95,7 @@ describe('resolveAIConfig', () => {
       apiKey: 'fw-key',
       model: 'accounts/fireworks/models/glm-5p1',
       baseURL: 'https://custom.fireworks.proxy',
-      provider: 'anthropic',
-      authMethod: 'bearer',
+      provider: 'openai',
     });
   });
 

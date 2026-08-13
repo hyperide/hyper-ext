@@ -272,23 +272,22 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<ChatEven
 export interface FetchAnthropicProviderOptions {
   apiKey: string;
   baseUrl?: string;
-  /** undefined = `x-api-key` header, 'bearer' = `Authorization: Bearer` (e.g. Fireworks) */
-  auth?: 'bearer';
 }
 
 /**
  * StreamProvider that uses raw fetch() to call the Anthropic Messages API.
+ * Reserved for Anthropic-protocol endpoints (the real Anthropic API, and
+ * commandcode's /messages gateway for claude-* models); every other provider
+ * goes through FetchOpenAIProvider.
  * Works in both Node.js and browser environments (VSCode extension webview).
  */
 export class FetchAnthropicProvider implements StreamProvider {
   private _apiKey: string;
   private _baseUrl: string;
-  private _auth?: 'bearer';
 
   constructor(options: FetchAnthropicProviderOptions) {
     this._apiKey = options.apiKey;
     this._baseUrl = options.baseUrl || 'https://api.anthropic.com';
-    this._auth = options.auth;
   }
 
   async *createStream(params: StreamParams): AsyncGenerator<RawStreamEvent> {
@@ -305,14 +304,11 @@ export class FetchAnthropicProvider implements StreamProvider {
       stream: true,
     };
 
-    const authHeaders: Record<string, string> =
-      this._auth === 'bearer' ? { Authorization: `Bearer ${this._apiKey}` } : { 'x-api-key': this._apiKey };
-
     const response = await fetch(`${this._baseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...authHeaders,
+        'x-api-key': this._apiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
@@ -373,4 +369,246 @@ export class FetchAnthropicProvider implements StreamProvider {
       reader.releaseLock();
     }
   }
+}
+
+// ============================================
+// FetchOpenAIProvider
+// ============================================
+
+export interface FetchOpenAIProviderOptions {
+  apiKey: string;
+  /** OpenAI-compatible base, e.g. https://api.commandcode.ai/provider/v1 — /chat/completions is appended */
+  baseUrl: string;
+}
+
+/** OpenAI streaming delta for a function tool call */
+interface OpenAIToolCallDelta {
+  index: number;
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+interface OpenAIStreamChunk {
+  choices?: {
+    delta?: { content?: string | null; tool_calls?: OpenAIToolCallDelta[] };
+    finish_reason?: string | null;
+  }[];
+}
+
+/**
+ * StreamProvider that speaks OpenAI Chat Completions with function calling and
+ * translates the stream into the Anthropic-shaped RawStreamEvent sequence that
+ * runChat() consumes. This gives OpenAI-protocol providers (Command Code OSS
+ * models, OpenAI, any /chat/completions gateway) the same agentic tool loop the
+ * Anthropic path has.
+ */
+export class FetchOpenAIProvider implements StreamProvider {
+  private _apiKey: string;
+  private _baseUrl: string;
+
+  constructor(options: FetchOpenAIProviderOptions) {
+    this._apiKey = options.apiKey;
+    this._baseUrl = options.baseUrl.replace(/\/+$/, '');
+  }
+
+  async *createStream(params: StreamParams): AsyncGenerator<RawStreamEvent> {
+    const body = {
+      model: params.model,
+      max_tokens: params.maxTokens,
+      stream: true,
+      messages: toOpenAIMessages(params.system, params.messages),
+      ...(params.tools.length > 0
+        ? {
+            tools: params.tools.map((t) => ({
+              type: 'function',
+              function: { name: t.name, description: t.description, parameters: t.input_schema },
+            })),
+          }
+        : {}),
+    };
+
+    const response = await fetch(`${this._baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this._apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: params.signal,
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`OpenAI-compatible API error ${response.status}: ${errorBody}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    yield { type: 'message_start', message: { id: 'openai', model: params.model, stop_reason: null } };
+
+    // Translator state. Text streams through immediately as a text block; tool
+    // calls CANNOT be streamed as blocks because OpenAI emits parallel calls
+    // with interleaved per-index deltas — they are accumulated per index here
+    // and emitted as complete tool_use blocks after the stream ends.
+    let blockIndex = -1;
+    let textOpen = false;
+    const toolCalls = new Map<number, { id: string; name: string; args: string }>();
+    let finishReason: string | null = null;
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      // Labeled so the [DONE] sentinel can reach finalization immediately —
+      // some proxies keep the SSE socket open after sending it.
+      read: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (!data) continue;
+          if (data === '[DONE]') break read;
+
+          let chunk: OpenAIStreamChunk;
+          try {
+            chunk = JSON.parse(data) as OpenAIStreamChunk;
+          } catch {
+            continue; // skip unparseable SSE lines
+          }
+          const choice = chunk.choices?.[0];
+          if (!choice) continue;
+
+          const text = choice.delta?.content;
+          if (typeof text === 'string' && text.length > 0) {
+            if (!textOpen) {
+              blockIndex++;
+              textOpen = true;
+              yield { type: 'content_block_start', index: blockIndex, content_block: { type: 'text', text: '' } };
+            }
+            yield { type: 'content_block_delta', index: blockIndex, delta: { type: 'text_delta', text } };
+          }
+
+          for (const call of choice.delta?.tool_calls ?? []) {
+            const entry = toolCalls.get(call.index) ?? { id: '', name: '', args: '' };
+            if (call.id) entry.id = call.id;
+            // Names and arguments both stream in fragments — append, never overwrite.
+            if (call.function?.name) entry.name += call.function.name;
+            if (call.function?.arguments) entry.args += call.function.arguments;
+            toolCalls.set(call.index, entry);
+          }
+
+          if (choice.finish_reason) {
+            finishReason = choice.finish_reason;
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    if (textOpen) {
+      yield { type: 'content_block_stop', index: blockIndex };
+      textOpen = false;
+    }
+
+    // Emit the accumulated tool calls as complete blocks, in index order.
+    for (const [index, call] of [...toolCalls.entries()].sort((a, b) => a[0] - b[0])) {
+      blockIndex++;
+      yield {
+        type: 'content_block_start',
+        index: blockIndex,
+        content_block: { type: 'tool_use', id: call.id || `call_${index}`, name: call.name || 'unknown_tool' },
+      };
+      if (call.args) {
+        yield {
+          type: 'content_block_delta',
+          index: blockIndex,
+          delta: { type: 'input_json_delta', partial_json: call.args },
+        };
+      }
+      yield { type: 'content_block_stop', index: blockIndex };
+    }
+
+    // Map OpenAI finish reasons onto Anthropic stop reasons for runChat.
+    const stopReason =
+      finishReason === 'tool_calls' || toolCalls.size > 0
+        ? 'tool_use'
+        : finishReason === 'length'
+          ? 'max_tokens'
+          : 'end_turn';
+    yield { type: 'message_delta', delta: { stop_reason: stopReason } };
+    yield { type: 'message_stop' };
+  }
+}
+
+/**
+ * OpenAI Chat Completions wire-format message produced by toOpenAIMessages.
+ */
+export interface OpenAIChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content?: string | null;
+  tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[];
+  tool_call_id?: string;
+}
+
+/**
+ * Convert Anthropic-shaped message history (runChat's in-memory history, or the
+ * SaaS chat history persisted in that shape) into OpenAI Chat Completions
+ * messages: tool_use blocks become assistant tool_calls, tool_result blocks
+ * become role:"tool" messages.
+ */
+export function toOpenAIMessages(system: string, messages: MessageParam[]): OpenAIChatMessage[] {
+  const out: OpenAIChatMessage[] = [];
+  if (system) out.push({ role: 'system', content: system });
+
+  for (const msg of messages) {
+    if (typeof msg.content === 'string') {
+      out.push({ role: msg.role, content: msg.content });
+      continue;
+    }
+
+    if (msg.role === 'assistant') {
+      const text = msg.content
+        .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
+        .map((b) => b.text)
+        .join('');
+      const toolCalls = msg.content
+        .filter((b): b is Extract<typeof b, { type: 'tool_use' }> => b.type === 'tool_use')
+        .map((b) => ({
+          id: b.id,
+          type: 'function' as const,
+          function: { name: b.name, arguments: JSON.stringify(b.input) },
+        }));
+      out.push({
+        role: 'assistant',
+        content: text || null,
+        ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+      });
+      continue;
+    }
+
+    // user message with blocks: tool results become role:"tool"; any text rides separately
+    const textBlocks: string[] = [];
+    for (const block of msg.content) {
+      if (block.type === 'tool_result') {
+        out.push({ role: 'tool', tool_call_id: block.tool_use_id, content: block.content });
+      } else if (block.type === 'text') {
+        textBlocks.push(block.text);
+      }
+    }
+    if (textBlocks.length > 0) {
+      out.push({ role: 'user', content: textBlocks.join('\n') });
+    }
+  }
+
+  return out;
 }

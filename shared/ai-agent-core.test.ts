@@ -30,17 +30,10 @@ describe('FetchAnthropicProvider auth headers', () => {
     globalThis.fetch = realFetch;
   });
 
-  it('sends x-api-key by default', async () => {
+  it('sends x-api-key (Anthropic SDK semantics — this provider serves Anthropic only)', async () => {
     const captured = captureFetchHeaders();
     await drain(new FetchAnthropicProvider({ apiKey: 'sk-test', baseUrl: 'https://example.test' }));
     expect(captured.headers?.['x-api-key']).toBe('sk-test');
     expect(captured.headers?.Authorization).toBeUndefined();
-  });
-
-  it('sends Authorization: Bearer when auth is bearer', async () => {
-    const captured = captureFetchHeaders();
-    await drain(new FetchAnthropicProvider({ apiKey: 'fw-test', baseUrl: 'https://example.test', auth: 'bearer' }));
-    expect(captured.headers?.Authorization).toBe('Bearer fw-test');
-    expect(captured.headers?.['x-api-key']).toBeUndefined();
   });
 });

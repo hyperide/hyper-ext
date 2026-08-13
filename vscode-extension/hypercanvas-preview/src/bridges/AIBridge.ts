@@ -2,8 +2,9 @@
  * AI Bridge - handles AI chat messages from webview
  *
  * Standalone mode: calls Anthropic/OpenAI API directly with user's API key.
- * Uses shared runChat() core for Anthropic tool-use loop.
- * OpenAI path remains text-only (no tools).
+ * Both protocols drive the shared runChat() tool loop: Anthropic Messages via
+ * FetchAnthropicProvider, OpenAI chat completions via FetchOpenAIProvider
+ * (function calling translated to the same event stream).
  */
 
 import { exec } from 'node:child_process';
@@ -13,6 +14,7 @@ import * as vscode from 'vscode';
 import {
   type ChatEvent,
   FetchAnthropicProvider,
+  FetchOpenAIProvider,
   type MessageParam,
   runChat,
   type ToolExecutor,
@@ -494,11 +496,16 @@ export class AIBridge {
       const wireBaseURL = resolved?.baseURL ?? (baseURL || undefined);
 
       if (wireProtocol === 'openai') {
-        await this._streamOpenAI(
-          requestId,
+        // OpenAI-protocol chats get the same agentic tool loop via function calling
+        // (Command Code OSS models, OpenAI, any /chat/completions gateway).
+        const streamProvider = new FetchOpenAIProvider({
           apiKey,
+          baseUrl: wireBaseURL || 'https://api.openai.com/v1',
+        });
+        await this._streamWithProvider(
+          requestId,
+          streamProvider,
           wireModel,
-          wireBaseURL || 'https://api.openai.com/v1',
           messages,
           abortController.signal,
           callback,
@@ -509,7 +516,6 @@ export class AIBridge {
           apiKey,
           wireModel,
           wireBaseURL,
-          resolved?.authMethod ?? freshDefaults.auth,
           messages,
           abortController.signal,
           callback,
@@ -584,12 +590,26 @@ export class AIBridge {
     apiKey: string,
     model: string,
     baseUrl: string | undefined,
-    auth: 'bearer' | undefined,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
     signal: AbortSignal,
     callback: StreamCallback,
   ): Promise<void> {
-    const streamProvider = new FetchAnthropicProvider({ apiKey, baseUrl, auth });
+    const streamProvider = new FetchAnthropicProvider({ apiKey, baseUrl });
+    await this._streamWithProvider(requestId, streamProvider, model, messages, signal, callback);
+  }
+
+  /**
+   * Drive the shared runChat() tool loop with any StreamProvider
+   * (Anthropic Messages or OpenAI chat completions with function calling).
+   */
+  private async _streamWithProvider(
+    requestId: string,
+    streamProvider: FetchAnthropicProvider | FetchOpenAIProvider,
+    model: string,
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    signal: AbortSignal,
+    callback: StreamCallback,
+  ): Promise<void> {
     const localExecutor = new LocalToolExecutor(this._workspaceRoot, this._devServerManager, this._diagnosticHub);
 
     // Wrap executor to intercept ask_user tool
@@ -679,79 +699,6 @@ export class AIBridge {
         callback({ type: 'ai:error', requestId, error: event.error });
         break;
     }
-  }
-
-  /**
-   * Stream from OpenAI API (text-only, no tools)
-   */
-  private async _streamOpenAI(
-    requestId: string,
-    apiKey: string,
-    model: string,
-    baseURL: string,
-    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-    signal: AbortSignal,
-    callback: StreamCallback,
-  ): Promise<void> {
-    const response = await fetch(`${baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'system', content: this._getSystemPrompt() }, ...messages],
-        stream: true,
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`OpenAI API error ${response.status}: ${errorBody}`);
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error('No response body');
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') {
-            callback({ type: 'ai:done', requestId });
-            return;
-          }
-          if (!data) continue;
-
-          try {
-            const event = JSON.parse(data);
-            const delta = event.choices?.[0]?.delta?.content;
-            if (delta) {
-              callback({ type: 'ai:delta', requestId, text: delta });
-            }
-          } catch {
-            // skip
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
-
-    callback({ type: 'ai:done', requestId });
   }
 
   private _getSystemPrompt(): string {

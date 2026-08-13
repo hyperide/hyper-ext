@@ -14,8 +14,6 @@ export interface ResolvedAIConfig {
   baseURL?: string;
   /** Which API protocol to use */
   provider: 'anthropic' | 'openai';
-  /** Anthropic-protocol auth: undefined = `x-api-key` header, 'bearer' = `Authorization: Bearer` */
-  authMethod?: 'bearer';
 }
 
 /** OpenAI Chat Completions-compatible base URLs by backend name */
@@ -48,22 +46,32 @@ export function resolveAIConfig(opts: {
     case 'claude':
       return { apiKey, model, baseURL: baseURL || undefined, provider: 'anthropic' };
 
-    case 'glm':
+    case 'glm': {
+      // Anthropic SDK is reserved for the real Anthropic API — GLM speaks OpenAI
+      // chat completions on the coding-plan endpoint. Users may still have the
+      // legacy Anthropic-protocol default persisted in settings; migrate it
+      // (trailing slashes included — settings round-trips add them).
+      const trimmed = baseURL ? baseURL.replace(/\/+$/, '') : '';
+      const isLegacyOrEmpty = !trimmed || trimmed === 'https://api.z.ai/api/anthropic';
       return {
         apiKey,
         model,
-        baseURL: baseURL || AI_PROVIDER_DEFAULTS.glm.baseURL || undefined,
-        provider: 'anthropic',
+        baseURL: isLegacyOrEmpty ? AI_PROVIDER_DEFAULTS.glm.baseURL || undefined : trimmed,
+        provider: 'openai',
       };
+    }
 
-    case 'firepass':
+    case 'firepass': {
+      // Same migration: the old default was the Anthropic-compatible base.
+      const trimmed = baseURL ? baseURL.replace(/\/+$/, '') : '';
+      const isLegacyOrEmpty = !trimmed || trimmed === 'https://api.fireworks.ai/inference';
       return {
         apiKey,
         model,
-        baseURL: baseURL || AI_PROVIDER_DEFAULTS.firepass.baseURL || undefined,
-        provider: 'anthropic',
-        authMethod: AI_PROVIDER_DEFAULTS.firepass.auth,
+        baseURL: isLegacyOrEmpty ? AI_PROVIDER_DEFAULTS.firepass.baseURL || undefined : trimmed,
+        provider: 'openai',
       };
+    }
 
     case 'commandcode': {
       // Command Code routes by model family: /messages serves Anthropic models
