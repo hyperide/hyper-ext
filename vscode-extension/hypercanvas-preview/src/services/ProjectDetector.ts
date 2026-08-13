@@ -868,8 +868,12 @@ function sameDirectory(a: string, b: string): boolean {
  * inherit a stray `~/bun.lock` / `~/nx.json` — files in `$HOME` are not
  * project evidence. Consumers layer their own stop conditions (e.g. the VCS
  * root) on top.
+ *
+ * Exported (HYP-1188 round 5) so other cwd-relative config detection outside
+ * this file — e.g. `toolchainInstaller.ts`'s Yarn Berry `.yarnrc.yml` lookup
+ * — reuses the same bounded walk instead of a fourth hand-rolled copy.
  */
-function* ancestorDirs(startDir: string, homeDir: string = os.homedir()): Generator<string> {
+export function* ancestorDirs(startDir: string, homeDir: string = os.homedir()): Generator<string> {
   let dir = startDir;
   for (;;) {
     const atHome = sameDirectory(dir, homeDir);

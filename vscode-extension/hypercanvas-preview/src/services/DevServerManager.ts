@@ -1962,17 +1962,48 @@ export class DevServerManager {
         try {
           await this._runDepsInstall(plan, toolDirs, progress, token, false);
         } catch (error) {
+          // HYP-1188: a cancelled token means the USER clicked Cancel on the
+          // progress notification — ensureDependencies rethrows that
+          // immediately (never retries it). Showing a "flaky network? Retry"
+          // modal for a cancellation the user just asked for is wrong; just
+          // propagate.
+          if (token.isCancellationRequested) throw error;
           const message = error instanceof Error ? error.message : String(error);
           this._outputChannel.appendLine(`[DevServer] Dependency install failed: ${message}`);
+          // HYP-1188: ensureDependencies already retried internally when the
+          // failure was network/cache-shaped (a plain attempt + cache-bypassing
+          // retries) before this catch is reached — this button offers a whole
+          // FRESH round, for the case network access came back after the
+          // pipeline gave up. `force: true` because a failed install can still
+          // leave `node_modules` on disk (bun/npm/pnpm/yarn all create it
+          // before the first failure), and `force: false` would let
+          // `shouldInstallDependencies` see an existing `node_modules` and
+          // silently return 'skipped' — turning this button into a no-op that
+          // reopens the SAME broken dev-server start with nothing actually
+          // retried.
+          //
+          // The "flaky network" framing below is shown ONLY when
+          // `retriesExhausted` is set — i.e. ensureDependencies actually ran
+          // its retry loop and gave up. Every other failure reaching this
+          // catch (a non-retryable error like EACCES, surfaced unwrapped by
+          // ensureDependencies specifically so it is NOT mislabeled) gets a
+          // neutral message instead — showing "usually a flaky network"
+          // unconditionally would defeat that lower-layer design and send a
+          // permission-error user chasing the wrong fix.
+          const networkHint =
+            error instanceof ToolchainInstallError && error.retriesExhausted
+              ? `This is usually caused by a flaky network connection (interrupted downloads, failed integrity ` +
+                `checks) rather than a problem with the project itself. `
+              : '';
           const choice = await vscode.window.showErrorMessage(
             `HyperIDE could not install the project dependencies (${pm} install), so the dev server cannot start. ` +
-              `The full install log is in the 'HyperIDE Dev Server' output channel.`,
+              `${networkHint}The full install log is in the 'HyperIDE Dev Server' output channel.`,
             'Retry',
             'Open Logs',
           );
           if (choice === 'Open Logs') this._outputChannel.show();
           if (choice !== 'Retry') throw error;
-          await this._runDepsInstall(plan, toolDirs, progress, token, false);
+          await this._runDepsInstall(plan, toolDirs, progress, token, true);
         }
       },
     };

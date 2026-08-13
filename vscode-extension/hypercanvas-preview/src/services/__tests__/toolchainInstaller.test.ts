@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, mock, vi } from 'bun:test';
 import { EventEmitter } from 'node:events';
+import * as fsp from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   _resetToolchainAvailabilityCacheForTests,
   detectAvailableTools,
@@ -16,6 +19,7 @@ import {
   findMissingLocalBinaries,
   installDocsUrl,
   isToleratedExitCode,
+  killProcessTree,
   requiredToolsForPackageManager,
   shouldInstallDependencies,
   ToolchainInstallError,
@@ -59,6 +63,11 @@ function availability(overrides: Partial<ToolAvailability>): ToolAvailability {
  * A fake step child process (the ToolchainExecDeps.spawnProcess seam): emits
  * the given stdout lines, then exits with `exitCode`. No real process ever
  * spawns — the repo convention for installer tests.
+ *
+ * Emits BOTH `exit` and `close` (real Node child processes always emit both)
+ * — `runStepProcess` finalizes on `close` (HYP-1188 round 2: `exit` can fire
+ * before stdio streams finish draining), so a fake that emitted only `exit`
+ * would hang every caller of this helper.
  */
 function fakeChild(exitCode: number | null, ...stdoutLines: string[]): StepChildProcess {
   const stdout = new EventEmitter();
@@ -67,6 +76,7 @@ function fakeChild(exitCode: number | null, ...stdoutLines: string[]): StepChild
   queueMicrotask(() => {
     for (const line of stdoutLines) stdout.emit('data', Buffer.from(`${line}\n`));
     child.emit('exit', exitCode);
+    child.emit('close', exitCode);
   });
   return { stdout, stderr, on: child.on.bind(child), kill: mock(() => {}) };
 }
@@ -581,6 +591,195 @@ describe('toleratedExitCodes — winget "already installed" is not a failure (HY
   });
 });
 
+/** A fake step child that never exits/errors on its own — simulates a hung installer. */
+function hangingChild(pid: number | undefined, kill: (signal?: NodeJS.Signals) => void): StepChildProcess {
+  return { stdout: new EventEmitter(), stderr: new EventEmitter(), pid, on: () => {}, kill };
+}
+
+describe('killProcessTree (HYP-1188: Windows orphaned process tree)', () => {
+  it('win32: runs taskkill /pid <pid> /t /f, THEN SIGKILLs the spawned pid too', () => {
+    const calls: Array<{ command: string; args: readonly string[] }> = [];
+    const kill = mock(() => {});
+    killProcessTree(hangingChild(4321, kill), 'win32', (command, args) => calls.push({ command, args }));
+    expect(calls).toEqual([{ command: 'taskkill', args: ['/pid', '4321', '/t', '/f'] }]);
+    expect(kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('darwin/linux: never calls taskkill — shell:true execs a single simple command in place, so SIGKILL alone reaches the real process', () => {
+    for (const platform of ['darwin', 'linux'] as const) {
+      const calls: unknown[] = [];
+      const kill = mock(() => {});
+      killProcessTree(hangingChild(123, kill), platform, (...args) => calls.push(args));
+      expect(calls).toEqual([]);
+      expect(kill).toHaveBeenCalledWith('SIGKILL');
+    }
+  });
+
+  it('win32 without a pid (spawn failed before the OS assigned one) skips taskkill, still SIGKILLs', () => {
+    const calls: unknown[] = [];
+    const kill = mock(() => {});
+    killProcessTree(hangingChild(undefined, kill), 'win32', (...args) => calls.push(args));
+    expect(calls).toEqual([]);
+    expect(kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('a taskkill failure still falls through to SIGKILL (best-effort, never leaves the child unkilled)', () => {
+    const kill = mock(() => {});
+    killProcessTree(hangingChild(99, kill), 'win32', () => {
+      throw new Error('taskkill: ERROR: The process with PID 99 could not be terminated.');
+    });
+    expect(kill).toHaveBeenCalledWith('SIGKILL');
+  });
+});
+
+describe('runStepProcess wiring: timeout kills the process TREE, not just the pid (HYP-1188)', () => {
+  const output = { appendLine: mock() };
+
+  afterEach(() => {
+    _resetToolchainAvailabilityCacheForTests();
+    output.appendLine.mockClear();
+  });
+
+  it('a timed-out step invokes killTree with the spawned child + platform (not a bare child.kill)', async () => {
+    const killCalls: Array<{ pid?: number; platform: NodeJS.Platform }> = [];
+    const childKill = mock(() => {});
+    const child = hangingChild(777, childKill);
+    const spawnProcess: SpawnStepProcess = mock(() => child);
+    const error = await ensureTool('bun', {
+      availability: availability({ bun: false, winget: true }),
+      output,
+      exec: {
+        platform: 'win32',
+        spawnProcess,
+        timeoutMs: 15,
+        probeDirs: async () => [],
+        verify: async () => false,
+        killTree: (c, platform) => killCalls.push({ pid: (c as StepChildProcess).pid, platform }),
+      },
+    }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ToolchainInstallError);
+    expect((error as Error).message).toContain('timed out');
+    expect(killCalls).toEqual([{ pid: 777, platform: 'win32' }]);
+  });
+
+  it('an orphan that keeps writing to stdout AFTER the step already timed out never reaches the output channel', async () => {
+    const stdout = new EventEmitter();
+    const child: StepChildProcess = { stdout, stderr: new EventEmitter(), pid: 778, on: () => {}, kill: mock() };
+    const spawnProcess: SpawnStepProcess = mock(() => child);
+    const ensurePromise = ensureTool('bun', {
+      availability: availability({ bun: false, winget: true }),
+      output,
+      exec: {
+        platform: 'win32',
+        spawnProcess,
+        timeoutMs: 15,
+        probeDirs: async () => [],
+        verify: async () => false,
+        // Simulates taskkill failing to actually stop the orphan — the onData
+        // `killed` guard is the belt-and-suspenders layer for exactly this.
+        killTree: () => {},
+      },
+    });
+    const error = await ensurePromise.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ToolchainInstallError);
+    output.appendLine.mockClear();
+    stdout.emit('data', Buffer.from('orphaned bun.exe still downloading a tarball\n'));
+    expect(output.appendLine).not.toHaveBeenCalled();
+  });
+
+  it('HYP-1188 round 3: `exit` fires but `close` never arrives (a detached child inherited the pipe and outlives the tracked process) — the step still finalizes within the bounded grace window, NOT the full step timeout', async () => {
+    // `verify` is STATEFUL (false until the fake install actually runs),
+    // NOT a bare `async () => true` — ensureTool's pre-install live-probe
+    // (round 3 of HYP-1169: "the live probe is the arbiter in BOTH
+    // directions") treats an always-true verify as "already installed" and
+    // returns BEFORE ever calling `spawnProcess`, making the whole
+    // exit/close/grace mechanism this test exists to exercise a no-op. This
+    // shape (flip to true only once the fake child has actually exited)
+    // forces the real install pipeline to run.
+    let installedOk = false;
+    const child: StepChildProcess = {
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      pid: 999,
+      on: (event, listener) => {
+        // 'close' is deliberately never emitted — simulates an orphan still
+        // holding the inherited stdout/stderr pipe (the Windows shell:true
+        // scenario). Only wire the events this fake actually fires.
+        if (event === 'exit') {
+          queueMicrotask(() => {
+            installedOk = true;
+            (listener as (code: number | null) => void)(0);
+          });
+        }
+      },
+      kill: mock(() => {}),
+    };
+    const spawnProcess: SpawnStepProcess = mock(() => child);
+    const startedAt = Date.now();
+    // A LARGE step timeout — if the grace-window fix regresses back to
+    // waiting unconditionally for 'close', this test would hang for the
+    // full timeout instead of the ~300ms grace window, making the
+    // regression obvious (a slow test) rather than silent.
+    const dirs = await ensureTool('bun', {
+      availability: availability({ bun: false, winget: true }),
+      output,
+      exec: {
+        platform: 'win32',
+        spawnProcess,
+        timeoutMs: 60_000,
+        probeDirs: async () => [],
+        verify: async () => installedOk,
+      },
+    });
+    const elapsedMs = Date.now() - startedAt;
+    expect(spawnProcess).toHaveBeenCalledTimes(1); // proves the install step actually ran, not a pre-check short-circuit
+    expect(dirs).toEqual([]); // resolved successfully — exit code 0, not timed out/killed
+    expect(elapsedMs).toBeLessThan(5_000); // well under the 60s timeoutMs; bounded by the grace window instead
+  });
+
+  it('HYP-1188 round 4: a step timeout landing INSIDE the exit→close grace window does not kill an already-exited process or reject a successful install', async () => {
+    // See the round-3 test above for why `verify` must be stateful.
+    let installedOk = false;
+    const killCalls: unknown[] = [];
+    const child: StepChildProcess = {
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      pid: 4242,
+      on: (event, listener) => {
+        // 'close' never fires — same "orphan holds the pipe" shape as the
+        // round-3 test above, but here `timeoutMs` is deliberately SMALLER
+        // than the grace window: if the main step-timeout timer isn't
+        // cleared as soon as 'exit' fires, it elapses WHILE we're still
+        // waiting inside the grace window and wrongly kills/rejects a run
+        // that already completed successfully.
+        if (event === 'exit') {
+          queueMicrotask(() => {
+            installedOk = true;
+            (listener as (code: number | null) => void)(0);
+          });
+        }
+      },
+      kill: mock(() => {}),
+    };
+    const spawnProcess: SpawnStepProcess = mock(() => child);
+    const dirs = await ensureTool('bun', {
+      availability: availability({ bun: false, winget: true }),
+      output,
+      exec: {
+        platform: 'win32',
+        spawnProcess,
+        timeoutMs: 50, // << EXIT_TO_CLOSE_GRACE_MS (300ms)
+        probeDirs: async () => [],
+        verify: async () => installedOk,
+        killTree: (...args) => killCalls.push(args),
+      },
+    });
+    expect(spawnProcess).toHaveBeenCalledTimes(1); // proves the install step actually ran, not a pre-check short-circuit
+    expect(dirs).toEqual([]); // resolved successfully — never killed, never rejected as "timed out"
+    expect(killCalls).toEqual([]);
+  });
+});
+
 describe('live install progress (HYP-1169 round 3)', () => {
   const output = { appendLine: mock() };
 
@@ -729,6 +928,527 @@ describe('ensureDependencies', () => {
     });
     expect(result).toBe('installed');
     expect(runStep).toHaveBeenCalled();
+  });
+});
+
+describe('ensureDependencies — HYP-1188: bounded retry with cache-bypass', () => {
+  const staleDeps = { fileExists: async (p: string) => p === '/p/package.json', mtimeMs: async () => null };
+
+  it('retries a failed install with --force and succeeds on attempt 2', async () => {
+    const ran: string[] = [];
+    let attempt = 0;
+    const runStep = mock(async (step: { command: string }) => {
+      attempt += 1;
+      ran.push(step.command);
+      if (attempt === 1) throw new Error('Fail extracting tarball for "@rolldown/binding-win32-x64-msvc"');
+    });
+    const output = { appendLine: mock() };
+    const result = await ensureDependencies('/p', 'bun', { output, exec: { runStep }, deps: staleDeps });
+    expect(result).toBe('installed');
+    expect(ran).toEqual(['bun install', 'bun install --force']);
+    // Clear, visible progress — the user must not think the extension hung.
+    const logged = output.appendLine.mock.calls.map((call) => String(call[0]));
+    expect(logged.some((line) => line.includes('retrying 2/3') && line.includes('cache-bypassing'))).toBe(true);
+  });
+
+  it('gives up after maxAttempts with an honest, actionable error (flaky network, output channel, attempt count)', async () => {
+    const runStep = mock(async () => {
+      throw new Error('Integrity check failed for tarball: iconv-lite');
+    });
+    const error = await ensureDependencies('/p', 'npm', {
+      output: { appendLine: mock() },
+      exec: { runStep },
+      deps: staleDeps,
+      maxAttempts: 2, // keep the test fast — bounded-retry semantics don't depend on the exact default
+    }).catch((e: unknown) => e);
+    expect(runStep).toHaveBeenCalledTimes(2);
+    expect(error).toBeInstanceOf(ToolchainInstallError);
+    const message = (error as Error).message;
+    expect(message).toContain('2 attempts');
+    expect(message).toContain('cache-bypassing retry');
+    expect(message).toContain('flaky network');
+    expect(message).toContain("'HyperIDE Dev Server' output channel");
+  });
+
+  it('a user-initiated cancellation is NEVER retried — it propagates immediately as-is', async () => {
+    const runStep = mock(async () => {
+      throw new Error('bun install was cancelled');
+    });
+    const token = { isCancellationRequested: true };
+    const error = await ensureDependencies('/p', 'bun', {
+      output: { appendLine: mock() },
+      exec: { runStep, token },
+      deps: staleDeps,
+    }).catch((e: unknown) => e);
+    expect(runStep).toHaveBeenCalledTimes(1); // no retry attempted
+    expect((error as Error).message).toBe('bun install was cancelled'); // the ORIGINAL error, not the wrapped one
+  });
+
+  it('a non-retryable failure (e.g. a permission error) is surfaced immediately, unwrapped — never force-retried', async () => {
+    const runStep = mock(async () => {
+      throw new Error("EACCES: permission denied, mkdir '/p/node_modules'");
+    });
+    const error = await ensureDependencies('/p', 'npm', {
+      output: { appendLine: mock() },
+      exec: { runStep },
+      deps: staleDeps,
+    }).catch((e: unknown) => e);
+    expect(runStep).toHaveBeenCalledTimes(1); // no retry — a permission error will not go away on an identical retry
+    // The ORIGINAL error, not the "flaky network" wrapper — a permission
+    // error mislabeled as network flakiness would send the user chasing
+    // the wrong fix.
+    expect((error as Error).message).toContain('EACCES');
+    expect((error as Error).message).not.toContain('flaky network');
+  });
+
+  it('Yarn Classic (no .yarnrc.yml) retries with --force, same as bun/npm/pnpm', async () => {
+    const ran: string[] = [];
+    let attempt = 0;
+    const runStep = mock(async (step: { command: string }) => {
+      attempt += 1;
+      ran.push(step.command);
+      if (attempt === 1) throw new Error('network error: socket hang up');
+    });
+    const result = await ensureDependencies('/p', 'yarn', {
+      output: { appendLine: mock() },
+      exec: { runStep },
+      deps: staleDeps,
+    });
+    expect(result).toBe('installed');
+    expect(ran).toEqual(['yarn install', 'yarn install --force']);
+  });
+
+  it('Yarn Berry (.yarnrc.yml present) retries with --check-cache, NOT --force (an unknown flag there)', async () => {
+    const ran: string[] = [];
+    let attempt = 0;
+    const runStep = mock(async (step: { command: string }) => {
+      attempt += 1;
+      ran.push(step.command);
+      if (attempt === 1) throw new Error('network error: socket hang up');
+    });
+    const berryDeps = {
+      fileExists: async (p: string) => p === '/p/package.json' || p === '/p/.yarnrc.yml',
+      mtimeMs: async () => null,
+    };
+    const result = await ensureDependencies('/p', 'yarn', {
+      output: { appendLine: mock() },
+      exec: { runStep },
+      deps: berryDeps,
+    });
+    expect(result).toBe('installed');
+    expect(ran).toEqual(['yarn install', 'yarn install --check-cache']);
+  });
+
+  it('Yarn Berry WORKSPACE MEMBER (.yarnrc.yml only at the ancestor workspace root, not cwd) still retries with --check-cache (HYP-1188 round 5)', async () => {
+    // Before the fix, isYarnBerry checked ONLY cwd for .yarnrc.yml. A Berry
+    // workspace member's cwd never carries its own .yarnrc.yml (it lives at
+    // the workspace root, same shape as a monorepo subpackage having no
+    // lockfile of its own) — so this misclassified as Classic and picked
+    // --force, an unrecognized flag for Berry's `install`, failing the retry
+    // immediately instead of bypassing the cache.
+    const ran: string[] = [];
+    let attempt = 0;
+    const runStep = mock(async (step: { command: string }) => {
+      attempt += 1;
+      ran.push(step.command);
+      if (attempt === 1) throw new Error('network error: socket hang up');
+    });
+    const memberDeps = {
+      fileExists: async (p: string) => p === '/repo/packages/member/package.json' || p === '/repo/.yarnrc.yml',
+      mtimeMs: async () => null,
+      // Explicit, unrelated $HOME (review finding) — the walk must not
+      // depend on the test-running machine's REAL os.homedir() not
+      // colliding with these fixture paths.
+      homeDir: '/home/ci-runner',
+    };
+    const result = await ensureDependencies('/repo/packages/member', 'yarn', {
+      output: { appendLine: mock() },
+      exec: { runStep },
+      deps: memberDeps,
+    });
+    expect(result).toBe('installed');
+    expect(ran).toEqual(['yarn install', 'yarn install --check-cache']);
+  });
+
+  it('Yarn Berry ancestor walk stops at the VCS root — an unrelated .yarnrc.yml above the repo is never inherited (HYP-1188 round 5)', async () => {
+    // Mirrors detectPackageManagerLockfile's own VCS-root bound: a
+    // .yarnrc.yml living ABOVE the repository's .git must not leak in and
+    // misclassify a Classic project as Berry.
+    const ran: string[] = [];
+    let attempt = 0;
+    const runStep = mock(async (step: { command: string }) => {
+      attempt += 1;
+      ran.push(step.command);
+      if (attempt === 1) throw new Error('network error: socket hang up');
+    });
+    const outsideRepoDeps = {
+      fileExists: async (p: string) =>
+        p === '/workspace/repo/packages/member/package.json' ||
+        p === '/workspace/repo/.git' ||
+        p === '/workspace/.yarnrc.yml', // stray, ABOVE the repo root — must not be inherited
+      mtimeMs: async () => null,
+      homeDir: '/home/ci-runner',
+    };
+    const result = await ensureDependencies('/workspace/repo/packages/member', 'yarn', {
+      output: { appendLine: mock() },
+      exec: { runStep },
+      deps: outsideRepoDeps,
+    });
+    expect(result).toBe('installed');
+    expect(ran).toEqual(['yarn install', 'yarn install --force']); // Classic default, NOT --check-cache
+  });
+
+  it("a NESTED Classic package (own yarn.lock, no .yarnrc.yml) inside a Berry monorepo does NOT inherit the root's Berry-ness (HYP-1188 round 5)", async () => {
+    // The mirror image of the workspace-member test above: Yarn's own
+    // project-root resolution stops at the NEAREST yarn.lock/.yarnrc.yml, not
+    // the outermost one. A nested Classic package must classify as Classic
+    // even though a Berry monorepo root sits above it — inheriting Berry
+    // here would pick --check-cache for a yarn install that doesn't
+    // recognize it.
+    const ran: string[] = [];
+    let attempt = 0;
+    const runStep = mock(async (step: { command: string }) => {
+      attempt += 1;
+      ran.push(step.command);
+      if (attempt === 1) throw new Error('network error: socket hang up');
+    });
+    const nestedClassicDeps = {
+      fileExists: async (p: string) =>
+        p === '/monorepo/vendor/legacy-pkg/package.json' ||
+        p === '/monorepo/vendor/legacy-pkg/yarn.lock' || // nearest project root — Classic
+        p === '/monorepo/.yarnrc.yml' || // the ENCLOSING Berry monorepo — must not leak down
+        p === '/monorepo/.git',
+      mtimeMs: async () => null,
+      homeDir: '/home/ci-runner',
+    };
+    const result = await ensureDependencies('/monorepo/vendor/legacy-pkg', 'yarn', {
+      output: { appendLine: mock() },
+      exec: { runStep },
+      deps: nestedClassicDeps,
+    });
+    expect(result).toBe('installed');
+    expect(ran).toEqual(['yarn install', 'yarn install --force']); // Classic, NOT --check-cache
+  });
+
+  it('a stray ~/.yarnrc.yml at $HOME itself is never inherited — ancestorDirs stops BEFORE entering $HOME (HYP-1188 round 5)', async () => {
+    // The reason DependenciesFsDeps.homeDir exists at all: ancestorDirs
+    // (ProjectDetector.ts) deliberately does NOT yield $HOME when climbing
+    // from a project rooted below it — $HOME's own files are not project
+    // evidence. A real per-user ~/.yarnrc.yml (Berry's user-level
+    // registry/auth config, common on real machines) must not leak into a
+    // project with no repo-level Berry marker of its own — there is no .git
+    // anywhere in this fixture either, so the walk exhausts at the $HOME
+    // boundary having found nothing.
+    const ran: string[] = [];
+    let attempt = 0;
+    const runStep = mock(async (step: { command: string }) => {
+      attempt += 1;
+      ran.push(step.command);
+      if (attempt === 1) throw new Error('network error: socket hang up');
+    });
+    const homeYarnrcDeps = {
+      fileExists: async (p: string) =>
+        p === '/home/ci-runner/projects/app/package.json' || p === '/home/ci-runner/.yarnrc.yml', // stray, AT $HOME itself
+      mtimeMs: async () => null,
+      homeDir: '/home/ci-runner',
+    };
+    const result = await ensureDependencies('/home/ci-runner/projects/app', 'yarn', {
+      output: { appendLine: mock() },
+      exec: { runStep },
+      deps: homeYarnrcDeps,
+    });
+    expect(result).toBe('installed');
+    expect(ran).toEqual(['yarn install', 'yarn install --force']); // Classic — $HOME's yarnrc is never inherited
+  });
+
+  it('a Berry root with BOTH .yarnrc.yml AND yarn.lock in the SAME directory still classifies as Berry (HYP-1188 round 5)', async () => {
+    // Load-bearing check order: a real Berry project keeps a yarn.lock too
+    // (Berry didn't drop lockfiles, it changed their format), so a real
+    // Berry root has BOTH files side by side. isYarnBerry checks
+    // .yarnrc.yml BEFORE yarn.lock within each directory specifically so
+    // this case still resolves Berry — none of the other new fixtures put
+    // both files in the same directory, so a future reorder of those two
+    // checks would silently regress every direct-cwd-is-Berry-root case
+    // (the ORIGINAL pre-round-5 scenario) with this suite otherwise green.
+    const ran: string[] = [];
+    let attempt = 0;
+    const runStep = mock(async (step: { command: string }) => {
+      attempt += 1;
+      ran.push(step.command);
+      if (attempt === 1) throw new Error('network error: socket hang up');
+    });
+    const berryRootDeps = {
+      fileExists: async (p: string) =>
+        p === '/berry-root/package.json' || p === '/berry-root/.yarnrc.yml' || p === '/berry-root/yarn.lock',
+      mtimeMs: async () => null,
+      homeDir: '/home/ci-runner',
+    };
+    const result = await ensureDependencies('/berry-root', 'yarn', {
+      output: { appendLine: mock() },
+      exec: { runStep },
+      deps: berryRootDeps,
+    });
+    expect(result).toBe('installed');
+    expect(ran).toEqual(['yarn install', 'yarn install --check-cache']); // Berry, NOT --force
+  });
+
+  it('the VCS-root ".git" stop engages against a REAL directory on a REAL filesystem, not just a mocked existence check (HYP-1188 round 5)', async () => {
+    // Two reviewers independently raised the same concern: every other test
+    // in this block injects a mock `fileExists` that answers `.git` queries
+    // by fiat, which cannot catch a regression if the real defaultFileExists
+    // ever became file-only (e.g. stat().isFile()) instead of existence-only
+    // — in a normal clone `.git` is a DIRECTORY (a file only in
+    // worktrees/submodules), so a file-only check would never engage the
+    // VCS-root stop in practice and a stray ancestor .yarnrc.yml WOULD leak
+    // in. This test uses NO fileExists/mtimeMs override — the real fs — with
+    // a REAL `.git` directory and proves the walk actually stops there.
+    const outer = await fsp.mkdtemp(path.join(os.tmpdir(), 'hyp1188-vcs-root-'));
+    try {
+      await fsp.writeFile(path.join(outer, '.yarnrc.yml'), ''); // stray, ABOVE the repo — must not be inherited
+      const repoRoot = path.join(outer, 'repo');
+      const memberDir = path.join(repoRoot, 'packages', 'member');
+      await fsp.mkdir(path.join(repoRoot, '.git'), { recursive: true }); // REAL directory, the normal shape
+      await fsp.mkdir(memberDir, { recursive: true });
+      await fsp.writeFile(path.join(memberDir, 'package.json'), '{}');
+
+      const ran: string[] = [];
+      let attempt = 0;
+      const runStep = mock(async (step: { command: string }) => {
+        attempt += 1;
+        ran.push(step.command);
+        if (attempt === 1) throw new Error('network error: socket hang up');
+      });
+      const result = await ensureDependencies(memberDir, 'yarn', {
+        output: { appendLine: mock() },
+        exec: { runStep },
+        // No `deps` override — exercises the real defaultFileExists against the real fs.
+      });
+      expect(result).toBe('installed');
+      expect(ran).toEqual(['yarn install', 'yarn install --force']); // Classic — the real .git dir stopped the climb
+    } finally {
+      await fsp.rm(outer, { recursive: true, force: true });
+    }
+  });
+
+  it('a REAL bun install exit — stderr arriving AFTER "exit" but before "close" (Node\'s documented ordering) still triggers the cache-bypassing retry', async () => {
+    // Regression coverage for TWO review findings:
+    // 1. Every OTHER test in this describe block injects a `runStep` mock
+    //    that throws the raw installer TEXT as the error message directly —
+    //    a contract the real createDefaultRunner/runStepProcess pipeline
+    //    never satisfies (its rejection was `"<display> failed (exit code
+    //    N)"`, with the actual stderr going only to the output channel).
+    //    Those tests passed while the retry was DEAD CODE in production.
+    // 2. A follow-up review round caught that finalizing on `exit` (not
+    //    `close`) made the fix from #1 intermittent: Node's docs state
+    //    `exit` can fire BEFORE stdio streams finish draining. This test
+    //    deliberately emits the failing stderr line and `close` in a LATER
+    //    microtask than `exit` — the ordering Node warns about — so it only
+    //    passes if `resolveStepOutcome` finalizes on `close`.
+    const commands: string[] = [];
+    let attempt = 0;
+    const spawnProcess: SpawnStepProcess = mock((command) => {
+      attempt += 1;
+      commands.push(command);
+      const stdout = new EventEmitter();
+      const stderr = new EventEmitter();
+      const child = new EventEmitter();
+      queueMicrotask(() => {
+        if (attempt === 1) {
+          child.emit('exit', 1); // process has exited...
+          queueMicrotask(() => {
+            // ...but its final stderr line only drains on a LATER tick, before 'close'.
+            stderr.emit('data', Buffer.from('Fail extracting tarball for "@rolldown/binding-win32-x64-msvc"\n'));
+            child.emit('close', 1);
+          });
+        } else {
+          child.emit('exit', 0);
+          child.emit('close', 0);
+        }
+      });
+      return { stdout, stderr, on: child.on.bind(child), kill: mock(() => {}) };
+    });
+    const result = await ensureDependencies('/p', 'bun', {
+      output: { appendLine: mock() },
+      exec: { platform: 'linux', spawnProcess },
+      deps: staleDeps,
+    });
+    expect(result).toBe('installed');
+    expect(commands).toEqual(['bun install', 'bun install --force']);
+  });
+
+  it('the decisive "Fail extracting tarball" line survives even after 25 MORE diagnostic lines follow it (HYP-1188 round 5)', async () => {
+    // Before the fix, createRecentOutputBuffer truncated purely
+    // chronologically (last RECENT_OUTPUT_MAX_LINES=20 non-empty lines) — a
+    // cache failure followed by more diagnostic output than that (exactly
+    // the shape of the original incident, which continued into an esbuild
+    // postinstall crash) silently sliced the ONE line isRetryableInstallError
+    // classifies on out of the tail attached to the rejection. Attempt 1
+    // would then reject as NON-retryable and the retry would never fire:
+    // `result` stays a rejection and only one spawnProcess call happens.
+    const filler = Array.from({ length: 25 }, (_, i) => `esbuild postinstall note ${i}`);
+    const commands: string[] = [];
+    let attempt = 0;
+    const spawnProcess: SpawnStepProcess = mock((command) => {
+      attempt += 1;
+      commands.push(command);
+      if (attempt === 1) {
+        return fakeChild(1, 'Fail extracting tarball for "@rolldown/binding-win32-x64-msvc"', ...filler);
+      }
+      return fakeChild(0);
+    });
+    const result = await ensureDependencies('/p', 'bun', {
+      output: { appendLine: mock() },
+      exec: { platform: 'linux', spawnProcess },
+      deps: staleDeps,
+    });
+    expect(result).toBe('installed');
+    expect(commands).toEqual(['bun install', 'bun install --force']);
+  });
+
+  it('the decisive line survives CHAR-based truncation too, not just line-count truncation (HYP-1188 round 5)', async () => {
+    // A distinct failure mode from the line-count test above: even with
+    // FEWER than RECENT_OUTPUT_MAX_LINES=20 lines total, real installer
+    // diagnostics (absolute paths, checksums) routinely run >100 chars/line —
+    // enough for the aggregate to exceed RECENT_OUTPUT_MAX_CHARS=2000 on its
+    // own and get chopped by tail()'s `.slice(-2000)` BEFORE the line-count
+    // window ever engages. An earlier fix attempt (pinning the decisive line
+    // at lines[0]) still lost it here — slice(-N) truncates from the FRONT,
+    // exactly where that pin placed it. Caught independently by two
+    // reviewers on the first round-5 attempt.
+    const longPath = '/home/user/AppData/Local/bun/install/cache/@rolldown/binding-win32-x64-msvc/package/';
+    const filler = Array.from(
+      { length: 15 },
+      (_, i) => `note: verifying checksum for ${longPath}chunk-${i}.tar.gz against registry manifest entry ${i}`,
+    );
+    const commands: string[] = [];
+    let attempt = 0;
+    const spawnProcess: SpawnStepProcess = mock((command) => {
+      attempt += 1;
+      commands.push(command);
+      if (attempt === 1) {
+        return fakeChild(1, 'Fail extracting tarball for "@rolldown/binding-win32-x64-msvc"', ...filler);
+      }
+      return fakeChild(0);
+    });
+    const result = await ensureDependencies('/p', 'bun', {
+      output: { appendLine: mock() },
+      exec: { platform: 'linux', spawnProcess },
+      deps: staleDeps,
+    });
+    expect(result).toBe('installed');
+    expect(commands).toEqual(['bun install', 'bun install --force']);
+  });
+
+  it('a decisive line LONGER than RECENT_OUTPUT_MAX_CHARS on its own still classifies as retryable (HYP-1188 round 5)', async () => {
+    // A review finding on this fix's second draft: appending the decisive
+    // line back in still sliced it with `.slice(-RECENT_OUTPUT_MAX_CHARS)` —
+    // truncating a >2000-char line from its FRONT, exactly where the
+    // classifying keyword ("Fail extracting tarball…") sits. `tail()` now
+    // keeps the START of an over-long decisive line instead.
+    const longDecisiveLine = `Fail extracting tarball for "@rolldown/binding-win32-x64-msvc": ${'x'.repeat(2100)}`;
+    const commands: string[] = [];
+    let attempt = 0;
+    const spawnProcess: SpawnStepProcess = mock((command) => {
+      attempt += 1;
+      commands.push(command);
+      if (attempt === 1) return fakeChild(1, longDecisiveLine);
+      return fakeChild(0);
+    });
+    const result = await ensureDependencies('/p', 'bun', {
+      output: { appendLine: mock() },
+      exec: { platform: 'linux', spawnProcess },
+      deps: staleDeps,
+    });
+    expect(result).toBe('installed');
+    expect(commands).toEqual(['bun install', 'bun install --force']);
+  });
+
+  it('pins the documented HYP-1206 tradeoff: an EARLY transient retryable line still forces a retry even when the attempt later fails for a genuinely non-retryable reason', async () => {
+    // This is the accepted-tradeoff behavior documented on
+    // createRecentOutputBuffer (review finding, tracked as HYP-1206): once
+    // ANY line in this attempt's output matched RETRYABLE_INSTALL_ERROR_PATTERN,
+    // that line survives into every subsequent tail() call for the SAME
+    // attempt — so a "Fail extracting tarball" logged early (say, for one
+    // package bun's own internal retry recovered from) still makes THIS
+    // failing attempt classify as retryable even though the actual fatal
+    // reason (EACCES) has nothing to do with the network/cache. This test
+    // exists so that when HYP-1206 lands a correct fix (classification
+    // captured independently of the lossy tail text), its own test suite
+    // update shows up here as an intentional, visible behavior change — not
+    // a silent regression.
+    const commands: string[] = [];
+    let attempt = 0;
+    const spawnProcess: SpawnStepProcess = mock((command) => {
+      attempt += 1;
+      commands.push(command);
+      if (attempt === 1) {
+        // Early transient line (recovered from — the OVERALL attempt still
+        // fails later, for an unrelated reason).
+        return fakeChild(
+          1,
+          'Fail extracting tarball for "@rolldown/binding-win32-x64-msvc"',
+          'retrying download…',
+          "EACCES: permission denied, mkdir '/p/node_modules'",
+        );
+      }
+      return fakeChild(0);
+    });
+    const result = await ensureDependencies('/p', 'bun', {
+      output: { appendLine: mock() },
+      exec: { platform: 'linux', spawnProcess },
+      deps: staleDeps,
+    });
+    // Documented current behavior: retries anyway, because the early
+    // retryable line is still present in the tail. A future fix that
+    // classifies on the ACTUAL failure reason would instead reject
+    // immediately, unwrapped, with an EACCES message and only ONE command.
+    expect(result).toBe('installed');
+    expect(commands).toEqual(['bun install', 'bun install --force']);
+  });
+
+  it('ToolchainInstallError.retriesExhausted is true ONLY on the final give-up error, never on an unwrapped non-retryable/cancelled error', async () => {
+    const exhausted = await ensureDependencies('/p', 'npm', {
+      output: { appendLine: mock() },
+      exec: {
+        runStep: mock(async () => {
+          throw new Error('integrity check failed for tarball');
+        }),
+      },
+      deps: staleDeps,
+      maxAttempts: 1,
+    }).catch((e: unknown) => e);
+    expect(exhausted).toBeInstanceOf(ToolchainInstallError);
+    expect((exhausted as ToolchainInstallError).retriesExhausted).toBe(true);
+
+    const unwrapped = await ensureDependencies('/p', 'npm', {
+      output: { appendLine: mock() },
+      exec: {
+        runStep: mock(async () => {
+          throw new Error('EACCES: permission denied');
+        }),
+      },
+      deps: staleDeps,
+    }).catch((e: unknown) => e);
+    expect((unwrapped as Error).message).toContain('EACCES'); // unwrapped, not a ToolchainInstallError
+    expect((unwrapped as { retriesExhausted?: boolean }).retriesExhausted).toBeUndefined();
+  });
+
+  it('a step TIMEOUT is never retried — a corrupted-cache failure fails fast, a genuine hang should surface promptly instead of tripling the wait', async () => {
+    const runStep = mock(async () => {
+      throw new ToolchainInstallError(
+        'Installing project dependencies (bun install) timed out after 10 minutes',
+        'bun',
+        'https://bun.sh',
+      );
+    });
+    const error = await ensureDependencies('/p', 'bun', {
+      output: { appendLine: mock() },
+      exec: { runStep },
+      deps: staleDeps,
+    }).catch((e: unknown) => e);
+    expect(runStep).toHaveBeenCalledTimes(1); // no retry — the ORIGINAL timeout error propagates immediately
+    expect((error as Error).message).toContain('timed out');
+    expect((error as ToolchainInstallError).retriesExhausted).toBe(false); // NOT the exhausted-retries give-up error
   });
 });
 

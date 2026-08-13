@@ -305,6 +305,113 @@ describe('HYP-1169 wiring: _runStart prepares the toolchain before spawning', ()
     }
   });
 
+  it('HYP-1188: the Retry action re-runs the dependency install with force:true (a failed install can leave node_modules on disk)', async () => {
+    const dir = await makeProject();
+    const forceFlags: boolean[] = [];
+    const toolchain = stubToolchain({
+      ensureDependencies: mock(async (_cwd: string, _pm: string, context: { force: boolean }) => {
+        forceFlags.push(context.force);
+        if (forceFlags.length === 1) throw new Error('Fail extracting tarball for "@rolldown/binding-win32-x64-msvc"');
+        return 'installed' as const;
+      }),
+    });
+    (vscode.window.showErrorMessage as ReturnType<typeof mock>).mockImplementationOnce(async () => 'Retry' as never);
+    const restore = stubWorkspace(dir);
+    const { manager } = wireManager(dir, toolchain);
+    try {
+      const state = await manager.start();
+      // force:false on the first attempt (the normal staleness-gated path),
+      // force:true on the Retry — otherwise a failed install that already
+      // left `node_modules` on disk would make Retry a silent no-op.
+      expect(forceFlags).toEqual([false, true]);
+      expect(state.error).toBe('test-shortcircuit-ready');
+    } finally {
+      restore();
+      manager.dispose();
+    }
+  });
+
+  it('HYP-1188: a cancelled install (user clicked Cancel) never shows the "flaky network / Retry" dialog', async () => {
+    const dir = await makeProject();
+    const toolchain = stubToolchain({
+      ensureDependencies: mock(async () => {
+        throw new Error('bun install was cancelled');
+      }),
+    });
+    (vscode.window.withProgress as ReturnType<typeof mock>).mockImplementationOnce((async (
+      _options: unknown,
+      task: (progress: { report(m: { message: string }): void }, token: unknown) => unknown,
+    ) => Promise.resolve(task({ report: mock() }, { isCancellationRequested: true }))) as never);
+    const restore = stubWorkspace(dir);
+    const { manager } = wireManager(dir, toolchain);
+    try {
+      const state = await manager.start();
+      expect(state.status).toBe('error');
+      expect(state.error).toContain('cancelled');
+      // No "flaky network... Retry" modal — the user asked for exactly this.
+      const errorCalls = (vscode.window.showErrorMessage as ReturnType<typeof mock>).mock.calls;
+      const depsError = errorCalls.find((call) =>
+        String(call[0]).includes('could not install the project dependencies'),
+      );
+      expect(depsError).toBeUndefined();
+    } finally {
+      restore();
+      manager.dispose();
+    }
+  });
+
+  it('HYP-1188: ensureDependencies\' exhausted-retries error (retriesExhausted: true) shows the "flaky network" dialog wording', async () => {
+    const dir = await makeProject();
+    const toolchain = stubToolchain({
+      ensureDependencies: mock(async () => {
+        throw new ToolchainInstallError(
+          'Installing project dependencies (bun install) failed after 3 attempts, including a cache-bypassing retry.',
+          'bun',
+          'https://bun.sh',
+          true, // retriesExhausted
+        );
+      }),
+    });
+    (vscode.window.showErrorMessage as ReturnType<typeof mock>).mockImplementationOnce(async () => undefined);
+    const restore = stubWorkspace(dir);
+    const { manager } = wireManager(dir, toolchain);
+    try {
+      await manager.start();
+      const errorCalls = (vscode.window.showErrorMessage as ReturnType<typeof mock>).mock.calls;
+      const depsError = errorCalls.find((call) =>
+        String(call[0]).includes('could not install the project dependencies'),
+      );
+      expect(String(depsError?.[0])).toContain('flaky network');
+    } finally {
+      restore();
+      manager.dispose();
+    }
+  });
+
+  it('HYP-1188: a non-retryable failure (e.g. EACCES, surfaced unwrapped by ensureDependencies) does NOT show the "flaky network" wording — a permission error mislabeled as network flakiness sends the user chasing the wrong fix', async () => {
+    const dir = await makeProject();
+    const toolchain = stubToolchain({
+      ensureDependencies: mock(async () => {
+        throw new Error("EACCES: permission denied, mkdir '/p/node_modules'");
+      }),
+    });
+    (vscode.window.showErrorMessage as ReturnType<typeof mock>).mockImplementationOnce(async () => undefined);
+    const restore = stubWorkspace(dir);
+    const { manager } = wireManager(dir, toolchain);
+    try {
+      await manager.start();
+      const errorCalls = (vscode.window.showErrorMessage as ReturnType<typeof mock>).mock.calls;
+      const depsError = errorCalls.find((call) =>
+        String(call[0]).includes('could not install the project dependencies'),
+      );
+      expect(String(depsError?.[0])).not.toContain('flaky network');
+      expect(String(depsError?.[0])).toContain("'HyperIDE Dev Server' output channel"); // still names the log location
+    } finally {
+      restore();
+      manager.dispose();
+    }
+  });
+
   it('deps install succeeded but node_modules/.bin/nx is absent → friendly error naming nx, NO spawn', async () => {
     const dir = await makeWrapperProject();
     const toolchain = stubToolchain({
