@@ -169,6 +169,21 @@ describe('PreviewFileManager', () => {
       const path = await manager.getPreviewFilePath();
       expect(path).toBe('/project/app/__canvas_preview__.tsx');
     });
+
+    it('should use client/ when the entry filename is not "main" (HyperIDE dogfood: /client/App.tsx)', async () => {
+      // HyperIDE's own repo bootstraps the SPA from /client/App.tsx, not /client/main.tsx.
+      // The registry must land next to that entry so the patched entry's
+      // import('./__canvas_preview__') resolves; otherwise it splits to src/ and the
+      // preview imports a stale/missing registry (blank preview).
+      const io = new InMemoryFileIO();
+      io.files.set(
+        '/project/index.html',
+        `<!doctype html><html><body><div id="root"></div><script type="module" src="/client/App.tsx"></script></body></html>`,
+      );
+      const manager = createManager(io);
+      const path = await manager.getPreviewFilePath();
+      expect(path).toBe('/project/client/__canvas_preview__.tsx');
+    });
   });
 
   describe('ensureComponent', () => {

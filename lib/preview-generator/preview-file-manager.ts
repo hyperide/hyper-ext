@@ -211,12 +211,22 @@ export class PreviewFileManager {
       // Not a monorepo
     }
 
-    // Detect frontend root from index.html <script type="module" src="/XXX/main.*">
+    // Detect frontend root from the index.html module entry: <script type="module"
+    // src="/XXX/<entry>.tsx">. The captured dir (XXX) is where the registry must live so
+    // the entry's patched `import('./__canvas_preview__')` resolves to it.
+    //
+    // The filename is intentionally NOT pinned to `main`: HyperIDE's own repo loads
+    // `/client/App.tsx`, and the old `…/main\.[jt]sx` pattern missed it, falling through to
+    // the `src/` fallback. The registry then landed in `src/__canvas_preview__.tsx` while
+    // the patched entry under `client/` imported `client/__canvas_preview__.tsx` — a split
+    // that left the preview importing a stale/missing registry (blank preview). Matching any
+    // entry filename fixes that while keeping the existing dir-capture behavior.
+    //
     // This must come BEFORE the src/ check so projects with src/ in root but client/ as
     // the actual frontend entrypoint (e.g. bulka-the-dog) are handled correctly.
     try {
       const html = await this.io.readFile(join(this.projectRoot, 'index.html')); // nosemgrep: path-join-resolve-traversal
-      const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/main\.[jt]sx?["']/);
+      const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/[^/"']+\.[jt]sx?["']/);
       if (match && match[1] !== 'src') {
         return join(this.projectRoot, match[1], '__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
       }
