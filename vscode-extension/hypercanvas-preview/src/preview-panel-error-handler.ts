@@ -68,11 +68,26 @@ export async function handleCreateSampleFromError(
   const componentName = options?.componentName ?? extractComponentName(sourceCode, fileName);
 
   const existingRegex = new RegExp(`export\\s+const\\s+${escapeRegex(exportName)}\\s*=`); // nosemgrep: detect-non-literal-regexp -- exportName is escaped internal identifier, not user input
-  if (existingRegex.test(sourceCode)) {
-    const sampleStart = sourceCode.indexOf(`export const ${exportName}`);
-    const afterSample = sourceCode.slice(sampleStart);
+  // Use the regex match position (not a literal indexOf) so nonstandard
+  // whitespace like `export  const Sample` can't desync the detected start
+  // from the existence check above (indexOf would return -1 and corrupt the
+  // replacement slices below).
+  const existingMatch = existingRegex.exec(sourceCode);
+  if (existingMatch) {
+    const exportStart = existingMatch.index;
+    const afterSample = sourceCode.slice(exportStart);
     const nextExportMatch = afterSample.match(/\n(export\s)/);
-    const sampleEnd = nextExportMatch ? sampleStart + (nextExportMatch.index ?? afterSample.length) : sourceCode.length;
+    const sampleEnd = nextExportMatch ? exportStart + (nextExportMatch.index ?? afterSample.length) : sourceCode.length;
+    // HYP-870: the replacement scaffold re-adds its own `// Sample component
+    // for preview` header, so the comment line(s) sitting directly above the
+    // existing sample must be consumed by the replacement range too. Keeping
+    // them in the retained prefix duplicated the comment on every rewrite
+    // (observed live: 8 stacked copies in conloca-app's AccountPage.tsx).
+    // Blank lines between stacked copies are consumed as well.
+    const scaffoldCommentAbove = sourceCode
+      .slice(0, exportStart)
+      .match(/(?:[ \t]*\/\/ Sample component for preview[ \t]*\r?\n(?:[ \t]*\r?\n)*)+$/);
+    const sampleStart = scaffoldCommentAbove ? exportStart - scaffoldCommentAbove[0].length : exportStart;
 
     const propEntries = deps.buildPropEntries(propValues);
     const replacement = deps.buildSampleScaffold(componentName, exportName, propEntries, sourceCode);

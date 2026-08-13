@@ -835,6 +835,135 @@ export default function Home() {
     // onSampleCreated joins to the repo root, so it must receive the repo-relative path.
     expect(callbackPaths).toEqual(['targets/conloca-app/src/app/ui/HostField.tsx']);
   });
+
+  // HYP-870: rewriting an EXISTING sample kept the `// Sample component for
+  // preview` comment line(s) above it in the retained prefix while the
+  // replacement scaffold re-added its own copy — every rewrite stacked one
+  // more duplicate (observed live: 8 copies in conloca-app's AccountPage.tsx).
+  it('does not duplicate the scaffold comment when rewriting an existing sample', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createPanel(stateHub);
+
+    const dupSource = [
+      'export function HostField({ label }: { label?: string }) { return null; }',
+      '',
+      '// Sample component for preview',
+      '// Sample component for preview',
+      '// Sample component for preview',
+      'export const SampleDefault = () => (',
+      '  <HostField',
+      '  />',
+      ');',
+    ].join('\n');
+    vscode.workspace.fs.readFile.mockImplementation(() => Promise.resolve(Buffer.from(dupSource)));
+    vscode.workspace.fs.writeFile.mockImplementation(() => Promise.resolve());
+
+    type InternalPanel = {
+      _handleCreateSampleFromError: (
+        path: string | undefined,
+        propValues?: Record<string, unknown>,
+        sampleName?: string,
+        options?: { componentName?: string; revealInEditor?: boolean },
+      ) => Promise<boolean>;
+    };
+    const internal = panel as unknown as InternalPanel;
+
+    await internal._handleCreateSampleFromError('src/HostField.tsx', undefined, 'SampleDefault', {
+      revealInEditor: false,
+    });
+
+    const writeCalls = vscode.workspace.fs.writeFile.mock.calls;
+    expect(writeCalls.length).toBeGreaterThan(0);
+    const written = Buffer.from(writeCalls[writeCalls.length - 1][1] as Uint8Array).toString('utf-8');
+    const commentCount = written.split('// Sample component for preview').length - 1;
+    expect(commentCount).toBe(1);
+    expect(written).toContain('export const SampleDefault');
+  });
+
+  // HYP-870 edge: nonstandard whitespace (`export  const`) must not desync the
+  // rewrite start from the existence check (indexOf would return -1 and corrupt
+  // the replacement slices).
+  it('rewrites an existing sample declared with nonstandard whitespace without corrupting the file', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createPanel(stateHub);
+
+    const dupSource = [
+      'export function HostField({ label }: { label?: string }) { return null; }',
+      '',
+      '// Sample component for preview',
+      'export  const SampleDefault = () => (',
+      '  <HostField',
+      '  />',
+      ');',
+    ].join('\n');
+    vscode.workspace.fs.readFile.mockImplementation(() => Promise.resolve(Buffer.from(dupSource)));
+    vscode.workspace.fs.writeFile.mockImplementation(() => Promise.resolve());
+
+    type InternalPanel = {
+      _handleCreateSampleFromError: (
+        path: string | undefined,
+        propValues?: Record<string, unknown>,
+        sampleName?: string,
+        options?: { componentName?: string; revealInEditor?: boolean },
+      ) => Promise<boolean>;
+    };
+    const internal = panel as unknown as InternalPanel;
+
+    await internal._handleCreateSampleFromError('src/HostField.tsx', undefined, 'SampleDefault', {
+      revealInEditor: false,
+    });
+
+    const writeCalls = vscode.workspace.fs.writeFile.mock.calls;
+    expect(writeCalls.length).toBeGreaterThan(0);
+    const written = Buffer.from(writeCalls[writeCalls.length - 1][1] as Uint8Array).toString('utf-8');
+    const commentCount = written.split('// Sample component for preview').length - 1;
+    expect(commentCount).toBe(1);
+    // The original function declaration must survive intact (no corrupted slices).
+    expect(written).toContain('export function HostField');
+    expect(written).toContain('export const SampleDefault');
+  });
+
+  // HYP-870 edge: stacked copies separated by blank lines must be consumed too.
+  it('collapses scaffold comments separated by blank lines when rewriting an existing sample', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createPanel(stateHub);
+
+    const dupSource = [
+      'export function HostField({ label }: { label?: string }) { return null; }',
+      '',
+      '// Sample component for preview',
+      '',
+      '// Sample component for preview',
+      '',
+      'export const SampleDefault = () => (',
+      '  <HostField',
+      '  />',
+      ');',
+    ].join('\n');
+    vscode.workspace.fs.readFile.mockImplementation(() => Promise.resolve(Buffer.from(dupSource)));
+    vscode.workspace.fs.writeFile.mockImplementation(() => Promise.resolve());
+
+    type InternalPanel = {
+      _handleCreateSampleFromError: (
+        path: string | undefined,
+        propValues?: Record<string, unknown>,
+        sampleName?: string,
+        options?: { componentName?: string; revealInEditor?: boolean },
+      ) => Promise<boolean>;
+    };
+    const internal = panel as unknown as InternalPanel;
+
+    await internal._handleCreateSampleFromError('src/HostField.tsx', undefined, 'SampleDefault', {
+      revealInEditor: false,
+    });
+
+    const writeCalls = vscode.workspace.fs.writeFile.mock.calls;
+    expect(writeCalls.length).toBeGreaterThan(0);
+    const written = Buffer.from(writeCalls[writeCalls.length - 1][1] as Uint8Array).toString('utf-8');
+    const commentCount = written.split('// Sample component for preview').length - 1;
+    expect(commentCount).toBe(1);
+    expect(written).toContain('export const SampleDefault');
+  });
 });
 
 // HYP-435: setComponentParam(repoRel, subRel) must derive and forward the
