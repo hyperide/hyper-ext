@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import * as vscode from 'vscode';
 import { goToCode } from './EditorBridge';
 import { autoUpdateMcpConfigs, registerCopilotMcp } from './extension-commands-utils';
@@ -34,6 +35,28 @@ export async function navigateToElement(
 const ACTIVATION_START_TIMEOUT_MS = 30_000;
 
 /**
+ * E2E-only hook (mirrors `HYPERIDE_DIAGNOSTIC_ERROR_SINK`): when
+ * `HYPERIDE_MCP_URL_SINK` names a file path, write the freshly-started server's
+ * `url` (which carries the per-start `?token=` secret) there so the Playwright
+ * harness can authenticate its direct `/mcp` calls. The token is minted per
+ * start() and never surfaced in the status-bar tooltip or any config file the
+ * reference project ships, so without this sink the harness has no way to obtain
+ * it and every MCP tool call 401s (HYP-956 auth landed the token; the harness
+ * was never wired to read it). Gated entirely on the env var — a no-op in
+ * production, where the var is unset. Best-effort: a write failure must never
+ * break server startup, so swallow errors like the diagnostic sink does.
+ */
+function publishMcpUrlToE2ESink(url: string): void {
+  const sinkPath = process.env.HYPERIDE_MCP_URL_SINK;
+  if (!sinkPath) return;
+  try {
+    writeFileSync(sinkPath, url, 'utf8');
+  } catch (err) {
+    console.error('[HyperMCP] Failed to write E2E MCP URL sink:', err);
+  }
+}
+
+/**
  * Fires on every successful `ensureStarted()` transition to STARTED — the
  * eager activation attempt AND any later successful `hypercanvas.setupMcp`
  * retry (HyperMcpServer.onStarted; HYP-954 review finding). Config auto-update,
@@ -56,6 +79,7 @@ function handleMcpServerStarted(
   // OLD workspace forever.
   autoUpdateMcpConfigs(panelRouter.workspaceRoot, server.url);
   registerCopilotMcp(context, server.url);
+  publishMcpUrlToE2ESink(server.url);
   mcpStatusBarItem.text = '$(plug) Hyper MCP';
   mcpStatusBarItem.tooltip = `HyperCanvas MCP: http://127.0.0.1:${server.port}/mcp\nClick to configure AI agents`;
   mcpStatusBarItem.show();
