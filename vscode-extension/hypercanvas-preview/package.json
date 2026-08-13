@@ -449,6 +449,36 @@
           "default": false,
           "description": "Automatically start dev server when opening preview"
         },
+        "hypercanvas.tools.bun": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Full path to the Bun program (for example `/Users/you/.bun/bin/bun` on macOS/Linux or `C:\\Users\\you\\.bun\\bin\\bun.exe` on Windows). Leave empty — HyperIDE finds Bun automatically. Set this only if the preview says Bun is missing but you know it is installed."
+        },
+        "hypercanvas.tools.node": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Full path to the Node.js program (for example `/usr/local/bin/node` or `C:\\Program Files\\nodejs\\node.exe`). Leave empty — HyperIDE finds Node.js automatically. Set this only if the preview says Node.js is missing but you know it is installed."
+        },
+        "hypercanvas.tools.npm": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Full path to the npm program. Leave empty — HyperIDE finds npm automatically. Set this only if the preview says npm is missing but you know it is installed."
+        },
+        "hypercanvas.tools.pnpm": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Full path to the pnpm program. Leave empty — HyperIDE finds pnpm automatically. Set this only if the preview says pnpm is missing but you know it is installed."
+        },
+        "hypercanvas.tools.yarn": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Full path to the Yarn program. Leave empty — HyperIDE finds Yarn automatically. Set this only if the preview says Yarn is missing but you know it is installed."
+        },
         "hypercanvas.preview.defaultPort": {
           "type": "number",
           "default": 3000,

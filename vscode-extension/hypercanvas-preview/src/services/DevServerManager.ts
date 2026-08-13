@@ -6,7 +6,7 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
-import { delimiter, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { detectFramework } from '@lib/preview-generator/framework-routing';
 import { VITE_CONFIG_CANDIDATES } from '@lib/preview-generator/vite-config-ast';
 import { patchViteConfigForReactDedupe } from '@lib/preview-generator/vite-config-react-dedupe';
@@ -46,6 +46,8 @@ import {
   type ToolchainProgress,
 } from './toolchainInstaller';
 import { mergePathEntries, refreshPathForChild } from './toolchainPath';
+import { resolveToolBinary } from './toolchainResolver';
+import type { ToolchainTool } from './toolchainDetector';
 
 /**
  * Pure predicate behind {@link DevServerManager._hasDirtyViteConfig}: do any of the dirty open
@@ -332,6 +334,19 @@ export function truncatePathForLog(path: string, maxEntries = 6): string {
   return `${entries.slice(0, maxEntries).join(separator)}${separator}… (+${entries.length - maxEntries} more entries, ${path.length} chars total)`;
 }
 
+/**
+ * HYP-1169 round 4: the `hypercanvas.tools.<tool>` settings override. Empty
+ * string (the default) means "no override" — the resolution chain then falls
+ * through to cache/PATH/shell-profile/well-known sources.
+ */
+function readToolOverrideSetting(tool: ToolchainTool): string | undefined {
+  const value: unknown = vscode.workspace.getConfiguration('hypercanvas.tools').get<string>(tool);
+  // typeof guard: configuration mocks in the DevServerManager suites answer
+  // ANY key with whatever value they were built for (a port number, …) — a
+  // non-string here means "no override", never a crash.
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
 export function shouldRepairDependencies(errorMessage: string, logs: LogEntry[]): boolean {
   const text = `${errorMessage}\n${logs.map((entry) => entry.line).join('\n')}`.toLowerCase();
   return (
@@ -583,6 +598,12 @@ export class DevServerManager {
     shouldInstallDependencies,
     findMissingLocalBinaries,
     refreshPathForChild,
+    // HYP-1169 round 4: the settings override reader + the ordered resolution
+    // chain (override → .hyperide/toolchain.json cache → process PATH → login
+    // shell PATH → well-known dirs). Runs BEFORE any install decision.
+    getToolOverride: readToolOverrideSetting,
+    resolveTool: (tool: ToolchainTool, projectPath: string, onLog: (message: string) => void) =>
+      resolveToolBinary(tool, projectPath, { getOverride: readToolOverrideSetting, onLog }),
   };
 
   // Log buffer and error detection
@@ -1816,25 +1837,62 @@ export class DevServerManager {
     const pm = plan.packageManager;
     const requiredTools = requiredToolsForPackageManager(pm);
     const localBinaries = requiredLocalBinaries(plan.cmd, plan.args, plan.branch);
-    const availability = await this._toolchain.detectAvailableTools();
-    const depsStale = await this._toolchain.shouldInstallDependencies(plan.cwd, pm);
+    // Copy the probe result: detectAvailableTools returns its SESSION cache by
+    // reference, and the resolution loop below marks resolved tools available.
+    // Writing that into the shared cache would make the NEXT start() skip the
+    // resolver (tool looks probe-available), run ensureTool's plain-PATH
+    // re-probe, and doom-reinstall a shell-profile-resolved tool — the exact
+    // regression this round exists to kill (review P1). Mutations stay local.
+    const availability = { ...(await this._toolchain.detectAvailableTools()) };
     const toolDirs: string[] = [];
+
+    // HYP-1169 round 4: run the ordered resolution chain (settings override →
+    // .hyperide/toolchain.json cache → process PATH → login-shell PATH →
+    // well-known dirs) BEFORE any install decision. A tool the probes declared
+    // missing can still resolve here (the "~/.zshrc has it but GUI VS Code
+    // doesn't" class), and an explicit override wins even over a PATH-visible
+    // tool. Every resolution is live-verified by the resolver; its directory
+    // joins the child PATH below. A warm start with no override pays nothing —
+    // the resolver is only called for missing-or-overridden tools.
+    const log = (message: string) => this._outputChannel.appendLine(message);
+    const resolvedTools = new Set<ToolchainTool>();
+    for (const tool of requiredTools) {
+      if (availability[tool] && !this._toolchain.getToolOverride(tool)) continue;
+      const resolved = await this._toolchain.resolveTool(tool, plan.cwd, log);
+      if (!resolved) continue;
+      // Local-only availability: the tool is reachable through THIS child's
+      // augmented PATH, not the process PATH — the session detector cache must
+      // stay false so the next start re-resolves (cheap project-cache hit)
+      // instead of running ensureTool's blind re-probe.
+      availability[tool] = true;
+      resolvedTools.add(tool);
+      const dir = dirname(resolved.path);
+      if (!toolDirs.some((d) => d.toLowerCase() === dir.toLowerCase())) toolDirs.push(dir);
+    }
+
+    const depsStale = await this._toolchain.shouldInstallDependencies(plan.cwd, pm);
     const installRan = { value: requiredTools.some((tool) => !availability[tool]) || depsStale };
 
-    const phases: ToolchainPhase[] = requiredTools.map((tool) => ({
-      title: `Checking ${tool}`,
-      run: async (progress, token) => {
-        const dirs = await this._toolchain.ensureTool(tool, {
-          availability,
-          output: this._outputChannel,
-          confirmSudo: (description) => this._confirmSudoInstall(description),
-          exec: { progress, token },
-        });
-        for (const dir of dirs) {
-          if (!toolDirs.some((d) => d.toLowerCase() === dir.toLowerCase())) toolDirs.push(dir);
-        }
-      },
-    }));
+    // Resolved tools skip the ensureTool phase: the resolver already live-
+    // verified the binary, and ensureTool's re-probe (process PATH +
+    // well-known dirs only) cannot see a shell-profile/override location —
+    // running it would invalidate the cache and trigger a doomed reinstall.
+    const phases: ToolchainPhase[] = requiredTools
+      .filter((tool) => !resolvedTools.has(tool))
+      .map((tool) => ({
+        title: `Checking ${tool}`,
+        run: async (progress, token) => {
+          const dirs = await this._toolchain.ensureTool(tool, {
+            availability,
+            output: this._outputChannel,
+            confirmSudo: (description) => this._confirmSudoInstall(description),
+            exec: { progress, token },
+          });
+          for (const dir of dirs) {
+            if (!toolDirs.some((d) => d.toLowerCase() === dir.toLowerCase())) toolDirs.push(dir);
+          }
+        },
+      }));
     if (depsStale) phases.push(this._depsPhase(plan, toolDirs));
     phases.push(this._verifyPhase(plan, localBinaries, toolDirs, installRan));
 

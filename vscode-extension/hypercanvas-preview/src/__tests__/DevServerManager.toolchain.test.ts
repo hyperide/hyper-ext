@@ -43,6 +43,8 @@ type ToolchainSeam = {
   shouldInstallDependencies: ReturnType<typeof mock>;
   findMissingLocalBinaries: ReturnType<typeof mock>;
   refreshPathForChild: ReturnType<typeof mock>;
+  getToolOverride: ReturnType<typeof mock>;
+  resolveTool: ReturnType<typeof mock>;
 };
 
 type ManagerPrivates = {
@@ -118,6 +120,8 @@ function stubToolchain(overrides: Partial<{ [K in keyof ToolchainSeam]: Toolchai
     shouldInstallDependencies: mock(async () => true),
     findMissingLocalBinaries: mock(async () => [] as string[]),
     refreshPathForChild: mock(async () => '/fresh/path'),
+    getToolOverride: mock(() => undefined as string | undefined),
+    resolveTool: mock(async () => null),
     ...overrides,
   };
 }
@@ -406,6 +410,128 @@ describe('HYP-1169 wiring: _runStart prepares the toolchain before spawning', ()
     const childPath = buildDevServerChildPath('/proj', '/fresh/toolchain/path');
     const sep = process.platform === 'win32' ? ';' : ':';
     expect(childPath).toBe(`/proj/node_modules/.bin${sep}/fresh/toolchain/path`);
+  });
+});
+
+describe('HYP-1169 round 4 wiring: resolution chain runs before any install decision', () => {
+  it('a missing tool resolved via the chain is NOT installed; its dir joins the child PATH', async () => {
+    const dir = await makeProject();
+    await fsp.writeFile(path.join(dir, 'bun.lock'), '');
+    const toolchain = stubToolchain({
+      detectAvailableTools: mock(async () => ({ ...ALL_AVAILABLE, bun: false })),
+      resolveTool: mock(async () => ({ tool: 'bun', path: '/home/u/.bun/bin/bun', source: 'shellProfile' })),
+    });
+    const restore = stubWorkspace(dir);
+    const { manager, priv } = wireManager(dir, toolchain);
+    const logs: string[] = [];
+    priv._outputChannel = {
+      appendLine: (line: string) => logs.push(line),
+      append: mock(),
+      show: mock(),
+      dispose: mock(),
+    } as never;
+    try {
+      const state = await manager.start();
+      expect(state.error).toBe('test-shortcircuit-ready');
+      // The resolver found bun → the installer never ran for it. Assert on the
+      // actual call list: not.toHaveBeenCalledWith passes trivially when the
+      // mock was never called at all.
+      expect(toolchain.resolveTool).toHaveBeenCalledWith('bun', dir, expect.anything());
+      expect(toolchain.ensureTool.mock.calls.map((call) => call[0])).not.toContain('bun');
+      // The resolved dir was prepended to the child PATH (ahead of the refreshed PATH).
+      const pathLine = logs.find((line) => line.startsWith('[DevServer] Child PATH: '));
+      expect(pathLine).toBeDefined();
+      const resolvedDir = pathLine?.indexOf('/home/u/.bun/bin') ?? -1;
+      const refreshed = pathLine?.indexOf('/fresh/path') ?? -1;
+      expect(resolvedDir).toBeGreaterThanOrEqual(0);
+      expect(refreshed).toBeGreaterThan(resolvedDir);
+    } finally {
+      restore();
+      manager.dispose();
+    }
+  });
+
+  it('a settings override is consulted even when the tool is already on PATH (override wins)', async () => {
+    const dir = await makeProject();
+    await fsp.writeFile(path.join(dir, 'bun.lock'), '');
+    const toolchain = stubToolchain({
+      getToolOverride: mock((tool: string) => (tool === 'bun' ? '/opt/custom/bun' : undefined)),
+      resolveTool: mock(async () => ({ tool: 'bun', path: '/opt/custom/bun', source: 'override' })),
+    });
+    const restore = stubWorkspace(dir);
+    const { manager } = wireManager(dir, toolchain);
+    try {
+      const state = await manager.start();
+      expect(state.error).toBe('test-shortcircuit-ready');
+      expect(toolchain.resolveTool).toHaveBeenCalledWith('bun', dir, expect.anything());
+      expect(toolchain.ensureTool.mock.calls.map((call) => call[0])).not.toContain('bun');
+    } finally {
+      restore();
+      manager.dispose();
+    }
+  });
+
+  it('a shell-profile resolution does NOT leak into the shared probe result (next start re-resolves instead of reinstalling)', async () => {
+    // Regression guard for the review P1: the real detectAvailableTools
+    // returns its SESSION cache by reference. If the resolution loop's
+    // availability[tool] = true landed on that shared object, the next start()
+    // would skip the resolver, run ensureTool's plain-PATH re-probe, and
+    // doom-reinstall a shell-profile-resolved tool. The seam returns the SAME
+    // object on every call here to make the aliasing observable.
+    const dir = await makeProject();
+    await fsp.writeFile(path.join(dir, 'bun.lock'), '');
+    const sharedAvailability = { ...ALL_AVAILABLE, bun: false };
+    const toolchain = stubToolchain({
+      detectAvailableTools: mock(async () => sharedAvailability),
+      resolveTool: mock(async () => ({ tool: 'bun', path: '/home/u/.bun/bin/bun', source: 'shellProfile' })),
+    });
+    const restore = stubWorkspace(dir);
+    const { manager } = wireManager(dir, toolchain);
+    try {
+      const state = await manager.start();
+      expect(state.error).toBe('test-shortcircuit-ready');
+      expect(toolchain.resolveTool).toHaveBeenCalledWith('bun', dir, expect.anything());
+      expect(sharedAvailability.bun).toBe(false);
+    } finally {
+      restore();
+      manager.dispose();
+    }
+  });
+
+  it('a failed resolution (null) falls through to the installer', async () => {
+    const dir = await makeProject();
+    await fsp.writeFile(path.join(dir, 'bun.lock'), '');
+    const toolchain = stubToolchain({
+      detectAvailableTools: mock(async () => ({ ...ALL_AVAILABLE, bun: false })),
+      resolveTool: mock(async () => null),
+    });
+    const restore = stubWorkspace(dir);
+    const { manager } = wireManager(dir, toolchain);
+    try {
+      await manager.start();
+      expect(toolchain.resolveTool).toHaveBeenCalled();
+      expect(toolchain.ensureTool).toHaveBeenCalledWith('bun', expect.anything());
+    } finally {
+      restore();
+      manager.dispose();
+    }
+  });
+
+  it('a warm start (all tools available, no override) never calls the resolver', async () => {
+    const dir = await makeProject();
+    const toolchain = stubToolchain({
+      shouldInstallDependencies: mock(async () => false),
+    });
+    const restore = stubWorkspace(dir);
+    const { manager } = wireManager(dir, toolchain);
+    try {
+      const state = await manager.start();
+      expect(state.error).toBe('test-shortcircuit-ready');
+      expect(toolchain.resolveTool).not.toHaveBeenCalled();
+    } finally {
+      restore();
+      manager.dispose();
+    }
   });
 });
 

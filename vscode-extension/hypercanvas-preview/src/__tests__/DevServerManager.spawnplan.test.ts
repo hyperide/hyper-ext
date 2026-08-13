@@ -187,6 +187,7 @@ describe('HYP-1160 (c): attach-first when the expected port already answers HTTP
     const priv = manager as unknown as ManagerPrivates & {
       _findFreePort: (start: number) => Promise<number>;
       _waitForReady: (timeout: number, gen?: number) => Promise<void>;
+      _toolchain: { shouldInstallDependencies: (cwd: string, pm: string) => Promise<boolean> };
     };
     // Avoid a real spawn/readiness wait: this test only proves the attach probe
     // did NOT adopt the unverified listener (start proceeds down the spawn path).
@@ -194,6 +195,10 @@ describe('HYP-1160 (c): attach-first when the expected port already answers HTTP
     priv._waitForReady = mock(async () => {
       throw new Error('test-shortcircuit-ready');
     });
+    // The deps phase is not under test either: the fixture's vite devDependency
+    // makes the REAL npm install take ~4.5s warm-cache, racing the 5s test
+    // timeout under full-suite parallel load (timed out twice at 5002/5026ms).
+    priv._toolchain.shouldInstallDependencies = mock(async () => false);
     try {
       const state = await manager.start();
       // Reached the spawn path (short-circuited), NOT the attach path.
@@ -224,6 +229,7 @@ describe('HYP-1160 (c): attach-first when the expected port already answers HTTP
     const priv = manager as unknown as ManagerPrivates & {
       _findFreePort: (start: number) => Promise<number>;
       _waitForReady: (timeout: number, gen?: number) => Promise<void>;
+      _toolchain: { shouldInstallDependencies: (cwd: string, pm: string) => Promise<boolean> };
     };
     // Avoid a real spawn/readiness wait: this test only proves the attach probe
     // did NOT adopt a non-HTTP listener (start proceeds down the spawn path).
@@ -231,6 +237,8 @@ describe('HYP-1160 (c): attach-first when the expected port already answers HTTP
     priv._waitForReady = mock(async () => {
       throw new Error('test-shortcircuit-ready');
     });
+    // Same real-npm-install hazard as the stranger-port test above.
+    priv._toolchain.shouldInstallDependencies = mock(async () => false);
     try {
       const state = await manager.start();
       // Reached the spawn path (short-circuited), NOT the attach path.
