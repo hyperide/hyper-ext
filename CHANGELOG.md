@@ -9,6 +9,8 @@ All notable changes to HyperCanvas Preview are documented here.
 - **Explorer shows components in src/app/** — `detectProjectStructure` now handles `src/app/` (non-Next.js) by delegating to `categorizeComponentsDir`; previously the Explorer showed all categories empty for projects with this layout (`b53d8b0f`)
 - **Git excludes on first component switch** — `ensureGitExclude` is now called from `_initPreviewFile` and `ensureStandaloneEntry`, so generated files are hidden from `git status` as soon as they are created rather than only after `ensurePreviewFiles` is invoked (`8e1beddc`)
 - **`.samples.tsx` and `__canvas_samples__.tsx` hidden from git** — `ensureGitExclude` now includes `__canvas_samples__.tsx` (legacy global samples file); `isPreviewIneligibleByName` excludes `*.samples.tsx` siblings so they never appear as previewable components or cause HMR churn (`a39a7288`)
+- **Try render without props before showing "requires props" overlay** — `shouldCreateNoPropsSample` now creates a minimal scaffold for every unsampled component regardless of declared props; if the component renders without props the preview just works; only if it crashes does `ComponentErrorOverlay` appear (`64a05bd2`)
+- **AI sample generation as fallback for required-prop components** — `_handleCreateSampleFromError` now checks component prop types before attempting AI generation; AI is only invoked when the component has required props and an API key is configured; for simple no-prop components the deterministic scaffold is used directly; when API key is missing and required props are detected, a notification prompts the user to configure one (`06d0d753`)
 
 ---
 
