@@ -45,7 +45,14 @@ import { NodeMapService } from '@lib/element-tracing/node-map-service';
 import type { FindElementResult } from '@lib/types';
 import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
 import { resolveWorkspacePath } from './workspace-path';
-import { describeJsxName, jsxContains, liftToCommonJsxParent, replaceStringLiteralValue } from './ast-utils';
+import {
+  describeJsxName,
+  isJsxContainer,
+  jsxContains,
+  liftToCommonJsxParent,
+  replaceStringLiteralValue,
+  swapInChildren,
+} from './ast-utils';
 import type {
   AstOperationResult,
   DuplicateElementResult,
@@ -758,50 +765,23 @@ export class AstService {
       contentBeforeWrite = await this._fileIO.readFile(targetFilePath);
     } catch {}
 
-    // Decide what to actually move. When source and target share a direct
-    // JSX parent → simple sibling reorder. Otherwise lift both up to the
-    // deepest common JSX ancestor (Task 4) so e.g. dragging an inner
-    // <p> from card-1 onto an inner <h3> in card-2 reorders the OUTER
-    // cards instead of stuffing the <p> into card-2's wrapper div.
-    let movingNode: t.JSXElement = sourceNode;
-    let movingParent: t.JSXElement | t.JSXFragment = sourceParent;
-    let pivotNode: t.JSXElement = targetNode;
-    let pivotParent: t.JSXElement | t.JSXFragment = targetParent;
-    if (sourceParent !== targetParent) {
-      const lifted = liftToCommonJsxParent(sourceResult.path, targetResult.path);
-      dbg(
-        `[moveElement] liftToCommonJsxParent → ${
-          lifted
-            ? `sourceLifted=${describeJsxName(lifted.sourceLifted)} targetLifted=${describeJsxName(lifted.targetLifted)} commonParent=${lifted.commonParent.type}`
-            : 'NULL'
-        }`,
-      );
-      if (lifted) {
-        if (lifted.sourceLifted === lifted.targetLifted) {
-          // Both nodes live inside the same outer-card subtree → no-op at
-          // the outer level. Treat as success without mutation.
-          dbg(`[moveElement] no-op: lifted source === lifted target`);
-          return { success: true, resolvedPath: targetFilePath };
-        }
-        movingNode = lifted.sourceLifted;
-        pivotNode = lifted.targetLifted;
-        pivotParent = lifted.commonParent;
-        // movingParent is whichever JSXElement/Fragment actually contains
-        // movingNode in its `children` array. For the standard lift case
-        // (Case C: lifted to a third common ancestor) movingParent ===
-        // commonParent. For the extract case (Case B: target is ancestor
-        // of source — sourceLifted === sourceNode itself), movingParent
-        // is the original sourceParent.
-        movingParent = movingNode === sourceNode ? sourceParent : lifted.commonParent;
-      } else {
-        // No common JSX ancestor — happens when source and target live
-        // in different return statements / component functions in the
-        // same file. Fall back to the original cut-from-sourceParent +
-        // splice-into-targetParent semantic so cross-component moves
-        // (Task 4 of move-any-to-any) keep working.
-        dbg(`[moveElement] no common ancestor → fallback to cross-parent splice`);
-      }
-    }
+    // REPARENT semantics (visual-foundation spec Part C, Task 7): the source
+    // node itself moves to sit next to the target inside the TARGET's parent.
+    // Same-parent → sibling reorder; different parent → the source lands
+    // INSIDE the target's container and the old parent empties out.
+    //
+    // We intentionally do NOT lift to a common ancestor and swap sibling
+    // containers here. "Drag card A onto card B → swap the two cards" is a
+    // DISTINCT gesture (spec Task 8, `swapElements`), not a side effect of
+    // moveElement. Folding swap into moveElement (the old liftToCommonJsxParent
+    // path) made cross-parent drops reorder outer containers instead of
+    // reparenting the dragged element, which contradicts Task 7 and broke the
+    // cross-parent reparent E2E (PI-5-DR-T2..T6). See `swapElements` for the
+    // container-swap path.
+    const movingNode: t.JSXElement = sourceNode;
+    const movingParent: t.JSXElement | t.JSXFragment = sourceParent;
+    const pivotNode: t.JSXElement = targetNode;
+    const pivotParent: t.JSXElement | t.JSXFragment = targetParent;
     // Splice movingNode out of movingParent.children, then insert it
     // into pivotParent.children at position relative to pivotNode.
     // When movingParent === pivotParent the recompute after the cut
@@ -841,6 +821,120 @@ export class AstService {
       resolvedPath: targetFilePath,
       contentBeforeWrite,
     };
+  }
+
+  /**
+   * Swap the positions of two JSX elements (visual-foundation spec Part C,
+   * Task 8 — `swapElements`). Both nodes exchange places in their respective
+   * parents' `children` arrays. This is the gesture-level container swap
+   * ("drag card A onto card B → the two cards trade places"); it is
+   * deliberately SEPARATE from `moveElement` (Task 7 = reparent), so dragging
+   * an element no longer secretly reorders outer containers.
+   *
+   * When the two refs point at INNER elements of two sibling containers
+   * (the card-swap gesture sends the inner element the pointer landed on),
+   * we lift each ref up to the direct child of their deepest common JSX
+   * ancestor via `liftToCommonJsxParent` and swap THOSE — i.e. the whole
+   * outer cards trade places, contents intact. When the refs already share a
+   * direct parent (or no lift is possible) we swap the resolved nodes as-is.
+   *
+   * Same-file only: the card-swap gesture operates within a single rendered
+   * component. Cross-file swap is not a product gesture and is out of scope.
+   * Internal failures propagate as exceptions, mirroring `moveElement`.
+   */
+  async swapElements(filePath: string, aId: NodeRef | string, bId: NodeRef | string): Promise<MoveResult> {
+    await this.ensureInitialized();
+    const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+    dbg(`[swapElements] BEGIN filePath=${filePath} aId=${String(aId)} bId=${String(bId)}`);
+
+    const { ast, resolvedPath } = await this._resolveSwapFile(absolutePath, aId, bId);
+    const { aNode, bNode, aParent, bParent } = this._resolveSwapEndpoints(ast, aId, bId, resolvedPath);
+
+    if (aNode === bNode) {
+      dbg(`[swapElements] no-op: a === b`);
+      return { success: true, resolvedPath };
+    }
+
+    let contentBeforeWrite: string | undefined;
+    try {
+      contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+    } catch {}
+
+    swapInChildren(aParent, aNode, bParent, bNode);
+
+    dbg(`[swapElements] mutation done, writing AST to ${resolvedPath}`);
+    await this._fileParser.writeAST(ast, resolvedPath);
+    await this._updateNodeMap(resolvedPath);
+
+    return { success: true, resolvedPath, contentBeforeWrite };
+  }
+
+  /** Resolve the single file both swap endpoints must share; throws on a cross-file pair. */
+  private async _resolveSwapFile(
+    absolutePath: string,
+    aId: NodeRef | string,
+    bId: NodeRef | string,
+  ): Promise<{ ast: t.File; resolvedPath: string }> {
+    await this.invalidateFile(absolutePath).catch(() => {});
+    const aLocate = await this._resolveElementInCorrectFile(absolutePath, aId as NodeRef);
+    if (!aLocate) throw new Error(`swapElements: element A not found (nodeRef=${aId})`);
+    const bLocate = await this._resolveElementInCorrectFile(absolutePath, bId as NodeRef);
+    if (!bLocate) throw new Error(`swapElements: element B not found (nodeRef=${bId})`);
+    if (aLocate.resolvedPath !== bLocate.resolvedPath) {
+      throw new Error('swapElements: cross-file swap is not supported');
+    }
+    const { ast } = await this._fileParser.readAndParseFile(aLocate.resolvedPath);
+    return { ast, resolvedPath: aLocate.resolvedPath };
+  }
+
+  /**
+   * Resolve both endpoints in one AST and lift each to the swap unit (the
+   * direct child of the deepest common ancestor), so an inner-element pair
+   * swaps the OUTER containers. Falls back to the resolved nodes when no
+   * lift applies (already-direct-siblings or no common ancestor).
+   */
+  private _resolveSwapEndpoints(
+    ast: t.File,
+    aId: NodeRef | string,
+    bId: NodeRef | string,
+    resolvedPath: string,
+  ): {
+    aNode: t.JSXElement;
+    bNode: t.JSXElement;
+    aParent: t.JSXElement | t.JSXFragment;
+    bParent: t.JSXElement | t.JSXFragment;
+  } {
+    const aResult = this._resolveElement(ast, aId as NodeRef, resolvedPath);
+    if (!aResult) throw new Error(`swapElements: element A disappeared after re-parse (nodeRef=${aId})`);
+    const bResult = this._resolveElement(ast, bId as NodeRef, resolvedPath);
+    if (!bResult) throw new Error(`swapElements: element B disappeared after re-parse (nodeRef=${bId})`);
+
+    let aNode = aResult.element;
+    let bNode = bResult.element;
+    let aParent = aResult.path.parent;
+    let bParent = bResult.path.parent;
+
+    if (aParent !== bParent) {
+      const lifted = liftToCommonJsxParent(aResult.path, bResult.path);
+      if (lifted && lifted.sourceLifted !== lifted.targetLifted) {
+        aNode = lifted.sourceLifted;
+        bNode = lifted.targetLifted;
+        // After lifting, each lifted node is a direct child of commonParent
+        // (the swap unit's container). Resolve each parent from the lifted
+        // node's actual home: the lifted node IS the original when no climb
+        // happened on that side, otherwise it sits under commonParent.
+        aParent = aNode === aResult.element ? aResult.path.parent : lifted.commonParent;
+        bParent = bNode === bResult.element ? bResult.path.parent : lifted.commonParent;
+      }
+    }
+
+    if (!isJsxContainer(aParent) || !isJsxContainer(bParent)) {
+      throw new Error('swapElements: one or both elements have no JSX parent (root-JSX swap unsupported)');
+    }
+    if (jsxContains(aNode, bNode) || jsxContains(bNode, aNode)) {
+      throw new Error('swapElements: cannot swap an element with its own ancestor/descendant');
+    }
+    return { aNode, bNode, aParent, bParent };
   }
 
   /**

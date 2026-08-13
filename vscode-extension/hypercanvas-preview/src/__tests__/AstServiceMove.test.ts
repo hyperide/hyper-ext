@@ -133,14 +133,15 @@ describe('AstService.moveElement — same-file moves (Task 2)', () => {
     });
   });
 
-  // Different-parent moves use server-side liftToCommonJsxParent (Task 4 of
-  // the move-any-intermittent plan). The user dragging an inner element of
-  // one card onto an inner element of another card expects the OUTER cards
-  // to swap — not for the source to be rehomed inside the target's parent.
-  // The old "nest into target's parent" semantic from move-any-to-any
-  // Task 2 is replaced by lift in every case where parents differ.
-  describe('different JSX parents in the same file (lift to common ancestor)', () => {
-    it('sibling → cousin: lifts <header> next to <main> at root level', async () => {
+  // Different-parent moves use REPARENT semantics (visual-foundation spec
+  // Part C, Task 7). When source and target sit in different JSX parents, the
+  // SOURCE node itself is spliced OUT of its old parent and INSERTED into the
+  // TARGET's parent, at `position` relative to the target node. The source's
+  // old parent empties out; the source lands INSIDE the target's container.
+  // (The old "lift to a common ancestor + swap the outer cards" behavior is
+  // gone from moveElement — it lives in a separate `swapElements` method.)
+  describe("different JSX parents in the same file (reparent into target's container)", () => {
+    it('sibling → cousin: reparents <a nav-a> into <main> after <p content>', async () => {
       const { service, fileIO, absPath, relPath } = await makeAppService();
       const sourceRef = refByClass(service, absPath, relPath, 'a', 'nav-a', APP_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'p', 'content', APP_FIXTURE);
@@ -150,18 +151,28 @@ describe('AstService.moveElement — same-file moves (Task 2)', () => {
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // Lift: source ancestor at root level = <header>, target ancestor at
-      // root level = <main>. Move <header> AFTER <main> — header subtree
-      // ends up second among root's children.
-      const headerOpenIdx = content.indexOf('<header');
+      // Reparent: <a nav-a> is cut out of <nav> and inserted into <main>
+      // (the target's parent), AFTER <p content>. So inside <main> the
+      // order is <p content> then <a nav-a>.
       const mainOpenIdx = content.indexOf('<main');
-      expect(mainOpenIdx).toBeLessThan(headerOpenIdx);
+      const mainCloseIdx = content.indexOf('</main>');
+      const insideMain = content.slice(mainOpenIdx, mainCloseIdx);
+      const contentIdx = insideMain.indexOf('"content"');
+      const navAIdx = insideMain.indexOf('"nav-a"');
+      expect(contentIdx).toBeGreaterThan(-1);
+      expect(navAIdx).toBeGreaterThan(-1);
+      expect(contentIdx).toBeLessThan(navAIdx);
 
-      // The <a nav-a> source itself was NOT extracted — it still lives
-      // inside the (now reordered) header subtree.
-      const headerCloseIdx = content.indexOf('</header>');
-      const insideHeader = content.slice(headerOpenIdx, headerCloseIdx);
-      expect(insideHeader.includes('"nav-a"')).toBe(true);
+      // The <a nav-a> source left its old parent <nav> entirely.
+      const navOpenIdx = content.indexOf('<nav className="nav"');
+      const navCloseIdx = content.indexOf('</nav>');
+      const insideNav = content.slice(navOpenIdx, navCloseIdx);
+      expect(insideNav.includes('"nav-a"')).toBe(false);
+      // <a nav-b> stays behind in <nav>.
+      expect(insideNav.includes('"nav-b"')).toBe(true);
+
+      // No duplication — the source class exists exactly once.
+      expect(content.match(/"nav-a"/g)?.length).toBe(1);
     });
 
     it('deep → root (target ancestor of source): extracts source out next to <header>', async () => {
@@ -189,11 +200,12 @@ describe('AstService.moveElement — same-file moves (Task 2)', () => {
       expect(insideNav.includes('"nav-a"')).toBe(false);
     });
 
-    it('root → deep: lifts <header> before <main> at root level', async () => {
+    it('root → deep: reparents <main> into <nav> before <a nav-b>', async () => {
       // Reverse direction: source <main> (root child), target <a nav-b> deep
-      // in nav. Source-chain = [main, root]. Target-chain = [a-nav-b, nav,
-      // header, root]. Common = root. Lifted source = <main>, lifted target
-      // = <header>. Moving main BEFORE header reorders root's children.
+      // in nav. Reparent splices <main> out of <div root> and inserts it into
+      // <nav> (the target's parent), BEFORE <a nav-b> — so inside <nav> the
+      // order is <a nav-a>, <main>, <a nav-b>. The root <div> empties of its
+      // <main> child.
       const { service, fileIO, absPath, relPath } = await makeAppService();
       const sourceRef = refByClass(service, absPath, relPath, 'main', 'main', APP_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'a', 'nav-b', APP_FIXTURE);
@@ -203,22 +215,33 @@ describe('AstService.moveElement — same-file moves (Task 2)', () => {
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      const mainOpenIdx = content.indexOf('<main');
-      const headerOpenIdx = content.indexOf('<header');
-      expect(mainOpenIdx).toBeLessThan(headerOpenIdx);
-
-      // Source <main> still at top level (NOT nested inside <nav>).
+      // <main> now lives INSIDE <nav>, before <a nav-b>.
       const navOpen = content.indexOf('<nav className="nav"');
       const navClose = content.indexOf('</nav>');
-      expect(content.slice(navOpen, navClose).includes('<main')).toBe(false);
+      const insideNav = content.slice(navOpen, navClose);
+      const mainIdx = insideNav.indexOf('<main');
+      const navBIdx = insideNav.indexOf('"nav-b"');
+      const navAIdx = insideNav.indexOf('"nav-a"');
+      expect(mainIdx).toBeGreaterThan(-1);
+      expect(navAIdx).toBeLessThan(mainIdx);
+      expect(mainIdx).toBeLessThan(navBIdx);
+
+      // <main> is no longer a direct child of root: the only <main> in the
+      // file is the one nested inside <nav>.
+      expect(content.match(/<main/g)?.length).toBe(1);
+      // The <p content> travelled inside <main> (we never split a node from
+      // its children).
+      const mainOpenIdx = content.indexOf('<main');
+      const mainCloseIdx = content.indexOf('</main>');
+      expect(content.slice(mainOpenIdx, mainCloseIdx).includes('"content"')).toBe(true);
     });
   });
 
-  // Task 4 of the move-any-intermittent plan: explicit grid-of-cards fixture
-  // matching the failing PI-5-DR-17 E2E. Source is an inner <p> inside one
-  // card, target is an inner <h3> inside another card. Lift must reorder the
-  // outer cards (the grid's direct children) — not nest <p> into card2.
-  describe('Task 4: lift inline elements to common grid container', () => {
+  // Grid-of-cards fixture matching the PI-5-DR-17 E2E. Source is an inner <p>
+  // inside one card, target is an inner <h3> inside another card. Under
+  // reparent semantics the inner <p> itself moves into the OTHER card's
+  // container, next to the target <h3> — the outer cards are NOT reordered.
+  describe("reparent inline elements into the target card's container", () => {
     const GRID_FIXTURE = `export default function Grid() {
   return (
     <div className="grid">
@@ -244,7 +267,7 @@ describe('AstService.moveElement — same-file moves (Task 2)', () => {
       return { service, fileIO, absPath, relPath };
     }
 
-    it('drag <p> in card1 onto <h3> in card2 swaps the outer cards', async () => {
+    it('drag <p> in card1 onto <h3> in card2 reparents <p> into card2', async () => {
       const { service, fileIO, absPath, relPath } = await makeGridService();
       const sourceRef = refByClass(service, absPath, relPath, 'p', 'b1', GRID_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'h3', 't2', GRID_FIXTURE);
@@ -254,20 +277,33 @@ describe('AstService.moveElement — same-file moves (Task 2)', () => {
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // Outer cards swapped: card2 now precedes card1 in the grid.
-      const card2Idx = content.indexOf('"card2"');
+      // Outer cards keep their order: card1 still precedes card2 in the grid.
       const card1Idx = content.indexOf('"card1"');
-      expect(card2Idx).toBeLessThan(card1Idx);
+      const card2Idx = content.indexOf('"card2"');
+      expect(card1Idx).toBeLessThan(card2Idx);
 
-      // The inner <p className="b1"> was NOT extracted — it still lives
-      // inside the (now relocated) card1 subtree, intact.
+      // Reparent: <p b1> is cut out of card1 and inserted into card2 (the
+      // target's parent), AFTER <h3 t2>. Inside card2 the order is t2, b1, b2.
+      const card2OpenIdx = content.indexOf('"card2"');
+      const card2CloseIdx = content.indexOf('</div>', card2OpenIdx);
+      const insideCard2 = content.slice(card2OpenIdx, card2CloseIdx);
+      const t2Idx = insideCard2.indexOf('"t2"');
+      const b1Idx = insideCard2.indexOf('"b1"');
+      const b2Idx = insideCard2.indexOf('"b2"');
+      expect(t2Idx).toBeLessThan(b1Idx);
+      expect(b1Idx).toBeLessThan(b2Idx);
+      // The moved <p> kept its text content.
       expect(content).toContain('<p className="b1">Body One</p>');
-      // And card1 still has its title alongside its body.
+
+      // card1 lost its <p b1>: only its title <h3 t1> remains there.
       const card1OpenIdx = content.indexOf('"card1"');
       const card1CloseIdx = content.indexOf('</div>', card1OpenIdx);
       const insideCard1 = content.slice(card1OpenIdx, card1CloseIdx);
       expect(insideCard1).toContain('"t1"');
-      expect(insideCard1).toContain('"b1"');
+      expect(insideCard1.includes('"b1"')).toBe(false);
+
+      // No duplication.
+      expect(content.match(/"b1"/g)?.length).toBe(1);
     });
 
     it('drag <h3> in card1 BEFORE <p> in card2 places card1 before card2 (already true → swaps NOT)', async () => {

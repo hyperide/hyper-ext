@@ -212,6 +212,22 @@ export type AstMessage =
       position: 'before' | 'after';
     }
   | {
+      /**
+       * Swap two JSX elements' positions (visual-foundation spec Part C, Task 8).
+       * The container-swap gesture — distinct from `ast:moveElement` (reparent).
+       * Same-file only; the two refs may sit in different parents (lifted to the
+       * common-ancestor swap unit). See `AstService.swapElements`.
+       */
+      type: 'ast:swapElements';
+      requestId: string;
+      /** Hint for resolving the refs — the file both elements live in. */
+      filePath: string;
+      /** nodeRef of the first element. */
+      aId: string;
+      /** nodeRef of the second element. */
+      bId: string;
+    }
+  | {
       /** Write a translated value for a given i18n key in the active locale resource file. */
       type: 'ast:writeI18nResource';
       requestId: string;

@@ -131,6 +131,10 @@ export class AstBridge {
           response = await this._handleMoveElement(message);
           break;
 
+        case 'ast:swapElements':
+          response = await this._handleSwapElements(message);
+          break;
+
         case 'ast:writeI18nResource':
           response = await this._handleWriteI18nResource(message);
           break;
@@ -588,6 +592,65 @@ export class AstBridge {
         success: true,
         data: result.adjustments ? { adjustments: result.adjustments } : undefined,
       };
+    } finally {
+      this._undoRedoService.endTracking();
+    }
+  }
+
+  /**
+   * Handle swapElements message (spec Task 8 container swap). Same-file only,
+   * so undo tracking is a single-file diff — simpler than `_handleMoveElement`,
+   * which also handles the cross-file branch. Internal failures throw out of
+   * `AstService.swapElements` and surface as `success: false` to the iframe.
+   */
+  private async _handleSwapElements(message: Extract<AstMessage, { type: 'ast:swapElements' }>): Promise<AstResponse> {
+    const absolutePath = this._resolvePath(message.filePath);
+    this._undoRedoService.beginTracking();
+    try {
+      let contentBefore: string;
+      let diskContentBefore: string;
+      try {
+        contentBefore = await this._fileIO.readFile(absolutePath);
+        diskContentBefore = await this._fileIO.readFileFromDisk(absolutePath);
+      } catch {
+        // File not present locally — run untracked.
+        const r = await this._astService.swapElements(message.filePath, message.aId, message.bId);
+        return { type: 'ast:response', requestId: message.requestId, success: r.success };
+      }
+
+      let result: Awaited<ReturnType<AstService['swapElements']>>;
+      try {
+        result = await this._astService.swapElements(message.filePath, message.aId, message.bId);
+      } catch (error) {
+        return {
+          type: 'ast:response',
+          requestId: message.requestId,
+          success: false,
+          error: error instanceof Error ? error.message : 'swapElements failed',
+        };
+      }
+
+      const actualPath = result.resolvedPath ?? absolutePath;
+      const sameFile = actualPath === absolutePath;
+      let after: string;
+      try {
+        after = await this._fileIO.readFileFromDisk(actualPath);
+      } catch {
+        try {
+          after = await this._fileIO.readFile(actualPath);
+        } catch {
+          after = contentBefore;
+        }
+      }
+      const beforeForDiff = sameFile ? diskContentBefore : (result.contentBeforeWrite ?? contentBefore);
+      const beforeForUndo = sameFile ? contentBefore : (result.contentBeforeWrite ?? contentBefore);
+      if (beforeForDiff !== after) {
+        this._undoRedoService.recordBatchEdit([
+          { filePath: actualPath, contentBefore: beforeForUndo, contentAfter: after },
+        ]);
+      }
+
+      return { type: 'ast:response', requestId: message.requestId, success: true };
     } finally {
       this._undoRedoService.endTracking();
     }

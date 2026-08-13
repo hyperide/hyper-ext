@@ -143,6 +143,33 @@ export function liftToCommonJsxParent(
   };
 }
 
+/** True when `node` is a JSX container that owns a `children` array (element or fragment). */
+export function isJsxContainer(node: t.Node | null | undefined): node is t.JSXElement | t.JSXFragment {
+  return t.isJSXElement(node) || t.isJSXFragment(node);
+}
+
+/**
+ * Exchange `aNode` and `bNode` in their parents' `children` arrays in place.
+ *
+ * Handles same-parent (two indices in one array) and cross-parent (one index
+ * in each array). The swap is positional: A lands where B was and vice versa,
+ * so the two subtrees trade places without touching their own contents. Used
+ * by `AstService.swapElements` (spec Task 8 card-swap).
+ */
+export function swapInChildren(
+  aParent: t.JSXElement | t.JSXFragment,
+  aNode: t.JSXElement,
+  bParent: t.JSXElement | t.JSXFragment,
+  bNode: t.JSXElement,
+): void {
+  const aIdx = aParent.children.indexOf(aNode);
+  const bIdx = bParent.children.indexOf(bNode);
+  if (aIdx === -1) throw new Error('swapElements: element A not found in its parent children');
+  if (bIdx === -1) throw new Error('swapElements: element B not found in its parent children');
+  aParent.children[aIdx] = bNode;
+  bParent.children[bIdx] = aNode;
+}
+
 export function describeJsxName(el: t.JSXElement): string {
   const name = el.openingElement.name;
   if (t.isJSXIdentifier(name)) return name.name;

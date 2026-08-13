@@ -192,12 +192,15 @@ describe('AstService.moveElement — drop on a non-container leaf (Task 6)', () 
     });
   });
 
-  // Different-parent moves use server-side lift (Task 4 of move-any-intermittent
-  // plan). When source and target sit in different cards, the OUTER cards
-  // reorder — the leaf is just a landing reference, not a nesting target.
-  // The leaf-self-closing invariant must survive that lift.
-  describe('different-parent move with lift: leaf stays self-closing', () => {
-    it('source from <main> AFTER <img className="hero-art" /> in <header> swaps containers, leaf preserved', async () => {
+  // Different-parent moves use REPARENT semantics (visual-foundation spec
+  // Part C, Task 7). When source and target sit in different parents, the
+  // SOURCE node is spliced out of its old parent and inserted into the
+  // TARGET's parent at `position`. When that target is a self-closing leaf
+  // (`<img />`), the source becomes a SIBLING of the leaf inside the leaf's
+  // parent — it is NEVER nested as a child of the leaf. The leaf-self-closing
+  // invariant must survive the reparent.
+  describe('different-parent reparent: leaf stays a sibling, never a nesting target', () => {
+    it('reparents <p lede> into <header> AFTER <img hero-art /> as its sibling, leaf preserved', async () => {
       const { service, fileIO, absPath, relPath } = await makePageService();
       const sourceRef = refByClass(service, absPath, relPath, 'p', 'lede', PAGE_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'img', 'hero-art', PAGE_FIXTURE);
@@ -207,27 +210,31 @@ describe('AstService.moveElement — drop on a non-container leaf (Task 6)', () 
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // Lift: source-lifted = <main>, target-lifted = <header>; common parent
-      // = <div className="page">. Position 'after': move <main> after
-      // <header> (which is the original layout — net change is the AST
-      // round-trip; ordering invariant still holds).
+      // Reparent: <p lede> is cut out of <main> and inserted into <header>
+      // (the leaf's parent), AFTER <img hero-art />. Inside <header> the
+      // order is <img hero-art /> then <p lede>.
       const headerOpenIdx = content.indexOf('<header');
-      const mainOpenIdx = content.indexOf('<main');
-      expect(headerOpenIdx).toBeLessThan(mainOpenIdx);
+      const headerCloseIdx = content.indexOf('</header>');
+      const insideHeader = content.slice(headerOpenIdx, headerCloseIdx);
+      const heroIdx = insideHeader.indexOf('"hero-art"');
+      const ledeIdx = insideHeader.indexOf('"lede"');
+      expect(heroIdx).toBeGreaterThan(-1);
+      expect(ledeIdx).toBeGreaterThan(-1);
+      expect(heroIdx).toBeLessThan(ledeIdx);
 
-      // The leaf <img className="hero-art" /> stays self-closing — lift
-      // operates on outer containers, never on the leaf itself.
+      // The leaf <img className="hero-art" /> stays self-closing — the source
+      // landed as its SIBLING, never as a child of the leaf.
       expect(/<img\s+className="hero-art"[^>]*\/>/.test(content)).toBe(true);
       expect(content.includes('</img>')).toBe(false);
 
-      // <p className="lede"> still inside <main> (lift moves containers,
-      // not their inner content).
+      // <p lede> left its old parent <main> entirely; no duplication.
+      const mainOpenIdx = content.indexOf('<main');
       const mainCloseIdx = content.indexOf('</main>');
-      const insideMain = content.slice(mainOpenIdx, mainCloseIdx);
-      expect(insideMain.includes('"lede"')).toBe(true);
+      expect(content.slice(mainOpenIdx, mainCloseIdx).includes('"lede"')).toBe(false);
+      expect(content.match(/"lede"/g)?.length).toBe(1);
     });
 
-    it('source from <aside> BEFORE <img className="hero-art" /> swaps cards, leaf preserved', async () => {
+    it('reparents <span badge> into <header> BEFORE <img hero-art /> as its sibling, leaf preserved', async () => {
       const { service, fileIO, absPath, relPath } = await makePageService();
       const sourceRef = refByClass(service, absPath, relPath, 'span', 'badge', PAGE_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'img', 'hero-art', PAGE_FIXTURE);
@@ -237,21 +244,27 @@ describe('AstService.moveElement — drop on a non-container leaf (Task 6)', () 
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // Lift: source-lifted = <main>, target-lifted = <header>. Position
-      // 'before': <main> moves BEFORE <header> at the page-div level.
+      // Reparent: <span badge> is cut out of <aside> (in <main>) and inserted
+      // into <header> (the leaf's parent), BEFORE <img hero-art />. Inside
+      // <header> the order is <span badge> then <img hero-art />.
       const headerOpenIdx = content.indexOf('<header');
-      const mainOpenIdx = content.indexOf('<main');
-      expect(mainOpenIdx).toBeLessThan(headerOpenIdx);
+      const headerCloseIdx = content.indexOf('</header>');
+      const insideHeader = content.slice(headerOpenIdx, headerCloseIdx);
+      const badgeIdx = insideHeader.indexOf('"badge"');
+      const heroIdx = insideHeader.indexOf('"hero-art"');
+      expect(badgeIdx).toBeGreaterThan(-1);
+      expect(heroIdx).toBeGreaterThan(-1);
+      expect(badgeIdx).toBeLessThan(heroIdx);
 
-      // Leaf still self-closing.
+      // Leaf still self-closing — source is a sibling, never nested into it.
       expect(/<img\s+className="hero-art"[^>]*\/>/.test(content)).toBe(true);
       expect(content.includes('</img>')).toBe(false);
 
-      // <span className="badge"> still inside <main> (still wrapped by
-      // <aside>) — lift never extracts inner nodes out of their container.
-      const mainCloseIdx = content.indexOf('</main>');
-      const insideMain = content.slice(mainOpenIdx, mainCloseIdx);
-      expect(insideMain.includes('"badge"')).toBe(true);
+      // <span badge> left its old parent <aside>; no duplication.
+      const asideOpenIdx = content.indexOf('<aside');
+      const asideCloseIdx = content.indexOf('</aside>');
+      expect(content.slice(asideOpenIdx, asideCloseIdx).includes('"badge"')).toBe(false);
+      expect(content.match(/"badge"/g)?.length).toBe(1);
     });
   });
 
