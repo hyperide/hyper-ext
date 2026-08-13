@@ -33,6 +33,23 @@ export interface ScanResult {
 
 const traverse = (_traverse as { default?: typeof _traverse }).default ?? _traverse;
 
+/**
+ * Read the props-parameter type name from a destructured first param, e.g.
+ * `{ variant }: ButtonProps` → `'ButtonProps'`. Used to scope the deferred
+ * `*Props` type-member merge to the SELECTED component's own Props declaration
+ * so a sibling's interface never leaks (HYP-486). Only a bare type reference
+ * (identifier) is returned; inline object types / qualified names yield null.
+ */
+function paramPropsTypeName(pattern: t.ObjectPattern): string | null {
+  const annotation = pattern.typeAnnotation;
+  if (!annotation || !t.isTSTypeAnnotation(annotation)) return null;
+  const typeNode = annotation.typeAnnotation;
+  if (t.isTSTypeReference(typeNode) && t.isIdentifier(typeNode.typeName)) {
+    return typeNode.typeName.name;
+  }
+  return null;
+}
+
 // ============================================
 // ComponentService Class
 // ============================================
@@ -364,7 +381,34 @@ export class ComponentService {
       let componentName: string | null = null;
       let hasDefaultExport = false;
       let hasSampleRender = false;
-      const props: PropInfo[] = [];
+      // Destructuring-derived props are scoped per component name so a sibling
+      // component's destructuring default never leaks onto the selected one when a
+      // single file exports multiple components (HYP-486). Mirrors the per-name
+      // scoping in componentSourceParser.parseComponentSource (keep the two in SYNC).
+      const propsPerName = new Map<string, PropInfo[]>();
+      const addProps = (name: string, extracted: PropInfo[]) => {
+        const entry = propsPerName.get(name) ?? [];
+        entry.push(...extracted);
+        propsPerName.set(name, entry);
+      };
+      // The props-parameter type name for each component (e.g. `Button` → `ButtonProps`),
+      // read from the type annotation on the destructured first param. Lets the deferred
+      // type-member merge below pick the SELECTED component's actual Props declaration
+      // instead of every `*Props` in the file (HYP-486).
+      const propsTypeNamePerComponent = new Map<string, string>();
+      // Interface / type-alias `*Props` members are collected here, KEYED by the
+      // declaration name, and merged into the SELECTED component's scoped props after
+      // the component name is resolved (declaration order can't tell us the owner during
+      // traversal). Merging only the selected component's Props declaration — not every
+      // `*Props` in the file — keeps a sibling's members (and same-name field types) from
+      // leaking onto the selected component (HYP-486).
+      type DeferredTypeMember = {
+        name: string;
+        type: string;
+        required: boolean;
+        objectFields: PropInfo[] | undefined;
+      };
+      const deferredTypeMembersByDecl = new Map<string, DeferredTypeMember[]>();
       const exportedVarNames: string[] = [];
 
       // Look for component declarations and exports
@@ -406,17 +450,38 @@ export class ComponentService {
               }
             }
           }
+
+          // Export-list specifiers: `const Button = ...; export { Button };`. Without this,
+          // componentName stays on the first PascalCase local and the scoped lookup drops the
+          // exported component's props (HYP-486). Mirror the preview generator's scanner: skip
+          // cross-file barrel re-exports (`export { X } from './x'` carry a source) and type-only
+          // exports; key by the LOCAL name since propsPerName is keyed by the declaration name.
+          if (!declaration && !nodePath.node.source && nodePath.node.exportKind !== 'type') {
+            for (const spec of nodePath.node.specifiers) {
+              if (!t.isExportSpecifier(spec)) continue;
+              if (spec.exportKind === 'type') continue;
+              if (t.isIdentifier(spec.local) && /^[A-Z]/.test(spec.local.name)) {
+                exportedVarNames.push(spec.local.name);
+              }
+            }
+          }
         },
 
         // Function declarations (for component name)
         FunctionDeclaration: (nodePath: NodePath<t.FunctionDeclaration>) => {
           if (nodePath.node.id && /^[A-Z]/.test(nodePath.node.id.name)) {
+            const name = nodePath.node.id.name;
             if (!componentName) {
-              componentName = nodePath.node.id.name;
+              componentName = name;
             }
             const firstParam = nodePath.node.params[0];
             if (t.isObjectPattern(firstParam)) {
-              props.push(...extractPropsFromDestructuring(firstParam, (n) => this._getTypeString(n)));
+              addProps(
+                name,
+                extractPropsFromDestructuring(firstParam, (n) => this._getTypeString(n)),
+              );
+              const propsTypeName = paramPropsTypeName(firstParam);
+              if (propsTypeName) propsTypeNamePerComponent.set(name, propsTypeName);
             }
           }
         },
@@ -452,7 +517,12 @@ export class ComponentService {
               if (renderFn) {
                 const firstParam = renderFn.params[0];
                 if (t.isObjectPattern(firstParam)) {
-                  props.push(...extractPropsFromDestructuring(firstParam, (n) => this._getTypeString(n)));
+                  addProps(
+                    id.name,
+                    extractPropsFromDestructuring(firstParam, (n) => this._getTypeString(n)),
+                  );
+                  const propsTypeName = paramPropsTypeName(firstParam);
+                  if (propsTypeName) propsTypeNamePerComponent.set(id.name, propsTypeName);
                 }
               }
             }
@@ -463,6 +533,7 @@ export class ComponentService {
         TSInterfaceDeclaration: (nodePath: NodePath<t.TSInterfaceDeclaration>) => {
           const name = nodePath.node.id.name;
           if (name.endsWith('Props')) {
+            const members: DeferredTypeMember[] = deferredTypeMembersByDecl.get(name) ?? [];
             for (const member of nodePath.node.body.body) {
               if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
                 const propName = member.key.name;
@@ -475,22 +546,15 @@ export class ComponentService {
                   objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, 0, localTypes);
                 }
 
-                // Check if already exists
-                const existing = props.find((p) => p.name === propName);
-                if (existing) {
-                  existing.type = propType;
-                  existing.required = !member.optional;
-                  existing.objectFields = objectFields;
-                } else {
-                  props.push({
-                    name: propName,
-                    type: propType,
-                    required: !member.optional,
-                    objectFields,
-                  });
-                }
+                members.push({
+                  name: propName,
+                  type: propType,
+                  required: !member.optional,
+                  objectFields,
+                });
               }
             }
+            deferredTypeMembersByDecl.set(name, members);
           }
         },
 
@@ -498,6 +562,7 @@ export class ComponentService {
         TSTypeAliasDeclaration: (nodePath: NodePath<t.TSTypeAliasDeclaration>) => {
           const name = nodePath.node.id.name;
           if (name.endsWith('Props') && t.isTSTypeLiteral(nodePath.node.typeAnnotation)) {
+            const members: DeferredTypeMember[] = deferredTypeMembersByDecl.get(name) ?? [];
             for (const member of nodePath.node.typeAnnotation.members) {
               if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
                 const propName = member.key.name;
@@ -510,46 +575,70 @@ export class ComponentService {
                   objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, 0, localTypes);
                 }
 
-                // Check if already exists
-                const existing = props.find((p) => p.name === propName);
-                if (existing) {
-                  existing.type = propType;
-                  existing.required = !member.optional;
-                  existing.objectFields = objectFields;
-                } else {
-                  props.push({
-                    name: propName,
-                    type: propType,
-                    required: !member.optional,
-                    objectFields,
-                  });
-                }
+                members.push({
+                  name: propName,
+                  type: propType,
+                  required: !member.optional,
+                  objectFields,
+                });
               }
             }
+            deferredTypeMembersByDecl.set(name, members);
           }
         },
       });
 
-      // Post-traverse: resolve imported type references that weren't found locally
-      await this._resolveImportedTypeReferences(props, importMap, componentPath, localTypes);
-
-      // Prefer exported name matching file basename (case-insensitive), then first exported name.
-      // Only when there's no default export (which already set componentName reliably).
+      // Resolve the selected component name BEFORE assembling its props so the type-alias
+      // / interface merge below applies to the SELECTED component's scoped destructuring
+      // props only — a sibling component's leaked default never reaches the sampler (HYP-486).
+      // Prefer exported name matching file basename (case-insensitive), then first exported
+      // name. Only when there's no default export (which already set componentName reliably).
       if (!hasDefaultExport && exportedVarNames.length > 0) {
         const fileBasenameLC = path.basename(componentPath, path.extname(componentPath)).toLowerCase();
         const basenameMatch = exportedVarNames.find((n) => n.toLowerCase() === fileBasenameLC);
         componentName = basenameMatch ?? exportedVarNames[0];
       }
-
-      // Skip if no component found
       if (!componentName) {
         // Try to get name from filename
         const basename = path.basename(componentPath, path.extname(componentPath));
         if (/^[A-Z]/.test(basename)) {
           componentName = basename;
-        } else {
-          return null;
         }
+      }
+
+      // Assemble the props for the selected component: its scoped destructuring props,
+      // then merge in the `*Props` interface / type-alias members (richer type / objectFields).
+      // Scope the type-member merge to the SELECTED component's OWN Props declaration —
+      // its props-param type name when annotated (`{ ... }: ButtonProps`), else the
+      // `${componentName}Props` convention. A sibling component's `*Props` (e.g. BadgeProps)
+      // must not leak its members, nor overwrite a same-name field's type (HYP-486).
+      const props: PropInfo[] = componentName ? [...(propsPerName.get(componentName) ?? [])] : [];
+      if (componentName) {
+        const propsDeclName = propsTypeNamePerComponent.get(componentName) ?? `${componentName}Props`;
+        const deferredTypeMembers = deferredTypeMembersByDecl.get(propsDeclName) ?? [];
+        for (const member of deferredTypeMembers) {
+          const existing = props.find((p) => p.name === member.name);
+          if (existing) {
+            existing.type = member.type;
+            existing.required = member.required;
+            existing.objectFields = member.objectFields;
+          } else {
+            props.push({
+              name: member.name,
+              type: member.type,
+              required: member.required,
+              objectFields: member.objectFields,
+            });
+          }
+        }
+      }
+
+      // Post-traverse: resolve imported type references that weren't found locally
+      await this._resolveImportedTypeReferences(props, importMap, componentPath, localTypes);
+
+      // Skip if no component found (name resolution happened before props assembly above).
+      if (!componentName) {
+        return null;
       }
 
       // Determine component type

@@ -152,4 +152,98 @@ describe('ComponentService string-literal union extraction (HYP-454)', () => {
     const sample = generateSamplePropValues(info?.props ?? []);
     expect(sample.unsatisfied).not.toContain('variant');
   });
+
+  // -----------------------------------------------------------------------
+  // HYP-486: when one file exports MULTIPLE components, the prop schema for the
+  // SELECTED component must not leak a sibling component's destructuring default.
+  // Here `Button` has no default (sampler should fall back to the first union
+  // member 'primary'), while the sibling `Badge` carries `variant = 'ghost'`.
+  // A flat prop collection merged Badge's default onto Button's variant, making
+  // the sampler emit 'ghost' for Button. Props must be scoped per component name.
+  // -----------------------------------------------------------------------
+  it('multi-component file → selected component does NOT inherit a sibling default (HYP-486)', async () => {
+    const source = `
+      export function Button({ variant }: { variant?: 'primary' | 'ghost' }) {
+        return <button className={variant} />;
+      }
+      export function Badge({ variant = 'ghost' }: { variant?: 'primary' | 'ghost' }) {
+        return <span className={variant} />;
+      }
+    `;
+    const info = await parse(source, 'src/ui/Button.tsx');
+    expect(info?.name).toBe('Button');
+
+    const variant = info?.props.find((pr) => pr.name === 'variant');
+    // Button declares no default — Badge's 'ghost' must not leak in.
+    expect(variant?.defaultValue).toBeUndefined();
+
+    const sample = generateSamplePropValues(info?.props ?? [], { componentName: 'Button' });
+    expect(sample.values.variant).toBe('primary');
+  });
+
+  // -----------------------------------------------------------------------
+  // HYP-486 (review follow-up): the *type-member* merge was still unscoped.
+  // `deferredTypeMembers` merged EVERY `*Props` interface/type in the file into
+  // the selected component. In a file with `ButtonProps` and `BadgeProps`,
+  // selecting `Button` pulled in Badge-only fields (`tone`) and, worse, let
+  // `BadgeProps`'s same-name field overwrite Button's type based on traversal
+  // order. Type members must be scoped to the selected component's props-param
+  // type (`ButtonProps`), not all `*Props` in the file.
+  // -----------------------------------------------------------------------
+  it('multi-component file → selected component does NOT inherit a sibling Props interface (HYP-486)', async () => {
+    const source = `
+      export interface ButtonProps {
+        variant?: 'primary' | 'ghost';
+      }
+      export interface BadgeProps {
+        // conflicting same-name field with a DIFFERENT type
+        variant?: 'solid' | 'outline';
+        // Badge-only field that must NOT leak onto Button
+        tone?: 'info' | 'warn';
+      }
+      export function Button({ variant }: ButtonProps) {
+        return <button className={variant} />;
+      }
+      export function Badge({ variant, tone }: BadgeProps) {
+        return <span className={variant} data-tone={tone} />;
+      }
+    `;
+    const info = await parse(source, 'src/ui/Button.tsx');
+    expect(info?.name).toBe('Button');
+
+    // Badge-only field must not appear on Button's prop schema.
+    const tone = info?.props.find((pr) => pr.name === 'tone');
+    expect(tone).toBeUndefined();
+
+    // The conflicting `variant` field must keep ButtonProps' type, not Badge's.
+    const variant = info?.props.find((pr) => pr.name === 'variant');
+    expect(variant?.type).toBe("'primary' | 'ghost'");
+    expect(variant?.type).not.toContain('solid');
+    expect(variant?.type).not.toContain('outline');
+  });
+
+  // -----------------------------------------------------------------------
+  // HYP-486 (codex review follow-up): the previewed component is exported via an
+  // export LIST (`export { Button }`) AFTER another PascalCase local helper. The
+  // ExportNamedDeclaration handler only recorded inline-declaration exports, so the
+  // export-list specifier never reached `exportedVarNames`. componentName therefore
+  // stayed on the FIRST PascalCase local ('Helper'), and the scoped lookup built
+  // props from Helper — DROPPING Button's destructured `variant`. componentName must
+  // resolve to the actually-exported component (mirror the preview generator).
+  // -----------------------------------------------------------------------
+  it('export-list specifier after a helper → componentName resolves to the exported component, props kept (HYP-486)', async () => {
+    const source = `
+      const Helper = (x) => x;
+      const Button = ({ variant }: { variant?: 'a' | 'b' }) => null;
+      export { Button };
+    `;
+    const info = await parse(source, 'src/ui/Button.tsx');
+    // The exported component, not the first local helper.
+    expect(info?.name).toBe('Button');
+
+    // Button's destructured prop must survive (not dropped, not Helper's).
+    const variant = info?.props.find((pr) => pr.name === 'variant');
+    expect(variant).toBeDefined();
+    expect(variant?.type).toBe("'a' | 'b'");
+  });
 });
