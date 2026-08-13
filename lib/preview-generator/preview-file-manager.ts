@@ -89,10 +89,209 @@ export interface PreviewFileManagerConfig {
  *                       the router IS patched, so this is a success, not a fallback trigger.
  * - 'no-routes'       — the matched router file has no literal <Routes> to inject into
  *                       (e.g. a react-router v6.4+ data router: createBrowserRouter([...]) +
- *                       <RouterProvider>). The caller must fall back to entry-file patching
- *                       instead of reporting a false success (HYP-934).
+ *                       <RouterProvider>), OR it calls createBrowserRouter/createHashRouter
+ *                       ANYWHERE in the file even if a literal <Routes> also exists elsewhere
+ *                       (e.g. inside a dead/test-only helper — HYP-1103). The caller must
+ *                       fall back to entry-file patching instead of reporting a false success
+ *                       (HYP-934, HYP-1103).
  */
 export type RouterPatchOutcome = 'written' | 'already-present' | 'no-routes';
+
+/** react-router v6.4+ data-router config builders. createMemoryRouter is deliberately
+ * excluded — scanner.ts's own app-shell heuristic (ROUTER_SHELL_IMPORTS comment) treats it as
+ * a testing/SampleDefault-isolation signal, not evidence of a production router: a
+ * component's SampleDefault commonly wraps itself in createMemoryRouter + <RouterProvider>
+ * purely to isolate its own preview render. */
+const DATA_ROUTER_BUILDER_NAMES = new Set(['createBrowserRouter', 'createHashRouter']);
+
+/** Read-only scan result for {@link scanRouterSignals}. */
+interface RouterSignalScan {
+  /** A createBrowserRouter/createHashRouter call was found within the scanned subtree. */
+  hasDataRouterSignal: boolean;
+  /** The first literal `<Routes>` JSX element found within the scanned subtree, if any. */
+  routesElement: namedTypes.JSXElement | null;
+  /** Capitalized custom JSX element names rendered directly in this subtree (excluding
+   * react-router's own tags), in the order encountered — candidates for one-level
+   * delegated-component follow-up (e.g. `export default () => <AppRoutes />`). */
+  renderedComponentNames: string[];
+}
+
+/** react-router JSX tags that are never a "delegate to another local component" candidate. */
+const REACT_ROUTER_JSX_TAGS = new Set([
+  'Routes',
+  'Route',
+  'RouterProvider',
+  'BrowserRouter',
+  'HashRouter',
+  'MemoryRouter',
+  'Outlet',
+  'Navigate',
+  'Link',
+  'NavLink',
+]);
+
+/**
+ * Scan a subtree (a whole file, or a single function's body) for the signals that decide
+ * whether a literal `<Routes>` is patchable: a data-router builder call (via a direct or
+ * namespaced callee, e.g. `RR.createBrowserRouter(...)`), the first `<Routes>` element, and
+ * any custom JSX components rendered directly (for delegated-composition follow-up). Read via
+ * the AST rather than source text so a mention inside a comment or string literal can't
+ * false-trigger the builder signal. Does not mutate the AST.
+ *
+ * `crossFunctionBoundaries: false` (used for the default-export's OWN scope) stops descending
+ * into any NESTED function encountered during the scan — a dead local helper function defined
+ * INSIDE the mounted component (but never invoked from its return value) must not be mistaken
+ * for something the component actually renders. `true` (used for the file-wide fallback scan)
+ * traverses everything, matching the pre-scoping behavior.
+ */
+function scanRouterSignals(root: namedTypes.Node, options: { crossFunctionBoundaries: boolean }): RouterSignalScan {
+  let hasDataRouterSignal = false;
+  let routesElement: namedTypes.JSXElement | null = null;
+  const renderedComponentNames: string[] = [];
+  const stopAtNestedFunction = function (this: { traverse: (path: unknown) => void }, path: { node: namedTypes.Node }) {
+    if (!options.crossFunctionBoundaries && path.node !== root) return false;
+    this.traverse(path);
+    return undefined;
+  };
+  recast.visit(root, {
+    visitFunctionDeclaration: stopAtNestedFunction,
+    visitFunctionExpression: stopAtNestedFunction,
+    visitArrowFunctionExpression: stopAtNestedFunction,
+    visitCallExpression(path) {
+      const callee = path.node.callee;
+      const calleeName =
+        callee.type === 'Identifier'
+          ? callee.name
+          : callee.type === 'MemberExpression' && callee.property.type === 'Identifier'
+            ? callee.property.name
+            : null;
+      if (calleeName !== null && DATA_ROUTER_BUILDER_NAMES.has(calleeName)) hasDataRouterSignal = true;
+      this.traverse(path);
+    },
+    visitJSXElement(path) {
+      const name = path.node.openingElement.name;
+      if (name.type === 'JSXIdentifier') {
+        if (name.name === 'Routes' && !routesElement) routesElement = path.node;
+        else if (/^[A-Z]/.test(name.name) && !REACT_ROUTER_JSX_TAGS.has(name.name)) renderedComponentNames.push(name.name);
+      }
+      this.traverse(path);
+    },
+  });
+  return { hasDataRouterSignal, routesElement, renderedComponentNames };
+}
+
+/**
+ * Resolve the file's default-exported function body — the ONE component the entry file
+ * actually mounts (main.tsx does `import App from './App'; render(<App/>)`). Handles
+ * `export default function App() {}`, `export default () => {}`, and `export default App;`
+ * where `App` is declared elsewhere in the same file (function declaration or
+ * `const App = () => {}`). Returns null when there is no default export, or its declaration
+ * can't be resolved locally (e.g. `export default connect(mapState)(App)`) — the caller
+ * falls back to a file-wide scan in that case.
+ */
+/** The body of a function-like node (declaration, expression, or arrow), or null otherwise. */
+function functionBody(node: namedTypes.Node): namedTypes.Node | null {
+  if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression') {
+    return (node as namedTypes.FunctionDeclaration | namedTypes.FunctionExpression | namedTypes.ArrowFunctionExpression)
+      .body;
+  }
+  return null;
+}
+
+/** Find a top-level `function <name>() {}` or `const <name> = () => {}` and return its body. */
+function findNamedFunctionBody(ast: namedTypes.File, targetName: string): namedTypes.Node | null {
+  let resolved: namedTypes.Node | null = null;
+  recast.visit(ast, {
+    visitFunctionDeclaration(path) {
+      if (path.node.id?.name === targetName) resolved = path.node.body;
+      this.traverse(path);
+    },
+    visitVariableDeclarator(path) {
+      const { id, init } = path.node;
+      if (id.type === 'Identifier' && id.name === targetName && init) resolved = functionBody(init);
+      this.traverse(path);
+    },
+  });
+  return resolved;
+}
+
+function findDefaultExportScope(ast: namedTypes.File): namedTypes.Node | null {
+  let defaultDecl: namedTypes.Node | undefined;
+  recast.visit(ast, {
+    visitExportDefaultDeclaration(path) {
+      defaultDecl = path.node.declaration;
+      return false;
+    },
+  });
+  if (defaultDecl === undefined) return null;
+
+  const direct = functionBody(defaultDecl);
+  if (direct) return direct;
+  if (defaultDecl.type !== 'Identifier') return null;
+
+  // `export default App;` — resolve the identifier to its declaration in the same file.
+  return findNamedFunctionBody(ast, (defaultDecl as namedTypes.Identifier).name);
+}
+
+/**
+ * Resolution outcome for {@link resolveRoutesElement}:
+ * - 'found'        — a patchable `<Routes>` element, reachable from what the file's default
+ *                    export (the actually-mounted component) renders.
+ * - 'disqualified' — the default-exported component IS a data router (or, absent a resolvable
+ *                    default export, the file calls a data-router builder ANYWHERE while also
+ *                    containing a literal `<Routes>`) — that `<Routes>` is unreachable dead
+ *                    code the running app never renders (HYP-1103).
+ * - 'not-found'    — no literal `<Routes>` anywhere in the file.
+ */
+type RoutesResolution =
+  | { kind: 'found'; element: namedTypes.JSXElement }
+  | { kind: 'disqualified' }
+  | { kind: 'not-found' };
+
+/**
+ * Decide which `<Routes>` element (if any) is safe to patch. Scopes the search to the file's
+ * default-exported function FIRST — the actual entry point main.tsx mounts — so an unrelated
+ * helper elsewhere in the file (a dead router build, a test-only `<Routes>` harness, a NESTED
+ * dead local function) can never disqualify or shadow the component that's genuinely rendered.
+ * When the default export renders neither `<Routes>` nor a data-router signal directly, follows
+ * ONE level of JSX delegation — a top-level component it renders directly, e.g.
+ * `export default () => <AppRoutes />` — before giving up on scoping. Falls back to a
+ * file-wide scan only when the default export (and its one-level delegate) can't resolve
+ * either signal (e.g. a HOC-wrapped default, or no default export at all — the split-file
+ * shape where createBrowserRouter is exported from this file but `<RouterProvider>` is
+ * rendered in a different entry file).
+ *
+ * Known, deliberate limitations (out of scope here — tracked as HYP-1109, a HYP-1103 follow-up):
+ * - A renamed import alias (`import { createBrowserRouter as cbr } from …`) is not resolved
+ *   back to react-router; the observed real-world shapes (cms-spa, HYP-934's fixtures) all
+ *   use the unaliased names.
+ * - Delegation deeper than one level (`App` → `Shell` → `AppRoutes`) is not followed.
+ * - An app that conditionally renders two SEPARATE `<Routes>` trees (not one shared tree)
+ *   only gets the first one patched — a pre-existing limitation, not a regression from this
+ *   scoping (the previous unscoped visitor also only durably wrote one of them).
+ */
+function resolveRoutesElement(ast: namedTypes.File): RoutesResolution {
+  const defaultExportScope = findDefaultExportScope(ast);
+  if (defaultExportScope) {
+    const scoped = scanRouterSignals(defaultExportScope, { crossFunctionBoundaries: false });
+    if (scoped.routesElement) return { kind: 'found', element: scoped.routesElement };
+    if (scoped.hasDataRouterSignal) return { kind: 'disqualified' };
+
+    // Neither signal directly — follow one level of JSX delegation to a locally-declared
+    // top-level component (e.g. `export default () => <AppRoutes />`).
+    for (const name of scoped.renderedComponentNames) {
+      const delegateBody = findNamedFunctionBody(ast, name);
+      if (!delegateBody) continue;
+      const delegate = scanRouterSignals(delegateBody, { crossFunctionBoundaries: false });
+      if (delegate.routesElement) return { kind: 'found', element: delegate.routesElement };
+      if (delegate.hasDataRouterSignal) return { kind: 'disqualified' };
+    }
+    // Still neither — fall through to a file-wide scan below rather than giving up.
+  }
+  const wholeFile = scanRouterSignals(ast, { crossFunctionBoundaries: true });
+  if (wholeFile.hasDataRouterSignal && wholeFile.routesElement) return { kind: 'disqualified' };
+  return wholeFile.routesElement ? { kind: 'found', element: wholeFile.routesElement } : { kind: 'not-found' };
+}
 
 export class PreviewFileManager {
   private projectRoot: string;
@@ -1148,6 +1347,56 @@ export class PreviewFileManager {
     const source = await this.io.readFile(routerFilePath);
     const ast = recast.parse(source, { parser: RECAST_PARSER });
 
+    // Reachability-scoped: only a `<Routes>` reachable from the file's default-exported
+    // (actually-mounted) component is trusted — see resolveRoutesElement's doc comment for
+    // why a file-wide "any signal anywhere" check is wrong in BOTH directions (HYP-934,
+    // HYP-1103). cms-spa's App.tsx calls createBrowserRouter in its default-exported,
+    // production `App()`, while ALSO containing a literal `<Routes>` inside an unrelated
+    // `AppRoutes()` helper kept only for a legacy `<MemoryRouter>` test harness — scoping to
+    // the default export means that dead `<Routes>` is never even considered.
+    const resolution = resolveRoutesElement(ast);
+    if (resolution.kind === 'disqualified') {
+      // The caller (PreviewModeManager) reverts any STALE @hyperide-managed marker from a
+      // prior (pre-fix) bad patch via _revertJsxPatchIfPresent() before falling back to
+      // entry-file patching — no separate cleanup is needed here.
+      console.warn(
+        '[PreviewFileManager] Router file is mounted as a data router',
+        '(createBrowserRouter/createHashRouter) — any literal <Routes> in it is unreachable',
+        'dead/legacy code the running app never renders. Skipping the <Routes> patch in',
+        routerFilePath,
+      );
+      return 'no-routes';
+    }
+    if (resolution.kind === 'not-found') {
+      console.warn('[PreviewFileManager] Could not find <Routes> in', routerFilePath);
+      return 'no-routes';
+    }
+
+    const outcome = this._applyRoutesPatch(resolution.element);
+    if (outcome === 'already-present') return 'already-present';
+
+    // Add CanvasPreview import at top — path relative to router file directory
+    const previewPath = await this.getPreviewFilePath();
+    const routerDir = dirname(routerFilePath);
+    let importPath = relative(routerDir, previewPath).replace(/\.\w+$/, '');
+    if (!importPath.startsWith('.')) importPath = `./${importPath}`;
+
+    const previewImport = `import CanvasPreview from '${importPath}'; // @hyperide-managed\n`;
+    const output = recast.print(ast).code;
+    const alreadyImportsPreview = await this._hasImport(routerFilePath, importPath);
+    const written = alreadyImportsPreview ? output : previewImport + output;
+    onBeforeWrite?.();
+    await this.io.writeFile(routerFilePath, written);
+    onWrite?.(written);
+    return 'written';
+  }
+
+  /**
+   * Mutate an already-resolved `<Routes>` element in place: inject the /test-preview <Route>
+   * (replacing a stale one and re-positioning ahead of any catch-all `*` route), or detect
+   * that it's already correctly installed. Pure AST mutation — does not read/write files.
+   */
+  private _applyRoutesPatch(el: namedTypes.JSXElement): 'written' | 'already-present' {
     const isRouteWithPath = (child: namedTypes.Node, routePath: string): boolean => {
       if (!namedTypes.JSXElement.check(child)) return false;
       return (
@@ -1164,83 +1413,50 @@ export class PreviewFileManager {
       );
     };
 
-    let patched = false;
-    let alreadyPresent = false;
-    recast.visit(ast, {
-      visitJSXElement(path) {
-        const el = path.node;
-        if (el.openingElement.name.type === 'JSXIdentifier' && el.openingElement.name.name === 'Routes') {
-          if (!el.children) el.children = [];
-          const existingPreviewRouteIndex = el.children.findIndex((child) => isRouteWithPath(child, '/test-preview'));
-          const existingCatchAllIndex = el.children.findIndex((child) => isRouteWithPath(child, '*'));
+    if (!el.children) el.children = [];
+    const existingPreviewRouteIndex = el.children.findIndex((child) => isRouteWithPath(child, '/test-preview'));
+    const existingCatchAllIndex = el.children.findIndex((child) => isRouteWithPath(child, '*'));
 
-          if (
-            existingPreviewRouteIndex >= 0 &&
-            (existingCatchAllIndex === -1 || existingPreviewRouteIndex < existingCatchAllIndex)
-          ) {
-            // <Routes> exists AND the /test-preview route is already installed in the right
-            // position — nothing to write, but this is NOT an unpatchable file. Distinguishing
-            // this from 'no-routes' is load-bearing: the caller treats 'already-present' as
-            // success and must NOT fall back to entry-file patching (HYP-934), otherwise a
-            // second onComponentSelected() (the extension's own file watcher re-fires on the
-            // patch write) would manage the entry file too and bypass the routed app shell.
-            alreadyPresent = true;
-            return false;
-          }
-
-          const newRoute = b.jsxElement(
-            b.jsxOpeningElement(
-              b.jsxIdentifier('Route'),
-              [
-                b.jsxAttribute(b.jsxIdentifier('path'), b.stringLiteral('/test-preview')),
-                b.jsxAttribute(
-                  b.jsxIdentifier('element'),
-                  b.jsxExpressionContainer(
-                    b.jsxElement(b.jsxOpeningElement(b.jsxIdentifier('CanvasPreview'), [], true), null, []),
-                  ),
-                ),
-              ],
-              true,
-            ),
-            null,
-            [],
-          );
-          if (existingPreviewRouteIndex >= 0) {
-            el.children = el.children.filter((_, index) => index !== existingPreviewRouteIndex);
-          }
-          const routeNodes = [b.jsxText('\n        '), newRoute, b.jsxText('\n      ')];
-          const catchAllIndex = el.children.findIndex((child) => isRouteWithPath(child, '*'));
-          if (catchAllIndex >= 0) {
-            el.children.splice(catchAllIndex, 0, ...routeNodes);
-          } else {
-            el.children.push(...routeNodes);
-          }
-          patched = true;
-          return false;
-        }
-        this.traverse(path);
-      },
-    });
-
-    if (!patched) {
-      if (alreadyPresent) return 'already-present';
-      console.warn('[PreviewFileManager] Could not find <Routes> in', routerFilePath);
-      return 'no-routes';
+    if (
+      existingPreviewRouteIndex >= 0 &&
+      (existingCatchAllIndex === -1 || existingPreviewRouteIndex < existingCatchAllIndex)
+    ) {
+      // <Routes> exists AND the /test-preview route is already installed in the right
+      // position — nothing to write, but this is NOT an unpatchable file. Distinguishing
+      // this from 'no-routes' is load-bearing: the caller treats 'already-present' as
+      // success and must NOT fall back to entry-file patching (HYP-934), otherwise a
+      // second onComponentSelected() (the extension's own file watcher re-fires on the
+      // patch write) would manage the entry file too and bypass the routed app shell.
+      return 'already-present';
     }
 
-    // Add CanvasPreview import at top — path relative to router file directory
-    const previewPath = await this.getPreviewFilePath();
-    const routerDir = dirname(routerFilePath);
-    let importPath = relative(routerDir, previewPath).replace(/\.\w+$/, '');
-    if (!importPath.startsWith('.')) importPath = `./${importPath}`;
-
-    const previewImport = `import CanvasPreview from '${importPath}'; // @hyperide-managed\n`;
-    const output = recast.print(ast).code;
-    const alreadyImportsPreview = await this._hasImport(routerFilePath, importPath);
-    const written = alreadyImportsPreview ? output : previewImport + output;
-    onBeforeWrite?.();
-    await this.io.writeFile(routerFilePath, written);
-    onWrite?.(written);
+    const newRoute = b.jsxElement(
+      b.jsxOpeningElement(
+        b.jsxIdentifier('Route'),
+        [
+          b.jsxAttribute(b.jsxIdentifier('path'), b.stringLiteral('/test-preview')),
+          b.jsxAttribute(
+            b.jsxIdentifier('element'),
+            b.jsxExpressionContainer(
+              b.jsxElement(b.jsxOpeningElement(b.jsxIdentifier('CanvasPreview'), [], true), null, []),
+            ),
+          ),
+        ],
+        true,
+      ),
+      null,
+      [],
+    );
+    if (existingPreviewRouteIndex >= 0) {
+      el.children = el.children.filter((_, index) => index !== existingPreviewRouteIndex);
+    }
+    const routeNodes = [b.jsxText('\n        '), newRoute, b.jsxText('\n      ')];
+    const catchAllIndex = el.children.findIndex((child) => isRouteWithPath(child, '*'));
+    if (catchAllIndex >= 0) {
+      el.children.splice(catchAllIndex, 0, ...routeNodes);
+    } else {
+      el.children.push(...routeNodes);
+    }
     return 'written';
   }
 

@@ -1252,6 +1252,408 @@ export default function App() {
   });
 });
 
+describe('PreviewModeManager — data-router file with a coexisting dead literal <Routes> (HYP-1103)', () => {
+  // Real-world shape from conloca-ref's cms-spa: App.tsx's production, default-exported
+  // `App()` renders `<RouterProvider router={router} />` around a createBrowserRouter — the
+  // SAME shape HYP-934 covers above. But this file ALSO exports a second, unrelated
+  // `AppRoutes()` helper (kept only for a legacy `<MemoryRouter>` test harness) that renders a
+  // literal `<Routes>{...}</Routes>`. Before the fix, patchRouterConfig()'s JSX visitor matched
+  // that literal `<Routes>` (wherever in the file it lives) and "successfully" injected the
+  // /test-preview route into the DEAD `AppRoutes()` copy, returning 'written' — so
+  // onComponentSelected reported 'ok' without ever falling back to entry-file patching. The
+  // actual production app (which only ever calls the default-exported `App()`, never
+  // `AppRoutes()`) still has no /test-preview route: react-router's own default ErrorBoundary
+  // renders a 404 instead of the previewed component.
+  const MIXED_ROUTER_SOURCE = `import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider, Routes } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+export function routeElements() {
+  return <Route path="/" element={<Home />} />;
+}
+
+/** Legacy test-only helper — rendered inside a <MemoryRouter> in unit tests, never in prod. */
+export function AppRoutes() {
+  return <Routes>{routeElements()}</Routes>;
+}
+
+/** Production entry — the ONLY thing main.tsx actually mounts. */
+export default function App() {
+  const router = createBrowserRouter(createRoutesFromElements(routeElements()));
+  return <RouterProvider router={router} />;
+}
+`;
+  const ENTRY_SOURCE = `import { createRoot } from 'react-dom/client';
+import App from './App';
+
+createRoot(document.getElementById('root')!).render(<App />);
+`;
+
+  function mixedRouterFiles(): Record<string, string> {
+    return {
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^7' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: MIXED_ROUTER_SOURCE,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    };
+  }
+
+  it('patchRouterConfig() returns no-routes instead of patching the dead <Routes> helper', async () => {
+    const io = makeIO(mixedRouterFiles());
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+
+    expect(await fileManager.patchRouterConfig(`${root}/src/App.tsx`)).toBe('no-routes');
+    // The dead AppRoutes() helper must be left completely untouched — no injected route, no marker.
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).not.toContain('@hyperide-managed');
+    expect(app).not.toContain('/test-preview');
+  });
+
+  it('onComponentSelected falls back to entry-file patching instead of leaving the real app unpatched', async () => {
+    const io = makeIO(mixedRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    const result = await m.onComponentSelected();
+
+    expect(result).toBe('ok');
+    // Entry file gets the App-Shell fallback patch — this is what actually makes
+    // /test-preview render the previewed component instead of the app's real router 404.
+    const entry = await io.readFile(`${root}/src/main.tsx`);
+    expect(entry).toContain('@hyperide-managed');
+    expect(entry).toContain('./__canvas_preview__');
+    // The router file (including its dead AppRoutes() helper) is left completely alone.
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).not.toContain('@hyperide-managed');
+    expect(app).not.toContain('/test-preview');
+  });
+
+  it('detects the data-router builder even when <RouterProvider> is rendered in a DIFFERENT file (split shape)', async () => {
+    // A common split: the router FILE only calls createBrowserRouter and exports the router —
+    // <RouterProvider> is rendered elsewhere, in main.tsx. The builder call alone (independent
+    // of where <RouterProvider> lives) must be enough to distrust a co-located dead <Routes>.
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^7' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: `import { createBrowserRouter, createRoutesFromElements, Route, Routes } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+export function routeElements() {
+  return <Route path="/" element={<Home />} />;
+}
+
+/** Legacy test-only helper — never rendered in production. */
+export function AppRoutes() {
+  return <Routes>{routeElements()}</Routes>;
+}
+
+/** Exported for main.tsx, which renders <RouterProvider router={router} />. */
+export const router = createBrowserRouter(createRoutesFromElements(routeElements()));
+`,
+      [`${root}/src/main.tsx`]: `import { createRoot } from 'react-dom/client';
+import { RouterProvider } from 'react-router-dom';
+import { router } from './App';
+
+createRoot(document.getElementById('root')!).render(<RouterProvider router={router} />);
+`,
+    });
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+
+    expect(await fileManager.patchRouterConfig(`${root}/src/App.tsx`)).toBe('no-routes');
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).not.toContain('@hyperide-managed');
+    expect(app).not.toContain('/test-preview');
+  });
+
+  it('does not disqualify a genuinely active <Routes> app shell merely because a <RouterProvider> string/comment mentions it', async () => {
+    // A <RouterProvider> appearing only in a comment or a string literal (not real JSX) must
+    // NOT disqualify the file's actual, active literal <Routes> — proves the check reads the
+    // AST, not raw source text.
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^7' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: `import { Route, Routes } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+// Future idea worth revisiting (HYP-1103): migrate to <RouterProvider> + createBrowserRouter.
+// (This whole block is FIXTURE source text for the test below — a fake app file's
+// content, not real project debt. It proves the route detector reads the AST rather
+// than raw source, so a comment mentioning RouterProvider here must not disqualify a
+// genuinely active <Routes> app shell. Deliberately not phrased as a task-marker
+// comment: this fixture text is never itself migrated, so such a marker on it would be
+// permanently untracked debt rather than a one-time note.)
+const migrationNote = 'not yet using <RouterProvider>';
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+    </Routes>
+  );
+}
+`,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    });
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+
+    expect(await fileManager.patchRouterConfig(`${root}/src/App.tsx`)).toBe('written');
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).toContain('@hyperide-managed');
+    expect(app).toContain('/test-preview');
+  });
+
+  it('does not disqualify a genuinely active <Routes> app shell because of an UNRELATED createMemoryRouter+RouterProvider sample wrapper', async () => {
+    // Mirrors scanner.ts's own established app-shell heuristic (ROUTER_SHELL_IMPORTS comment):
+    // a leaf component's SampleDefault commonly wraps itself in createMemoryRouter +
+    // <RouterProvider> for isolated preview rendering — that is NOT the app's real router and
+    // must not disqualify a genuinely active literal <Routes> app shell living in the SAME file.
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^7' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: `import { Route, Routes, RouterProvider, createMemoryRouter } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+/** Isolated preview wrapper for an unrelated leaf component — NOT the app's real router. */
+export function SampleDefault() {
+  const memoryRouter = createMemoryRouter([{ path: '/', element: <Home /> }]);
+  return <RouterProvider router={memoryRouter} />;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+    </Routes>
+  );
+}
+`,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    });
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+
+    expect(await fileManager.patchRouterConfig(`${root}/src/App.tsx`)).toBe('written');
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).toContain('@hyperide-managed');
+    expect(app).toContain('/test-preview');
+  });
+
+  it('does not disqualify a genuinely active <Routes> app shell because an UNRELATED helper elsewhere calls createBrowserRouter', async () => {
+    // The mirror-image bug: reviewer-caught counter-example. The default-exported `App()`
+    // genuinely renders <BrowserRouter><Routes>...</Routes></BrowserRouter> — that IS what
+    // main.tsx mounts. A separate, never-invoked `buildTestRouter()` helper elsewhere in the
+    // same file happens to call createBrowserRouter (e.g. for an unrelated test utility) —
+    // that must NOT disqualify patching the app's real, reachable <Routes>.
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^7' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: `import { BrowserRouter, Routes, Route, createBrowserRouter } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+/** Never invoked from production — exists for an unrelated test utility. */
+export function buildTestRouter() {
+  return createBrowserRouter([{ path: '/test', element: <Home /> }]);
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+`,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    });
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+
+    expect(await fileManager.patchRouterConfig(`${root}/src/App.tsx`)).toBe('written');
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).toContain('@hyperide-managed');
+    expect(app).toContain('/test-preview');
+  });
+
+  it('reverts a STALE pre-fix patch (injected into the dead helper) and falls back to entry-file patching on the next selection', async () => {
+    // Real-world migration state: a project patched by the PRE-FIX code has the
+    // /test-preview route injected into the dead AppRoutes() helper, with the
+    // @hyperide-managed import already added. onComponentSelected must detect the router
+    // is now correctly classified as unpatchable, revert that stale injection, and apply
+    // the entry-file fallback instead — leaving the project no worse than a fresh selection.
+    const stalePatchedSource = `import CanvasPreview from '../__canvas_preview__'; // @hyperide-managed
+import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider, Routes } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+export function routeElements() {
+  return <Route path="/" element={<Home />} />;
+}
+
+/** Legacy test-only helper — rendered inside a <MemoryRouter> in unit tests, never in prod. */
+export function AppRoutes() {
+  return (
+    <Routes>
+        <Route path="/test-preview" element={<CanvasPreview />} />
+        {routeElements()}
+      </Routes>
+  );
+}
+
+/** Production entry — the ONLY thing main.tsx actually mounts. */
+export default function App() {
+  const router = createBrowserRouter(createRoutesFromElements(routeElements()));
+  return <RouterProvider router={router} />;
+}
+`;
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^7' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: stalePatchedSource,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+      [`${root}/src/__canvas_preview__.tsx`]: '// stub',
+    });
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    const result = await m.onComponentSelected();
+
+    expect(result).toBe('ok');
+    // The stale injection is reverted from the dead helper — no leftover managed marker.
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).not.toContain('@hyperide-managed');
+    expect(app).not.toContain('/test-preview');
+    // The entry file gets the real fallback patch instead.
+    const entry = await io.readFile(`${root}/src/main.tsx`);
+    expect(entry).toContain('@hyperide-managed');
+    expect(entry).toContain('./__canvas_preview__');
+  });
+
+  it('recognizes createHashRouter (not just createBrowserRouter) as a disqualifying data-router builder', async () => {
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^7' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: MIXED_ROUTER_SOURCE.replace(/createBrowserRouter/g, 'createHashRouter'),
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    });
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+
+    expect(await fileManager.patchRouterConfig(`${root}/src/App.tsx`)).toBe('no-routes');
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).not.toContain('@hyperide-managed');
+    expect(app).not.toContain('/test-preview');
+  });
+
+  it('does not patch a dead <Routes> defined in a NESTED helper function inside the default export itself', async () => {
+    // Reviewer-caught counter-example: the default-exported App() defines a local helper
+    // function INSIDE its own body that renders <Routes> — but App() never calls that helper;
+    // it returns <RouterProvider> built from createBrowserRouter. The nested helper's <Routes>
+    // must not be mistaken for something the component actually renders.
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^7' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: `import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider, Routes } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+export default function App() {
+  // Dead local helper — defined here but never invoked or returned.
+  function renderLegacyRoutes() {
+    return <Routes><Route path="/" element={<Home />} /></Routes>;
+  }
+  const router = createBrowserRouter(createRoutesFromElements(<Route path="/" element={<Home />} />));
+  return <RouterProvider router={router} />;
+}
+`,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    });
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+
+    expect(await fileManager.patchRouterConfig(`${root}/src/App.tsx`)).toBe('no-routes');
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).not.toContain('@hyperide-managed');
+    expect(app).not.toContain('/test-preview');
+  });
+
+  it('follows one level of JSX delegation to patch <Routes> rendered by a separate top-level component', async () => {
+    // Reviewer-caught counter-example: App() itself renders nothing but <AppRoutes /> — the
+    // ACTIVE <Routes> tree lives in that separate, top-level, non-default-exported component.
+    // An unrelated helper elsewhere in the file also calls createBrowserRouter (e.g. for a
+    // secondary/test utility) — that must not disqualify the reachable, delegated <Routes>.
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^7' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: `import { BrowserRouter, Routes, Route, createBrowserRouter } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+/** Never invoked from production — exists for an unrelated test utility. */
+export function buildTestRouter() {
+  return createBrowserRouter([{ path: '/test', element: <Home /> }]);
+}
+
+function AppRoutes() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default function App() {
+  return <AppRoutes />;
+}
+`,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    });
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+
+    expect(await fileManager.patchRouterConfig(`${root}/src/App.tsx`)).toBe('written');
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).toContain('@hyperide-managed');
+    expect(app).toContain('/test-preview');
+  });
+
+  it('disqualifies a delegated component whose OWN body is a data router, one level deep', async () => {
+    // Mirror of the delegation test: App() renders <AppRouterShell /> which is itself a data
+    // router (createBrowserRouter + RouterProvider) — the delegate resolution must also
+    // recognize a data-router signal in the delegate, not just a <Routes> element.
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^7' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: `import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider, Routes } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+/** Legacy test-only helper — never invoked from production. */
+export function AppRoutesLegacy() {
+  return <Routes><Route path="/" element={<Home />} /></Routes>;
+}
+
+function AppRouterShell() {
+  const router = createBrowserRouter(createRoutesFromElements(<Route path="/" element={<Home />} />));
+  return <RouterProvider router={router} />;
+}
+
+export default function App() {
+  return <AppRouterShell />;
+}
+`,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    });
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+
+    expect(await fileManager.patchRouterConfig(`${root}/src/App.tsx`)).toBe('no-routes');
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).not.toContain('@hyperide-managed');
+    expect(app).not.toContain('/test-preview');
+  });
+});
+
 describe('PreviewModeManager — custom (non-react-router) router app falls back to entry patching (conloca WorkspaceRouter, HYP-934)', () => {
   // conloca-app is a Vite SPA whose App renders a bespoke history/subdomain-based
   // <WorkspaceRouter> — it imports NO react-router and has none of detectRouterFile's markers
