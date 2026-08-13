@@ -26,6 +26,7 @@ import type { OverlayElementResolver } from '@shared/canvas-interaction/types';
 import { type Fiber, getFiberFromDOM } from '@shared/element-tracing/fiber-internals';
 import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 import { scrollIntoViewCenterSmooth, extractComputedStyle, extractComputedStyleForProperties } from './dom-utils';
+import { setupReadabilityReporting } from './iframe-readability';
 import { parseSourceRef, buildMapUrl, isViteSourceUrl } from './source-map-utils';
 import { sendOverlayRects } from './iframe-overlay';
 import { handleScreenshotRequest } from './iframe-screenshot';
@@ -986,6 +987,10 @@ if (document.body) {
 } else {
   document.addEventListener('DOMContentLoaded', setupBodyObservers, { once: true });
 }
+
+// Readability aid (HYP-1002): report surface-backed text colours to the preview-panel webview,
+// which decides whether to flip the canvas surface. Read-only; never mutates the DOM.
+setupReadabilityReporting();
 
 const overlayScrollHandler = () => {
   window.parent.postMessage({ type: 'hypercanvas:overlayScroll', scrollY: window.scrollY }, '*');

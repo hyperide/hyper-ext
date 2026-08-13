@@ -13,6 +13,8 @@ import {
   useIframeRuntimeErrors,
   useIframeStyles,
 } from './iframe-canvas-hooks';
+import { useReadableSurface } from './iframe-canvas-hooks/useReadableSurface';
+import { ReadableSurfaceBadge } from './ReadableSurfaceBadge';
 
 interface IframeCanvasProps {
   componentPath: string;
@@ -84,6 +86,7 @@ export default function IframeCanvas({
   const { meta } = useComponentMeta();
   const engine = useCanvasEngine();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const { tracer, clickRetryQueue } = useElementTracer({
     iframe: iframeRef.current,
@@ -146,6 +149,19 @@ export default function IframeCanvas({
     overrideSrc,
   });
 
+  // Readability aid (HYP-1002): flip the canvas surface behind the transparent iframe when a
+  // no-own-background component paints clearly-unreadable text. Disabled in app-mode (the app
+  // supplies its own surface). Works for the standard preview AND NodePod/override previews — a
+  // cross-origin override whose DOM can't be read is handled as "no samples" (safe no-op).
+  const readableSurface = useReadableSurface({
+    iframeRef,
+    wrapperRef,
+    previewReady,
+    componentPath,
+    iframeLoadedCounter,
+    enabled: !appMode,
+  });
+
   if (!meta?.projectId) {
     return (
       <div className="relative w-full h-full bg-white dark:bg-slate-950">
@@ -161,16 +177,25 @@ export default function IframeCanvas({
 
   return (
     <div
+      ref={wrapperRef}
       data-testid="IframeCanvas"
       className="relative"
       style={{
         overflow: 'visible',
-        background: 'transparent',
+        // Readability aid (HYP-1002) paints this variable behind the transparent iframe; when
+        // unset the canvas surface below shows through unchanged.
+        background: 'var(--hc-canvas-surface, transparent)',
         pointerEvents: boardModeActive ? 'none' : 'auto',
         width: canvasMode === 'multi' ? 'fit-content' : '100%',
         height: canvasMode === 'multi' ? 'fit-content' : '100%',
       }}
     >
+      {readableSurface.surfaceId && !boardModeActive && (
+        <ReadableSurfaceBadge
+          minContrast={readableSurface.minContrastBefore}
+          onDismiss={readableSurface.onDismiss}
+        />
+      )}
       <iframe
         id="preview-iframe"
         ref={iframeRef}

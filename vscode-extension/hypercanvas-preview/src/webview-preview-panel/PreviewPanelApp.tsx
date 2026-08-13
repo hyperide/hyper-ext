@@ -35,6 +35,8 @@ import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
 import { SupportDimensionsTabs } from './SupportDimensionsTabs';
 import { useAutoCreateEmptySample } from './useAutoCreateEmptySample';
 import { useCanvasInteraction } from './useCanvasInteraction';
+import { useReadableSurface } from './useReadableSurface';
+import { ReadableSurfaceBadge } from './ReadableSurfaceBadge';
 import { UnsupportedFrameworkScreen } from './UnsupportedFrameworkScreen';
 import { usePreviewBridge } from './usePreviewBridge';
 
@@ -137,6 +139,15 @@ function PreviewContent() {
     iframeEl,
     canvas,
     onStateUpdate: updateState,
+  });
+
+  // Readability aid (HYP-1002): flip the canvas surface behind the transparent iframe when a
+  // no-own-background component paints unreadable text. Disabled in app-mode (the app supplies
+  // its own surface). Component switches are detected from the reported sample-content signature,
+  // so no per-URL key is needed (the extension switches components without an iframe reload).
+  const readableSurface = useReadableSurface({
+    iframeEl,
+    enabled: !appMode,
   });
 
   // Create a sample for the errored component (host writes the sample file).
@@ -396,6 +407,12 @@ function PreviewContent() {
           onError={handleIframeError}
         />
         <div ref={overlayCallbackRef} style={overlayStyle} />
+        {readableSurface.surfaceId && (
+          <ReadableSurfaceBadge
+            minContrast={readableSurface.minContrastBefore}
+            onDismiss={readableSurface.onDismiss}
+          />
+        )}
         {iframeSrc &&
           !iframeLoaded &&
           !componentError &&
@@ -833,7 +850,11 @@ const iframeStyle: React.CSSProperties = {
   border: 'none',
   width: '100%',
   height: '100%',
-  background: 'var(--vscode-editor-background, #1e1e1e)',
+  // Readability aid (HYP-1002): the preview iframe paints the canvas surface behind the
+  // (transparent-bodied) component. `--hc-canvas-surface` is set on the webview body by
+  // useReadableSurface and inherits here; unset it falls back to the live editor background, so
+  // the default look is unchanged.
+  background: 'var(--hc-canvas-surface, var(--vscode-editor-background, #1e1e1e))',
 };
 
 const overlayStyle: React.CSSProperties = {
