@@ -22,6 +22,7 @@ import {
 } from '@shared/canvas-interaction/selection-utils';
 import type { OverlayElementResolver } from '@shared/canvas-interaction/types';
 import { type Fiber, getFiberFromDOM } from '@shared/element-tracing/fiber-internals';
+import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 import { scrollIntoViewCenterSmooth, extractComputedStyle } from './dom-utils';
 import { parseSourceRef, buildMapUrl, isViteSourceUrl } from './source-map-utils';
 import { sendOverlayRects } from './iframe-overlay';
@@ -1012,8 +1013,10 @@ window.addEventListener('unload', () => {
 });
 import { updateDesignStyles } from './iframe-design-styles';
 
-// nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- VS Code webview iframe, origin not applicable
+// nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- origin IS validated by isTrustedMessageOrigin() as the handler's first statement; Semgrep's syntactic rule can't follow the helper call.
 window.addEventListener('message', (event: MessageEvent) => {
+  // Reject untrusted frames before dispatching (js/missing-origin-check).
+  if (!isTrustedMessageOrigin(event)) return;
   const msg = event.data;
   if (!msg || !msg.type) return;
   if (msg.type === 'hypercanvas:setComponent') {

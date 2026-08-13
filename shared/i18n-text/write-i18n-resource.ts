@@ -77,13 +77,22 @@ function setKey(data: unknown, key: string, value: string): boolean {
   let current: Record<string, unknown> = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i];
+    // Re-assert the prototype-pollution barrier at every write sink with
+    // EXPLICIT literal comparisons. The up-front `FORBIDDEN_KEY_PARTS` Set
+    // check is functionally sufficient, but CodeQL js/prototype-pollution-utility
+    // only recognizes literal `key === '__proto__'`-style guards as a barrier,
+    // not a `Set.has()` membership test, and does not propagate the up-front
+    // check to these sinks.
+    if (part === '__proto__' || part === 'constructor' || part === 'prototype') return false;
     if (typeof current[part] !== 'object' || current[part] === null) {
       if (Object.hasOwn(current, part)) return false; // non-object collision
       current[part] = {};
     }
     current = current[part] as Record<string, unknown>;
   }
-  current[parts[parts.length - 1]] = value;
+  const leaf = parts[parts.length - 1];
+  if (leaf === '__proto__' || leaf === 'constructor' || leaf === 'prototype') return false;
+  current[leaf] = value;
   return true;
 }
 

@@ -9,6 +9,7 @@ import type { ConsoleCaptureMessage, DiagnosticLogEntry } from '@shared/diagnost
 import { CONSOLE_CAPTURE_EVENT } from '@shared/diagnostic-types';
 import type { RuntimeError } from '@shared/runtime-error';
 import type { ProjectStatus } from '@shared/types/statuses';
+import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNetworkAwarePolling } from '@/hooks/useNetworkAwarePolling';
 import { type SSEStatus, useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
@@ -278,6 +279,8 @@ export function useDiagnosticSync({ projectId, containerStatus, runtimeError, pr
   // Listen for console capture messages from iframe
   useEffect(() => {
     const handler = (event: MessageEvent) => {
+      // Reject untrusted frames before dispatching (js/missing-origin-check).
+      if (!isTrustedMessageOrigin(event)) return;
       if (event.data?.type === CONSOLE_CAPTURE_EVENT) {
         const msg = event.data as ConsoleCaptureMessage;
         addConsoleLogs(msg.entries);

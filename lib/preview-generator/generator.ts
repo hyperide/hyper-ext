@@ -27,6 +27,25 @@ export { PREVIEW_GENERATOR_SCHEMA_MARKER, entryHasRenderableSample, isUiPrimitiv
 
 export { deriveUniquePrefix } from './name-resolution';
 
+/**
+ * Emit `value` as a fully-escaped, single-quoted JS string literal for the
+ * generated source (keeps this file's single-quote convention).
+ *
+ * Derived from `JSON.stringify`, which escapes EVERY metacharacter —
+ * backslash, double quote, newlines and control chars — then re-wrapped in
+ * single quotes with `'` escaped too. This replaces the previous
+ * `.replace(/'/g, "\\'")` single-quote-only escaping, which left `\`
+ * unescaped (CodeQL js/incomplete-sanitization): `foo\` would emit `'foo\'`
+ * and swallow the closing quote, letting the value break out of the literal.
+ */
+function jsStr(value: string): string {
+  // JSON.stringify gives a fully-escaped double-quoted literal. Strip the
+  // outer double quotes, un-escape the now-redundant `\"`, then escape `'`
+  // and re-wrap in single quotes. Backslash, newlines, etc. stay escaped.
+  const inner = JSON.stringify(value).slice(1, -1).replace(/\\"/g, '"').replace(/'/g, "\\'");
+  return `'${inner}'`;
+}
+
 /** Generate the full __canvas_preview__.tsx content */
 export function generatePreviewContent(entries: PreviewComponentEntry[], options?: GeneratePreviewOptions): string {
   const registryEntries = entries.filter((e) => !isUiPrimitive(e.componentPath) || entryHasRenderableSample(e));
@@ -70,8 +89,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
     lines.push(buildImportLine(entry, alias));
     if (entry.syntheticSampleDefault) {
-      const safePath = entry.importPath.replace(/'/g, "\\'");
-      lines.push(`import * as ${alias}Module from '${safePath}';`);
+      lines.push(`import * as ${alias}Module from ${jsStr(entry.importPath)};`);
     }
   }
   lines.push('');
@@ -80,7 +98,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('const componentRegistry: Record<string, PreviewComponent> = {');
   for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
-    lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': toPreviewComponent(${alias}),`);
+    lines.push(`  ${jsStr(entry.componentPath)}: toPreviewComponent(${alias}),`);
   }
   lines.push('};');
   lines.push('');
@@ -89,9 +107,9 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('const sampleRenderMap: Record<string, React.FC> = {');
   for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
-    const safeKey = entry.componentPath.replace(/'/g, "\\'");
+    const safeKey = jsStr(entry.componentPath);
     if (entry.sampleExports.includes('SampleDefault')) {
-      lines.push(`  '${safeKey}': ${alias}SampleDefault,`);
+      lines.push(`  ${safeKey}: ${alias}SampleDefault,`);
     } else if (entry.syntheticSampleDefault) {
       const inline = renderSyntheticSampleArrow(
         entry.syntheticSampleDefault,
@@ -99,7 +117,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
         entry.componentName,
         entry.exportStyle,
       );
-      lines.push(`  '${safeKey}': ${inline},`);
+      lines.push(`  ${safeKey}: ${inline},`);
     }
   }
   lines.push('};');
@@ -109,9 +127,9 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('const componentExportsMap: Record<string, string[]> = {');
   for (const entry of entries) {
     if (!entry.detectedExports || entry.detectedExports.length === 0) continue;
-    const safeKey = entry.componentPath.replace(/'/g, "\\'");
+    const safeKey = jsStr(entry.componentPath);
     const exportsList = entry.detectedExports.map((n) => JSON.stringify(n)).join(', ');
-    lines.push(`  '${safeKey}': [${exportsList}],`);
+    lines.push(`  ${safeKey}: [${exportsList}],`);
   }
   lines.push('};');
   lines.push('');
@@ -120,9 +138,9 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('const declaredPropNamesMap: Record<string, string[]> = {');
   for (const entry of entries) {
     if (entry.declaredPropNames === undefined) continue;
-    const safeKey = entry.componentPath.replace(/'/g, "\\'");
+    const safeKey = jsStr(entry.componentPath);
     const namesList = entry.declaredPropNames.map((n) => JSON.stringify(n)).join(', ');
-    lines.push(`  '${safeKey}': [${namesList}],`);
+    lines.push(`  ${safeKey}: [${namesList}],`);
   }
   lines.push('};');
   lines.push('');
@@ -132,13 +150,13 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
     if (entry.sampleExports.length > 0) {
-      lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': {`);
+      lines.push(`  ${jsStr(entry.componentPath)}: {`);
       for (const exp of entry.sampleExports) {
-        lines.push(`    '${sampleExportToKey(exp)}': ${alias}${exp},`);
+        lines.push(`    ${jsStr(sampleExportToKey(exp))}: ${alias}${exp},`);
       }
       lines.push('  },');
     } else {
-      lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': {},`);
+      lines.push(`  ${jsStr(entry.componentPath)}: {},`);
     }
   }
   lines.push('};');
@@ -154,7 +172,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   if (needsRemixMock) {
     lines.push('const ssrRouteSet = new Set<string>([');
     for (const routePath of ssrRoutes) {
-      lines.push(`  '${routePath.replace(/'/g, "\\'")}',`);
+      lines.push(`  ${jsStr(routePath)},`);
     }
     lines.push(']);');
     lines.push('');
@@ -207,16 +225,16 @@ if (root) {
 
 function buildImportLine(entry: PreviewComponentEntry, alias: string): string {
   const sampleImports = entry.sampleExports.map((exp) => `${exp} as ${alias}${exp}`);
-  const safePath = entry.importPath.replace(/'/g, "\\'");
+  const safePath = jsStr(entry.importPath);
   if (entry.exportStyle === 'default-named' || entry.exportStyle === 'default-anonymous') {
     if (sampleImports.length > 0) {
-      return `import ${alias}, { ${sampleImports.join(', ')} } from '${safePath}';`;
+      return `import ${alias}, { ${sampleImports.join(', ')} } from ${safePath};`;
     }
-    return `import ${alias} from '${safePath}';`;
+    return `import ${alias} from ${safePath};`;
   }
   const componentImport = alias !== entry.componentName ? `${entry.componentName} as ${alias}` : alias;
   const allImports = [componentImport, ...sampleImports];
-  return `import { ${allImports.join(', ')} } from '${safePath}';`;
+  return `import { ${allImports.join(', ')} } from ${safePath};`;
 }
 
 function renderSyntheticSampleArrow(

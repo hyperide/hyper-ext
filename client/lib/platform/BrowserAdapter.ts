@@ -8,6 +8,7 @@
  * - Native fetch for API calls
  */
 
+import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 import type {
   ApiAdapter,
   CanvasAdapter,
@@ -38,6 +39,8 @@ function createBrowserEditorAdapter(): EditorAdapter {
     isListening = true;
 
     messageHandler = (event: MessageEvent) => {
+      // Reject untrusted frames before dispatching (js/missing-origin-check).
+      if (!isTrustedMessageOrigin(event)) return;
       if (event.data?.type === 'hypercanvas:activeFileChange') {
         const path = event.data.path as string | null;
         for (const cb of activeFileChangeListeners) {
@@ -46,7 +49,6 @@ function createBrowserEditorAdapter(): EditorAdapter {
       }
     };
 
-    // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
     window.addEventListener('message', messageHandler);
   };
 
@@ -291,8 +293,10 @@ function attachIframeMessageListener() {
   if (iframeMessageListenerAttached) return;
   iframeMessageListenerAttached = true;
 
-  // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
+  // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- origin IS validated by isTrustedMessageOrigin() as the handler's first statement; Semgrep's syntactic rule can't follow the helper call.
   window.addEventListener('message', (event) => {
+    // Reject untrusted frames before dispatching (js/missing-origin-check).
+    if (!isTrustedMessageOrigin(event)) return;
     const msg = event.data;
     if (!msg?.type) return;
 
@@ -347,13 +351,14 @@ function createVSCodeIframeEditorAdapter(): EditorAdapter {
 
         // Listen for response
         const handler = (event: MessageEvent) => {
+          // Reject untrusted frames before dispatching (js/missing-origin-check).
+          if (!isTrustedMessageOrigin(event)) return;
           if (event.data?.type === 'editor:activeFileChanged') {
             window.removeEventListener('message', handler);
             resolve(event.data.path);
           }
         };
 
-        // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
         window.addEventListener('message', handler);
 
         // Request active file

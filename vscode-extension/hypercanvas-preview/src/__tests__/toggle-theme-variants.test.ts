@@ -5,6 +5,7 @@
  * Validates that the correct CSS custom property values are declared in styles.css
  * for each VS Code theme class (dark, light, high-contrast).
  */
+import { escapeRegExp } from '@shared/escapeRegExp';
 import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -42,7 +43,10 @@ const cssBlocks = getCSSBlocks(cssContent);
 function getTokenForSelector(selector: string, property: string): string | null {
   for (const block of cssBlocks) {
     if (block.selectors.some((s) => s === selector || s.includes(selector))) {
-      const propRegex = new RegExp(`${property.replace(/-/g, '\\-')}\\s*:\\s*([^;]+);`);
+      // Fully escape the property name (all regex metacharacters), not just `-` —
+      // a complete escape avoids the js/incomplete-sanitization partial-escape flag.
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- the dynamic part is fully escaped via escapeRegExp(property), so no ReDoS/injection; test-only, controlled input.
+      const propRegex = new RegExp(`${escapeRegExp(property)}\\s*:\\s*([^;]+);`);
       const propMatch = block.body.match(propRegex);
       if (propMatch) return propMatch[1].trim();
     }

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
+import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 
 interface CodeServerIDEProps {
   projectId: string;
@@ -247,6 +248,8 @@ export function CodeServerIDE({
   // Listen for postMessage from code-server iframe (script is injected server-side in main.ts)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      // Reject messages from untrusted frames before dispatching (js/missing-origin-check).
+      if (!isTrustedMessageOrigin(event)) return;
       if (event.data?.type === 'hypercanvas:activeFileChange') {
         console.log('[IDE] Received activeFileChange:', event.data.path);
         onActiveFileChange?.(event.data.path);

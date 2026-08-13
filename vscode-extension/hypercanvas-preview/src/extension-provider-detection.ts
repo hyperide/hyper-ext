@@ -127,10 +127,13 @@ export async function detectSSRMockConfig(root: string): Promise<SSRMockConfig |
 async function detectFrontendRoot(root: string): Promise<string> {
   try {
     const html = await readFile(join(root, 'index.html'), 'utf-8'); // nosemgrep: path-join-resolve-traversal
-    for (const scriptTag of html.matchAll(/<script\b([^>]*)>/g)) {
+    // HTML tag names are case-insensitive — match `<SCRIPT>`/`<Script>` too
+    // (CodeQL js/bad-tag-filter). Regex HTML parsing is a smell; this only
+    // sniffs the module entry script to detect the frontend root dir.
+    for (const scriptTag of html.matchAll(/<script\b([^>]*)>/gi)) {
       const attrs = scriptTag[1];
-      if (!/\btype=["']module["']/.test(attrs)) continue;
-      const srcMatch = attrs.match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/);
+      if (!/\btype=["']module["']/i.test(attrs)) continue;
+      const srcMatch = attrs.match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/i);
       if (srcMatch && srcMatch[1] !== 'src') return srcMatch[1];
     }
   } catch {

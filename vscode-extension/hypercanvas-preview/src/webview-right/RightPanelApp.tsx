@@ -12,6 +12,7 @@
  */
 
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-react';
+import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ComponentNavigatorPanel } from '@/components/FloatingPanels';
 import { NudgeHUD } from '@/components/NudgeHUD/NudgeHUD';
@@ -87,6 +88,8 @@ function RightPanelContent() {
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
+      // Reject untrusted frames before dispatching (js/missing-origin-check).
+      if (!isTrustedMessageOrigin(event)) return;
       const data = event.data;
       if (!data?.type) return;
 

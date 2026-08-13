@@ -1,3 +1,4 @@
+import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 import { useEffect, useState } from 'react';
 import { AIChat } from '../webview/AIChat';
 import { vscode } from '../webview/vscodeApi';
@@ -14,6 +15,8 @@ export function AIChatApp() {
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
+      // Reject untrusted frames before dispatching (js/missing-origin-check).
+      if (!isTrustedMessageOrigin(event)) return;
       if (event.data?.type === 'ai:openChat' && event.data.prompt) {
         setInitialPrompt(event.data.prompt);
       }
@@ -21,7 +24,7 @@ export function AIChatApp() {
         setHasApiKey(!!event.data.hasApiKey);
       }
     };
-    window.addEventListener('message', handler); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, extension-controlled messages only
+    window.addEventListener('message', handler);
 
     // Request key status from extension host — resolves race condition where
     // the host sends ai:keyStatus before the webview JS is ready to listen.

@@ -8,6 +8,7 @@
  * - API proxying (CORS workaround)
  */
 
+import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 import type {
   ApiAdapter,
   CanvasAdapter,
@@ -97,8 +98,10 @@ function attachMessageListener() {
   if (isMessageListenerAttached) return;
   isMessageListenerAttached = true;
 
-  // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
+  // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- origin IS validated by isTrustedMessageOrigin() as the handler's first statement; Semgrep's syntactic rule can't follow the helper call.
   window.addEventListener('message', (event) => {
+    // Reject untrusted frames before dispatching (js/missing-origin-check).
+    if (!isTrustedMessageOrigin(event)) return;
     const message = event.data as PlatformMessage;
     if (message?.type) {
       for (const handler of messageHandlers) {

@@ -16,6 +16,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TID } from '../../data-testid-map';
+import { isTrustedMessageOrigin } from '../../utils/trusted-message-origin';
 import { extractPropsFromError } from './extract-props-from-error';
 import { computeInitialPropValues, PropsForm, type SimplePropInfo } from './PropsForm';
 
@@ -113,21 +114,16 @@ export function ComponentErrorOverlay({
 
   // Listen for sample deletion from file watcher.
   // This message arrives from the VS Code extension host over the webview channel,
-  // whose origin is the opaque vscode-webview://<session-id> — origin-string
-  // comparison is meaningless here, so we validate by message shape instead.
+  // whose origin is the opaque vscode-webview://<session-id>. isTrustedMessageOrigin
+  // accepts that scheme (and same-origin SaaS) and rejects foreign frames.
   useEffect(() => {
-    // VS Code webview host channel (opaque vscode-webview:// origin) — origin-string
-    // comparison is meaningless; validated by message shape. Bare nosemgrep so both
-    // the repo config and the registry `config: auto` scan honor the suppression
-    // (the short rule-id form is not matched by the registry rule's full id).
-    // nosemgrep
     const handler = (event: MessageEvent) => {
-      // nosemgrep
+      // Reject untrusted frames before dispatching (js/missing-origin-check).
+      if (!isTrustedMessageOrigin(event)) return;
       if ((event.data as { type?: string })?.type === 'errorOverlay:sampleDeleted') {
         setSampleCreated(false);
       }
     };
-    // nosemgrep
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, []);

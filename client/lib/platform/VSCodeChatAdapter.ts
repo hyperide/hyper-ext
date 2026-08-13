@@ -3,6 +3,7 @@
  */
 
 import type { ChatAdapter, ChatSession, ChatStreamEvent, DisplayMessage } from '../../../shared/ai-chat-display';
+import { isTrustedMessageOrigin } from '../../../shared/utils/trusted-message-origin';
 
 interface VsCodeApi {
   postMessage(message: unknown): void;
@@ -22,6 +23,8 @@ export function createVSCodeChatAdapter(vsCodeApi: VsCodeApi): ChatAdapter {
       }, timeout);
 
       function handler(event: MessageEvent) {
+        // Reject untrusted frames before dispatching (js/missing-origin-check).
+        if (!isTrustedMessageOrigin(event)) return;
         const data = event.data;
         if (data?.type !== type) return;
         if (match) {
@@ -34,7 +37,7 @@ export function createVSCodeChatAdapter(vsCodeApi: VsCodeApi): ChatAdapter {
         resolve(data as T);
       }
 
-      window.addEventListener('message', handler); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, extension-controlled messages only
+      window.addEventListener('message', handler);
     });
   }
 
@@ -82,6 +85,8 @@ export function createVSCodeChatAdapter(vsCodeApi: VsCodeApi): ChatAdapter {
 
       return new Promise<void>((resolve) => {
         function handler(event: MessageEvent) {
+          // Reject untrusted frames before dispatching (js/missing-origin-check).
+          if (!isTrustedMessageOrigin(event)) return;
           const msg = event.data;
           if (!msg?.type || msg.requestId !== requestId) return;
 

@@ -275,9 +275,12 @@ export class PreviewModeManager {
   private async _detectFrontendRoot(): Promise<string> {
     try {
       const html = await this._io.readFile(join(this._projectRoot, 'index.html'));
-      for (const tag of html.matchAll(/<script\b[^>]*>/g)) {
-        if (!/\btype=["']module["']/.test(tag[0])) continue;
-        const src = tag[0].match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/)?.[1];
+      // HTML tag names are case-insensitive — match `<SCRIPT>`/`<Script>` too
+      // (CodeQL js/bad-tag-filter). Regex HTML parsing is a smell; this is a
+      // best-effort entry-script sniff over project HTML, not a sanitizer.
+      for (const tag of html.matchAll(/<script\b[^>]*>/gi)) {
+        if (!/\btype=["']module["']/i.test(tag[0])) continue;
+        const src = tag[0].match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/i)?.[1];
         if (src && src !== 'src') return src;
       }
     } catch {
@@ -357,11 +360,14 @@ export class PreviewModeManager {
       }
 
       const htmlDir = htmlRel.includes('/') ? htmlRel.slice(0, htmlRel.lastIndexOf('/')) : '';
-      const scriptTags = html.matchAll(/<script\b[^>]*>/g);
+      // HTML tag names are case-insensitive — match `<SCRIPT>`/`<Script>` too
+      // (CodeQL js/bad-tag-filter). Regex HTML parsing is a smell; this only
+      // sniffs the module entry script, it does not strip/sanitize markup.
+      const scriptTags = html.matchAll(/<script\b[^>]*>/gi);
       for (const match of scriptTags) {
         const tag = match[0];
-        if (!/\btype=["']module["']/.test(tag)) continue;
-        const src = tag.match(/\bsrc=["']([^"']+)["']/)?.[1];
+        if (!/\btype=["']module["']/i.test(tag)) continue;
+        const src = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1];
         if (!src || src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/@')) continue;
 
         const rel = src.startsWith('/') ? src.slice(1) : posix.normalize(posix.join(htmlDir, src));
