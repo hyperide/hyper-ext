@@ -705,6 +705,84 @@ export function App() {
       expect(out).toMatch(/import\s*\{\s*twMerge[^}]*\}\s*from\s*['"]tailwind-merge['"]/);
     });
 
+    it('tailwind-merge declared in the NEAREST package.json (monorepo leaf), not workspace root → twMerge override applied (HYP-564)', async () => {
+      // Monorepo: the edited file is at apps/web/src/App.tsx. The workspace-root /project/package.json
+      // does NOT declare tailwind-merge, but the leaf /project/apps/web/package.json DOES. The dep
+      // check must resolve from the nearest package.json (walking up from the edited file), not only
+      // the workspace root — otherwise canInjectTwMerge=false and the override degrades to the inline
+      // floor even though the import would resolve fine in the leaf package.
+      const appPath = '/project/apps/web/src/App.tsx';
+      const fileIO = new InMemoryFileIO({
+        [appPath]: source,
+        '/project/package.json': JSON.stringify({ dependencies: { clsx: '^2.1.1' } }),
+        '/project/apps/web/package.json': JSON.stringify({ dependencies: { 'tailwind-merge': '^2.6.0' } }),
+      });
+      const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+      const result = await executeStyleWriteRequest({
+        ast,
+        sourceFilePath: appPath,
+        element,
+        styles: { color: '#3b82f6' },
+        domClasses: 'p-2 text-red-500',
+        runtimeThemeContext: {
+          ideThemePreference: 'system',
+          resolvedColorScheme: 'light',
+          source: 'test-fixture',
+        },
+        fileIO,
+        projectRoot: '/project',
+      });
+      expect(result.success).toBe(true);
+      const out = fileIO.content(appPath);
+      // The opaque conflict the AST cannot strip forces a twMerge override so the new class wins.
+      expect(out).toContain('twMerge');
+      expect(out).toContain('text-blue-500');
+      // The wrap references twMerge, so the INJECTED import MUST also be written.
+      expect(out).toMatch(/import\s*\{\s*twMerge[^}]*\}\s*from\s*['"]tailwind-merge['"]/);
+      // The opaque prop is untouched.
+      expect(out).toContain('titleClassName');
+    });
+
+    it('sibling dir whose name prefixes the project root must NOT be consulted by the dep walk (HYP-564)', async () => {
+      // The edited file lives in a SIBLING /project-old whose path string is prefixed by the project
+      // root /project. /project (and its subtree) does NOT declare tailwind-merge; the sibling
+      // /project-old DOES. A string-prefix containment guard (dir.startsWith(stopAt)) wrongly treats
+      // /project-old/src as "inside" /project, so the clamp is bypassed and the upward walk reads the
+      // sibling's package.json — falsely injecting twMerge based on the wrong package. The walk must be
+      // clamped with a path-relative containment check (start at the root when the file is outside it).
+      const appPath = '/project-old/src/App.tsx';
+      const fileIO = new InMemoryFileIO({
+        [appPath]: source,
+        '/project/package.json': JSON.stringify({ dependencies: { clsx: '^2.1.1' } }),
+        '/project-old/package.json': JSON.stringify({ dependencies: { 'tailwind-merge': '^2.6.0' } }),
+      });
+      const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+      const result = await executeStyleWriteRequest({
+        ast,
+        sourceFilePath: appPath,
+        element,
+        styles: { color: '#3b82f6' },
+        domClasses: 'p-2 text-red-500',
+        runtimeThemeContext: {
+          ideThemePreference: 'system',
+          resolvedColorScheme: 'light',
+          source: 'test-fixture',
+        },
+        fileIO,
+        projectRoot: '/project',
+      });
+      expect(result.success).toBe(true);
+      const out = fileIO.content(appPath);
+      // /project resolves no tailwind-merge and the sibling must not be consulted → inline §7 floor,
+      // never an unresolvable twMerge import keyed off the wrong package.
+      expect(out).not.toContain('twMerge');
+      expect(out).not.toContain('tailwind-merge');
+      expect(out).toMatch(/style=\{\{[^}]*[Cc]olor[^}]*#3b82f6/);
+      expect(out).toContain('titleClassName');
+    });
+
     it('SAME source, live DOM shows NO conflict → no twMerge override (minimal blast radius)', async () => {
       const out = await writeColorWithDom('p-2');
       expect(out).toContain('text-blue-500');

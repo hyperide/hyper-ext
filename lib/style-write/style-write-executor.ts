@@ -245,7 +245,7 @@ export class StyleWriteExecutor {
     const originalEnd = valueBefore?.end ?? undefined;
 
     const locations: LegacyClassNameLocation[] = [];
-    const canInjectTwMerge = await this.projectResolvesTailwindMerge(plan.projectRoot);
+    const canInjectTwMerge = await this.projectResolvesTailwindMerge(absolutePath, plan.projectRoot);
     // HYP-544 Phase 1: binding resolution may find-replace the conflicting class at a SAME-FILE const's
     // literal — a node in a DISJOINT top-level statement, outside the className value's span. The
     // mutator records each such rewritten literal's original source range here so we can splice it too
@@ -440,21 +440,49 @@ export class StyleWriteExecutor {
    * Does the EDITED project resolve `tailwind-merge`? Gates whether the residual override may inject a
    * new `import { twMerge } from 'tailwind-merge'`. Reading the project's own package.json (not
    * HyperIDE's) is what keeps a color edit from breaking the user's build with an unresolvable import.
-   * Conservative: any read/parse failure → false (fall back to the safe concat-append).
+   *
+   * Resolves like Node module resolution: walk up from the EDITED file's directory, checking each
+   * `package.json` for a `tailwind-merge` declaration, and stop at the project root (HYP-564 — a
+   * monorepo leaf package may declare the dep while the workspace root does not; resolving only the
+   * workspace root would falsely decline the override). The walk is clamped so it never escapes the
+   * project root and stops at the filesystem root.
+   * Conservative: any read/parse failure on a given package.json → continue the walk; final fallback false.
    */
-  private async projectResolvesTailwindMerge(planProjectRoot: string): Promise<boolean> {
+  private async projectResolvesTailwindMerge(editedFilePath: string, planProjectRoot: string): Promise<boolean> {
     const root = planProjectRoot || this.projectRoot;
     if (!root) return false;
-    try {
-      const raw = await this.fileIO.readFile(path.join(root, 'package.json'));
-      const pkg = JSON.parse(raw) as {
-        dependencies?: Record<string, string>;
-        devDependencies?: Record<string, string>;
-      };
-      return Boolean(pkg.dependencies?.['tailwind-merge'] || pkg.devDependencies?.['tailwind-merge']);
-    } catch {
-      return false;
+
+    const stopAt = path.resolve(root);
+    let dir = path.dirname(path.resolve(editedFilePath));
+    // Clamp: if the edited file lives outside the project root, start the walk at the root itself.
+    // Use a path-relative containment check (repo convention — see server/lib/path-security.ts), NOT a
+    // string prefix: `dir.startsWith(stopAt)` would treat a sibling like `/project-old/src` as inside
+    // `/project`, letting the walk escape the root and read the wrong package.json (HYP-564 review).
+    const rel = path.relative(stopAt, dir);
+    const contained = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+    if (!contained) dir = stopAt;
+
+    while (true) {
+      try {
+        const raw = await this.fileIO.readFile(path.join(dir, 'package.json'));
+        const pkg = JSON.parse(raw) as {
+          dependencies?: Record<string, string>;
+          devDependencies?: Record<string, string>;
+        };
+        if (pkg.dependencies?.['tailwind-merge'] || pkg.devDependencies?.['tailwind-merge']) {
+          return true;
+        }
+      } catch {
+        // No package.json here, or unreadable/unparseable — keep walking up toward the project root.
+      }
+
+      if (dir === stopAt) break;
+      const parent = path.dirname(dir);
+      if (parent === dir) break; // filesystem root
+      dir = parent;
     }
+
+    return false;
   }
 }
 
