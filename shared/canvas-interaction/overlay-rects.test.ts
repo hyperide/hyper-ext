@@ -424,4 +424,58 @@ describe('detectTailwindExplicitSize', () => {
   it('returns false/false for size-full (keyword)', () => {
     expect(detectTailwindExplicitSize('size-full')).toEqual({ width: false, height: false });
   });
+
+  // min-w / max-w / basis
+  it('detects min-w-0 as explicit width', () => {
+    expect(detectTailwindExplicitSize('min-w-0')).toEqual({ width: true, height: false });
+  });
+
+  it('does not detect max-w-full (keyword)', () => {
+    expect(detectTailwindExplicitSize('max-w-full')).toEqual({ width: false, height: false });
+  });
+
+  it('detects max-w-96 as explicit width', () => {
+    expect(detectTailwindExplicitSize('max-w-96')).toEqual({ width: true, height: false });
+  });
+
+  it('detects max-w-[800px] arbitrary as explicit width', () => {
+    expect(detectTailwindExplicitSize('max-w-[800px]')).toEqual({ width: true, height: false });
+  });
+
+  it('does not detect basis-1/2 (fraction)', () => {
+    expect(detectTailwindExplicitSize('basis-1/2')).toEqual({ width: false, height: false });
+  });
+
+  it('detects basis-4 as explicit width', () => {
+    expect(detectTailwindExplicitSize('basis-4')).toEqual({ width: true, height: false });
+  });
+
+  it('detects basis-[200px] arbitrary as explicit width', () => {
+    expect(detectTailwindExplicitSize('basis-[200px]')).toEqual({ width: true, height: false });
+  });
+
+  // min-h / max-h
+  it('does not detect min-h-screen (keyword)', () => {
+    expect(detectTailwindExplicitSize('min-h-screen')).toEqual({ width: false, height: false });
+  });
+
+  it('detects min-h-0 as explicit height', () => {
+    expect(detectTailwindExplicitSize('min-h-0')).toEqual({ width: false, height: true });
+  });
+
+  it('detects max-h-48 as explicit height', () => {
+    expect(detectTailwindExplicitSize('max-h-48')).toEqual({ width: false, height: true });
+  });
+
+  it('detects max-h-[500px] arbitrary as explicit height', () => {
+    expect(detectTailwindExplicitSize('max-h-[500px]')).toEqual({ width: false, height: true });
+  });
+
+  it('detects combination min-w-0 max-h-48 as both axes', () => {
+    expect(detectTailwindExplicitSize('min-w-0 max-h-48')).toEqual({ width: true, height: true });
+  });
+
+  it('detects responsive-prefixed md:min-w-4 lg:max-h-8', () => {
+    expect(detectTailwindExplicitSize('md:min-w-4 lg:max-h-8')).toEqual({ width: true, height: true });
+  });
 });

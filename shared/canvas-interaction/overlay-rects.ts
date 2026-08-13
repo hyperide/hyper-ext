@@ -10,7 +10,8 @@ import type { OverlayElementResolver, OverlayRect, PlaceholderRect } from './typ
 
 /**
  * Detect whether a Tailwind class list contains explicit fixed-size classes per axis.
- * Matches: w-{n}, h-{n} (numeric including decimals), w-px/h-px, w-[...]/h-[...] arbitrary.
+ * Matches: w-{n}, min-w-{n}, max-w-{n}, basis-{n}, h-{n}, min-h-{n}, max-h-{n} (numeric),
+ * -px variants, and arbitrary-value [...] forms.
  * Does NOT match keyword sizes: auto, full, screen, min, max, fit.
  *
  * Design intent for variant-prefixed classes (e.g. md:w-12, hover:md:w-12):
@@ -32,7 +33,12 @@ export function detectTailwindExplicitSize(className: string | undefined): { wid
     const colonIdx = cls.lastIndexOf(':', searchEnd - 1);
     const bare = colonIdx !== -1 ? cls.slice(colonIdx + 1) : cls;
     if (!width && isTailwindSizeClass(bare, 'w')) width = true;
+    if (!width && isTailwindSizeClass(bare, 'min-w')) width = true;
+    if (!width && isTailwindSizeClass(bare, 'max-w')) width = true;
+    if (!width && isTailwindSizeClass(bare, 'basis')) width = true;
     if (!height && isTailwindSizeClass(bare, 'h')) height = true;
+    if (!height && isTailwindSizeClass(bare, 'min-h')) height = true;
+    if (!height && isTailwindSizeClass(bare, 'max-h')) height = true;
     if ((!width || !height) && isTailwindSizeClass(bare, 'size')) {
       width = true;
       height = true;
@@ -42,7 +48,7 @@ export function detectTailwindExplicitSize(className: string | undefined): { wid
   return { width, height };
 }
 
-function isTailwindSizeClass(cls: string, axis: 'w' | 'h' | 'size'): boolean {
+function isTailwindSizeClass(cls: string, axis: string): boolean {
   const prefix = `${axis}-`;
   if (!cls.startsWith(prefix)) return false;
   const rest = cls.slice(prefix.length);
