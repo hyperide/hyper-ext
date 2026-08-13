@@ -398,10 +398,13 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
   // Track latest i18n keys request
   const latestKeysRequestRef = useRef<string | null>(null);
 
-  // Track the elementId of the last initiated request. Used in the RPC path to detect
-  // element switches so we can eagerly clear i18nText before the response arrives.
-  // Prevents leaked i18nText from element A appearing on element B while B's RPC is in-flight.
+  // Track (elementId, effectiveComponentPath) of the last initiated request.
+  // isElementChange fires when EITHER changes so we eagerly clear parsedStyles:
+  //   - same-component element click: elementId changes
+  //   - component switch with stale selectedIds: componentPath changes, elementId stays same
+  //     (RightPanelProvider's component:open handler only patches currentComponent, not selectedIds)
   const prevElementIdRef = useRef<string | null>(null);
+  const prevComponentPathRef = useRef<string | null>(null);
 
   /* eslint-disable react-hooks/exhaustive-deps -- refreshKey is an intentional trigger to force style re-read after external changes */
   useEffect(() => {
@@ -409,6 +412,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       setData(EMPTY_DATA);
       latestRequestRef.current = null;
       prevElementIdRef.current = null;
+      prevComponentPathRef.current = null;
       return;
     }
 
@@ -428,6 +432,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       setData(EMPTY_DATA);
       latestRequestRef.current = null;
       prevElementIdRef.current = null;
+      prevComponentPathRef.current = null;
       return;
     }
 
@@ -444,22 +449,29 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       setData(EMPTY_DATA);
       latestRequestRef.current = null;
       prevElementIdRef.current = null;
+      prevComponentPathRef.current = null;
       return;
     }
 
     const requestId = crypto.randomUUID();
     latestRequestRef.current = requestId;
 
-    // When element changes, eagerly clear i18nText so the previous element's binding
-    // doesn't leak through while the new element's RPC is in-flight. For same-element
-    // re-reads (locale change, refreshKey bump, debounced write re-read) we keep prev.i18nText
-    // so the I18nTextInspector stays mounted and localText isn't reset mid-typing.
-    const isElementChange = prevElementIdRef.current !== elementId;
+    // Fire on EITHER elementId or effectiveComponentPath change so both cases are covered:
+    //   1. User clicks a different element (same component): elementId changes
+    //   2. User switches component with stale selectedIds (RightPanelProvider's component:open
+    //      patches currentComponent only; selectedIds stays from previous component):
+    //      effectiveComponentPath changes while elementId stays the same
+    // On match: reset to EMPTY_DATA (clears parsedStyles, tagType, textContent, i18nText) before
+    // the new RPC response arrives so no stale values leak into the Inspector.
+    // On re-read (same element, same component — locale change, refreshKey bump, write re-read):
+    // both refs match → keep prev data to avoid flicker while the re-read is in-flight.
+    const isElementChange =
+      prevElementIdRef.current !== elementId || prevComponentPathRef.current !== effectiveComponentPath;
     prevElementIdRef.current = elementId;
+    prevComponentPathRef.current = effectiveComponentPath;
     setData((prev) => ({
-      ...prev,
+      ...(isElementChange ? EMPTY_DATA : prev),
       loading: true,
-      ...(isElementChange ? { i18nText: undefined } : {}),
     }));
 
     const unsub = canvas.onEvent('styles:response', (msg) => {

@@ -23,6 +23,7 @@ import { useSharedEditorState, useSharedEditorStateSync } from '@/lib/platform/s
 import type { ComponentGroup } from '../../../../lib/component-scanner/types';
 import type { SharedEditorState } from '../../../../lib/types';
 import { TID } from '../shared/data-testid-map';
+import type { DesignToken } from '../services/DesignTokensService';
 import type { ProjectCapabilities } from '../types';
 
 interface ComponentGroupsData {
@@ -86,6 +87,7 @@ function RightPanelContent() {
   const [explorerVisible, setExplorerVisible] = useState(false);
   const [insertPanelExpanded, setInsertPanelExpanded] = useState(false);
   const [projectCapabilities, setProjectCapabilities] = useState<ProjectCapabilities | null>(null);
+  const [designTokens, setDesignTokens] = useState<DesignToken[] | undefined>(undefined);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -106,6 +108,9 @@ function RightPanelContent() {
       }
       if (data.type === 'projectCapabilities') {
         setProjectCapabilities(data.capabilities ?? null);
+      }
+      if (data.type === 'inspector:designTokens') {
+        setDesignTokens(Array.isArray(data.tokens) ? (data.tokens as DesignToken[]) : []);
       }
     };
     window.addEventListener('message', handler); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, extension-controlled messages only
@@ -157,6 +162,7 @@ function RightPanelContent() {
             explorerVisible={explorerVisible}
             onComponentClick={handleComponentClick}
             readonly={projectCapabilities?.readonly === true}
+            designTokens={designTokens}
           />
         </div>
         {/* HUD overlay — sibling of the scroll container so overflow-y-auto can't clip it.

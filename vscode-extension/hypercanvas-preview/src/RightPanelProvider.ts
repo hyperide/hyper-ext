@@ -14,6 +14,7 @@ import type { PanelRouter } from './PanelRouter';
 import { toPickerGroups } from './PreviewPanel';
 import type { StateHub } from './StateHub';
 import type { ScanResult } from './services/ComponentService';
+import type { DesignToken } from './services/DesignTokensService';
 import type { ProjectCapabilities } from './types';
 import { postToWebviewRawSafe } from './webview-post';
 
@@ -47,6 +48,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
   ) {}
 
   private _capabilities: ProjectCapabilities | null = null;
+  private _designTokens: DesignToken[] = [];
 
   /**
    * Notify the webview about project capabilities (readonly mode, CSS system).
@@ -56,6 +58,15 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
   public notifyCapabilities(capabilities: ProjectCapabilities | null): void {
     this._capabilities = capabilities;
     this._postToWebview({ type: 'projectCapabilities', capabilities: capabilities ?? null });
+  }
+
+  /**
+   * Notify the webview about design tokens scanned from the project.
+   * Caches the result so a late-resolving webview receives it on `webview:ready`.
+   */
+  public notifyDesignTokens(tokens: DesignToken[]): void {
+    this._designTokens = tokens;
+    this._postToWebview({ type: 'inspector:designTokens', tokens });
   }
 
   /**
@@ -158,10 +169,11 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
       if (msg.type === 'webview:ready') {
         this._ready = true;
         this._stateHub.sendInit(RightPanelProvider.viewType);
-        // Send initial explorer visibility + component groups + capabilities
+        // Send initial explorer visibility + component groups + capabilities + design tokens
         this._sendExplorerState();
         this._sendComponentGroups();
         this._postToWebview({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
+        this._postToWebview({ type: 'inspector:designTokens', tokens: this._designTokens });
         return;
       }
 

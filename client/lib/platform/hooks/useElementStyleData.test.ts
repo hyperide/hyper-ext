@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { SelectedElementRuntimeStyle } from '@lib/types';
 import { parseHexWithAlpha } from '@shared/utils/color';
-import { classNameToStyles, mergeRuntimeStyle } from './useElementStyleData';
+import type { CanvasAdapter } from '../types';
+import { classNameToStyles, mergeRuntimeStyle, useElementStyleData } from './useElementStyleData';
 
 describe('mergeRuntimeStyle', () => {
   const elementId = 'client/components/FAQ.tsx:42:10';
@@ -136,5 +138,103 @@ describe('mergeRuntimeStyle', () => {
     const merged = mergeRuntimeStyle(base, runtime, elementId);
     // rgba(0,0,0,0) is browser-default transparent — must not populate backgroundColor
     expect(merged.backgroundColor).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// useElementStyleData — VS Code mode: stale parsedStyles on selection change
+// ============================================================================
+
+/** Minimal canvas mock that routes styles:response to registered handlers. */
+function makeCanvas() {
+  const responseHandlers = new Set<(msg: unknown) => void>();
+  const sent: Array<{ type: string; requestId?: string }> = [];
+
+  const canvas: CanvasAdapter = {
+    onEvent(type: string, handler: (msg: unknown) => void) {
+      if (type === 'styles:response') {
+        responseHandlers.add(handler);
+        return () => {
+          responseHandlers.delete(handler);
+        };
+      }
+      return () => {};
+    },
+    sendEvent(msg: unknown) {
+      sent.push(msg as { type: string; requestId?: string });
+    },
+  } as unknown as CanvasAdapter;
+
+  /** Emit styles:response using the requestId from the most-recent styles:readClassName call. */
+  const emitResponse = (overrides: Record<string, unknown> = {}) => {
+    const req = [...sent].reverse().find((m) => m.type === 'styles:readClassName');
+    const payload = {
+      requestId: req?.requestId,
+      success: true,
+      className: 'bg-red-500',
+      tagType: 'div',
+      textContent: '',
+      ...overrides,
+    };
+    for (const h of responseHandlers) h(payload);
+  };
+
+  return { canvas, sent, emitResponse };
+}
+
+describe('useElementStyleData — stale data on selection change (VS Code mode)', () => {
+  test('clears parsedStyles immediately when elementId changes (element click)', async () => {
+    const { canvas, emitResponse } = makeCanvas();
+    const { result, rerender } = renderHook(
+      (props: { elementId: string; componentPath: string }) => useElementStyleData({ ...props, canvas }),
+      { initialProps: { elementId: 'src/A.tsx:5:3', componentPath: 'src/A.tsx' } },
+    );
+
+    // First element: respond so parsedStyles is populated
+    act(() => emitResponse());
+    await waitFor(() => expect(result.current.parsedStyles).not.toBeNull());
+
+    // Click a different element in the same component
+    rerender({ elementId: 'src/A.tsx:10:5', componentPath: 'src/A.tsx' });
+
+    // Before the new RPC response, parsedStyles must be null — no stale data shown
+    expect(result.current.parsedStyles).toBeNull();
+  });
+
+  test('clears parsedStyles immediately on component switch even when selectedIds is stale', async () => {
+    const { canvas, emitResponse } = makeCanvas();
+    const { result, rerender } = renderHook(
+      (props: { elementId: string; componentPath: string }) => useElementStyleData({ ...props, canvas }),
+      { initialProps: { elementId: 'src/OldComp.tsx:5:3', componentPath: 'src/OldComp.tsx' } },
+    );
+
+    // Populate parsedStyles for OldComp element
+    act(() => emitResponse());
+    await waitFor(() => expect(result.current.parsedStyles).not.toBeNull());
+
+    // Component switch: componentPath changes but elementId stays stale
+    // (mirrors the real bug: selectedIds not cleared on setComponent → component:open)
+    rerender({ elementId: 'src/OldComp.tsx:5:3', componentPath: 'src/TweetComposer.tsx' });
+
+    // parsedStyles must be null before TweetComposer's response — no OldComp data shown
+    expect(result.current.parsedStyles).toBeNull();
+  });
+
+  test('does NOT clear parsedStyles on same-element re-read (refreshKey/locale bump)', async () => {
+    const { canvas, emitResponse } = makeCanvas();
+    const { result, rerender } = renderHook(
+      (props: { elementId: string; componentPath: string; refreshKey: number }) =>
+        useElementStyleData({ ...props, canvas }),
+      { initialProps: { elementId: 'src/A.tsx:5:3', componentPath: 'src/A.tsx', refreshKey: 0 } },
+    );
+
+    act(() => emitResponse());
+    await waitFor(() => expect(result.current.parsedStyles).not.toBeNull());
+
+    // Bump refreshKey — same element, same component (locale change or style write re-read)
+    rerender({ elementId: 'src/A.tsx:5:3', componentPath: 'src/A.tsx', refreshKey: 1 });
+
+    // parsedStyles must stay — avoid flicker during re-read of the same element
+    expect(result.current.parsedStyles).not.toBeNull();
   });
 });

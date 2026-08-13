@@ -54,6 +54,7 @@ import { isWebviewDisposedError } from './webview-post';
 import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
 import { DevServerManager } from './services/DevServerManager';
+import { extractDesignTokens } from './services/DesignTokensService';
 import { shouldInjectGeneratedProps } from './services/no-props-sample';
 import {
   computeCapabilities,
@@ -374,6 +375,15 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Send capabilities to inspector panel (readonly inputs)
         rightPanelProvider?.notifyCapabilities(capabilities);
+
+        // Scan project CSS/SCSS for design tokens shown in the Inspector empty state.
+        // Errors are swallowed so a scan failure never blocks the capabilities path.
+        try {
+          const designTokens = extractDesignTokens(root);
+          rightPanelProvider?.notifyDesignTokens(designTokens);
+        } catch (err) {
+          console.warn('[HyperIDE] Design token scan failed:', err);
+        }
 
         // Scope this background detector to its OWN react-native error channel.
         // detectUnsupportedProject only ever returns a 'react-native' error (or
@@ -1030,6 +1040,7 @@ export function activate(context: vscode.ExtensionContext) {
     rerootPreviewPipeline(folderRoot);
     previewPanel?.setWorkspaceRoot(folderRoot);
     rightPanelProvider?.notifyCapabilities(null);
+    rightPanelProvider?.notifyDesignTokens([]);
     stateHub?.applyUpdate({ projectUIKit: undefined });
     runProjectDetection(folderRoot);
   };

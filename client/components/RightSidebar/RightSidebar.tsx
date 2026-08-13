@@ -42,6 +42,7 @@ import type { FillMode } from '../ui/fill-picker';
 import { Input } from '../ui/input';
 import { ToastAction } from '../ui/toast';
 import { ComponentQuickList } from './ComponentQuickList';
+import { DesignTokensPanel } from './DesignTokensPanel';
 import { useComponentPathCompat, useSelectionCompat } from './hooks/useSelectionCompat';
 import { useNavigationHandlers } from './hooks/useNavigationHandlers';
 import { usePopulateStyleState } from './hooks/usePopulateStyleState';
@@ -97,6 +98,7 @@ export default function RightSidebar({
   explorerVisible,
   onComponentClick,
   readonly: readonlyProp = false,
+  designTokens,
 }: RightSidebarProps) {
   const engine = useCanvasEngineOptional();
   const canvas = usePlatformCanvas();
@@ -1369,6 +1371,9 @@ export default function RightSidebar({
           </p>
         </div>
       )}
+
+      {/* Design tokens — shown in the empty state when no element is selected and tokens exist */}
+      {selectedIds.length === 0 && !!designTokens?.length && <DesignTokensPanel tokens={designTokens} />}
 
       {/* Elements tree — shown when component is open, nothing selected, Explorer hidden */}
       {showTreeInInspector && selectedIds.length === 0 && elementsTree.length > 0 && (

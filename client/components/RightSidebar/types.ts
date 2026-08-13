@@ -4,6 +4,17 @@ export type PositionType = 'static' | 'rel' | 'abs' | 'fixed' | 'sticky' | 'mixe
 export type LayoutType = 'layout' | 'col' | 'row' | 'grid' | 'mixed';
 export type UIKitType = 'tailwind' | 'tamagui' | 'none';
 
+export type DesignTokenCategory = 'colors' | 'typography' | 'spacing' | 'shadows' | 'other';
+
+/** A single CSS custom property surfaced in the Inspector empty state. */
+export interface DesignToken {
+  /** Full property name including leading dashes, e.g. `--color-primary` */
+  name: string;
+  /** Raw value string, e.g. `#ff0000` or `1rem` */
+  value: string;
+  category: DesignTokenCategory;
+}
+
 export interface RightSidebarProps {
   onOpenSettings?: () => void;
   viewport?: { zoom: number; panX: number; panY: number };
@@ -31,6 +42,8 @@ export interface RightSidebarProps {
   onComponentClick?: (name: string, path: string) => void;
   /** When true, all style-editing inputs are disabled (CSS system not writable) */
   readonly?: boolean;
+  /** Design tokens scanned from the project's CSS/SCSS files (shown in empty state) */
+  designTokens?: DesignToken[];
 }
 
 export interface StrokeItem {
