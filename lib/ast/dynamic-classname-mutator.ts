@@ -576,6 +576,70 @@ interface InPlaceReplaceResult {
  * that residual case is not guaranteed. This is acceptable: inspector-written classes live in the
  * static portion, which is always rewritten correctly.
  */
+/**
+ * Strip the conflicting same-property class from string literals inside an expression WITHOUT
+ * injecting any new class. Used for short-circuit operands (`cond && "text-red-500"`) where the
+ * "off" path is colorless, so the conflicting color can be safely removed but the picked class
+ * must NOT be planted in the conditional branch (it would only apply on the truthy path) — the
+ * caller appends it once outside instead.
+ *
+ * Recurses parens / nested logical / ternary / concat / merge-call string-literal args so a color
+ * nested anywhere inside the branch is still removed. Returns whether any class was stripped.
+ */
+function stripConflictInLiterals(node: t.Expression, changedStyleKeys: string[], state?: string): boolean {
+  if (t.isStringLiteral(node)) {
+    const { preserved, removed } = removeConflictingClasses(node.value, changedStyleKeys, state);
+    if (removed.length === 0) return false;
+    const lead = /^\s*/.exec(node.value)?.[0] ?? '';
+    const trail = /\s*$/.exec(node.value)?.[0] ?? '';
+    node.value = `${lead}${preserved.trim()}${trail}`;
+    return true;
+  }
+  if (t.isParenthesizedExpression(node)) {
+    return stripConflictInLiterals(node.expression, changedStyleKeys, state);
+  }
+  // The safe rule is POSITION, not truthiness: only rewrite operands that are RENDERED as the
+  // class value, never a guard whose own string controls short-circuit evaluation.
+  //  - `A && B`: A is a pure guard — clsx receives the value of (A && B) = B when A is truthy, else
+  //    a falsy it ignores; A's string is never a class. Recurse RIGHT only (covers a nested logical
+  //    value branch in B, e.g. `cond && (a || "text-red-500")`).
+  //  - `A || B`: both A (when truthy) and B (fallback) are rendered values. Recurse BOTH, which also
+  //    covers a fallback chain like `(cond && "text-red-500") || "text-green-500"` where the
+  //    conflict hides in the left operand.
+  // (Out of scope: a bare string literal as an `||` LEFT operand, e.g. `"text-red-500" || x` —
+  // emptying it would resurrect the dead right side. Such a shape does not occur in real className
+  // code and is intentionally not special-cased.)
+  if (t.isLogicalExpression(node) && node.operator === '&&') {
+    return t.isExpression(node.right) ? stripConflictInLiterals(node.right, changedStyleKeys, state) : false;
+  }
+  if (t.isLogicalExpression(node) && node.operator === '||') {
+    const l = t.isExpression(node.left) ? stripConflictInLiterals(node.left, changedStyleKeys, state) : false;
+    const r = t.isExpression(node.right) ? stripConflictInLiterals(node.right, changedStyleKeys, state) : false;
+    return l || r;
+  }
+  if (t.isConditionalExpression(node)) {
+    const c = stripConflictInLiterals(node.consequent, changedStyleKeys, state);
+    const a = stripConflictInLiterals(node.alternate, changedStyleKeys, state);
+    return c || a;
+  }
+  if (t.isBinaryExpression(node) && node.operator === '+') {
+    const l = t.isExpression(node.left) ? stripConflictInLiterals(node.left, changedStyleKeys, state) : false;
+    const r = stripConflictInLiterals(node.right, changedStyleKeys, state);
+    return l || r;
+  }
+  if (t.isCallExpression(node)) {
+    const calleeName = getCalleeName(node.callee);
+    if (calleeName && CLASS_MERGE_CALLEES.has(calleeName)) {
+      let stripped = false;
+      for (const arg of node.arguments) {
+        if (t.isExpression(arg) && stripConflictInLiterals(arg, changedStyleKeys, state)) stripped = true;
+      }
+      return stripped;
+    }
+  }
+  return false;
+}
+
 function replaceConflictingInStaticLiterals(
   expr: t.Expression,
   newClasses: string,
@@ -640,6 +704,20 @@ function replaceConflictingInStaticLiterals(
       };
     }
 
+    // Short-circuit `cond && "text-red-500"` / `a || "text-red-500"` (HYP-537). Delegate to
+    // stripConflictInLiterals, which removes the conflicting color from the RENDERED-value operands
+    // only (the right of `&&`, both sides of `||` — never a guard, see its doc), and never injects
+    // the new class into a conditional branch (a branch can't unconditionally carry it). So
+    // guaranteedNewClass stays false and the caller appends the new class once outside — every
+    // runtime path then renders the picked color, and no competing OLD token survives in any value
+    // branch. This narrows HYP-515's over-conservative limitation, which feared dropping a color on
+    // a branch the author relied on; stripping a value operand drops nothing, because the picked
+    // color is appended unconditionally.
+    if (t.isLogicalExpression(node) && (node.operator === '&&' || node.operator === '||')) {
+      const handledConflict = stripConflictInLiterals(node, changedStyleKeys, state);
+      return { handledConflict, guaranteedNewClass: false };
+    }
+
     if (t.isCallExpression(node)) {
       const calleeName = getCalleeName(node.callee);
       if (calleeName && CLASS_MERGE_CALLEES.has(calleeName)) {
@@ -656,17 +734,21 @@ function replaceConflictingInStaticLiterals(
             const result = visit(arg);
             handledConflict = handledConflict || result.handledConflict;
             anyArgGuarantees = anyArgGuarantees || result.guaranteedNewClass;
-          } else if (t.isConditionalExpression(arg) || t.isCallExpression(arg)) {
+          } else if (t.isConditionalExpression(arg) || t.isCallExpression(arg) || t.isLogicalExpression(arg)) {
+            // Includes `cond && "text-red-500"` (HYP-537): visit() strips the conflicting color
+            // from the short-circuit branch literal but never guarantees the new class there, so
+            // the arg still counts as unanalyzable for win-ordering and the caller appends last.
             const result = visit(arg);
             handledConflict = handledConflict || result.handledConflict;
             anyArgGuarantees = anyArgGuarantees || result.guaranteedNewClass;
-            // A ternary/nested call only fully guarantees the new class when every path carries it.
-            // If it didn't, it may emit a later same-group class we couldn't account for.
+            // A ternary/nested call/short-circuit only fully guarantees the new class when every
+            // path carries it. If it didn't, it may emit a later same-group class we couldn't
+            // account for.
             if (!result.guaranteedNewClass) {
               hasUnanalyzableArg = true;
             }
           } else {
-            // Spread, object, identifier, member, logical (`cond && "..."`), etc. — opaque.
+            // Spread, object, identifier, member, etc. — opaque.
             hasUnanalyzableArg = true;
           }
         }

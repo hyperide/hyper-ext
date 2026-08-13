@@ -201,7 +201,7 @@ describe('StyleWriteExecutor', () => {
       plan: makeTailwindPlan(),
       mutatedFiles: [appPath],
     });
-    expect(fileIO.content(appPath)).toContain('className="text-red-500 pl-[16px]"');
+    expect(fileIO.content(appPath)).toContain("className='text-red-500 pl-[16px]'");
   });
 
   it('fails dynamic Tailwind plans with precise locations until location mapping exists', async () => {
@@ -274,9 +274,9 @@ export function App() {
       mutatedFiles: [appPath],
     });
     const content = fileIO.content(appPath);
-    expect(content).toContain('opacity: "0.5"');
+    expect(content).toContain("opacity: '0.5'");
     expect(content).toContain('color: "red"');
-    expect(content).toContain('paddingLeft: "16px"');
+    expect(content).toContain("paddingLeft: '16px'");
     expect(content).not.toContain('opacity: "0.2"');
   });
 
@@ -397,7 +397,50 @@ export function App() {
     });
 
     expect(result.success).toBe(true);
-    expect(fileIO.content(appPath)).toContain('className="text-red-500 pl-[16px]"');
+    expect(fileIO.content(appPath)).toContain("className='text-red-500 pl-[16px]'");
+  });
+
+  it('routes a cn() color write through the production planner and strips a short-circuit-branch color (HYP-537)', async () => {
+    // Regression guard for the ROUTING, not just the mutator: prove the deterministic planner emits
+    // a mode:'static' TailwindPlan (TailwindV4Writer always does), so executeTailwindPlan reaches
+    // modifyDynamicClassName rather than bailing on the unsupported mode:'dynamic'+locations path.
+    // The conflicting color lives only in `cond && "text-red-500"` — the HYP-537 case.
+    const appPath = '/project/src/App.tsx';
+    const fileIO = new InMemoryFileIO({
+      [appPath]: `import cn from 'clsx';
+
+export function App() {
+  return (
+    <div className={cn("p-2", cond && "text-red-500")}>Hi</div>
+  );
+}
+`,
+    });
+    const { ast, element } = await parseElement(fileIO, appPath, 5, 4);
+
+    const result = await executeStyleWriteRequest({
+      ast,
+      sourceFilePath: appPath,
+      element,
+      styles: { color: '#3b82f6' },
+      runtimeThemeContext: {
+        ideThemePreference: 'system',
+        resolvedColorScheme: 'light',
+        source: 'test-fixture',
+      },
+      fileIO,
+      projectRoot: '/project',
+    });
+
+    expect(result.success).toBe(true);
+    const written = fileIO.content(appPath);
+    // The old color in the `&&` branch is stripped (the fix reaches production routing).
+    expect(written).not.toContain('text-red-500');
+    // The conditional branch and the non-color base class are preserved.
+    expect(written).toContain('cond &&');
+    expect(written).toContain('p-2');
+    // A new text color class is written.
+    expect(written).toMatch(/text-\[#3b82f6\]|text-blue-500/);
   });
 
   it('routes computed writes to inline styles when no class source exists', async () => {
@@ -427,7 +470,7 @@ export function App() {
     });
 
     expect(result.success).toBe(true);
-    expect(fileIO.content(appPath)).toContain('paddingLeft: "16px"');
+    expect(fileIO.content(appPath)).toContain("paddingLeft: '16px'");
   });
 
   it('rejects unsupported explicit source tabs instead of falling back to Tailwind mutation', async () => {

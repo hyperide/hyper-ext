@@ -126,15 +126,69 @@ describe('modifyDynamicClassName — complex expression color replacement', () =
     expect(out).toContain('p-4');
   });
 
-  it('documented limitation: conflicting class only in a dynamic sub-expression is not rewritten', () => {
-    // The conflicting color lives in `cond && "text-red-500"`, not a top-level static literal.
-    // We do NOT rewrite dynamic branches; the new class is appended and wins by cascade order,
-    // but the old class remains. This is the documented limitation.
+  it('logical && branch: strips the conflicting color from the consequent literal (HYP-537)', () => {
+    // HYP-537: the conflicting color lives in `cond && "text-red-500"`. The `&&` false branch is
+    // already colorless, so stripping the color from the consequent drops NOTHING on the false
+    // path — it is safe to remove (narrows HYP-515's over-conservative documented limitation,
+    // which feared dropping a color on the false branch; that fear does not apply to `&&`).
+    // After: `cn("p-2", cond && "")` + appended `text-blue-500` → blue on every runtime path,
+    // red gone, no competing token survives (so clsx-vs-twMerge ordering is irrelevant).
     const code = 'const C = () => <div className={cn("p-2", cond && "text-red-500")}>Hi</div>;';
     const out = writeColor(code, { color: 'text-blue-500' }, ['color']);
     expect(out).toContain('text-blue-500');
-    // Limitation: still present because it lives in a dynamic branch we don't rewrite.
-    expect(out).toContain('text-red-500');
+    // The old color in the `&&` branch is now stripped (the fix).
+    expect(out).not.toContain('text-red-500');
+    // The conditional itself is preserved (still a `cond && ...`), and non-color classes survive.
+    expect(out).toContain('cond &&');
+    expect(out).toContain('p-2');
+    // Appended so the false branch also gets the new color.
+    expect(out).toContain('+ " text-blue-500"');
+  });
+
+  it('logical && branch with extra classes: strips only the conflicting color, keeps siblings', () => {
+    // The `&&` branch carries a non-color class alongside the conflicting one; only the color goes.
+    const code = 'const C = () => <div className={cn("p-2", cond && "font-bold text-red-500")}>Hi</div>;';
+    const out = writeColor(code, { color: 'text-blue-500' }, ['color']);
+    expect(out).toContain('text-blue-500');
+    expect(out).not.toContain('text-red-500');
+    // sibling class in the same branch is untouched
+    expect(out).toContain('font-bold');
+    expect(out).toContain('cond &&');
+  });
+
+  it('logical || branch: strips the conflicting color from the right operand literal', () => {
+    const code = 'const C = () => <div className={cn("p-2", maybe || "bg-red-500")}>Hi</div>;';
+    const out = writeColor(code, { backgroundColor: 'bg-blue-500' }, ['backgroundColor']);
+    expect(out).toContain('bg-blue-500');
+    expect(out).not.toContain('bg-red-500');
+    expect(out).toContain('maybe ||');
+  });
+
+  it('nested logical fallback chain: strips conflicts in BOTH the left && branch and the || fallback', () => {
+    // `(cond && "text-red-500") || "text-green-500"` — the conflict hides in the LEFT operand of the
+    // outer `||`. Both same-group colors must be stripped, not just the right fallback.
+    const code = 'const C = () => <div className={cn((cond && "text-red-500") || "text-green-500")}>Hi</div>;';
+    const out = writeColor(code, { color: 'text-blue-500' }, ['color']);
+    expect(out).toContain('text-blue-500');
+    expect(out).not.toContain('text-red-500');
+    expect(out).not.toContain('text-green-500');
+    // both conditional operators preserved
+    expect(out).toContain('cond &&');
+    expect(out).toContain('||');
+  });
+
+  it('&& guard operand is NOT rewritten: a string-literal guard keeps its short-circuit semantics', () => {
+    // `"text-red-500" && "font-bold"` renders to "font-bold" (left truthy). The left is a GUARD, not
+    // a rendered class value — emptying it would flip `&&` to falsy and DROP font-bold. The rule is
+    // position-based: for `&&` only the RIGHT (rendered) operand is touched, so the guard literal is
+    // left intact and font-bold survives. (The guard's stale color never renders anyway.)
+    const code = 'const C = () => <div className={cn("text-red-500" && "font-bold")}>Hi</div>;';
+    const out = writeColor(code, { color: 'text-blue-500' }, ['color']);
+    expect(out).toContain('text-blue-500');
+    // the rendered (right) operand has no color to strip, and its class survives
+    expect(out).toContain('font-bold');
+    // the && structure is preserved (guard literal untouched → short-circuit semantics intact)
+    expect(out).toContain('&&');
   });
 
   it('cn() with no static color literal: appends new class (concat fallback)', () => {
@@ -160,17 +214,21 @@ describe('modifyDynamicClassName — complex expression color replacement', () =
     expect(out).toContain('+ " bg-blue-500"');
   });
 
-  it('cn() with a dynamic same-group branch: strips static conflict and appends so new class wins', () => {
-    // A later dynamic branch could carry a same-group class (here text-green-500). Because cn/twMerge
-    // resolve last-wins, the injected class alone is not guaranteed to win, so we also append it.
+  it('cn() with a dynamic same-group && branch: strips BOTH the static AND the branch color (HYP-537)', () => {
+    // HYP-537 narrows HYP-515's limitation: the same-group color in the `cond && "..."` branch
+    // (text-green-500) is now ALSO stripped — the `&&` false path is colorless, so removing it
+    // drops nothing. With no competing token left, the appended pick wins regardless of whether
+    // cn is twMerge- or plain-clsx-based.
     const code = 'const C = () => <div className={cn("text-red-500", cond && "text-green-500")}>Hi</div>;';
     const out = writeColor(code, { color: 'text-blue-500' }, ['color']);
     expect(out).toContain('text-blue-500');
     // static conflict stripped
     expect(out).not.toContain('text-red-500');
-    // dynamic branch left untouched (documented limitation)
-    expect(out).toContain('text-green-500');
-    // appended last so it wins over the dynamic branch when present
+    // dynamic-branch conflict now stripped too (the fix)
+    expect(out).not.toContain('text-green-500');
+    // the `&&` conditional itself is preserved
+    expect(out).toContain('cond &&');
+    // appended last so the false branch also gets the new color
     expect(out).toContain('+ " text-blue-500"');
   });
 
