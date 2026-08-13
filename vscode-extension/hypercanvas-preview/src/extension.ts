@@ -70,6 +70,7 @@ import {
   resolveRunnableTargets,
 } from './services/ProjectDetector';
 import { computeSupportDimensionsForRoot, gatherSupportDimensions } from './services/support-dimensions-detect';
+import { uiKitToDefaultCssSystem } from '@lib/style-write/ui-kit-default-system';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
 import { ensureIsolationWrapper } from './services/WrapperGenerator';
 import { VSCodeFileIO } from './vscode-file-io';
@@ -462,6 +463,22 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Send capabilities to inspector panel (readonly inputs)
         rightPanelProvider?.notifyCapabilities(capabilities);
+
+        // Thread the UIKit-derived project default into the write path so a SURFACELESS element (no
+        // existing className/style) floors to the project system under Auto/Computed routing instead
+        // of a silent inline `style={{}}` (D2 §4.3). On a Tailwind project the edit lands as a Tailwind
+        // class — parity with the SaaS batch route, which already carries this from the inspector UIKit.
+        //
+        // SIMPLE-repo GATE (HYP-983 review, codex P1): `detectUIKit` reads only the workspace-root
+        // package.json, but one repo-rooted AstService serves EVERY member of a monorepo. Flooring to
+        // the root UIKit would force e.g. Tailwind classes onto a plain-CSS/Tamagui member (wrong
+        // system). Only thread the default when the workspace root IS the app (repoType==='simple' —
+        // conloca opens at targets/conloca-app, a simple leaf). For a monorepo the default stays UNSET
+        // → surfaceless edits floor to inline (safe), pending per-target monorepo-aware detection
+        // (HYP-985).
+        panelRouter?.setProjectDefaultCssSystem(
+          repoType === 'simple' ? uiKitToDefaultCssSystem(capabilities.uiKit) : undefined,
+        );
 
         // Scan project CSS/SCSS for design tokens shown in the Inspector empty state.
         // Errors are swallowed so a scan failure never blocks the capabilities path.

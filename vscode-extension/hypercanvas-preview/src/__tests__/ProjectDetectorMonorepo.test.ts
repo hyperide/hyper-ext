@@ -161,6 +161,12 @@ describe('detectCssSystem — targets/ directory (Conloca pattern)', () => {
   });
 });
 
+// NOTE: monorepo-aware detectUIKit (root reads only its own package.json; a Tailwind/Tamagui
+// sub-package is invisible) is intentionally NOT handled here — it is deferred to the mixed-monorepo
+// UIKit-neutralization follow-up (see the HYP-983 PR body). conloca opens at targets/conloca-app,
+// where the root-level detectUIKit already returns 'tailwind', so the surfaceless Tailwind floor works
+// without it.
+
 // ─── resolveRunnableTargets (start-before-select, HYP-431) ───────────────────
 
 describe('resolveRunnableTargets', () => {

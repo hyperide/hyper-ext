@@ -26,6 +26,7 @@ import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/share
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import type { StyleForwardingWarning } from '@shared/types/style-forwarding-warning';
 import type { StyleSourceTab } from '@lib/style-read/types';
+import { uiKitToDefaultCssSystem } from '@lib/style-write/ui-kit-default-system';
 import {
   describeLandedReason,
   describeLandedSystem,
@@ -261,11 +262,7 @@ export default function RightSidebar({
   const isMultiSelect = selectedIds.length > 1;
   // UIKit-derived project default for the surfaceless Auto floor (D2 §4.3). Threaded to the batch
   // RPC so a surfaceless element floors to the project system, never a silent inline fallback.
-  const projectDefaultCssSystem = useMemo(() => {
-    if (inspectorUIKit === 'tailwind') return 'tailwind-v4';
-    if (inspectorUIKit === 'tamagui') return 'tamagui';
-    return undefined;
-  }, [inspectorUIKit]);
+  const projectDefaultCssSystem = useMemo(() => uiKitToDefaultCssSystem(inspectorUIKit), [inspectorUIKit]);
   const sourceTabs = useMemo(
     () =>
       resolveInspectorStyleSourceTabs({

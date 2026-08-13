@@ -826,4 +826,33 @@ describe('PanelRouter', () => {
       expect(reRoot(router)(msg)).toBe(msg);
     });
   });
+
+  // HYP-983 codex P1: the workspace-switch race. After a workspace-folder switch, project detection may
+  // call setProjectDefaultCssSystem BEFORE any routed message triggers the lazy _ensureCurrentWorkspace
+  // re-root. If the setter just wrote the value, the later re-root would rebuild the AstBridge and CLEAR
+  // it — permanently reverting surfaceless writes to inline. The setter must re-root FIRST so the value
+  // lands on the CURRENT workspace's AstService and survives.
+  describe('setProjectDefaultCssSystem — survives a workspace switch (codex P1 race)', () => {
+    it('applies the default to the current workspace AstService when detection precedes the first message', async () => {
+      const vscode = await import('vscode');
+      const original = vscode.workspace.workspaceFolders;
+      try {
+        // Router was constructed at /test-workspace; align the mock so no re-root is pending.
+        Object.assign(vscode.workspace, {
+          workspaceFolders: [{ uri: vscode.Uri.file('/test-workspace'), name: 'test', index: 0 }],
+        });
+        // Simulate the switch, then detection firing BEFORE any routed message re-roots.
+        Object.assign(vscode.workspace, {
+          workspaceFolders: [{ uri: vscode.Uri.file('/switched-workspace'), name: 'switched', index: 0 }],
+        });
+        router.setProjectDefaultCssSystem('tailwind-v4');
+
+        // A subsequent astBridge access re-checks the workspace; the root is already current, so it is a
+        // no-op that must NOT clear the freshly-set default (the race the fix closes).
+        expect(router.astBridge.astService.projectDefaultCssSystem).toBe('tailwind-v4');
+      } finally {
+        Object.assign(vscode.workspace, { workspaceFolders: original });
+      }
+    });
+  });
 });

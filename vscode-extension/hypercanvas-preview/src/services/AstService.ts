@@ -11,6 +11,7 @@ import * as fsSync from 'node:fs';
 import * as nodePath from 'node:path';
 import * as t from '@babel/types';
 import type { ColorProbeCandidate } from './color-probe-types';
+import type { CssSystemId } from '@lib/style-read/types';
 import type { FileIO } from '@lib/ast/file-io';
 import { insertElement, duplicateElement, pasteElement, wrapElement } from './ast-element-ops';
 import {
@@ -89,6 +90,13 @@ export class AstService {
   private _nodeMapService = new NodeMapService();
   private _fileIO: FileIO;
   private _initialized = false;
+  /**
+   * UIKit-derived project default CSS system (a Tailwind project → 'tailwind-v4'), set from the
+   * extension host's project capabilities. Threaded into every style write so a surfaceless element
+   * floors to the project system, never a silent inline `style={{}}` (D2 §4.3, SaaS parity). Undefined
+   * until capabilities are known or for non-UIKit projects.
+   */
+  private _projectDefaultCssSystem?: CssSystemId;
   // Maps "absolutePath:oldLine:oldCol" → new position + fingerprint after recast reformatting.
   // fingerprint guards against stale entries when the file is restored between writes.
   private readonly _positionForwardingCache = new Map<string, { line: number; column: number; fingerprint: string }>();
@@ -285,7 +293,22 @@ export class AstService {
       verifyComputedStyle: this._verifyComputedStyle,
       resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) =>
         this._resolveElement(ast, nodeRef, filePath),
+      projectDefaultCssSystem: this._projectDefaultCssSystem,
     };
+  }
+
+  /**
+   * Set the UIKit-derived project default CSS system (Tailwind project → 'tailwind-v4'). Called by the
+   * extension host from project capabilities so surfaceless style writes floor to the project system
+   * (SaaS parity) instead of a silent inline `style={{}}`.
+   */
+  setProjectDefaultCssSystem(system: CssSystemId | undefined): void {
+    this._projectDefaultCssSystem = system;
+  }
+
+  /** The currently-applied UIKit-derived default (undefined = surfaceless writes floor to inline). */
+  get projectDefaultCssSystem(): CssSystemId | undefined {
+    return this._projectDefaultCssSystem;
   }
 
   /**

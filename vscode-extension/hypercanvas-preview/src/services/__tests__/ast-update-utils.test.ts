@@ -135,6 +135,58 @@ describe('updateStyles B0 wiring invariant (HYP-722 T1a)', () => {
     expect(result).toMatchObject({ success: true, resolvedPath: '/workspace/App.tsx' });
   });
 
+  test('threads deps.projectDefaultCssSystem into the write request (Tailwind surfaceless floor)', async () => {
+    const fileIO = makeFileIO();
+    mockRunStyleWriteTransaction.mockResolvedValueOnce({
+      success: true,
+      plan: makeTailwindPlan(),
+      mutatedFiles: ['/workspace/App.tsx'],
+      writeId: 'wid-tw' as WriteId,
+    });
+    const deps = { ...makeDeps(fileIO), projectDefaultCssSystem: 'tailwind-v4' as const };
+
+    await updateStyles(
+      'App.tsx',
+      'App.tsx:1:0',
+      { paddingTop: '24' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      deps,
+    );
+
+    const call = mockRunStyleWriteTransaction.mock.calls[0]?.[0];
+    // A surfaceless element on a Tailwind project must floor to the project's Tailwind system, not a
+    // silent inline style. The extension host derives this from capabilities.uiKit; assert it reaches
+    // the shared executor request (parity with the SaaS batch route). Regression: HYP-983 (conloca).
+    expect((call?.request as Record<string, unknown>)?.projectDefaultCssSystem).toBe('tailwind-v4');
+  });
+
+  test('omits projectDefaultCssSystem when the host supplied none', async () => {
+    const fileIO = makeFileIO();
+    mockRunStyleWriteTransaction.mockResolvedValueOnce({
+      success: true,
+      plan: makeTailwindPlan(),
+      mutatedFiles: ['/workspace/App.tsx'],
+      writeId: 'wid-none' as WriteId,
+    });
+
+    await updateStyles(
+      'App.tsx',
+      'App.tsx:1:0',
+      { paddingTop: '24' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      makeDeps(fileIO),
+    );
+
+    const call = mockRunStyleWriteTransaction.mock.calls[0]?.[0];
+    expect((call?.request as Record<string, unknown>)?.projectDefaultCssSystem).toBeUndefined();
+  });
+
   test('propagates a transaction failure as { success: false, error }', async () => {
     const fileIO = makeFileIO();
     mockRunStyleWriteTransaction.mockResolvedValueOnce({

@@ -20,6 +20,7 @@ import { type EditorMessage, handleEditorMessage } from './EditorBridge';
 import type { StateHub } from './StateHub';
 import type { AstService } from './services/AstService';
 import type { ColorProbeCandidate, ColorProbeRequest } from './services/color-probe-types';
+import type { CssSystemId } from '@lib/style-read/types';
 import { ComponentService, type ScanResult } from './services/ComponentService';
 import { StyleReadService } from './services/StyleReadService';
 import type { AstMessage, SharedEditorState } from './types';
@@ -738,6 +739,24 @@ export class PanelRouter {
   }
 
   /**
+   * Set the UIKit-derived project default CSS system (Tailwind project → 'tailwind-v4'), derived by
+   * the extension host from project capabilities. Makes a surfaceless style write floor to the project
+   * system instead of a silent inline `style={{}}` (SaaS parity).
+   *
+   * RE-ROOT FIRST (HYP-983 review, codex P1 race): on a workspace switch, project detection may call
+   * this setter BEFORE the first routed message lazily triggers `_ensureCurrentWorkspace()`. If we
+   * just wrote the value here, that later re-create would rebuild the AstBridge and CLEAR the default
+   * out from under us — permanently reverting surfaceless writes to inline. So re-root NOW: after this,
+   * `_ensureCurrentWorkspace()` sees the root unchanged and is a no-op, so the value we set persists on
+   * the CURRENT workspace's AstService. (The AstService default is cleared, never re-applied, on an
+   * actual root change — the new workspace's detection re-derives it via this setter.)
+   */
+  setProjectDefaultCssSystem(system: CssSystemId | undefined): void {
+    this._ensureCurrentWorkspace();
+    this._astBridge.astService.setProjectDefaultCssSystem(system);
+  }
+
+  /**
    * HYP-544 Phase 3 — fire the empirical color-probe and thread the ranked driving candidates onto
    * the write message, but ONLY when a same-group color is actually applied (the live `domClasses`
    * carries a conflicting class for the changed property). This keeps the probe off the hot path for
@@ -826,6 +845,14 @@ export class PanelRouter {
     this._workspaceRoot = workspaceRoot;
     this._astBridge = new AstBridge(workspaceRoot);
     if (this._currentWebview) this._astBridge.setWebview(this._currentWebview);
+    // CLEAR the default on a workspace switch — this branch only runs when the root actually changed,
+    // so the previous workspace's UIKit default is now stale (a Tailwind project's default must NOT
+    // leak onto a non-Tailwind one). Reset to undefined and let the new workspace's project detection
+    // re-derive it via setProjectDefaultCssSystem (extension.ts runs runProjectDetection on reroot).
+    // Until that lands, a surfaceless write floors to inline — the safe under-approximation, never a
+    // wrong-system class (codex P2 / Fable review). The freshly-built AstBridge above already defaults
+    // to undefined; this explicit clear documents the cross-workspace-reset intent.
+    this._astBridge.astService.setProjectDefaultCssSystem(undefined);
     this._componentService = this._createComponentService(workspaceRoot);
     this._styleReadService = this._createStyleReadService(workspaceRoot);
   }

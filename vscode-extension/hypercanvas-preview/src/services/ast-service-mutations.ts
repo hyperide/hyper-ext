@@ -6,6 +6,7 @@
 
 import type * as t from '@babel/types';
 import type { NodeRef } from '@shared/element-tracing/types';
+import type { CssSystemId } from '@lib/style-read/types';
 import type { FileIO } from '@lib/ast/file-io';
 import type { ColorProbeCandidate } from './color-probe-types';
 import { mutateElement } from './ast-mutation-utils';
@@ -31,6 +32,12 @@ export interface MutationWrapperDeps {
     nodeRef: NodeRef,
   ) => Promise<{ result: FindElementResult; ast: t.File; resolvedPath: string } | null>;
   resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) => FindElementResult | null;
+  /**
+   * UIKit-derived project default CSS system (a Tailwind project → 'tailwind-v4'). Threaded to the
+   * shared style-write executor so a surfaceless element floors to the project system, never a silent
+   * inline `style={{}}` (D2 §4.3, parity with the SaaS batch route).
+   */
+  projectDefaultCssSystem?: CssSystemId;
   /** HYP-901 — tsconfig path-alias map lookup for the non-forwarding-component pre-write check. */
   getAliasMap?: (importerFilePath: string) => Record<string, string>;
   /** HYP-901 — B1-lite runtime computed-style verify for the auto-wrap retry candidate. */
@@ -56,6 +63,7 @@ export async function updateStylesWrapper(
       resolveElementInCorrectFile: (absolutePath, nr) => deps.resolveElementInCorrectFile(absolutePath, nr),
       updateNodeMap: (fp) => deps.updateNodeMap(fp),
       probeDriving,
+      projectDefaultCssSystem: deps.projectDefaultCssSystem,
       getAliasMap: deps.getAliasMap,
       verifyComputedStyle: deps.verifyComputedStyle,
       verifyElementId,

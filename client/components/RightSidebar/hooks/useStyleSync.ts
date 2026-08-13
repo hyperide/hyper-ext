@@ -275,6 +275,13 @@ export function useStyleSync({
           const rnProps = styleAdapter.convertToProps(styles);
           engine.updateASTProps(writeId, filePath, rnProps);
         } else {
+          // HYP-985 (deferred): this single-selection SaaS write does NOT forward
+          // `projectDefaultCssSystem` — only the multi-select batch branch above does, and neither
+          // `engine.updateASTStyles` / `ASTStyleOperationParams` nor `/api/update-component-styles`
+          // expose the field yet. So an ordinary single-select SURFACELESS edit in SaaS still lands
+          // inline instead of flooring to the project system. Thread it through this single-write
+          // contract (params + route) when HYP-985 lands. The VS Code extension path is unaffected
+          // (its default is applied host-side on AstService, HYP-983).
           backendPromise = engine.updateASTStyles(writeId, filePath, styles, {
             domClasses,
             instanceProps: {},

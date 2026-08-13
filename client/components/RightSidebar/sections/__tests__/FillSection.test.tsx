@@ -48,4 +48,25 @@ describe('FillSection text controls', () => {
 
     expect(syncStyleChange).toHaveBeenCalledWith('fontSize', '16px');
   });
+
+  // Guards against the recurring "text color is display-only" false alarm: the QA
+  // matrix harness cannot drive the text ColorCombobox (its hex input carries no
+  // testid, so the harness aims .fill() at the non-input root <div> and reports
+  // "0/14 applied"). The control IS wired — editing the hex writes `color` through
+  // the same syncStyleChange path bg uses. This test pins that wiring so a future
+  // harness artifact is not mistaken for a product regression.
+  it('writes `color` to the style-sync path when the text hex input is edited', () => {
+    const syncStyleChange = mock(() => {});
+    // Raw hex (not a tailwind token) renders the ColorCombobox in unlinked mode,
+    // exposing the editable hex input a partner types into.
+    render(<FillSection {...defaultProps} textColor="#111111" syncStyleChange={syncStyleChange} />);
+
+    const textControl = screen.getByTestId(TID.inspector.fillTextColor);
+    const hexInput = textControl.querySelector('input[type="text"]') as HTMLInputElement | null;
+    expect(hexInput).toBeTruthy();
+
+    fireEvent.change(hexInput!, { target: { value: '22ff88' } });
+
+    expect(syncStyleChange).toHaveBeenCalledWith('color', '#22ff88');
+  });
 });

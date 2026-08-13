@@ -44,6 +44,7 @@ import {
   unwrapStyleWrapper,
 } from './style-wrap-retry';
 import type { NodeRef } from '@shared/element-tracing/types';
+import type { CssSystemId } from '@lib/style-read/types';
 import type { FileIO } from '@lib/ast/file-io';
 import { parseCode } from '@lib/ast/parser';
 import type { StyleForwardingWarning } from '@shared/types/style-forwarding-warning';
@@ -60,6 +61,14 @@ export interface UpdateStylesDeps {
   updateNodeMap: (filePath: string) => Promise<void>;
   /** HYP-544 Phase 3 — ranked driving candidates from the empirical color-probe (unresolvable case). */
   probeDriving?: ColorProbeCandidate[];
+  /**
+   * UIKit-derived project default CSS system (e.g. a Tailwind project → 'tailwind-v4'). Threaded from
+   * the extension host's project capabilities so a SURFACELESS element (no existing className/style)
+   * floors to the project's system under Auto/Computed routing instead of a silent inline `style={{}}`
+   * (D2 §4.3). Mirrors the SaaS batch route, which already carries this from the inspector's UIKit.
+   * Undefined for non-UIKit projects — the write cascade falls through to a detected system, then inline.
+   */
+  projectDefaultCssSystem?: CssSystemId;
   /** HYP-901 — tsconfig path-alias map lookup, threaded to the non-forwarding-component pre-write
    *  check so it resolves imports the same way "Go to main component" (HYP-563) does. */
   getAliasMap?: (importerFilePath: string) => Record<string, string>;
@@ -182,6 +191,7 @@ async function writeDirectCandidate(
       selectedSourceTabId: input.selectedSourceTabId,
       domClasses: input.domClasses,
       probeDriving: deps.probeDriving,
+      projectDefaultCssSystem: deps.projectDefaultCssSystem,
       runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'vscode' },
       projectRoot: deps.workspaceRoot,
     },
