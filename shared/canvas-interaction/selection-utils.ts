@@ -8,6 +8,18 @@
 import type { SourceLocation } from '../element-tracing/types';
 
 /**
+ * True when a click should ADD/TOGGLE the clicked element in the current
+ * selection instead of replacing it. Universal multi-select modifiers across
+ * every element kind: Cmd (mac), Ctrl (win/linux), and Shift.
+ *
+ * Shift was historically omitted (only Cmd/Ctrl were handled), which silently
+ * broke multi-select for users reaching for the conventional Shift modifier.
+ */
+export function isAdditiveSelectionEvent(e: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean }): boolean {
+  return Boolean(e.metaKey || e.ctrlKey || e.shiftKey);
+}
+
+/**
  * Resolve the effective nodeRef for optimistic selection update.
  *
  * When nodeRef is null (server round-trip pending), synthesize a ref from source
@@ -15,8 +27,9 @@ import type { SourceLocation } from '../element-tracing/types';
  * format produced by sourceToElementId() in the extension host, ensuring
  * keyboard shortcuts (Cmd+D, Delete) can act on the selection without waiting.
  *
- * Only used in the non-additive (single-click) path — additive path handles
- * null nodeRef separately via toggleNodeRefInSelection.
+ * Used by BOTH the single-click and additive (multi-select) paths to synthesize a
+ * stable ref from source when nodeRef is null, so elements that resolve to a source
+ * location but have no cached nodeRef can still be selected/toggled.
  */
 export function computeEffectiveRef(nodeRef: string | null, source: SourceLocation): string {
   return nodeRef ?? `${source.fileName}:${source.line}:${source.column}`;

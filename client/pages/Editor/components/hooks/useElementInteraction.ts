@@ -6,6 +6,7 @@
  *   null nodeRef means fiber couldn't resolve (server round-trip pending or no source)
  */
 
+import { isAdditiveSelectionEvent } from '@shared/canvas-interaction/selection-utils';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import { useCallback } from 'react';
 import type { CanvasEngine } from '@/lib/canvas-engine';
@@ -67,8 +68,8 @@ export function useElementInteraction({
         return;
       }
 
-      // Cmd/Ctrl+Click — toggle selection
-      if (event.metaKey || event.ctrlKey) {
+      // Cmd/Ctrl/Shift+Click — toggle (add/remove) selection
+      if (isAdditiveSelectionEvent(event)) {
         const currentSelection = engine.getSelection();
         if (currentSelection.selectedIds.includes(nodeRef)) {
           // removeFromSelection also drops the id's selectedItemIndices entry (HYP-691).

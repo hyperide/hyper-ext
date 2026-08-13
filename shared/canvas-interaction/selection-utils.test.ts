@@ -6,7 +6,40 @@
 
 import { describe, expect, it } from 'bun:test';
 import type { SourceLocation } from '../element-tracing/types';
-import { computeEffectiveRef, toggleItemIndex, toggleNodeRefInSelection } from './selection-utils';
+import {
+  computeEffectiveRef,
+  isAdditiveSelectionEvent,
+  toggleItemIndex,
+  toggleNodeRefInSelection,
+} from './selection-utils';
+
+/* ─── isAdditiveSelectionEvent ─────────────────────────────────────── */
+
+describe('isAdditiveSelectionEvent', () => {
+  it('metaKey only → true (Cmd, mac)', () => {
+    expect(isAdditiveSelectionEvent({ metaKey: true })).toBe(true);
+  });
+
+  it('ctrlKey only → true (Ctrl, win/linux)', () => {
+    expect(isAdditiveSelectionEvent({ ctrlKey: true })).toBe(true);
+  });
+
+  it('shiftKey only → true (conventional multi-select modifier)', () => {
+    expect(isAdditiveSelectionEvent({ shiftKey: true })).toBe(true);
+  });
+
+  it('no modifiers → false', () => {
+    expect(isAdditiveSelectionEvent({ metaKey: false, ctrlKey: false, shiftKey: false })).toBe(false);
+  });
+
+  it('empty object (no modifier fields) → false', () => {
+    expect(isAdditiveSelectionEvent({})).toBe(false);
+  });
+
+  it('combo (meta + shift) → true', () => {
+    expect(isAdditiveSelectionEvent({ metaKey: true, shiftKey: true })).toBe(true);
+  });
+});
 
 /* ─── computeEffectiveRef ──────────────────────────────────────────── */
 

@@ -18,6 +18,7 @@ import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-int
 import { collectDomSiblingRects } from '@shared/canvas-interaction/spacing-guides';
 import {
   computeEffectiveRef,
+  isAdditiveSelectionEvent,
   toggleItemIndex,
   toggleNodeRefInSelection,
 } from '@shared/canvas-interaction/selection-utils';
@@ -507,13 +508,18 @@ attachClickHandler(
   document,
   {
     onElementClick: (nodeRef, el, e, itemIndex, source) => {
-      const additive = e.metaKey || e.ctrlKey;
+      const additive = isAdditiveSelectionEvent(e);
       if (additive) {
-        const nextIds = toggleNodeRefInSelection(state.selectedIds, nodeRef);
-        const nextIndices = toggleItemIndex(state.selectedItemIndices, nodeRef, nextIds, itemIndex);
+        // Synthesize a ref from source when nodeRef is null so source-only elements
+        // (mapped list items, decorative nodes) toggle correctly instead of clearing.
+        const additiveRef = source ? computeEffectiveRef(nodeRef, source) : nodeRef;
+        const nextIds = toggleNodeRefInSelection(state.selectedIds, additiveRef);
+        const nextIndices = toggleItemIndex(state.selectedItemIndices, additiveRef, nextIds, itemIndex);
         logSelsurvSelectedIdsAssign('click:additive', state.selectedIds, nextIds);
         state.selectedIds = nextIds;
         state.selectedItemIndices = nextIndices;
+        needsOverlayUpdate = true;
+        scheduleOverlayLoopIfNeeded();
       } else {
         const effectiveRef = source ? computeEffectiveRef(nodeRef, source) : nodeRef;
         if (effectiveRef) {
@@ -555,7 +561,7 @@ attachClickHandler(
     },
     onEmptyClick: (emptyClickEvent) => {
       if (pendingClickElement) return; // codeql[js/useless-conditional] -- pendingClickElement is mutable state; guard prevents empty-click while a click is pending
-      if (emptyClickEvent.metaKey || emptyClickEvent.ctrlKey) return;
+      if (isAdditiveSelectionEvent(emptyClickEvent)) return;
       window.parent.postMessage({ type: 'hypercanvas:emptyClick' }, '*');
     },
     getMode: () => state.engineMode as 'design' | 'interact',
