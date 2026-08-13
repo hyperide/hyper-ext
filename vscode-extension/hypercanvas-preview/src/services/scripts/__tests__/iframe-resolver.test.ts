@@ -46,7 +46,14 @@ afterEach(() => {
 });
 
 describe('call-site mapper: distinguishes COLD (warm it) from definitive NULL (skip) — HYP-970 / Codex P1', () => {
-  const LEAF_URL = 'http://localhost:5173/src/components/Tweet.tsx';
+  // Post-HYP-1006 the call-site walk only runs for a NON-EDITABLE (node_modules) primitive
+  // internal — an editable leaf resolves to its own source without walking. So the clicked
+  // leaf here is the internal host of a node_modules <Button>: its served chunk frame is a
+  // `/src/` URL (what extractClientChunkFrames keys on), but its SOURCE-MAP-resolved file is
+  // a node_modules path (LEAF_FILE) — non-editable, so the walk collapses to the <Button/>
+  // call site (<Button/> in Feed.tsx). (An editable leaf never reaches this walk.)
+  const LEAF_URL = 'http://localhost:5173/src/deps/acme-ui-button.js';
+  const LEAF_FILE = 'node_modules/@acme/ui/dist/button.js';
   const CALLSITE_URL = 'http://localhost:5173/src/components/Feed.tsx';
 
   function attach(el: object, fiber: Fiber): HTMLElement {
@@ -68,8 +75,8 @@ describe('call-site mapper: distinguishes COLD (warm it) from definitive NULL (s
   }
 
   test('COLD call-site ancestor (undefined) → mapper WARMS it and the walk keeps the valid leaf source, never a compiled line', () => {
-    // Leaf (clicked <div> inside <Tweet>) resolves warm to its own Tweet.tsx source.
-    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
+    // Leaf (clicked host node inside a node_modules <Button>) resolves warm to its own source.
+    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: LEAF_FILE, line: 20, column: 3 });
     // The <Tweet> call-site frame in Feed.tsx is NOT cached (cold / never warmed).
     const callSite = makeFiberWithFrame(CALLSITE_URL, 65, 84); // Feed.tsx:65:84 (compiled, uncached)
     const leaf = makeFiberWithFrame(LEAF_URL, 100, 15, callSite);
@@ -83,11 +90,11 @@ describe('call-site mapper: distinguishes COLD (warm it) from definitive NULL (s
     expect(warmedServer).toContain(callSite);
     // …and, still cold this pass, the result is the valid leaf source — NEVER the compiled
     // Feed.tsx:65:84 (parseDebugStack) line that AstService can't resolve.
-    expect(loc).toEqual({ fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
+    expect(loc).toEqual({ fileName: LEAF_FILE, line: 20, column: 3 });
   });
 
   test('definitive-NULL call-site ancestor (warmed, unmappable) → mapper does NOT warm, just skips', () => {
-    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
+    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: LEAF_FILE, line: 20, column: 3 });
     clientSourceMapCache.set(`${CALLSITE_URL}:65:84`, null); // warmed, no mapping → definitive miss
     const callSite = makeFiberWithFrame(CALLSITE_URL, 65, 84);
     const leaf = makeFiberWithFrame(LEAF_URL, 100, 15, callSite);
@@ -99,12 +106,12 @@ describe('call-site mapper: distinguishes COLD (warm it) from definitive NULL (s
     // A definitive miss is NOT re-warmed (no point) — it is simply skipped.
     expect(warmedFiber).not.toContain(callSite);
     expect(warmedServer).not.toContain(callSite);
-    expect(loc).toEqual({ fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
+    expect(loc).toEqual({ fileName: LEAF_FILE, line: 20, column: 3 });
   });
 
-  test('resolveClickLocal keeps the valid LEAF source (never a wrong ancestor / compiled line) while the call-site is COLD, and warms it', () => {
-    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
-    // <Tweet> call site in Feed is cold — never warmed.
+  test('resolveClickLocal DEFERS a NON-editable (node_modules) leaf while the call-site is COLD, and warms it (HYP-1006)', () => {
+    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: LEAF_FILE, line: 20, column: 3 });
+    // <Button> call site in Feed is cold — never warmed.
     const callSite = makeFiberWithFrame(CALLSITE_URL, 65, 84);
     const leaf = makeFiberWithFrame(LEAF_URL, 100, 15, callSite);
 
@@ -112,17 +119,39 @@ describe('call-site mapper: distinguishes COLD (warm it) from definitive NULL (s
     const resolver = createIframeResolver(ctx);
     const result = resolver.resolveClickLocal(attach({}, leaf));
 
-    // Commits the element's own valid leaf source — NEVER a wrong container or the compiled
-    // Feed.tsx:65:84 line. resolveClickLocal is side-effect-free for hover reuse: no pending
-    // click is registered.
-    expect(result?.nodeRef).toBe('src/components/Tweet.tsx:20:3');
-    expect(ctx.pendingClickElement.current).toBeNull();
+    // The leaf is a node_modules dependency internal — committing it would target uneditable code
+    // whose style writes fail. Since the editable call site is only COLD (not gone), defer to the
+    // warm-retry (which re-resolves once the frame warms) instead of committing the node_modules
+    // path. (An EDITABLE leaf still keeps its own valid source — see the resolveClickLocal-LEAF-seed
+    // suite below, which uses a first-party App.tsx leaf.)
+    expect(result).toBeNull();
+    expect(ctx.pendingClickElement.current).not.toBeNull(); // deferred → pending registered
     // The cold call-site frame was warmed so the NEXT pass resolves the true call site.
     expect(warmedFiber).toContain(callSite);
   });
 
+  test('resolveClickLocal does NOT register a pending click for a DEFINITIVE (non-cold) non-editable miss — no hover side effect (HYP-1006)', () => {
+    // The call site is WARM but definitively unmappable (cached null) — NOT cold, so waiting can
+    // never improve it. Deferring here would be wrong on two counts: (1) it can never resolve to
+    // anything better (a permanently "pending" click), and (2) resolveClickLocal is reused for
+    // HOVER (shared click-handler's handleMouseOver) — registering a pending click as a side
+    // effect of merely hovering over an unresolvable node_modules primitive could later commit a
+    // selection the user never clicked. Must return null WITHOUT touching pendingClickElement.
+    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: LEAF_FILE, line: 20, column: 3 });
+    clientSourceMapCache.set(`${CALLSITE_URL}:65:84`, null); // WARM, definitively unmappable
+    const callSite = makeFiberWithFrame(CALLSITE_URL, 65, 84);
+    const leaf = makeFiberWithFrame(LEAF_URL, 100, 15, callSite);
+
+    const { ctx } = makeCtxWithSpies();
+    const resolver = createIframeResolver(ctx);
+    const result = resolver.resolveClickLocal(attach({}, leaf));
+
+    expect(result).toBeNull();
+    expect(ctx.pendingClickElement.current).toBeNull(); // terminal — no pending click registered
+  });
+
   test('resolveClickLocal commits the TRUE call site (Feed.tsx) once the call-site frame is WARM', () => {
-    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
+    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: LEAF_FILE, line: 20, column: 3 });
     // <Tweet> call site now resolves to its ORIGINAL Feed.tsx position (line 46, not compiled 65).
     clientSourceMapCache.set(`${CALLSITE_URL}:65:84`, { fileName: 'src/components/Feed.tsx', line: 46, column: 10 });
     const callSite = makeFiberWithFrame(CALLSITE_URL, 65, 84);
@@ -137,7 +166,7 @@ describe('call-site mapper: distinguishes COLD (warm it) from definitive NULL (s
   });
 
   test('an ancestor with NO unresolved frame (definitive/frameless) is SKIPPED, not treated as cold — walk reaches the warm call site (Codex P1 #3)', () => {
-    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
+    clientSourceMapCache.set(`${LEAF_URL}:100:15`, { fileName: LEAF_FILE, line: 20, column: 3 });
     clientSourceMapCache.set(`${CALLSITE_URL}:65:84`, { fileName: 'src/components/Feed.tsx', line: 46, column: 10 });
     // Intermediate component fiber with NO source frame (e.g. a server-only/definitive miss):
     // must NOT be treated as cold-forever, or the walk would discard the warm Feed call site.
@@ -159,9 +188,9 @@ describe('resolveClickLocal LEAF seed: never commit a raw React-19 compiled _deb
   // Under React 19 + Vite the leaf's OWN _debugStack first frame is the COMPILED position in the
   // jsxDEV-transformed App.tsx module (e.g. src/App.tsx:101:32 — past the 58-line source's EOF),
   // NOT the original source. getSourceLocationFromDOM (parseDebugStack) hands this compiled frame
-  // to resolveClickLocal as the seed. Because compiled+original share the SAME fileName (Vite
-  // transforms in-place), resolveCallSiteTarget's isFromRenderedFile short-circuit returns it
-  // verbatim — so the cross-file mapper HYP-970 added to the ancestor walk never sees it. When the
+  // to resolveClickLocal as the seed. Because the leaf's own file is editable, resolveCallSiteTarget's
+  // own-source short-circuit (isEditableSourcePath) returns it verbatim — so the cross-file mapper
+  // HYP-970 added to the ancestor walk never sees it. When the
   // client source map is COLD, the compiled seed must NOT be committed: AstService can't resolve
   // line 101 and EVERY inspector style write fails ("Element not found"/"Style update failed").
   // DevTools-faithful rule: a raw _debugStack frame is only an INPUT to symbolication; if unmapped,

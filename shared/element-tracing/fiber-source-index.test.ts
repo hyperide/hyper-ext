@@ -686,3 +686,71 @@ describe('FiberSourceIndex source-map collapse skips nested fibers at same mappe
     }
   });
 });
+
+/* ─── call-site / own-source dual alias (HYP-897 tree→canvas after HYP-1006) ─── */
+
+describe('FiberSourceIndex call-site/own-source dual alias', () => {
+  it('indexes an imported first-party component internal under BOTH its own source and the component call site (HYP-897)', () => {
+    // HostRoutePage (component) is rendered at OrgSettingsPage.tsx:56 and returns a host
+    // <div> authored at HostRoutePage.tsx:12. The index registers the div under its OWN
+    // source — so a canvas click resolves to it (HYP-1006 own-source click path) — AND
+    // registers the HostRoutePage component fiber at its call site — so selecting the
+    // <HostRoutePage> Explorer node (keyed at OrgSettingsPage.tsx:56) still highlights the
+    // same div (HYP-897 tree→canvas). Both refs are aliases for one DOM element, which is
+    // why the tree→canvas overlay survives even though the click path no longer collapses
+    // to the call site.
+    const div = document.createElement('div');
+    document.body.appendChild(div);
+    try {
+      const hostDivFiber: Fiber = {
+        tag: FiberTag.HostComponent,
+        type: 'div',
+        stateNode: div,
+        return: null,
+        child: null,
+        sibling: null,
+        memoizedProps: {},
+        _debugSource: { fileName: 'src/app/ui/HostRoutePage.tsx', lineNumber: 12, columnNumber: 4 },
+        _debugOwner: null,
+      };
+      const componentFiber: Fiber = {
+        tag: FiberTag.FunctionComponent,
+        type: function HostRoutePage() {},
+        stateNode: null,
+        return: null,
+        child: hostDivFiber,
+        sibling: null,
+        memoizedProps: {},
+        // A component fiber's OWN source is its call site (where <HostRoutePage/> is written).
+        _debugSource: { fileName: 'src/app/org-settings/OrgSettingsPage.tsx', lineNumber: 56, columnNumber: 5 },
+        _debugOwner: null,
+      };
+      hostDivFiber.return = componentFiber;
+      const root: Fiber = {
+        tag: FiberTag.HostRoot,
+        type: null,
+        stateNode: null,
+        return: null,
+        child: componentFiber,
+        sibling: null,
+        memoizedProps: {},
+        _debugSource: null,
+        _debugOwner: null,
+      };
+
+      const index = new FiberSourceIndex(() => root, document);
+
+      const ownRef = index.findDOMElements({ fileName: 'src/app/ui/HostRoutePage.tsx', line: 12, column: 3 });
+      const callSiteRef = index.findDOMElements({
+        fileName: 'src/app/org-settings/OrgSettingsPage.tsx',
+        line: 56,
+        column: 4,
+      });
+
+      expect(ownRef).toContain(div); // canvas-click path (HYP-1006)
+      expect(callSiteRef).toContain(div); // tree-select path (HYP-897)
+    } finally {
+      div.remove();
+    }
+  });
+});

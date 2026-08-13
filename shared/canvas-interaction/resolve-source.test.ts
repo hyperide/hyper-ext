@@ -42,7 +42,13 @@ function makeStackFiber(fileName: string, line: number, col: number, overrides: 
 }
 
 describe('resolveCallSiteTarget', () => {
-  it('uses the repeated component call-site index for imported component internals rendered in a map', () => {
+  it('resolves a first-party child component internal to its OWN source while keeping the repeated item index (HYP-1006)', () => {
+    // UserSuggestion.tsx is a first-party (editable) child rendered in a map inside
+    // TrendingSidebar.tsx. Clicking the internal <span> resolves to the span's OWN
+    // authored source in UserSuggestion.tsx — not the <UserSuggestion/> call site in
+    // TrendingSidebar — because the user can edit that span directly. The repeated
+    // item index (1 = the second instance) is still counted at the component-instance
+    // level via the fiber ancestry, so N runtime instances stay distinguishable.
     const callSiteSource: DebugSource = {
       fileName: '/app/src/components/TrendingSidebar.tsx',
       lineNumber: 59,
@@ -101,10 +107,11 @@ describe('resolveCallSiteTarget', () => {
     const result = resolveCallSiteTarget(source(), internalSpan, 'src/components/TrendingSidebar.tsx', 0);
 
     expect(result).toEqual({
+      // The span's OWN source (UserSuggestion.tsx), not the TrendingSidebar call site.
       source: {
-        fileName: '/app/src/components/TrendingSidebar.tsx',
-        line: 59,
-        column: 12,
+        fileName: '/app/src/components/UserSuggestion.tsx',
+        line: 10,
+        column: 6,
       },
       itemIndex: 1,
     });
@@ -294,18 +301,19 @@ describe('resolveCallSiteTarget', () => {
     expect(result.source).toEqual(syntheticDirect);
   });
 
-  it('finds the call site via _debugStack when the imported component ancestor has no _debugSource — React 19 (HYP-897)', () => {
-    // Real-world repro (conloca-app, live-verified): OrgSettingsPage.tsx renders
-    // <HostRoutePage> (an imported, cross-file component). HostRoutePage's own
-    // implementation lives in a different file and returns a host <div> directly —
-    // in React 19 that div's nearest ancestor with source info is the HostRoutePage
-    // component fiber itself, which carries ONLY `_debugStack` (React 19 never sets
-    // `_debugSource`). The old call-site walk checked `current._debugSource`
-    // exclusively, so for a React 19 app it silently found no cross-file ancestor
-    // and fell through to the direct (wrong-file) source — the Explorer-tree
-    // selection's nodeRef (computed from the AST call site "OrgSettingsPage.tsx:56:4")
-    // then never matched the FiberSourceIndex key built from this resolution,
-    // so `findElementsByRef` missed and the selection overlay never rendered.
+  it('resolves a first-party imported component internal to its OWN source (HYP-897 click path, revised by HYP-1006)', () => {
+    // Real-world repro (conloca-app): OrgSettingsPage.tsx renders <HostRoutePage> (an
+    // imported, cross-file, FIRST-PARTY component). HostRoutePage's implementation lives
+    // in src/app/ui/HostRoutePage.tsx and returns a host <div> directly. Since that div's
+    // own source is EDITABLE, a canvas click on it now resolves to HostRoutePage.tsx:12
+    // (its own authored location) — the user can open and edit that div — instead of
+    // collapsing to the <HostRoutePage/> call site in OrgSettingsPage. HYP-897's REAL
+    // requirement (selecting the <HostRoutePage> Explorer node — keyed at the call site
+    // OrgSettingsPage.tsx:56 — must still highlight this div) is an INDEX contract, not a
+    // click-path contract: the component fiber is indexed at its call site independently
+    // of this resolution, so both refs alias the same DOM element. That contract is
+    // covered by fiber-source-index.test.ts ("call-site ref and own-source ref both
+    // resolve to the same host element").
     const hostRoutePage = makeStackFiber('src/app/org-settings/OrgSettingsPage.tsx', 56, 5, {
       tag: 0,
       type: function HostRoutePage() {},
@@ -321,44 +329,42 @@ describe('resolveCallSiteTarget', () => {
     const result = resolveCallSiteTarget(directSource, internalDiv, 'src/app/org-settings/OrgSettingsPage.tsx', 0);
 
     expect(result.source).toEqual({
-      fileName: 'src/app/org-settings/OrgSettingsPage.tsx',
-      line: 56,
-      column: 4,
+      fileName: 'src/app/ui/HostRoutePage.tsx',
+      line: 12,
+      column: 3,
     });
   });
 
-  it('maps the _debugStack call-site through the source map instead of committing the RAW COMPILED position (HYP-970)', () => {
+  it('maps a NON-EDITABLE primitive call-site through the source map instead of committing the RAW COMPILED position (HYP-970)', () => {
     // Regression (0.1.69, react-vite-tw4-twitter, React 19.2.4 + Vite 8 + plugin-react 6):
     // A `_debugStack` frame carries the COMPILED position in the Vite-served module
     // (jsxDEV output, ~2x the source line count), NOT the original source position.
     // HYP-897 added `parseDebugStack(current._debugStack)` to the call-site walk and
-    // committed that compiled position verbatim — e.g. a clicked element inside <Tweet>
-    // resolved to the `tweets.map(...)` call site at the COMPILED "Feed.tsx:65:84", a line
-    // that does not exist in the 51-line source. AstService._resolveElementInCorrectFile
-    // then parsed the real file, found nothing at line 65, and EVERY inspector style write
-    // failed ("Element not found"). The call-site position must be source-map-mapped, using
-    // the SAME mapper that already produced `directSource`, so both are in original-source
-    // coordinates. (HYP-897's own test — dev server whose compiled≈original — stays green
-    // because it passes no mapper and the raw-parseDebugStack fallback is preserved.)
-    const tweetCallSite = makeStackFiber('src/components/Feed.tsx', 65, 84, {
+    // committed that compiled position verbatim. Under HYP-1006 the call-site walk only
+    // runs for a NON-EDITABLE (node_modules) primitive internal — the leaf here — and its
+    // mapped call site must be source-map-mapped, using the SAME mapper that produced
+    // `directSource`, never the raw compiled `parseDebugStack` line ("Feed.tsx:65:84", a
+    // line that does not exist in the source). (An editable leaf never reaches this walk;
+    // the raw `parseDebugStack` fallback is preserved for callers with no mapper.)
+    const buttonCallSite = makeStackFiber('src/components/Feed.tsx', 65, 84, {
       tag: 0,
-      type: function Tweet() {},
+      type: function Button() {},
     });
-    const internalDiv = makeStackFiber('src/components/Tweet.tsx', 20, 4, {
+    // The clicked host node lives inside a node_modules design-system primitive.
+    const internalButton = makeStackFiber('node_modules/@acme/ui/dist/button.js', 20, 4, {
       tag: 5,
-      type: 'div',
-      return: tweetCallSite,
+      type: 'button',
+      return: buttonCallSite,
     });
-    tweetCallSite.child = internalDiv;
+    buttonCallSite.child = internalButton;
 
-    // directSource is the source-map-MAPPED leaf (original Tweet.tsx coordinates).
-    const directSource = source({ fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
-    // The mapper maps the <Tweet> call-site fiber's compiled frame back to the ORIGINAL
-    // Feed.tsx position (line 30, where `<Tweet .../>` is actually written in source).
+    const directSource = source({ fileName: 'node_modules/@acme/ui/dist/button.js', line: 20, column: 3 });
+    // The mapper maps the <Button> call-site fiber's compiled frame back to the ORIGINAL
+    // Feed.tsx position (line 30, where `<Button .../>` is actually written in source).
     const mapped: SourceLocation = { fileName: 'src/components/Feed.tsx', line: 30, column: 8 };
-    const resolveLocation = (f: Fiber): SourceLocation | null => (f === tweetCallSite ? mapped : null);
+    const resolveLocation = (f: Fiber): SourceLocation | null => (f === buttonCallSite ? mapped : null);
 
-    const result = resolveCallSiteTarget(directSource, internalDiv, 'src/App.tsx', 0, resolveLocation);
+    const result = resolveCallSiteTarget(directSource, internalButton, 'src/App.tsx', 0, resolveLocation);
 
     // Must be the MAPPED original position, never the compiled parseDebugStack position
     // (Feed.tsx:65:83 = column 84 - 1).
@@ -366,35 +372,34 @@ describe('resolveCallSiteTarget', () => {
     expect(result.source.line).not.toBe(65);
   });
 
-  it('SKIPS a _debugStack ancestor the source map cannot resolve and walks to the next mappable cross-file ancestor (HYP-970)', () => {
-    // The exact react-vite-tw4-twitter shape: clicking a host <div> inside an imported
-    // <Tweet> rendered in `tweets.map(...)`. The <Tweet> COMPONENT fiber's own jsxDEV
-    // column has NO source-map entry (maps to null), while the wrapping <div> in Feed maps
-    // cleanly. The walk must NOT commit the unmappable component fiber's raw compiled
-    // `parseDebugStack` line (Feed.tsx:65:84, past the 51-line source EOF) — it must skip it
-    // and use the next mappable cross-file ancestor.
-    const tweetComponent = makeStackFiber('src/components/Feed.tsx', 65, 84, {
+  it('SKIPS a _debugStack ancestor the source map cannot resolve and walks to the next mappable EDITABLE ancestor (HYP-970)', () => {
+    // Same non-editable-primitive walk as above, but the immediate component fiber's own
+    // jsxDEV column has NO source-map entry (maps to null), while the wrapping <div> in Feed
+    // maps cleanly. The walk must NOT commit the unmappable component fiber's raw compiled
+    // `parseDebugStack` line (Feed.tsx:65:84, past the source EOF) — it must skip it and use
+    // the next mappable EDITABLE ancestor.
+    const buttonComponent = makeStackFiber('src/components/Feed.tsx', 65, 84, {
       tag: 0,
-      type: function Tweet() {},
+      type: function Button() {},
     });
     const feedWrapperDiv = makeStackFiber('src/components/Feed.tsx', 999, 6, {
       tag: 5,
       type: 'div',
       return: null,
     });
-    tweetComponent.return = feedWrapperDiv;
-    const internalDiv = makeStackFiber('src/components/Tweet.tsx', 20, 4, {
+    buttonComponent.return = feedWrapperDiv;
+    const internalButton = makeStackFiber('node_modules/@acme/ui/dist/button.js', 20, 4, {
       tag: 5,
-      type: 'div',
-      return: tweetComponent,
+      type: 'button',
+      return: buttonComponent,
     });
 
-    const directSource = source({ fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
-    // Mapper: the <Tweet> component fiber is UNMAPPABLE (null); the Feed wrapper div maps.
+    const directSource = source({ fileName: 'node_modules/@acme/ui/dist/button.js', line: 20, column: 3 });
+    // Mapper: the <Button> component fiber is UNMAPPABLE (null); the Feed wrapper div maps.
     const wrapper: SourceLocation = { fileName: 'src/components/Feed.tsx', line: 44, column: 6 };
     const resolveLocation = (f: Fiber): SourceLocation | null => (f === feedWrapperDiv ? wrapper : null);
 
-    const result = resolveCallSiteTarget(directSource, internalDiv, 'src/App.tsx', 0, resolveLocation);
+    const result = resolveCallSiteTarget(directSource, internalButton, 'src/App.tsx', 0, resolveLocation);
 
     // Must skip the unmappable component fiber (never commit Feed.tsx:65:83) and return the
     // mapped wrapper — a real, AST-resolvable position.
@@ -426,6 +431,85 @@ describe('resolveCallSiteTarget', () => {
     // but the synthetic-direct-source gate must still keep it from being committed.
     expect(result.source.fileName).not.toContain('main.tsx');
     expect(result.source).toEqual(syntheticDirect);
+  });
+
+  it('resolves an editable child element to the SAME own source regardless of which root is previewed (HYP-1006 depth-independence)', () => {
+    // The core HYP-1006 invariant: previewing App.tsx (composition root, several layers
+    // above) and previewing Feed.tsx directly must resolve Feed's <h1> to the identical
+    // own-source ref. The old rule keyed off `renderedFile` (suffix match), so the same
+    // click collapsed to the <Feed/> call site when previewing App but resolved correctly
+    // when previewing Feed — depth-dependence WAS the bug.
+    const buildTree = (): Fiber => {
+      const feedComponent = makeStackFiber('src/App.tsx', 47, 10, {
+        tag: 0,
+        type: function Feed() {},
+      });
+      const h1 = makeStackFiber('src/components/Feed.tsx', 13, 9, {
+        tag: 5,
+        type: 'h1',
+        return: feedComponent,
+      });
+      feedComponent.child = h1;
+      return h1;
+    };
+
+    const directSource: SourceLocation = { fileName: 'src/components/Feed.tsx', line: 13, column: 8 };
+
+    const previewingApp = resolveCallSiteTarget(directSource, buildTree(), 'src/App.tsx', 0);
+    const previewingFeed = resolveCallSiteTarget(directSource, buildTree(), 'src/components/Feed.tsx', 0);
+
+    // Both resolve to the <h1>'s OWN authored source — never App.tsx:47 (the <Feed/> call site).
+    expect(previewingApp.source).toEqual(directSource);
+    expect(previewingFeed.source).toEqual(directSource);
+    expect(previewingApp).toEqual(previewingFeed);
+  });
+
+  it('keeps the editable leaf source even when the call-site ancestor is cold/unmappable (HYP-1006 robustness)', () => {
+    // The exact mechanism that made every element collapse to App.tsx:47 in the repro: the
+    // intermediate call-site frame is unmappable (cold source map), so the pre-fix walk
+    // over-climbed to the only mappable ancestor (the root). Because an editable leaf now
+    // never walks, a cold intermediate can no longer hijack the resolution.
+    const feedComponent = makeStackFiber('src/components/Feed.tsx', 46, 10, {
+      tag: 0,
+      type: function Tweet() {},
+    });
+    const span = makeStackFiber('src/components/Tweet.tsx', 22, 11, {
+      tag: 5,
+      type: 'span',
+      return: feedComponent,
+    });
+    feedComponent.child = span;
+
+    const directSource: SourceLocation = { fileName: 'src/components/Tweet.tsx', line: 22, column: 10 };
+    // Mapper resolves NOTHING (every ancestor cold) — pre-fix this forced a fallback climb.
+    const resolveLocation = (): SourceLocation | null => null;
+
+    const result = resolveCallSiteTarget(directSource, span, 'src/App.tsx', 0, resolveLocation);
+
+    expect(result.source).toEqual(directSource);
+  });
+
+  it('collapses a node_modules primitive internal to its first-party call site (imported-primitive preserved)', () => {
+    // The one case that SHOULD still collapse: the internal <button> of a node_modules
+    // <Button> is not user-editable, so a click resolves to where <Button> is written in
+    // first-party code (Feed.tsx), not into the package source.
+    const buttonCallSite = makeStackFiber('src/components/Feed.tsx', 22, 7, {
+      tag: 0,
+      type: function Button() {},
+    });
+    const internalButton = makeStackFiber('node_modules/@acme/ui/dist/button.js', 88, 5, {
+      tag: 5,
+      type: 'button',
+      return: buttonCallSite,
+    });
+    buttonCallSite.child = internalButton;
+
+    const directSource: SourceLocation = { fileName: 'node_modules/@acme/ui/dist/button.js', line: 88, column: 4 };
+
+    const result = resolveCallSiteTarget(directSource, internalButton, 'src/App.tsx', 0);
+
+    // Own source is node_modules (not editable) → collapse to the first-party call site.
+    expect(result.source).toEqual({ fileName: 'src/components/Feed.tsx', line: 22, column: 6 });
   });
 
   it('uses the rendered-file ancestor item index when clicking a nested child inside a map item', () => {

@@ -142,7 +142,17 @@ export class ElementTracer implements TracingResolver {
       itemIndex,
     });
     const requestId = `req-${++this._requestCounter}`;
-    this._transport.send({ type: 'resolve-element', requestId, source, itemIndex });
+    // Send the RESOLVED target, not the raw leaf source: the server's on-demand indexer must
+    // parse the file the click actually resolves to — the element's own first-party source, or
+    // (for a dependency primitive) the editable call-site file — not a node_modules leaf it will
+    // reject. For an editable leaf the two are identical, so this only changes the primitive /
+    // cross-file cases. (HYP-1006.)
+    this._transport.send({
+      type: 'resolve-element',
+      requestId,
+      source: resolvedTarget.source,
+      itemIndex: resolvedTarget.itemIndex,
+    });
     return null;
   }
 

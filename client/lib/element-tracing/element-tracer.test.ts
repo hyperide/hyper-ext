@@ -288,7 +288,11 @@ describe('ElementTracer', () => {
       expect(transport.sent).toHaveLength(1);
     });
 
-    it('resolves imported component internals to the clicked map item call site', () => {
+    it('resolves a first-party imported component internal to its OWN source with the correct map item index (HYP-1006)', () => {
+      // UserSuggestion.tsx is a first-party (editable) child rendered in a map inside
+      // TrendingSidebar. Clicking the internal <button> resolves to the button's OWN source
+      // in UserSuggestion.tsx (distinct, editable) — not the <UserSuggestion/> call site —
+      // while the repeated map item index (1) is still counted at the component-instance level.
       const callSiteSource: DebugSource = {
         fileName: '/app/src/components/TrendingSidebar.tsx',
         lineNumber: 53,
@@ -339,60 +343,61 @@ describe('ElementTracer', () => {
       tracer.renderedFile = 'src/components/TrendingSidebar.tsx';
       transport.simulateMessage({
         type: 'node-map-update',
-        filePath: '/app/src/components/TrendingSidebar.tsx',
-        fileHash: 'abc123',
+        filePath: '/app/src/components/UserSuggestion.tsx',
+        fileHash: 'us1',
         version: 1,
         nodes: [
           {
-            nodeRef: '/app/src/components/TrendingSidebar.tsx:53:11',
-            tag: 'UserSuggestion',
-            loc: { fileName: '/app/src/components/TrendingSidebar.tsx', line: 53, column: 11 },
-            endLoc: { fileName: '/app/src/components/TrendingSidebar.tsx', line: 53, column: 50 },
+            nodeRef: '/app/src/components/UserSuggestion.tsx:39:6',
+            tag: 'button',
+            loc: { fileName: '/app/src/components/UserSuggestion.tsx', line: 39, column: 6 },
+            endLoc: { fileName: '/app/src/components/UserSuggestion.tsx', line: 39, column: 40 },
             parentRef: null,
             children: [],
-            isComponent: true,
-            fingerprint: 'callsite',
+            isComponent: false,
+            fingerprint: 'own',
           },
         ],
       });
 
       const result = tracer.resolveClickLocal(attachFiber({} as HTMLElement, internalButton));
 
-      expect(result?.nodeRef).toBe('/app/src/components/TrendingSidebar.tsx:53:11');
+      expect(result?.nodeRef).toBe('/app/src/components/UserSuggestion.tsx:39:6');
       expect(result?.itemIndex).toBe(1);
       expect(result?.source).toEqual({
-        fileName: '/app/src/components/TrendingSidebar.tsx',
-        line: 53,
-        column: 11,
+        fileName: '/app/src/components/UserSuggestion.tsx',
+        line: 39,
+        column: 6,
       });
       expect(transport.sent).toHaveLength(0);
     });
 
-    it('maps a React 19 _debugStack call-site ancestor through the source map, not its raw COMPILED line (HYP-970)', () => {
-      // React 19 + Vite: the imported <Tweet> component fiber carries only `_debugStack`, whose
-      // frame is the COMPILED position in the transformed module (Feed.tsx:65:84 — past the real
-      // 51-line file's EOF). Committing that raw line makes the node-map lookup miss and the
-      // element resolve to the wrong file. With the mapCallSiteSource mapper the call site is
-      // resolved in ORIGINAL coords (Feed.tsx:30:8) and matches the server node map.
-      const tweetStack = new Error();
-      tweetStack.stack = 'Error\n    at http://localhost:5173/src/components/Feed.tsx:65:84';
-      const tweetComponent = mockFiber({ tag: 0, type: function Tweet() {}, _debugStack: tweetStack });
-      const internalDiv = mockFiber({
+    it('maps a NON-EDITABLE primitive call-site ancestor through the source map, not its raw COMPILED line (HYP-970)', () => {
+      // React 19 + Vite: the internal host node of a node_modules <Button> primitive is not
+      // editable, so it collapses to the <Button/> call site. The <Button> component fiber
+      // carries only `_debugStack`, whose frame is the COMPILED position (Feed.tsx:65:84 —
+      // past the real file's EOF). Committing that raw line makes the node-map lookup miss.
+      // With the mapCallSiteSource mapper the call site resolves in ORIGINAL coords
+      // (Feed.tsx:30:8) and matches the server node map. (An editable leaf never walks here.)
+      const buttonStack = new Error();
+      buttonStack.stack = 'Error\n    at http://localhost:5173/src/components/Feed.tsx:65:84';
+      const buttonComponent = mockFiber({ tag: 0, type: function Button() {}, _debugStack: buttonStack });
+      const internalButton = mockFiber({
         tag: 5,
-        type: 'div',
-        return: tweetComponent,
-        _debugSource: { fileName: '/app/src/components/Tweet.tsx', lineNumber: 20, columnNumber: 4 },
+        type: 'button',
+        return: buttonComponent,
+        _debugSource: { fileName: '/app/node_modules/@acme/ui/dist/button.js', lineNumber: 20, columnNumber: 4 },
       });
-      tweetComponent.child = internalDiv;
+      buttonComponent.child = internalButton;
 
       adapter = mockAdapter({
-        getSourceLocation: () => ({ fileName: '/app/src/components/Tweet.tsx', line: 20, column: 3 }),
+        getSourceLocation: () => ({ fileName: '/app/node_modules/@acme/ui/dist/button.js', line: 20, column: 3 }),
         getItemIndex: () => 0,
       });
       transport = mockTransport();
-      // MAPPED-only mapper: the <Tweet> component fiber → original Feed.tsx:30:8 (never 65:84).
+      // MAPPED-only mapper: the <Button> component fiber → original Feed.tsx:30:8 (never 65:84).
       const mapCallSiteSource = (f: Fiber) =>
-        f === tweetComponent ? { fileName: 'src/components/Feed.tsx', line: 30, column: 8 } : null;
+        f === buttonComponent ? { fileName: 'src/components/Feed.tsx', line: 30, column: 8 } : null;
       tracer = new ElementTracer(adapter, transport, mapCallSiteSource);
       tracer.renderedFile = 'src/App.tsx';
       transport.simulateMessage({
@@ -403,7 +408,7 @@ describe('ElementTracer', () => {
         nodes: [
           {
             nodeRef: 'src/components/Feed.tsx:30:8',
-            tag: 'Tweet',
+            tag: 'Button',
             loc: { fileName: 'src/components/Feed.tsx', line: 30, column: 8 },
             endLoc: { fileName: 'src/components/Feed.tsx', line: 30, column: 40 },
             parentRef: null,
@@ -414,7 +419,7 @@ describe('ElementTracer', () => {
         ],
       });
 
-      const result = tracer.resolveClickLocal(attachFiber({} as HTMLElement, internalDiv));
+      const result = tracer.resolveClickLocal(attachFiber({} as HTMLElement, internalButton));
 
       // Resolves to the MAPPED call site (never the compiled Feed.tsx:65:83), no server fallback.
       expect(result?.nodeRef).toBe('src/components/Feed.tsx:30:8');

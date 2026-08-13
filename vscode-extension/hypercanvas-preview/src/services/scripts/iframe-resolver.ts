@@ -8,6 +8,7 @@ import {
   isUnsymbolicatedReact19Fiber,
   stripNodePodPrefix,
 } from '@shared/element-tracing/fiber-internals';
+import { isEditableSourcePath } from '@shared/element-tracing/editable-source';
 import { FiberSourceIndex, getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-index';
 import { isSyntheticPreviewPath } from '@shared/element-tracing/synthetic-preview';
 import type { SourceLocation } from '@shared/element-tracing/types';
@@ -313,6 +314,22 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
       if (!coldCallSite) {
         source = target.source;
         itemIndex = target.itemIndex;
+      }
+
+      // The resolved source is a NON-editable dependency internal (node_modules primitive).
+      // Committing it would target uneditable node_modules code whose style writes then fail.
+      if (!isEditableSourcePath(source.fileName)) {
+        // Only defer when the call site is genuinely COLD — there is a real chance the NEXT
+        // pass resolves to the editable call site once its frame warms. `resolveClickLocal` is
+        // reused for HOVER (shared/canvas-interaction/click-handler.ts's handleMouseOver), so
+        // deferring unconditionally would register a pending "click" as a side effect of merely
+        // hovering, which the TTL-bounded warm-retry could later commit as a spurious selection.
+        // When `coldCallSite` is false, the walk already completed and found NO editable
+        // ancestor anywhere (a definitive miss) — waiting can never improve that, so this is a
+        // terminal "unresolvable" result: return null WITHOUT deferring (matches the SaaS
+        // ElementTracer path, which fails closed to null for the same case). (HYP-1006)
+        if (coldCallSite && fiber !== null) deferToWarmRetry(fiber);
+        return null;
       }
 
       // Belt-and-suspenders: resolveCallSiteTarget already recovers the element's real
