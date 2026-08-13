@@ -340,7 +340,7 @@ export function registerCopilotMcp(context: vscode.ExtensionContext, port: numbe
 
     type RegisterFn = (id: string, provider: Record<string, unknown>) => vscode.Disposable | undefined;
     const register = lm.registerMcpServerDefinitionProvider as RegisterFn;
-    const disposable = register('hypercanvas.ctx.mcpServer', {
+    const disposable = register('hypercanvas.mcpServer', {
       onDidChangeMcpServerDefinitions: didChangeEmitter.event,
       provideMcpServerDefinitions: async () => [
         new McpHttpServerDefinition(
