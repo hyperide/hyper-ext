@@ -14,7 +14,10 @@
 # Knobs (env):
 #   LEFTOVER_BASE        diff base. Default origin/main -> main -> full-tree scan.
 #   LEFTOVER_INCLUDE     ERE of file paths to scan. Default: source-ish extensions.
-#   LEFTOVER_EXCLUDE     ERE of paths to skip. Default: vendored/build/lock dirs.
+#   LEFTOVER_EXCLUDE     ERE of paths to skip. Default: vendored/build/lock dirs +
+#                        the gate's own dir (ci/leftover-grep/): this script's comments
+#                        and regexes contain the very tokens it greps for, so without the
+#                        self-exclude any PR that edits the gate would be blocked by it.
 #   TICKET_REGEX         what makes a TODO "tracked". Default: TODO/FIXME followed by
 #                        (ABC-123) or (#123) or a URL. Customize for your tracker.
 #   ALLOW_CONSOLE        "1" = console.log is a WARNING, not a failure (default: block).
@@ -30,7 +33,12 @@ set -euo pipefail
 LEFTOVER_BASE="${LEFTOVER_BASE:-origin/main}"
 LEFTOVER_HEAD="${LEFTOVER_HEAD:-HEAD}"
 LEFTOVER_INCLUDE="${LEFTOVER_INCLUDE:-\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|rb|java|kt|c|h|cpp|hpp|cs|php|swift|sh)$}"
-LEFTOVER_EXCLUDE="${LEFTOVER_EXCLUDE:-(^|/)(node_modules|dist|build|out|vendor|\.git|coverage|__snapshots__)/|\.min\.(js|css)$|lock$}"
+# NOTE: ci/leftover-grep/ excludes the gate's OWN source — its self-documenting comments
+# and detection regexes spell out the very markers it hunts for (focused-test markers,
+# debugger statements, and untracked-todo comments). Without this, any PR touching this
+# script would be flagged by it. This exempts ONLY the gate's own dir; every other path
+# is still scanned exactly as before.
+LEFTOVER_EXCLUDE="${LEFTOVER_EXCLUDE:-(^|/)ci/leftover-grep/|(^|/)(node_modules|dist|build|out|vendor|\.git|coverage|__snapshots__)/|\.min\.(js|css)$|lock$}"
 TICKET_REGEX="${TICKET_REGEX:-[A-Z]+-[0-9]+|#[0-9]+|https?://}"
 ALLOW_CONSOLE="${ALLOW_CONSOLE:-0}"
 LEFTOVER_FULLTREE="${LEFTOVER_FULLTREE:-0}"

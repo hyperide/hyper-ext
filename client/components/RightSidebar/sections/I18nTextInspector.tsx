@@ -63,6 +63,18 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   const [keySearch, setKeySearch] = useState('');
   const [showKeyDropdown, setShowKeyDropdown] = useState(false);
   const [optimisticKey, setOptimisticKey] = useState<string | null>(null);
+  // Key of the last key-write we fired and have NOT yet seen confirmed by a re-read.
+  // Distinct from optimisticKey, which the safety-net below wipes the moment realKey
+  // equals it. A stale-window revert (HYP-752) writes a key that ALREADY equals the
+  // stale realKey, so realKey===optimisticKey is true immediately and the safety-net
+  // clears the optimistic marker before the write is confirmed. If that revert RPC then
+  // silently fails (success reported, file unchanged), currentKey===realKey===the-target
+  // and the no-op guard would block every retry until a later re-read exposes the truth.
+  // This ref survives the safety-net so commitKey can tell "confirmed no-op" from
+  // "unconfirmed pending write that happens to equal realKey" and allow the retry.
+  // Cleared only on genuine confirmation (binding identity change) or explicit failure
+  // (rollbackKey) — both handled in the resync effect below.
+  const pendingKeyWriteRef = useRef<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -93,6 +105,10 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     prevBindingIdentityRef.current = bindingIdentity;
     if (isBindingChange) {
       pendingTextRef.current = null;
+      // A fresh binding identity means a re-read actually landed — the pending key
+      // write is now confirmed (or superseded). Drop the pending-write marker so a
+      // subsequent pick of the same key is correctly treated as a no-op.
+      pendingKeyWriteRef.current = null;
       setLocalText(resolvedText);
       setOptimisticKey(null);
       return;
@@ -103,6 +119,9 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     if (isRollback) {
       // Explicit failure — drop the pending guard and snap back so the user sees the truth.
       pendingTextRef.current = null;
+      // The parent already rolled back; clear the pending-write marker so the next pick
+      // starts from a clean slate rather than re-firing a write the parent abandoned.
+      pendingKeyWriteRef.current = null;
       setLocalText(resolvedText);
       // Also clear the optimistic key so the combobox trigger reverts to the real key.
       // Without this, optimisticKey stays on the new (failed) key even though realKey
@@ -190,22 +209,42 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   // inside an already-resolved editable dictionary.
   const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch && canCreateKeys;
 
-  const commitKey = (key: string) => {
-    // Compare against realKey, not currentKey (optimisticKey ?? realKey).
-    // optimisticKey can leak across test boundaries / silent write failures: when the
-    // source file stays at the original key (realKey unchanged), using currentKey blocks
-    // the retry write because optimisticKey already equals the requested key.
-    // Using realKey always allows the write when the file state differs from the requested
-    // key, which is the correct guard.
-    if (!key || key === realKey) {
+  // Returns true when the change was committed (onKeyChange fired), false on a no-op —
+  // the plain-input call sites use the result to decide whether to reset the visible value.
+  const commitKey = (key: string): boolean => {
+    // Suppress the write ONLY when the requested key is a true no-op: it equals BOTH the
+    // real file key AND the currently displayed (optimistic) key. Checking realKey alone
+    // is too strict and checking currentKey alone is too loose — each breaks one of two
+    // sequential-change scenarios that must both work (HYP-752 / PI-7-I18N-6):
+    //   - Silent write failure / retry: realKey is stale (unchanged file), optimisticKey holds
+    //     the requested key. key === currentKey but key !== realKey → must still fire (retry the
+    //     write that silently didn't land). A pure currentKey guard would wrongly block this.
+    //   - Sequential revert: user picks B (optimisticKey=B) then reverts to the original key A
+    //     before the re-read lands (realKey still A). key === realKey but key !== currentKey →
+    //     must fire (it IS a change relative to what the user sees). A pure realKey guard would
+    //     wrongly block this.
+    // Both reduce to: block iff the requested key matches the real key AND the displayed key.
+    //
+    // One more exception (HYP-752 P2): a stale-window revert writes a key that already equals the
+    // stale realKey, so the safety-net wipes optimisticKey and currentKey falls back to realKey ===
+    // the-target. If that revert RPC silently failed (success reported, file unchanged) the
+    // displayed key matches the real key yet the write never landed — and pendingKeyWriteRef still
+    // holds the target because no re-read confirmed it. Re-selecting that key must RETRY, not be
+    // dropped as a no-op. So a requested key that equals an UNCONFIRMED pending write is never a
+    // no-op. (A confirmed write clears the ref via the resync effect, so a genuine no-op still
+    // blocks.)
+    const isUnconfirmedRetry = key === pendingKeyWriteRef.current;
+    if (!key || (key === realKey && key === currentKey && !isUnconfirmedRetry)) {
       setShowKeyDropdown(false);
       setKeySearch('');
-      return;
+      return false;
     }
+    pendingKeyWriteRef.current = key;
     setOptimisticKey(key);
     onKeyChange?.(key);
     setShowKeyDropdown(false);
     setKeySearch('');
+    return true;
   };
 
   return (
@@ -305,7 +344,9 @@ export const I18nTextInspector = memo(function I18nTextInspector({
               if (e.key === 'Enter') {
                 e.preventDefault();
                 const v = (e.target as HTMLInputElement).value.trim();
-                if (v && v !== realKey) commitKey(v);
+                // commitKey owns the no-op guard (realKey + currentKey); don't pre-filter on
+                // realKey alone here or a sequential revert to the original key gets dropped.
+                commitKey(v);
               } else if (e.key === 'Escape') {
                 (e.target as HTMLInputElement).value = currentKey;
                 (e.target as HTMLInputElement).blur();
@@ -313,8 +354,9 @@ export const I18nTextInspector = memo(function I18nTextInspector({
             }}
             onBlur={(e) => {
               const v = e.target.value.trim();
-              if (v && v !== realKey) commitKey(v);
-              else e.target.value = currentKey;
+              // Delegate the no-op guard to commitKey; reset the visible value only when
+              // nothing was committed (empty or a true no-op).
+              if (!commitKey(v)) e.target.value = currentKey;
             }}
             className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
           />

@@ -562,6 +562,134 @@ describe('I18nTextInspector', () => {
     expect(onKeyChange).toHaveBeenCalledTimes(2);
   });
 
+  it('fires onKeyChange when reverting to the original key while realKey is still stale (sequential change, HYP-752)', () => {
+    // Scenario (sequential key change within the HMR/re-read window):
+    // 1. realKey='habits.greeting'. User picks 'habits.farewell' → optimisticKey='habits.farewell'.
+    //    The combobox trigger now shows 'habits.farewell'.
+    // 2. Before the server re-read lands, realKey is STILL 'habits.greeting'.
+    // 3. User changes their mind and picks 'habits.greeting' again (revert to original).
+    //    From the user's POV this IS a change: the visible/optimistic key is 'habits.farewell',
+    //    so going back to 'habits.greeting' must fire a write.
+    // A naive guard of `key === realKey` would WRONGLY block step 3 because the requested key
+    // happens to equal the stale realKey. The correct guard must compare against the displayed
+    // (optimistic) key, while still allowing a retry of an UNCHANGED-realKey write (the silent
+    // write-failure case above). This is the distinct PI-7-I18N-6 / I18N-KEY-BUG-4 boundary.
+    const onKeyChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'habits.greeting' }}
+        availableKeys={['habits.greeting', 'habits.farewell']}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+      />,
+    );
+
+    // Step 1: greeting → farewell. optimisticKey becomes 'habits.farewell'.
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.click(screen.getByTestId('i18n-key-option-habits.farewell'));
+    expect(onKeyChange).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('i18n-key-input').textContent).toBe('habits.farewell');
+
+    // Step 3: revert farewell → greeting while realKey is STILL stale ('habits.greeting').
+    // This is a real change relative to what the user sees. It MUST fire.
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.click(screen.getByTestId('i18n-key-option-habits.greeting'));
+    expect(onKeyChange).toHaveBeenCalledTimes(2);
+    expect(onKeyChange).toHaveBeenLastCalledWith('habits.greeting');
+  });
+
+  it('retries a silently-failed stale-window revert when the user re-selects the original key (HYP-752 P2)', () => {
+    // P2 (Codex review on PR #486): the newly-allowed stale-window revert can silently fail and
+    // get stuck with no retry path.
+    //
+    // Timeline:
+    //  1. realKey='A'. User picks 'B' → optimisticKey='B'. currentKey='B'.
+    //  2. Before the re-read lands, realKey is STILL 'A'. User reverts and picks 'A' (the revert
+    //     this PR newly allows). commitKey fires onKeyChange('A') and sets optimisticKey='A'.
+    //  3. The existing safety-net effect (realKey==='A' === optimisticKey==='A') immediately
+    //     clears optimisticKey → currentKey falls back to realKey='A'.
+    //  4. The revert RPC reports SUCCESS but the file is unchanged (silent write failure — the very
+    //     mode this guard exists to handle). realKey stays 'A', so no re-render carries a new key.
+    //  5. User notices nothing changed and picks 'A' again. Now currentKey===realKey==='A', so the
+    //     no-op guard (key===realKey && key===currentKey) treats it as a true no-op and DROPS the
+    //     retry. The file stays on 'B' until a later re-read happens to expose 'B'.
+    //
+    // The revert must leave a pending/optimistic marker that is NOT discarded just because it equals
+    // the stale realKey, so re-selecting 'A' fires a retry write.
+    const onKeyChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'A' }}
+        availableKeys={['A', 'B']}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+      />,
+    );
+
+    // Step 1: A → B. optimisticKey becomes 'B'.
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.click(screen.getByTestId('i18n-key-option-B'));
+    expect(onKeyChange).toHaveBeenCalledTimes(1);
+    expect(onKeyChange).toHaveBeenLastCalledWith('B');
+    expect(screen.getByTestId('i18n-key-input').textContent).toBe('B');
+
+    // Step 2: revert B → A while realKey is STILL stale ('A'). Must fire (it IS a change vs. 'B').
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.click(screen.getByTestId('i18n-key-option-A'));
+    expect(onKeyChange).toHaveBeenCalledTimes(2);
+    expect(onKeyChange).toHaveBeenLastCalledWith('A');
+
+    // Steps 3+4 happen with no prop change: the revert RPC "succeeded" but wrote nothing, so realKey
+    // stays 'A' and the component never re-renders with a fresh key. The safety-net effect runs and
+    // (in the buggy version) wipes the pending marker because realKey === optimisticKey === 'A'.
+
+    // Step 5: user re-selects 'A' to retry. This MUST fire onKeyChange('A') again.
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.click(screen.getByTestId('i18n-key-option-A'));
+    expect(onKeyChange).toHaveBeenCalledTimes(3);
+    expect(onKeyChange).toHaveBeenLastCalledWith('A');
+  });
+
+  it('stops retrying once a key write is confirmed by a re-read (pending marker cleared, HYP-752 P2)', () => {
+    // Guards the clear-on-confirmation half of the P2 fix: the pending-write marker must be dropped
+    // when a fresh binding identity (a real re-read) lands, so a confirmed write does NOT turn into
+    // an endless retry. Without the clear, the no-op guard would be permanently disabled for that key.
+    const onKeyChange = mock(() => {});
+    const { rerender } = render(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'A' }}
+        availableKeys={['A', 'B']}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+      />,
+    );
+
+    // Pick B → fires, pendingKeyWriteRef='B'.
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.click(screen.getByTestId('i18n-key-option-B'));
+    expect(onKeyChange).toHaveBeenCalledTimes(1);
+
+    // The write lands: the re-read carries the new realKey 'B' (binding identity changes) → the
+    // resync effect clears the pending marker.
+    rerender(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'B' }}
+        availableKeys={['A', 'B']}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+      />,
+    );
+
+    // Re-selecting the now-current, confirmed key 'B' must be a true no-op — no further write.
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.click(screen.getByTestId('i18n-key-option-B'));
+    expect(onKeyChange).toHaveBeenCalledTimes(1);
+  });
+
   it('does not fire onKeyChange when selecting the current key in combobox', () => {
     const onKeyChange = mock(() => {});
     render(
