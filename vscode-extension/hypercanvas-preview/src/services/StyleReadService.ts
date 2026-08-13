@@ -33,8 +33,8 @@ import { detectI18nPackage } from '@shared/i18n-text/detect-i18n-package';
 import { type DomTextI18nMatch, resolveI18nByDomText } from '@shared/i18n-text/resolve-by-dom-text';
 import { FLAT_LOCALE_DIRS, discoverLayout, resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
 import type { I18nBindingResult, I18nLibrary, I18nTextBinding, PackageJsonDeps } from '@shared/i18n-text/types';
+import { listKeysForBinding } from '@shared/i18n-text/adapters/registry';
 import { isBundleArtifactPath } from './bundle-artifact-path';
-import { AdapterFactory } from './i18n/AdapterFactory';
 import { resolveWorkspacePath } from './workspace-path';
 
 export interface ElementStyleReadResult {
@@ -228,20 +228,16 @@ export class StyleReadService {
     library?: I18nLibrary,
   ): Promise<string[]> {
     try {
-      const stub: I18nTextBinding = {
-        kind: 'i18n',
-        library: library ?? 'custom',
-        key: '',
+      // 'custom' is not a structurally-gating library (it means "format unknown, infer from
+      // files"); pass null so library-gated adapters (next-intl/react-intl/i18next) only claim
+      // a file when the project actually uses that library.
+      const registryLibrary = library && library !== 'custom' ? library : null;
+      return await listKeysForBinding(activeLocale, {
+        projectRoot: this._workspaceRoot,
+        fileIO: this._fileIO,
+        library: registryLibrary,
         namespace,
-        activeLocale,
-        availableLocales: [],
-        resolvedText: null,
-        editable: false,
-        writable: false,
-        sourceLocation: { filePath: '', line: 0, column: 0 },
-      };
-      const adapter = await new AdapterFactory(this._workspaceRoot, this._fileIO).forBinding(stub, activeLocale);
-      return adapter.getAvailableKeys(activeLocale);
+      });
     } catch {
       return [];
     }

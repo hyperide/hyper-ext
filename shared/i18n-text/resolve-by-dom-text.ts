@@ -22,13 +22,26 @@
 import type { FileIO } from '../../lib/ast/file-io';
 import { isLocaleCode } from './locale-code';
 import { isExcludedScanPath } from '../fs/scan-excludes';
+// Single source of truth for locale dirs — shared with the adapter registry so the two
+// historic copies (here + resolve-i18n-resource's FLAT_LOCALE_DIRS) cannot drift.
+import { LOCALE_DIRS } from './adapters/locale-dirs';
 import { findTsDomTextHit, parseTsLocaleObject, resolveLocaleKey } from './ts-locale-ast';
-
-/** Conventional locale directories — kept ONLY as a fast-path hint / no-listFiles fallback. */
-const LOCALE_DIRS = ['locales', 'public/locales', 'src/i18n', 'src/locales', 'messages'];
 
 /** Extensions a translation dictionary can live in. */
 const DICT_EXTENSIONS = ['.json', '.ts', '.js'];
+
+const MERGED_FILE_CANDIDATES = [
+  'src/translations.ts',
+  'src/lib/translations.ts',
+  'client/lib/translations.ts',
+  'lib/translations.ts',
+  'src/i18n.ts',
+  'src/translations.js',
+  'src/lib/translations.js',
+  'client/lib/translations.js',
+  'lib/translations.js',
+  'src/i18n.js',
+];
 
 export interface DomTextI18nMatch {
   key: string;

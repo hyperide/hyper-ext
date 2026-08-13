@@ -578,3 +578,26 @@ describe.skipIf(!existsSync(BULKA_ROOT))('Bulka project — real client/lib/tran
     expect(result.writable).toBe(true);
   });
 });
+
+describe('i18n/ aggregator index.ts is not a locale named "index"', () => {
+  // The shared LOCALE_DIRS now includes `i18n`. A project whose i18n/ holds only an
+  // aggregator `index.ts` (re-exporting per-locale modules) must NOT be mistaken for a
+  // locale file `index.ts`. The real translations live in a merged file and should win.
+  const fileIO = new MemoryFileIO({
+    [`${ROOT}/i18n/index.ts`]: 'export const x = 1;',
+    [`${ROOT}/src/translations.ts`]: `export const translations = { en: { greeting: 'Hello' }, de: { greeting: 'Hallo' } };`,
+  });
+
+  it('resolves from the merged file, not a bogus "index" locale', async () => {
+    const result = await resolveI18nResource({
+      projectRoot: ROOT,
+      library: 'custom',
+      key: 'greeting',
+      activeLocale: 'en',
+      fileIO,
+    });
+    expect(result.resolvedText).toBe('Hello');
+    expect(result.availableLocales.sort()).toEqual(['de', 'en']);
+    expect(result.availableLocales).not.toContain('index');
+  });
+});

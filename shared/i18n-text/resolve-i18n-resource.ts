@@ -6,6 +6,7 @@
  */
 
 import type { FileIO } from '../../lib/ast/file-io';
+import { LOCALE_DIRS } from './adapters/locale-dirs';
 import { parseTsLocaleObject, resolveLocaleKey } from './ts-locale-ast';
 import type { I18nLibrary, ResolveI18nResourceResult } from './types';
 
@@ -78,7 +79,9 @@ async function discoverMergedLayout(
 
 // Well-known flat locale directory layouts, tried in priority order.
 // Exported so consumers like StyleReadService can reuse the same list without drift.
-export const FLAT_LOCALE_DIRS = ['locales', 'public/locales', 'src/i18n', 'src/locales', 'messages'] as const;
+// Aliases the canonical LOCALE_DIRS so this older name keeps working while the list lives in
+// exactly one place (adapters/locale-dirs) and cannot drift from the registry's view.
+export const FLAT_LOCALE_DIRS = LOCALE_DIRS;
 
 export async function discoverLayout(
   projectRoot: string,
@@ -145,10 +148,14 @@ export async function discoverLayout(
 
       // TS/JS files — static object literals are writable via AST; dynamic modules
       // remain unsupported after resolveI18nResource attempts to parse them.
+      // `index.ts`/`index.js` is an aggregator (re-exports per-locale modules), not a locale
+      // file named "index" — skip it so dirs like `i18n/` don't yield a bogus "index" locale.
       const tsFiles = await listFiles(dir, ['.ts', '.js']);
       const flatTs = tsFiles.filter((f) => {
         const rel = f.slice(prefix.length);
-        return !rel.includes('/') && (rel.endsWith('.ts') || rel.endsWith('.js'));
+        if (rel.includes('/')) return false;
+        if (rel === 'index.ts' || rel === 'index.js') return false;
+        return rel.endsWith('.ts') || rel.endsWith('.js');
       });
       if (flatTs.length > 0) {
         const ext = flatTs[0].endsWith('.ts') ? '.ts' : '.js';
