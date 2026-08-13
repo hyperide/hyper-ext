@@ -33,7 +33,7 @@ export interface ParsedTailwindStyles {
 }
 
 // Tailwind spacing scale (0-96 + auto)
-const SPACING_SCALE: Record<string, string> = {
+export const SPACING_SCALE: Record<string, string> = {
   '0': '0px',
   px: '1px',
   '0.5': '0.125rem',

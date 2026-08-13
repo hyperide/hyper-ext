@@ -18,7 +18,9 @@ import IframeCanvas from '@/components/IframeCanvas';
 import { InstanceEditPopup } from '@/components/InstanceEditPopup';
 import LeftSidebar from '@/components/LeftSidebar';
 import { MapEditPopup } from '@/components/MapEditPopup';
+import { useNudgeActions } from '@/lib/nudge';
 import type { MapBoundary } from '@/components/MapOverlay';
+import { NudgeHUD } from '@/components/NudgeHUD/NudgeHUD';
 import RightSidebar from '@/components/RightSidebar';
 import { useProjectUIKit } from '@/components/RightSidebar/hooks/useProjectUIKit';
 import { AnnotationsLayerPortal } from './components/AnnotationsLayerPortal';
@@ -510,6 +512,13 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     selectedItemIndices,
   });
 
+  // Load this project's persisted nudge step overrides (n-edit → s-save). Goes through the port's
+  // setProjectId, not a direct nudgeStore import — SaaS resolves to the singleton-backed port.
+  const { setProjectId: setNudgeProjectId } = useNudgeActions();
+  useEffect(() => {
+    if (activeProjectId) setNudgeProjectId(activeProjectId);
+  }, [activeProjectId, setNudgeProjectId]);
+
   // RAF loop for updating comment sticker positions during scroll/drag
   useCanvasComments({
     activeProjectStatus: activeProject?.status,
@@ -934,6 +943,11 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                     </button>
                   )}
               </div>
+
+              {/* NudgeHUD — absolute bottom-left overlay for pixel/token-precise nudge steps.
+                  SaaS realm: no provider → resolves to the persisted singleton port, shared with
+                  the RightSidebar numeric inputs. Default (SaaS) layout, no className override. */}
+              {!isCodeEditorMode && <NudgeHUD adapter={projectUIKit} />}
 
               {/* Selection overlay container - for design/interact mode (NOT transformed) */}
               {/* Always render to keep ref stable, hide via CSS when not needed */}

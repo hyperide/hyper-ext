@@ -119,6 +119,7 @@ export const StrokeSection = memo(function StrokeSection({
           <NumericInput
             id="hyper-inspector-stroke-width-input"
             testId={TID.inspector.strokeWidth}
+            styleKey="borderWidth"
             value={stroke.width ?? ''}
             onChange={(val) => updateStroke({ width: val }, [['borderWidth', normalizeBorderWidth(val)]])}
             className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0"
