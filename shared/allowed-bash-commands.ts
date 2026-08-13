@@ -5,8 +5,6 @@
  */
 import commands from './allowed-bash-commands.json';
 
-export const ALLOWED_BASH_CATEGORIES = commands.categories;
-
 /** Flat Set of all allowed command names */
 export const ALLOWED_COMMANDS = new Set(Object.values(commands.categories).flat());
 

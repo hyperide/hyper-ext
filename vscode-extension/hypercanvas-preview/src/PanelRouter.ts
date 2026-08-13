@@ -9,7 +9,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
-import type { TracingClientMessage } from '@shared/element-tracing/types';
 import type { I18nLibrary } from '@shared/i18n-text/types';
 import * as vscode from 'vscode';
 import { AstBridge } from './bridges/AstBridge';
@@ -35,7 +34,6 @@ export class PanelRouter {
   private _context: vscode.ExtensionContext;
   private _currentWebview: vscode.Webview | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
-  private _onElementTracingMessage?: (msg: TracingClientMessage) => void;
 
   constructor(config: PanelRouterConfig) {
     this._astBridge = new AstBridge(config.workspaceRoot);
@@ -80,16 +78,6 @@ export class PanelRouter {
     const msg = message as { type?: string };
     const type = msg.type;
     if (!type) return false;
-
-    // Element tracing messages — forward to PostMessageTracingTransport
-    const TRACING_PREFIX = 'element-tracing:';
-    if (type.startsWith(TRACING_PREFIX)) {
-      if (this._onElementTracingMessage) {
-        const { payload } = message as { payload: TracingClientMessage };
-        this._onElementTracingMessage(payload);
-      }
-      return true;
-    }
 
     // State sync
     if (type === 'state:update') {
@@ -349,14 +337,6 @@ export class PanelRouter {
    */
   setOnOpenAIChat(callback: (prompt: string) => void): void {
     this._onOpenAIChat = callback;
-  }
-
-  /**
-   * Set callback for element-tracing messages from any panel.
-   * Extension host wires this to PostMessageTracingTransport.receiveFromWebview().
-   */
-  setOnElementTracingMessage(callback: (msg: TracingClientMessage) => void): void {
-    this._onElementTracingMessage = callback;
   }
 
   dispose(): void {

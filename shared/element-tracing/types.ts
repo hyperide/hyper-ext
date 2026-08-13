@@ -133,15 +133,6 @@ export interface TracingTransport {
   onConnectionChange(handler: (connected: boolean) => void): () => void;
 }
 
-/* ─── Mutation response extension ────────────────────────────────── */
-
-export interface MutationResponse {
-  success: boolean;
-  nodeRef?: NodeRef;
-  newLoc?: SourceLocation;
-  error?: string;
-}
-
 /* ─── Sync state ─────────────────────────────────────────────────── */
 
 export type SyncState = 'synced' | 'awaiting-both' | 'awaiting-hmr' | 'awaiting-map';

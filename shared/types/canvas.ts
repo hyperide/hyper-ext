@@ -134,11 +134,6 @@ export const DEFAULT_VIEWPORT: ViewportState = {
   panY: 0,
 };
 
-export const DEFAULT_INSTANCE_POSITION: InstancePosition = {
-  x: 100,
-  y: 100,
-};
-
 export const DEFAULT_INSTANCE_CONFIG: InstanceConfig = {
   x: 100,
   y: 100,

@@ -3,13 +3,10 @@
  * Handles template literals, cn() calls, and concatenation
  */
 
-import _generate from '@babel/generator';
 import * as t from '@babel/types';
 import { getConflictingPrefixes } from '../tailwind/generator.js';
 import type { ClassNameLocation } from '../types.js';
 import { getAttribute, setAttribute } from './mutator.js';
-
-const generate = (_generate as unknown as { default: typeof _generate }).default || _generate;
 
 /**
  * Detect type of className attribute
@@ -632,24 +629,4 @@ export function modifyDynamicClassName(
     // For call expressions and other expressions, always wrap
     wrapInConcatenation(element, newClasses);
   }
-}
-
-/**
- * Get className as code string (for debugging)
- */
-export function getClassNameCode(element: t.JSXElement): string {
-  const attr = getAttribute(element, 'className');
-  if (!attr) return '';
-
-  if (t.isStringLiteral(attr)) {
-    return `"${attr.value}"`;
-  }
-
-  if (t.isJSXExpressionContainer(attr)) {
-    const expr = attr.expression;
-    if (t.isJSXEmptyExpression(expr)) return '';
-    return `{${generate(expr).code}}`;
-  }
-
-  return '';
 }

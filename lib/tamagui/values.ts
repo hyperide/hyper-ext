@@ -271,29 +271,6 @@ export function getTamaguiTokenFromHex(hex: string): string | null {
 }
 
 /**
- * Check if a token is a valid Tamagui token (palette or semantic)
- */
-export function isValidTamaguiToken(token: string): boolean {
-  const cleanToken = token.startsWith('$') ? token.slice(1) : token;
-  const match = cleanToken.match(/^([a-z]+)(\d+)$/i);
-  if (!match) return false;
-
-  const [, colorName, shade] = match;
-  const colorNameLower = colorName.toLowerCase();
-  const shadeNum = Number.parseInt(shade, 10);
-
-  // Check semantic tokens
-  const semanticData = TAMAGUI_SEMANTIC_TOKENS[colorNameLower as keyof typeof TAMAGUI_SEMANTIC_TOKENS];
-  if (semanticData && shadeNum in semanticData) return true;
-
-  // Check palette colors
-  const colorData = TAMAGUI_COLORS[colorNameLower as keyof typeof TAMAGUI_COLORS];
-  if (colorData && shadeNum in colorData) return true;
-
-  return false;
-}
-
-/**
  * Get all Tamagui colors as a flat list of {token, hex} entries (palette + semantic).
  * Palette tokens come first so stable sort prefers them over semantic tokens at equal distance.
  */

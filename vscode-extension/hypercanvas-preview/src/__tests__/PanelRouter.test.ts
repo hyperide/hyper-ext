@@ -80,7 +80,6 @@ function createMockStateHub() {
     onChange: mock(() => () => {}),
     sendInit: mock(),
     broadcast: mock(),
-    broadcastTracingMessage: mock(),
     dispose: mock(),
   };
 }

@@ -403,14 +403,6 @@ export function removeConflictingClasses(
 }
 
 /**
- * Remove conflicting classes from className (legacy, returns only string)
- * @deprecated Use removeConflictingClasses instead
- */
-export function removeConflictingClassesString(className: string, styleKeys: string[]): string {
-  return removeConflictingClasses(className, styleKeys).preserved;
-}
-
-/**
  * Parse Tailwind classes and extract CSS values
  */
 export function parseTailwindClasses(className: string): ParsedTailwindStyles {

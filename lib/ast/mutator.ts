@@ -293,23 +293,6 @@ export function makeNotSelfClosing(element: t.JSXElement): void {
 }
 
 /**
- * Add child to element
- */
-export function addChild(
-  element: t.JSXElement,
-  child: t.JSXElement | t.JSXText | t.JSXExpressionContainer,
-  index?: number,
-): void {
-  makeNotSelfClosing(element);
-
-  if (index !== undefined && index >= 0 && index < element.children.length) {
-    element.children.splice(index, 0, child);
-  } else {
-    element.children.push(child);
-  }
-}
-
-/**
  * Parse mixed content like "{hour.toString()}:00" into JSX children nodes.
  * Returns an array of t.JSXText and t.JSXExpressionContainer nodes.
  */
