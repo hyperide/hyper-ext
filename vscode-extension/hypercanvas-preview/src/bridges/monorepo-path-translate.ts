@@ -27,7 +27,6 @@ import { isAbsolute, join } from 'node:path';
 
 import { stripViteFsPrefix } from '@shared/element-tracing/path-normalization';
 
-
 /** Convert any backslash separators to forward slashes. */
 function toForwardSlashes(p: string): string {
   return p.includes('\\') ? p.replace(/\\/g, '/') : p;

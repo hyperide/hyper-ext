@@ -22,6 +22,17 @@
   "ignore": [
     "templates/**",
     "server/docker/**",
+    // Local runtime junk that lands inside the checkout. Both dirs ARE gitignored,
+    // but the contents are themselves git repos/worktrees (nested .git), which breaks
+    // knip's gitignore chain — files inside then match the root entry globs
+    // (**/*.test.ts, **/__tests__/**) and fail the run with unlisted-dependency
+    // errors from foreign projects. HYP-653.
+    // - cloned-projects/: user projects cloned at runtime (server/routes/project-creation.ts)
+    // - .claude/worktrees/, .ralphex/worktrees/: agent-created git worktrees
+    // (same dir set bunfig.toml pathIgnorePatterns excludes from `bun test`)
+    "cloned-projects/**",
+    ".claude/worktrees/**",
+    ".ralphex/worktrees/**",
     // Runtime-loaded, not statically imported — knip can't see these refs:
     // - iframe-console-capture.js: read via Bun.file('./shared/scripts/...') in
     //   server/main.ts, served at /__hypercanvas/iframe-console-capture.js, and
