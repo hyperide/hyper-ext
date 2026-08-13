@@ -194,12 +194,24 @@ export class PreviewModeManager {
         // exactly like vite-spa-jsx-router. Only a genuinely router-less app falls through to
         // entry-file patching below.
         const routerFile = await this.detectRouterFile();
-        if (routerFile) {
-          const wrote = await this._fileManager.patchRouterConfig(routerFile);
-          if (wrote) await this._waitForPreviewRouteUpdate();
+        if (routerFile && (await this._tryPatchRouterFile(routerFile))) {
+          // We patched the router. If a PRIOR data-router selection had fallen back to entry-file
+          // patching (e.g. the user just converted createBrowserRouter([...]) into a literal
+          // <Routes>), that entry patch is now stale and still severs the routed app shell — drop
+          // it so the two strategies never stay managed at once (HYP-934 review). _applyPatchIfNeeded
+          // does not need this: it pre-reverts both patches before repatching.
+          // That revert is a LATER entry-file write than the router patch, so wait for HMR to
+          // settle it before the extension navigates — the router patch's own barrier already
+          // fired inside _tryPatchRouterFile but no longer covers this final write.
+          if (await this._revertEntryPatchIfPresent()) await this._waitForPreviewRouteUpdate();
           return 'ok';
         }
-        // No JSX router found — patch entry file and wait for HMR before navigation.
+        // No JSX router found, OR a matched router file that patchRouterConfig could not patch
+        // (a react-router v6.4+ data router: createBrowserRouter([...]) + <RouterProvider>, no
+        // literal <Routes> — HYP-934). Fall back to entry-file patching. First drop any stale
+        // router patch from a prior JSX-<Routes> selection so both strategies never stay managed
+        // at once, then wait for HMR before navigation instead of reporting a false success.
+        await this._revertJsxPatchIfPresent();
         return this._patchEntryFile({ armRecompileGate: false, waitForPreviewRouteUpdate: true });
       }
       case 'webpack':
@@ -412,27 +424,57 @@ export class PreviewModeManager {
     }
   }
 
-  private async _revertEntryPatchIfPresent(): Promise<void> {
+  /** @returns true when a managed entry patch was actually reverted (a file write happened). */
+  private async _revertEntryPatchIfPresent(): Promise<boolean> {
     const entryFile = await this._detectEntryFile();
-    if (!entryFile) return;
+    if (!entryFile) return false;
     try {
       const content = await this._io.readFile(entryFile);
-      if (content.includes('@hyperide-managed')) await this._fileManager.revertEntryFile(entryFile);
+      if (content.includes('@hyperide-managed')) {
+        await this._fileManager.revertEntryFile(entryFile);
+        return true;
+      }
     } catch {
       /* not accessible */
     }
+    return false;
+  }
+
+  /**
+   * Inject the /test-preview route into an app's react-router <Routes> and wait for the route
+   * to go live. Returns true only when a route was actually written. Returns false when
+   * patchRouterConfig no-ops — a matched router file that patchRouterConfig cannot patch, i.e. a
+   * react-router v6.4+ data router (createBrowserRouter([...]) + <RouterProvider>, no literal
+   * <Routes>) — so the caller falls back to entry-file patching instead of reporting a false
+   * success and leaving the app with no /test-preview route (HYP-934). Awaiting the route-update
+   * barrier here (not only in onComponentSelected) closes the second HYP-934 gap: _applyPatchIfNeeded
+   * runs on the isolated→app-shell round trip immediately before onModeChange(false) + an iframe
+   * refresh, which previously could navigate before the newly-patched route was live.
+   */
+  private async _tryPatchRouterFile(routerFile: string): Promise<boolean> {
+    const outcome = await this._fileManager.patchRouterConfig(routerFile);
+    // Only a genuinely unpatchable file ('no-routes') triggers the entry-file fallback. An
+    // 'already-present' result means the router is already patched (idempotent re-run, e.g. the
+    // extension's file watcher re-firing on our own patch write) — treat it as success and do
+    // NOT fall back, or the entry file would get managed too and bypass the routed app shell.
+    if (outcome === 'no-routes') return false;
+    // Wait for the route to go live only when we actually wrote it; an already-present route
+    // is already live, so there is no HMR to wait for.
+    if (outcome === 'written') await this._waitForPreviewRouteUpdate();
+    return true;
   }
 
   private async _applyPatchIfNeeded(): Promise<void> {
     const detection = await detectFramework(this._projectRoot, this._io);
     if (detection.framework === 'vite-spa-jsx-router' || detection.framework === 'astro') {
       const routerFile = detection.framework === 'vite-spa-jsx-router' ? await this.detectRouterFile() : null;
-      if (routerFile) {
-        await this._fileManager.patchRouterConfig(routerFile);
-        return;
-      }
-      // No JSX router — patch entry file (same as webpack/parcel)
-      await this._patchEntryFile();
+      if (routerFile && (await this._tryPatchRouterFile(routerFile))) return;
+      // No JSX router, or a data router patchRouterConfig could not patch (HYP-934) — entry file.
+      // Match onComponentSelected's Vite/bun options: a Vite app must NOT arm the webpack
+      // recompile gate (it emits no webpack marker) and MUST await the HMR route-update barrier
+      // before onModeChange(false) triggers the iframe refresh, or the preview navigates before
+      // the freshly-patched entry is live.
+      await this._patchEntryFile({ armRecompileGate: false, waitForPreviewRouteUpdate: true });
     } else if (detection.framework === 'webpack' || detection.framework === 'parcel') {
       await this._patchEntryFile();
     } else if (detection.framework === 'bun') {
@@ -440,10 +482,7 @@ export class PreviewModeManager {
       // this runs on the isolated→app-shell round trip, so it must restore router-based
       // patching for a bun-with-router app instead of regressing to entry-only patching.
       const routerFile = await this.detectRouterFile();
-      if (routerFile) {
-        await this._fileManager.patchRouterConfig(routerFile);
-        return;
-      }
+      if (routerFile && (await this._tryPatchRouterFile(routerFile))) return;
       await this._patchEntryFile({ armRecompileGate: false, waitForPreviewRouteUpdate: true });
     }
   }

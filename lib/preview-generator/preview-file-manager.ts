@@ -73,6 +73,21 @@ export interface PreviewFileManagerConfig {
   providerWrap?: ProviderWrapConfig;
   ssrMock?: SSRMockConfig;
 }
+
+/**
+ * Result of {@link PreviewFileManager.patchRouterConfig}. The three outcomes are NOT
+ * interchangeable — only 'no-routes' should trigger the caller's entry-file fallback:
+ * - 'written'         — a /test-preview <Route> was injected into a literal <Routes>.
+ * - 'already-present' — <Routes> exists and the route is already installed (idempotent
+ *                       re-run / the extension's watcher re-firing); nothing written, but
+ *                       the router IS patched, so this is a success, not a fallback trigger.
+ * - 'no-routes'       — the matched router file has no literal <Routes> to inject into
+ *                       (e.g. a react-router v6.4+ data router: createBrowserRouter([...]) +
+ *                       <RouterProvider>). The caller must fall back to entry-file patching
+ *                       instead of reporting a false success (HYP-934).
+ */
+export type RouterPatchOutcome = 'written' | 'already-present' | 'no-routes';
+
 export class PreviewFileManager {
   private projectRoot: string;
   private workspaceRoot: string;
@@ -1119,7 +1134,7 @@ export class PreviewFileManager {
    * Uses recast for AST editing (preserves formatting). Tags with @hyperide-managed.
    * Only for Vite SPA JSX router (App Shell mode, no wrapper).
    */
-  async patchRouterConfig(routerFilePath: string, onBeforeWrite?: () => void): Promise<boolean> {
+  async patchRouterConfig(routerFilePath: string, onBeforeWrite?: () => void): Promise<RouterPatchOutcome> {
     const source = await this.io.readFile(routerFilePath);
     const ast = recast.parse(source, { parser: RECAST_PARSER });
 
@@ -1140,6 +1155,7 @@ export class PreviewFileManager {
     };
 
     let patched = false;
+    let alreadyPresent = false;
     recast.visit(ast, {
       visitJSXElement(path) {
         const el = path.node;
@@ -1152,6 +1168,13 @@ export class PreviewFileManager {
             existingPreviewRouteIndex >= 0 &&
             (existingCatchAllIndex === -1 || existingPreviewRouteIndex < existingCatchAllIndex)
           ) {
+            // <Routes> exists AND the /test-preview route is already installed in the right
+            // position — nothing to write, but this is NOT an unpatchable file. Distinguishing
+            // this from 'no-routes' is load-bearing: the caller treats 'already-present' as
+            // success and must NOT fall back to entry-file patching (HYP-934), otherwise a
+            // second onComponentSelected() (the extension's own file watcher re-fires on the
+            // patch write) would manage the entry file too and bypass the routed app shell.
+            alreadyPresent = true;
             return false;
           }
 
@@ -1190,8 +1213,9 @@ export class PreviewFileManager {
     });
 
     if (!patched) {
+      if (alreadyPresent) return 'already-present';
       console.warn('[PreviewFileManager] Could not find <Routes> in', routerFilePath);
-      return false;
+      return 'no-routes';
     }
 
     // Add CanvasPreview import at top — path relative to router file directory
@@ -1205,7 +1229,7 @@ export class PreviewFileManager {
     const alreadyImportsPreview = await this._hasImport(routerFilePath, importPath);
     onBeforeWrite?.();
     await this.io.writeFile(routerFilePath, alreadyImportsPreview ? output : previewImport + output);
-    return true;
+    return 'written';
   }
 
   /**

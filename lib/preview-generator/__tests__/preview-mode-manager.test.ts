@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
 import type { FileIO } from '../../ast/file-io';
+import { PreviewFileManager } from '../preview-file-manager';
 import { PreviewModeManager, type WatcherFactory } from '../preview-mode-manager';
 
 /** Minimal FileIO that simulates file presence/absence */
@@ -870,6 +871,28 @@ createRoot(document.getElementById('root')!).render(<App />);
     expect(await io.readFile(`${root}/src/index.tsx`)).not.toContain('@hyperide-managed');
   });
 
+  it('a second onComponentSelected keeps the entry file clean (already-present route is not an entry-file fallback, HYP-934)', async () => {
+    // The extension's file watcher re-fires onComponentSelected() on the router file's own patch
+    // write, so a second selection is routine. patchRouterConfig() returns 'already-present' (not
+    // 'written') on that second run — which must NOT be mistaken for an unpatchable file, or the
+    // entry file gets managed too and the routed app shell is bypassed (codex review finding).
+    const io = makeIO(bunWithRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    expect(await m.onComponentSelected()).toBe('ok');
+    expect(await m.onComponentSelected()).toBe('ok');
+
+    const appContent = await io.readFile(`${root}/src/App.tsx`);
+    // Still exactly one managed route, and the entry file is never touched.
+    expect(appContent.match(/path="\/test-preview"/g)?.length).toBe(1);
+    expect(await io.readFile(`${root}/src/index.tsx`)).not.toContain('@hyperide-managed');
+  });
+
   it('restores router-based patching (not entry patching) after an isolated-mode round trip', async () => {
     // onWrapperCreated/onWrapperDeleted exercise _applyPatchIfNeeded — the same bug existed
     // there independently of onComponentSelected, so this round trip must ALSO end up with
@@ -919,5 +942,365 @@ createRoot(document.getElementById('root')!).render(<App />);
     const entry = await io.readFile(`${root}/src/index.tsx`);
     expect(entry).toContain('@hyperide-managed');
     expect(entry).toContain('./__canvas_preview__');
+  });
+});
+
+describe('PreviewModeManager — data-router app with no literal <Routes> (HYP-934)', () => {
+  // detectRouterFile() matches on createBrowserRouter/createHashRouter/createMemoryRouter as
+  // well as a literal <Routes>, but patchRouterConfig() can only inject a <Route> into a
+  // literal <Routes> JSX element. A react-router v6.4+ data-router (createBrowserRouter([...])
+  // + <RouterProvider>, NO <Routes>) therefore MATCHES detection but patchRouterConfig() no-ops
+  // (console.warn + returns false). Before the fix both call sites ignored that false and
+  // reported success, leaving the app unpatched (no /test-preview route, no entry-file
+  // fallback). The fix falls back to entry-file patching when patchRouterConfig() returns false.
+  const DATA_ROUTER_SOURCE = `import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+const router = createBrowserRouter([
+  { path: '/', element: <Home /> },
+]);
+
+export default function App() {
+  return <RouterProvider router={router} />;
+}
+`;
+  const ENTRY_SOURCE = `import { createRoot } from 'react-dom/client';
+import App from './App';
+
+createRoot(document.getElementById('root')!).render(<App />);
+`;
+
+  function viteDataRouterFiles(): Record<string, string> {
+    return {
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^6' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: DATA_ROUTER_SOURCE,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    };
+  }
+
+  function bunDataRouterFiles(): Record<string, string> {
+    return {
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { react: '^18', 'react-router-dom': '^6' } }),
+      [`${root}/bun.lock`]: '',
+      [`${root}/src/App.tsx`]: DATA_ROUTER_SOURCE,
+      [`${root}/src/index.tsx`]: ENTRY_SOURCE,
+    };
+  }
+
+  it('detectRouterFile() matches a data router (createBrowserRouter) but patchRouterConfig() no-ops on it', async () => {
+    const io = makeIO(viteDataRouterFiles());
+    const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
+    // The premise of the bug: detection MATCHES (so the router branch is taken)...
+    expect(await m.detectRouterFile()).toBe(`${root}/src/App.tsx`);
+    // ...but the JSX-<Routes> injector cannot patch it and leaves it untouched.
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+    expect(await fileManager.patchRouterConfig(`${root}/src/App.tsx`)).toBe('no-routes');
+    expect(await io.readFile(`${root}/src/App.tsx`)).not.toContain('@hyperide-managed');
+  });
+
+  it('onComponentSelected falls back to entry-file patching for a vite data-router app', async () => {
+    const io = makeIO(viteDataRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    const result = await m.onComponentSelected();
+
+    expect(result).toBe('ok');
+    // Entry file gets the App-Shell fallback patch...
+    const entry = await io.readFile(`${root}/src/main.tsx`);
+    expect(entry).toContain('@hyperide-managed');
+    expect(entry).toContain('./__canvas_preview__');
+    // ...and the un-patchable router file is left completely alone.
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).not.toContain('@hyperide-managed');
+    expect(app).not.toContain('/test-preview');
+  });
+
+  it('onComponentSelected falls back to entry-file patching for a bun data-router app', async () => {
+    const io = makeIO(bunDataRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    const result = await m.onComponentSelected();
+
+    expect(result).toBe('ok');
+    const entry = await io.readFile(`${root}/src/index.tsx`);
+    expect(entry).toContain('@hyperide-managed');
+    expect(entry).toContain('./__canvas_preview__');
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).not.toContain('@hyperide-managed');
+    expect(app).not.toContain('/test-preview');
+  });
+
+  it('falls back to entry-file patching for a vite data-router app after an isolated-mode round trip', async () => {
+    const io = makeIO(viteDataRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onWrapperCreated();
+    expect(m.mode).toBe('isolated');
+    await m.onWrapperDeleted();
+    expect(m.mode).toBe('app-shell');
+
+    const entry = await io.readFile(`${root}/src/main.tsx`);
+    expect(entry).toContain('@hyperide-managed');
+    expect(entry).toContain('./__canvas_preview__');
+    expect(await io.readFile(`${root}/src/App.tsx`)).not.toContain('@hyperide-managed');
+  });
+
+  it('falls back to entry-file patching for a bun data-router app after an isolated-mode round trip', async () => {
+    const io = makeIO(bunDataRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onWrapperCreated();
+    expect(m.mode).toBe('isolated');
+    await m.onWrapperDeleted();
+    expect(m.mode).toBe('app-shell');
+
+    const entry = await io.readFile(`${root}/src/index.tsx`);
+    expect(entry).toContain('@hyperide-managed');
+    expect(entry).toContain('./__canvas_preview__');
+    expect(await io.readFile(`${root}/src/App.tsx`)).not.toContain('@hyperide-managed');
+  });
+
+  it('vite data-router entry fallback awaits the barrier before onModeChange(false) and does not arm the webpack gate (HYP-934 review)', async () => {
+    // On the isolated→app-shell round trip a vite data-router falls back to entry-file patching.
+    // That fallback must use the same options as onComponentSelected: never arm the webpack
+    // recompile gate (vite emits no webpack marker) and await the HMR barrier before the
+    // extension is told the mode changed and refreshes the iframe.
+    const order: string[] = [];
+    const io = makeIO(viteDataRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      onModeChange: (isolated: boolean) => order.push(`mode-change:${isolated}`),
+      onBeforeWebpackEntryPatch: () => order.push('arm-gate'),
+      waitForPreviewRouteUpdate: mock(() => {
+        order.push('wait-route-update');
+      }),
+    });
+
+    await m.onWrapperCreated();
+    await m.onWrapperDeleted();
+
+    expect(order).not.toContain('arm-gate');
+    const waitIdx = order.indexOf('wait-route-update');
+    const modeFalseIdx = order.indexOf('mode-change:false');
+    expect(waitIdx).toBeGreaterThanOrEqual(0);
+    expect(modeFalseIdx).toBeGreaterThan(waitIdx);
+  });
+
+  const LITERAL_ROUTES_SOURCE = `import { BrowserRouter, Routes, Route } from 'react-router-dom';
+export default function App() {
+  return <BrowserRouter><Routes><Route path="/" element={<div />} /></Routes></BrowserRouter>;
+}
+`;
+
+  it('reverts the stale entry patch when a data-router app is converted to a literal <Routes> (HYP-934 review)', async () => {
+    // Data-router first selection → entry-file fallback (entry managed). The user then converts
+    // createBrowserRouter([...]) into a literal <Routes>. The next selection must patch the router
+    // AND drop the now-stale entry patch, or the entry redirect keeps bypassing the routed shell.
+    const io = makeIO(viteDataRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onComponentSelected();
+    expect(await io.readFile(`${root}/src/main.tsx`)).toContain('@hyperide-managed');
+
+    await io.writeFile(`${root}/src/App.tsx`, LITERAL_ROUTES_SOURCE);
+    await m.onComponentSelected();
+
+    // Router now managed, entry patch dropped — exactly one strategy is active.
+    expect((await io.readFile(`${root}/src/App.tsx`)).match(/path="\/test-preview"/g)?.length).toBe(1);
+    expect(await io.readFile(`${root}/src/main.tsx`)).not.toContain('@hyperide-managed');
+  });
+
+  it('waits for HMR after reverting the stale entry patch, so the LAST write is barriered (HYP-934 review)', async () => {
+    // The stale-entry revert is a later write than the router patch. The route-update barrier must
+    // fire AFTER that revert write, or the extension navigates while the dev server still serves
+    // the old entry patch. Instrument writes + waits and assert the ordering on the transition.
+    const order: string[] = [];
+    const files: Record<string, string> = { ...viteDataRouterFiles() };
+    const io: FileIO = {
+      async readFile(p: string) {
+        if (p in files) return files[p];
+        throw new Error(`ENOENT: ${p}`);
+      },
+      async writeFile(p: string, c: string) {
+        files[p] = c;
+        order.push(`write:${p.replace(root, '')}`);
+      },
+      async access(p: string) {
+        if (p in files) return;
+        if (Object.keys(files).some((k) => k.startsWith(`${p}/`))) return;
+        throw new Error(`ENOENT: ${p}`);
+      },
+      async deleteFile(p: string) {
+        delete files[p];
+      },
+    };
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {
+        order.push('wait');
+      }),
+    });
+
+    await m.onComponentSelected(); // data-router → entry fallback (entry managed)
+    files[`${root}/src/App.tsx`] = LITERAL_ROUTES_SOURCE;
+    order.length = 0; // only care about the transition selection
+    await m.onComponentSelected(); // <Routes> → router patch + stale-entry revert
+
+    const lastEntryWrite = order.lastIndexOf('write:/src/main.tsx');
+    const lastWait = order.lastIndexOf('wait');
+    expect(lastEntryWrite).toBeGreaterThanOrEqual(0);
+    expect(lastWait).toBeGreaterThan(lastEntryWrite);
+  });
+
+  it('reverts the stale router patch when a <Routes> app is converted to a data router (HYP-934 review)', async () => {
+    // Reverse transition: <Routes> first selection → router managed. The user converts it to a
+    // createBrowserRouter data router. The next selection must fall back to entry-file patching
+    // AND drop the now-dangling managed router import.
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5', 'react-router-dom': '^6' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: LITERAL_ROUTES_SOURCE,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    });
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onComponentSelected();
+    expect(await io.readFile(`${root}/src/App.tsx`)).toContain('@hyperide-managed');
+    expect(await io.readFile(`${root}/src/main.tsx`)).not.toContain('@hyperide-managed');
+
+    await io.writeFile(`${root}/src/App.tsx`, DATA_ROUTER_SOURCE);
+    await m.onComponentSelected();
+
+    // Entry now managed (fallback), router patch reverted — exactly one strategy is active.
+    expect(await io.readFile(`${root}/src/main.tsx`)).toContain('@hyperide-managed');
+    expect(await io.readFile(`${root}/src/App.tsx`)).not.toContain('@hyperide-managed');
+  });
+
+  it('awaits the route-update barrier before onModeChange(false) when _applyPatchIfNeeded patches a real <Routes> router (HYP-934 gap 3)', async () => {
+    // A genuinely patchable JSX <Routes> bun app. On the isolated→app-shell round trip
+    // _applyPatchIfNeeded patches the router; the barrier must be awaited before the extension
+    // is told the mode changed (onModeChange(false)), matching onComponentSelected's ordering.
+    const order: string[] = [];
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { react: '^18', 'react-router-dom': '^6' } }),
+      [`${root}/bun.lock`]: '',
+      [`${root}/src/App.tsx`]: `import { BrowserRouter, Routes, Route } from 'react-router-dom';
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<div />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+`,
+      [`${root}/src/index.tsx`]: ENTRY_SOURCE,
+    });
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      onModeChange: (isolated: boolean) => order.push(`mode-change:${isolated}`),
+      waitForPreviewRouteUpdate: mock(() => {
+        order.push('wait-route-update');
+      }),
+    });
+
+    await m.onWrapperCreated();
+    await m.onWrapperDeleted();
+
+    const waitIdx = order.indexOf('wait-route-update');
+    const modeFalseIdx = order.indexOf('mode-change:false');
+    expect(waitIdx).toBeGreaterThanOrEqual(0);
+    expect(modeFalseIdx).toBeGreaterThan(waitIdx);
+  });
+});
+
+describe('PreviewModeManager — custom (non-react-router) router app falls back to entry patching (conloca WorkspaceRouter, HYP-934)', () => {
+  // conloca-app is a Vite SPA whose App renders a bespoke history/subdomain-based
+  // <WorkspaceRouter> — it imports NO react-router and has none of detectRouterFile's markers
+  // (<Routes>/<BrowserRouter>/createBrowserRouter/…). detectRouterFile() therefore returns null
+  // and the app correctly uses entry-file patching. This locks in that a custom-router app is
+  // never mistaken for a react-router app and never left unpatched.
+  const CUSTOM_ROUTER_APP = `import WorkspaceRouter from './workspace/WorkspaceRouter';
+
+export default function App() {
+  const bootstrap = useBootstrap();
+  return <WorkspaceRouter bootstrap={bootstrap} />;
+}
+`;
+  const ENTRY_SOURCE = `import { createRoot } from 'react-dom/client';
+import App from './app/App';
+
+createRoot(document.getElementById('root')!).render(<App />);
+`;
+
+  function conlocaLikeFiles(): Record<string, string> {
+    return {
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/app/App.tsx`]: CUSTOM_ROUTER_APP,
+      [`${root}/src/main.tsx`]: ENTRY_SOURCE,
+    };
+  }
+
+  it('detectRouterFile() returns null for a custom router app (no react-router markers)', async () => {
+    const io = makeIO(conlocaLikeFiles());
+    const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
+    expect(await m.detectRouterFile()).toBeNull();
+  });
+
+  it('onComponentSelected patches the entry file (not the App) for a custom router app', async () => {
+    const io = makeIO(conlocaLikeFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    const result = await m.onComponentSelected();
+
+    expect(result).toBe('ok');
+    const entry = await io.readFile(`${root}/src/main.tsx`);
+    expect(entry).toContain('@hyperide-managed');
+    expect(entry).toContain('./__canvas_preview__');
+    expect(await io.readFile(`${root}/src/app/App.tsx`)).not.toContain('@hyperide-managed');
   });
 });
