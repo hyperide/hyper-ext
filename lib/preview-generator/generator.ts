@@ -7,7 +7,14 @@ import { basename, dirname } from 'node:path';
 import type { ContainerSampleJsxBody } from './sample-scaffold';
 import type { ExportStyle } from './scanner';
 
-export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v10';
+// Bump this whenever the generated __canvas_preview__.tsx output changes shape so that
+// already-generated files carrying an OLD marker are detected as stale by
+// PreviewFileManager.ensureComponent (fast path, preview-file-manager.ts:~498) and
+// REGENERATED through the current generator. Without a bump, existing previews keep the
+// old output forever (the marker + provider-imports fast-path bails before regen).
+// v10 -> v11: HYP-446 — single-mode wrapper gained a definite-height flex column for RN
+// (minHeight:100vh) so react-native-web FlatList rows render at non-zero height.
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v11';
 
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
@@ -984,6 +991,36 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
   const wo = providerWrap?.wrapOpen ?? '';
   const wc = providerWrap?.wrapClose ?? '';
   const hasSSR = ssrRoutes && ssrRoutes.size > 0;
+  // HYP-446 — React Native preview height fix.
+  // react-native-web turns `flex: 1` / `View` chains into CSS flex containers
+  // that have NO intrinsic height. react-navigation's native-stack web view
+  // renders each screen with `StyleSheet.absoluteFill` (position:absolute,
+  // inset:0) inside a `flex:1` container, and FlatList's VirtualizedList scroll
+  // container is `flex:1` too. In single mode the default wrapper is a plain
+  // `display:block` div with `height:auto`, so the whole `flex:1` chain collapses
+  // to 0 — the FlatList scroll container measures `height:0px` and the list rows
+  // render into a zero-height clipped box (the "empty rows" bug, reproduced with
+  // DOM evidence: scroller `flex:1 1 auto; height:0px; rectH:0` while the row
+  // text IS present in the DOM). Giving the wrapper `min-height:100vh` +
+  // `display:flex; flexDirection:column` reconnects the chain: the navigator's
+  // `flex:1` now resolves against a definite-height ancestor. `min-height` (not
+  // `height`) so tall content-flow previews still grow & scroll instead of being
+  // clipped. Only applied for RN-detected projects (SafeAreaProvider, a bare
+  // react-native import, or a React Navigation import in the provider wrap) so
+  // non-RN previews keep the existing block layout.
+  const isReactNative = (providerWrap?.imports ?? []).some(
+    (imp) =>
+      imp.includes('react-native-safe-area-context') ||
+      imp.includes("from 'react-native'") ||
+      // Navigation-only RN apps (React Navigation without SafeAreaProvider) hit
+      // the same collapsed-flex height path: native-stack renders screens as
+      // position:absolute inside a flex:1 container that needs a definite-height
+      // ancestor for FlatList/ScrollView to measure.
+      imp.includes('@react-navigation/'),
+  );
+  const singleWrapperStyle = isReactNative
+    ? "{ minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: 20, boxSizing: 'border-box' }"
+    : '{ padding: 20 }';
   // Runtime fallback render: use RemixMockWrapper for SSR routes, direct render otherwise.
   // Feature #210 — in-memory generated sample props. The extension host computes
   // best-effort values for ALL of a component's props (generateSamplePropValues) and
@@ -1045,7 +1082,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '        </div>',
     '      );',
     '    }',
-    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath} propsReady={generatedPropsReady}><div style={{ padding: 20 }}>${singleRender}<_ComponentSuccessSignal componentPath={componentPath} /></div></ComponentErrorBoundary>${wc};`,
+    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath} propsReady={generatedPropsReady}><div style={${singleWrapperStyle}}>${singleRender}<_ComponentSuccessSignal componentPath={componentPath} /></div></ComponentErrorBoundary>${wc};`,
     '  }',
     '',
     '  const instances = ((window.parent as unknown) as { __CANVAS_INSTANCES__?: Record<string, InstanceEntry> }).__CANVAS_INSTANCES__ || {};',

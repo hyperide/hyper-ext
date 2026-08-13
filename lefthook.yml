@@ -2,22 +2,41 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      glob: "*.{ts,tsx,js,jsx}"
-      run: npx oxlint --config .oxlintrc.json --no-error-on-unmatched-pattern {staged_files}
+      glob: '*.{ts,tsx,js,jsx}'
+      run: |
+        OXLINT="$(git rev-parse --path-format=absolute --git-common-dir)/../node_modules/.bin/oxlint"
+        if [ -x "$OXLINT" ]; then
+          "$OXLINT" --config .oxlintrc.json --no-error-on-unmatched-pattern {staged_files} < /dev/null
+        else
+          npx --yes oxlint --config .oxlintrc.json --no-error-on-unmatched-pattern {staged_files} < /dev/null
+        fi
     format:
-      glob: "*.{ts,tsx,js,jsx,json,jsonc,css,md}"
-      run: npx oxfmt --write --no-error-on-unmatched-pattern {staged_files}
+      glob: '*.{ts,tsx,js,jsx,json,jsonc,css,md}'
+      run: |
+        OXFMT="$(git rev-parse --path-format=absolute --git-common-dir)/../node_modules/.bin/oxfmt"
+        if [ -x "$OXFMT" ]; then
+          "$OXFMT" --write --no-error-on-unmatched-pattern {staged_files} < /dev/null
+        else
+          npx --yes oxfmt --write --no-error-on-unmatched-pattern {staged_files} < /dev/null
+        fi
       stage_fixed: true
     typecheck:
-      glob: "*.{ts,tsx}"
+      glob: '*.{ts,tsx}'
       # TODO: re-enable `&& npx tsgo --noEmit -p vscode-extension/hypercanvas-preview/tsconfig.json`
       # once pre-existing TS6059 rootDir errors (and missing @types/vscode in worktree) are resolved.
-      run: npx tsgo --noEmit
+      run: |
+        TSGO="$(git rev-parse --path-format=absolute --git-common-dir)/../node_modules/.bin/tsgo"
+        if [ -x "$TSGO" ]; then
+          "$TSGO" --noEmit < /dev/null
+        else
+          echo "ERROR: tsgo not found in node_modules/.bin — run 'bun install' first" >&2
+          exit 1
+        fi
     react-hooks-import:
-      glob: "*.{tsx,ts}"
+      glob: '*.{tsx,ts}'
       run: node scripts/check-react-hooks-import.cjs {staged_files}
     no-conflict-markers:
-      glob: "*.{ts,tsx,js,jsx,json,md,yml,yaml,css,scss}"
+      glob: '*.{ts,tsx,js,jsx,json,md,yml,yaml,css,scss}'
       run: |
         FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -v "node_modules" | grep -E "\.(ts|tsx|js|jsx|json|md|yml|yaml|css|scss)$")
         if [ -z "$FILES" ]; then exit 0; fi

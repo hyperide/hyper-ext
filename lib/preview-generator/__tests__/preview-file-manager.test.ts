@@ -1568,6 +1568,57 @@ describe('ensureComponent — fast path', () => {
     expect(content).toContain('data: previewData');
   });
 
+  // HYP-446 P1 (codex, generator.ts:1078): bumping the schema marker must invalidate
+  // already-generated previews carrying the PREVIOUS marker. The "old marker" fixture
+  // uses the literal v10 string ON PURPOSE — referencing the (now-v11) constant would make
+  // the file hit the fast path and the test would assert nothing after the next bump.
+  it('regenerates when an existing preview carries the PREVIOUS schema marker (v10)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      "// @hyperide-preview-schema:fallback-props-v10\n// @hyperide-managed\nimport Button from './components/Button';\nconst previewFallbackProps = { data: [] };\nexport default function CanvasPreview() {}",
+    );
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
+
+    // The stale v10 marker is gone, replaced with the current marker, and the file went
+    // through the real generator (componentRegistry shape, not the hand-written stub).
+    expect(content).not.toContain('fallback-props-v10');
+    expect(content).toContain(PREVIEW_GENERATOR_SCHEMA_MARKER);
+    expect(content).toContain('componentRegistry');
+  });
+
+  // The wrapper fix only takes effect for real projects if regeneration re-runs the CURRENT
+  // generator with the project's providerWrap. End-to-end proof: an RN project whose existing
+  // preview still has the v10 marker is regenerated WITH the definite-height wrapper.
+  it('regenerates an RN preview with the v10 marker and emits the definite-height wrapper', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      "// @hyperide-preview-schema:fallback-props-v10\n// @hyperide-managed\nimport { SafeAreaProvider } from 'react-native-safe-area-context';\nimport Button from './components/Button';\nconst previewFallbackProps = { data: [] };\nexport default function CanvasPreview() {}",
+    );
+
+    const manager = new PreviewFileManager({
+      projectRoot: '/project',
+      io,
+      providerWrap: {
+        imports: ["import { SafeAreaProvider } from 'react-native-safe-area-context';"],
+        wrapOpen: '<SafeAreaProvider>',
+        wrapClose: '</SafeAreaProvider>',
+      },
+    });
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
+
+    expect(content).toContain(PREVIEW_GENERATOR_SCHEMA_MARKER);
+    expect(content).not.toContain('fallback-props-v10');
+    // The HYP-446 RN wrapper is now present in the regenerated file.
+    expect(content).toContain("minHeight: '100vh'");
+    expect(content).toContain("flexDirection: 'column'");
+  });
+
   it('regenerates when an already registered component gains SampleDefault', async () => {
     const io = new InMemoryFileIO();
     io.files.set(

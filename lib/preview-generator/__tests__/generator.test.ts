@@ -939,3 +939,61 @@ function makeEntry(path: string, name: string): PreviewComponentEntry {
     importPath: `./${path.replace('src/', '').replace('.tsx', '')}`,
   };
 }
+
+describe('generatePreviewContent — HYP-446 React Native single-mode height', () => {
+  const rnEntries: PreviewComponentEntry[] = [makeEntry('App.tsx', 'App')];
+
+  it('gives the single-mode wrapper a definite-height flex column for RN projects', () => {
+    // RN is detected via the SafeAreaProvider import in the provider wrap.
+    const content = generatePreviewContent(rnEntries, {
+      providerWrap: {
+        imports: ["import { SafeAreaProvider } from 'react-native-safe-area-context';"],
+        wrapOpen: '<SafeAreaProvider>',
+        wrapClose: '</SafeAreaProvider>',
+      },
+    });
+
+    // Wrapper must establish a definite height so react-native-web's flex:1 chain
+    // (navigator screen + FlatList VirtualizedList scroll container) resolves and
+    // the rows render at non-zero height. min-height (not height) so tall
+    // content-flow previews still grow & scroll.
+    expect(content).toContain("minHeight: '100vh'");
+    expect(content).toContain("flexDirection: 'column'");
+    // Still parses as valid TSX.
+    expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
+  });
+
+  it('detects RN via React Navigation imports even without SafeAreaProvider', () => {
+    const content = generatePreviewContent(rnEntries, {
+      providerWrap: {
+        imports: [
+          "import { NavigationContainer } from '@react-navigation/native';",
+          "import { NavigationIndependentTree } from '@react-navigation/core';",
+        ],
+        wrapOpen: '<NavigationContainer><NavigationIndependentTree>',
+        wrapClose: '</NavigationIndependentTree></NavigationContainer>',
+      },
+    });
+
+    expect(content).toContain("minHeight: '100vh'");
+    expect(content).toContain("flexDirection: 'column'");
+  });
+
+  it('keeps the plain block wrapper (no 100vh) for non-RN projects', () => {
+    const content = generatePreviewContent([makeEntry('src/components/Button.tsx', 'Button')], {
+      providerWrap: {
+        imports: ["import { ThemeProvider } from '@emotion/react';"],
+        wrapOpen: '<ThemeProvider theme={theme}>',
+        wrapClose: '</ThemeProvider>',
+      },
+    });
+
+    expect(content).not.toContain("minHeight: '100vh'");
+    expect(content).toContain('padding: 20');
+  });
+
+  it('keeps the plain block wrapper when there is no provider wrap at all', () => {
+    const content = generatePreviewContent([makeEntry('src/components/Button.tsx', 'Button')]);
+    expect(content).not.toContain("minHeight: '100vh'");
+  });
+});
