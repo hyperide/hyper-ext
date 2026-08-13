@@ -4,16 +4,20 @@
  * Accessed via: Vector engine graph — add "Simplify" node; CLI `path.simplify(tolerance)`.
  * Assumptions: PathOpsBackend is injected at registry creation and is stateless. Two distinct
  *   operations are composed here and BOTH are intentional (do not collapse them):
- *     1. Point-decimation (RDP, path/decimate.ts) — tolerance-driven; drops redundant
- *        near-collinear vertices. Pure TS, works even with the MockPathOps backend.
+ *     1. Point-decimation (path/decimate.ts) — tolerance-driven; drops redundant vertices.
+ *        Pure TS, works even with the MockPathOps backend. The `method` param selects the
+ *        algorithm: 'rdp' (default, Ramer-Douglas-Peucker, perpendicular-distance bound) or
+ *        'vw' (Visvalingam-Whyatt, effective-triangle-area greedy). `tolerance` is the RDP
+ *        epsilon (max perpendicular distance) or the VW area threshold respectively.
  *     2. Geometric simplify (backend.simplify, vector-wasm/canvaskit-pathops.ts) — removes
  *        self-intersections / overlaps via CanvasKit. No-op under MockPathOps.
- *   `tolerance <= 0` is a near-identity: no decimation, no backend pass.
+ *   `tolerance <= 0` is a near-identity: no decimation, no backend pass (both methods return
+ *   the input unchanged for a non-positive threshold).
  * Architecture: docs/specs/2026-06-03-vecli-vector-cli-decomposition.md §VECLI-2 + §VECLI-3
  */
 
 import type { PathOpsBackend } from 'vector-wasm';
-import { decimateRDP } from '../../path/decimate';
+import { decimateRDP, decimateVW } from '../../path/decimate';
 import { decodeCommands, encodeCommands, PathCmd, type PathCommand } from '../../path/commands';
 import type { NodeTypeDefinition, NodeValue, PathValue, Point } from '../../types';
 
@@ -95,7 +99,18 @@ export function createSimplifyNode(backend: PathOpsBackend): NodeTypeDefinition 
     category: 'pathOp',
     inputs: [{ name: 'path', type: 'path' }],
     outputs: [{ name: 'path', type: 'path' }],
-    params: [{ name: 'tolerance', type: 'number', default: DEFAULT_TOLERANCE, min: 0, step: 0.1 }],
+    params: [
+      { name: 'tolerance', type: 'number', default: DEFAULT_TOLERANCE, min: 0, step: 0.1 },
+      {
+        name: 'method',
+        type: 'enum',
+        default: 'rdp',
+        options: [
+          { value: 'rdp', label: 'Ramer-Douglas-Peucker' },
+          { value: 'vw', label: 'Visvalingam-Whyatt' },
+        ],
+      },
+    ],
     execute(
       inputs: Record<string, NodeValue | NodeValue[]>,
       params: Record<string, unknown>,
@@ -107,6 +122,9 @@ export function createSimplifyNode(backend: PathOpsBackend): NodeTypeDefinition 
       const path = pathVal.value as PathValue;
       const raw = params.tolerance;
       const tolerance = typeof raw === 'number' && Number.isFinite(raw) ? raw : DEFAULT_TOLERANCE;
+      // RDP is the default; any value other than 'vw' (including an omitted/invalid param) is RDP.
+      const method: 'rdp' | 'vw' = params.method === 'vw' ? 'vw' : 'rdp';
+      const decimate = method === 'vw' ? decimateVW : decimateRDP;
 
       // tolerance <= 0 → identity (no decimation, no backend pass).
       if (tolerance <= 0) {
@@ -115,16 +133,18 @@ export function createSimplifyNode(backend: PathOpsBackend): NodeTypeDefinition 
 
       const cmds = decodeCommands(path.commands);
 
-      // Step 1: point-decimation (RDP). Only applied to plain polylines, where decimating
-      // the exact vertices is lossless apart from the tolerance budget. Each contour
-      // (sub-path between Move commands) is decimated independently so compound polylines
-      // keep their separate sub-paths. Curved paths (cubic/quad/arc) are passed through
-      // untouched — flattening them to line segments here would silently destroy the
-      // curves, and re-fitting (curve/fit.ts) after decimation is a deliberate follow-up.
+      // Step 1: point-decimation. Only applied to plain polylines, where decimating the
+      // exact vertices is lossless apart from the tolerance budget. Each contour (sub-path
+      // between Move commands) is decimated independently so compound polylines keep their
+      // separate sub-paths. The `method` param picks RDP (perpendicular-distance bound) or
+      // VW (effective-triangle-area greedy); `tolerance` is the RDP epsilon or the VW area
+      // threshold respectively. Curved paths (cubic/quad/arc) are passed through untouched —
+      // flattening them to line segments here would silently destroy the curves, and
+      // re-fitting (curve/fit.ts) after decimation is a deliberate follow-up.
       const decimated: PathValue = isPolyline(cmds)
         ? contoursToPath(
             splitContours(cmds).map((contour) => ({
-              points: decimateRDP(contour.points, tolerance),
+              points: decimate(contour.points, tolerance),
               closed: contour.closed,
             })),
           )

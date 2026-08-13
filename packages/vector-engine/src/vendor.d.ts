@@ -14,8 +14,15 @@ declare module 'opentype.js' {
     commands: PathCommand[];
   }
 
+  export interface Glyph {
+    advanceWidth: number;
+    getPath(x: number, y: number, fontSize: number): Path;
+  }
+
   export interface Font {
+    unitsPerEm: number;
     getPath(text: string, x: number, y: number, fontSize: number): Path;
+    stringToGlyphs(text: string): Glyph[];
   }
 
   // Tests pull in additional shapes loosely; widening to any keeps strict mode happy.

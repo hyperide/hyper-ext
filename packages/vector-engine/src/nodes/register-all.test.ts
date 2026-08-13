@@ -5,9 +5,9 @@ describe('createDefaultRegistry', () => {
   it('should register all built-in node types', () => {
     const registry = createDefaultRegistry();
     const all = registry.listAll();
-    // Plan 1: 24 nodes + Plan 2: 21 nodes + Plan 2b: 3 nodes + Plan 3: 4 nodes
-    // + simplify (VECLI-2/HYP-493) = 53 total
-    expect(all.length).toBe(53);
+    // Plan 1: 24 nodes + Plan 2: 21 nodes + Plan 2b: 3 nodes + Plan 3: 4 nodes = 52 base
+    //   + simplify (VECLI-2/HYP-493) + textOnPath (VECLI-5) = 54 total
+    expect(all.length).toBe(54);
   });
 
   it('should have generators category', () => {

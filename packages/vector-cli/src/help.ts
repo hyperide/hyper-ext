@@ -110,7 +110,7 @@ Examples:
   .chamfer(distance)             Chamfer corners
   .smooth(smoothness)            Smooth corners (0..1)
   .offset(distance)              Inflate (+) or deflate (-)
-  .simplify(tolerance)           Drop redundant points (RDP) + remove self-overlap
+  .simplify(tolerance, opts?)    Drop redundant points (RDP default; { method: 'vw' } for Visvalingam-Whyatt) + remove self-overlap
   .trim(start, end)              Trim path (0..1)
   .reverse()                     Reverse direction
   .close()                       Close open path
@@ -252,8 +252,9 @@ One-liners:
 
   wordart: `WORD ART & DECORATIVE HELPERS
 
-  arcText(str, radius, start?, spread?, size?)   Text along arc
-  wavyText(str, amplitude?, frequency?, size?)    Wavy text
+  arcText(str, radius, start?, spread?, size?, outline?)   Text along arc
+  wavyText(str, amplitude?, frequency?, size?, outline?)   Wavy text
+  path(d).textOnPath(str, {fontUrl, fontSize?})   True glyph outlines on any path
   ribbon(w, h, curvature?)                        Curved banner
   badge(w, h, notchSize?)                         Octagonal badge
   burst(rays, outerR, innerR)                     Starburst shape
@@ -267,7 +268,9 @@ One-liners:
 
   input                           Stdin data (from pipe)
 
-Note: arcText/wavyText use text() which requires a loaded font for path outlines.
+Note: arcText/wavyText position individual characters by default; pass an
+      'outline: {fontUrl}' option (or use .textOnPath) for true glyph-outline-on-path,
+      which needs a font registered in the engine.
       label/cowsay use SVG text elements — no font loading needed.
 
 Usage:

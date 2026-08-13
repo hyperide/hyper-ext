@@ -97,7 +97,8 @@ export { strokeNode } from './nodes/style/stroke';
 // Text shaping (Plan 2b)
 export { initShaper, resetShaper, type ShapedGlyph, shapeText } from './nodes/text/shaper';
 // Text
-export { textToPathNode } from './nodes/text/text-to-path';
+export { layoutGlyphsOnPath, type TextOnPathOptions, textOnPathNode } from './nodes/text/text-on-path';
+export { extractGlyphOutlines, type GlyphOutline, textToPathNode } from './nodes/text/text-to-path';
 // Transform nodes
 export { rotateNode } from './nodes/transform/rotate';
 export { scaleNode } from './nodes/transform/scale';

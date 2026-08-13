@@ -59,10 +59,36 @@ describe('ChainableNode', () => {
     expect(ctx.graph.nodeCount).toBe(2);
   });
 
+  it('executes .reverse() and .close() (node types match the registry, not Unknown)', () => {
+    // Regression for the reversePath/closeOpen vs reverse-path/close-open-path name
+    // mismatch (HYP-512): before the fix these hit "Unknown node type" in GraphExecutor.
+    const rev = ChainableNode.generator(createContext(), 'rectangle', { width: 40, height: 20 }).reverse().svg();
+    expect(rev).toContain('<svg');
+    expect(rev).toContain('<path');
+    const closed = ChainableNode.generator(createContext(), 'line', { x1: 0, y1: 0, x2: 50, y2: 0 }).close().svg();
+    expect(closed).toContain('<svg');
+    expect(closed).toContain('<path');
+  });
+
   it('should chain transforms', () => {
     const ctx = createContext();
     ChainableNode.generator(ctx, 'rectangle', { width: 50, height: 50 }).translate(10, 20).rotate(45).scale(2);
     expect(ctx.graph.nodeCount).toBe(4);
+  });
+
+  it('should chain textOnPath, wiring the path output into the new node', () => {
+    const ctx = createContext();
+    const node = ChainableNode.generator(ctx, 'line', { x1: 0, y1: 0, x2: 200, y2: 0 }).textOnPath('Hi', {
+      fontUrl: 'mock://f.ttf',
+      fontSize: 32,
+    });
+    expect(ctx.graph.nodeCount).toBe(2);
+    expect(ctx.graph.edgeCount).toBe(1);
+    const created = ctx.graph.getNode(node.nodeId);
+    expect(created?.type).toBe('textOnPath');
+    expect(created?.params.text).toBe('Hi');
+    expect(created?.params.fontUrl).toBe('mock://f.ttf');
+    expect(created?.params.fontSize).toBe(32);
   });
 
   it('should return area', () => {
@@ -112,6 +138,20 @@ describe('ChainableNode', () => {
       const d = 'M 0 0 L 10 7 L 20 0 L 30 9';
       const bounds = ChainableNode.generator(ctx, 'svgPath', { d }).simplify(0).bounds();
       expect(bounds.width).toBeCloseTo(30, 0);
+    });
+
+    it("runs Visvalingam-Whyatt end-to-end via .simplify(tolerance, { method: 'vw' })", () => {
+      // Discriminator polyline: VW keeps the on-axis (10,0) vertex (large effective
+      // triangle area), RDP drops it (small perpendicular deviation). The two modes
+      // therefore yield different path lengths — proving VW actually executed and is
+      // not silently falling back to RDP. length() runs the executor end-to-end, so an
+      // unmapped node type would throw here rather than pass.
+      const d = 'M 0 0 L 5 0.1 L 10 0 L 15 10 L 20 0';
+      const rdpLen = ChainableNode.generator(createContext(), 'svgPath', { d }).simplify(6).length();
+      const vwLen = ChainableNode.generator(createContext(), 'svgPath', { d }).simplify(6, { method: 'vw' }).length();
+      // VW keeps (10,0) → longer polyline (~32.36) than RDP (~29.21).
+      expect(vwLen).toBeGreaterThan(rdpLen);
+      expect(vwLen).toBeCloseTo(32.36, 1);
     });
   });
 

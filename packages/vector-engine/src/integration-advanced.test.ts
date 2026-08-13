@@ -199,7 +199,8 @@ describe('Plan 3 integration', () => {
     expect(registry.get('convertPoint')).toBeDefined();
     expect(registry.get('splitPath')).toBeDefined();
     const all = registry.listAll();
-    expect(all.length).toBe(53);
+    // 52 base + simplify (VECLI-2/HYP-493) + textOnPath (VECLI-5/HYP-501) = 54.
+    expect(all.length).toBe(54);
   });
 });
 

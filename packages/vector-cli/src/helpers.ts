@@ -121,10 +121,36 @@ export function createHelpers(_ctx: EvalContext): Record<string, unknown> {
   };
 }
 
+/** Build an SVG `d` for a sine wave baseline of the given width (left → right). */
+function sineWaveD(width: number, amplitude: number, frequency: number, step: number): string {
+  const samples = Math.max(2, Math.ceil(width / Math.max(step * 0.25, 1)));
+  const parts: string[] = [];
+  for (let i = 0; i <= samples; i++) {
+    const x = (i / samples) * width;
+    const y = Math.sin((x / Math.max(step * 0.6, 1e-6)) * frequency) * amplitude;
+    parts.push(`${i === 0 ? 'M' : 'L'} ${x} ${y}`);
+  }
+  return parts.join(' ');
+}
+
+/** Opt-in outline mode for arcText/wavyText — lays real glyph outlines on the curve. */
+export interface OutlineOpts {
+  /** Font registered in the engine via registerFont(); required for outline mode. */
+  fontUrl: string;
+  /** Extra spacing (px) after each glyph. */
+  letterSpacing?: number;
+  /** Shift along the curve before the first glyph (px). */
+  startOffset?: number;
+}
+
 /**
  * Word art and decorative shape helpers.
- * Text-based helpers (arcText, wavyText) position individual characters —
- * text() requires a loaded font to produce actual path outlines.
+ *
+ * arcText/wavyText default to positioning individual characters (no font needed).
+ * Pass an `outline` option (with a registered `fontUrl`) to instead lay true glyph
+ * outlines along the curve via the engine `textOnPath` node — returned as a
+ * single-element array so the call signature stays `ChainableNode[]`. Outline mode
+ * uses real per-glyph advance spacing (vs. the legacy even-angular layout).
  */
 export function createWordArtHelpers(
   ctx: EvalContext,
@@ -148,8 +174,32 @@ export function createWordArtHelpers(
         anchor: opts?.anchor ?? 'start',
       });
     },
-    /** Word art — text along an arc */
-    arcText: (str: string, radius: number, startAngle = -90, spread = 180, fontSize = 24): ChainableNode[] => {
+    /** Word art — text along an arc (positioned chars, or true outlines via `outline`) */
+    arcText: (
+      str: string,
+      radius: number,
+      startAngle = -90,
+      spread = 180,
+      fontSize = 24,
+      outline?: OutlineOpts,
+    ): ChainableNode[] => {
+      if (outline) {
+        const curve = ChainableNode.generator(ctx, 'arc', {
+          radius,
+          startAngle,
+          endAngle: startAngle + spread,
+          cx: 0,
+          cy: 0,
+        });
+        return [
+          curve.textOnPath(str, {
+            fontSize,
+            fontUrl: outline.fontUrl,
+            letterSpacing: outline.letterSpacing,
+            startOffset: outline.startOffset,
+          }),
+        ];
+      }
       const chars = str.split('');
       const angleStep = spread / Math.max(chars.length - 1, 1);
       return chars.map((char, i) => {
@@ -161,8 +211,21 @@ export function createWordArtHelpers(
       });
     },
 
-    /** Word art — wavy text */
-    wavyText: (str: string, amplitude = 15, frequency = 0.3, fontSize = 24): ChainableNode[] => {
+    /** Word art — wavy text (positioned chars, or true outlines via `outline`) */
+    wavyText: (str: string, amplitude = 15, frequency = 0.3, fontSize = 24, outline?: OutlineOpts): ChainableNode[] => {
+      if (outline) {
+        const curve = ChainableNode.generator(ctx, 'svgPath', {
+          d: sineWaveD(Math.max(str.length, 1) * fontSize * 0.6, amplitude, frequency, fontSize),
+        });
+        return [
+          curve.textOnPath(str, {
+            fontSize,
+            fontUrl: outline.fontUrl,
+            letterSpacing: outline.letterSpacing,
+            startOffset: outline.startOffset,
+          }),
+        ];
+      }
       const chars = str.split('');
       return chars.map((char, i) => {
         const x = i * fontSize * 0.6;

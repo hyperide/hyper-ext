@@ -98,12 +98,18 @@ export class ChainableNode {
   }
 
   /**
-   * Reduce redundant points via Ramer-Douglas-Peucker decimation, then run the WASM
-   * geometric simplify (self-intersection removal). Higher tolerance drops more points;
-   * tolerance 0 is a near-identity.
+   * Reduce redundant points, then run the WASM geometric simplify (self-intersection
+   * removal). Higher tolerance drops more points; tolerance 0 is a near-identity.
+   *
+   * `method` picks the decimation algorithm (default 'rdp'):
+   *   - 'rdp' (Ramer-Douglas-Peucker): `tolerance` is the max perpendicular distance any
+   *     dropped point may deviate from the simplified polyline (a hard deviation bound).
+   *   - 'vw' (Visvalingam-Whyatt): `tolerance` is the minimum effective triangle AREA a
+   *     vertex must have to survive. VW keeps visually salient vertices but gives no
+   *     per-point deviation bound — the threshold is an area, not a distance.
    */
-  simplify(tolerance = 1): ChainableNode {
-    return this.chain('simplify', { tolerance });
+  simplify(tolerance = 1, opts?: { method?: 'rdp' | 'vw' }): ChainableNode {
+    return this.chain('simplify', { tolerance, method: opts?.method ?? 'rdp' });
   }
 
   trim(start = 0, end = 1): ChainableNode {
@@ -111,11 +117,14 @@ export class ChainableNode {
   }
 
   reverse(): ChainableNode {
-    return this.chain('reversePath', {});
+    // Node type must match the registry name (basic-ops.ts: 'reverse-path'); the old
+    // 'reversePath' hit "Unknown node type" in GraphExecutor — .reverse() was a no-op.
+    return this.chain('reverse-path', {});
   }
 
   close(): ChainableNode {
-    return this.chain('closeOpen', {});
+    // Registry name is 'close-open-path' (basic-ops.ts); the old 'closeOpen' was unknown.
+    return this.chain('close-open-path', { action: 'close' });
   }
 
   dash(dashArray: number[], dashOffset = 0): ChainableNode {
@@ -124,6 +133,26 @@ export class ChainableNode {
 
   strokeToPath(width = 1): ChainableNode {
     return this.chain('strokeToPath', { width, cap: 'butt', join: 'miter' });
+  }
+
+  /**
+   * Lay real glyph outlines of `text` along this path, following its tangent.
+   *
+   * Consumes the current node as the baseline curve and produces a compound path
+   * of per-glyph outlines (true text-on-path, not positioned <text> annotations).
+   * Requires a font registered in the engine; with no font the result is empty.
+   */
+  textOnPath(
+    text: string,
+    opts: { fontSize?: number; fontUrl?: string; letterSpacing?: number; startOffset?: number } = {},
+  ): ChainableNode {
+    return this.chain('textOnPath', {
+      text,
+      fontSize: opts.fontSize ?? 48,
+      fontUrl: opts.fontUrl ?? '',
+      letterSpacing: opts.letterSpacing ?? 0,
+      startOffset: opts.startOffset ?? 0,
+    });
   }
 
   // -- Deformations --

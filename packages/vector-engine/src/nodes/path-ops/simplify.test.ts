@@ -112,6 +112,94 @@ describe('simplify node', () => {
     expect(out.commands.length).toBe(0);
   });
 
+  it('defaults to RDP when method is omitted or invalid', () => {
+    expect(simplifyNode.params?.some((p) => p.name === 'method')).toBe(true);
+    // Discriminator polyline: the on-axis (10,0) vertex has small perpendicular
+    // deviation (RDP drops it) but a large effective triangle area because its
+    // neighbours are far apart (VW keeps it). See decimate.test.ts.
+    const path = new PathBuilder().moveTo(0, 0).lineTo(5, 0.1).lineTo(10, 0).lineTo(15, 10).lineTo(20, 0).build();
+    const omitted = decodeCommands(
+      (
+        (simplifyNode.execute({ path: { type: 'path', value: path } }, { tolerance: 6 }).path as NodeValue)
+          .value as PathValue
+      ).commands,
+    );
+    const invalid = decodeCommands(
+      (
+        (
+          simplifyNode.execute({ path: { type: 'path', value: path } }, { tolerance: 6, method: 'nonsense' })
+            .path as NodeValue
+        ).value as PathValue
+      ).commands,
+    );
+    // RDP at tolerance 6 drops (10,0) → Move + 2 Lines.
+    expect(omitted.length).toBe(3);
+    expect(invalid.length).toBe(3);
+    expect(omitted.some((c) => c.type === PathCmd.Line && (c as { x: number }).x === 10)).toBe(false);
+  });
+
+  it("runs Visvalingam-Whyatt when method is 'vw'", () => {
+    // Same discriminator: VW keeps the large-area (10,0) vertex that RDP drops.
+    const path = new PathBuilder().moveTo(0, 0).lineTo(5, 0.1).lineTo(10, 0).lineTo(15, 10).lineTo(20, 0).build();
+    const vw = decodeCommands(
+      (
+        (
+          simplifyNode.execute({ path: { type: 'path', value: path } }, { tolerance: 6, method: 'vw' })
+            .path as NodeValue
+        ).value as PathValue
+      ).commands,
+    );
+    const rdp = decodeCommands(
+      (
+        (
+          simplifyNode.execute({ path: { type: 'path', value: path } }, { tolerance: 6, method: 'rdp' })
+            .path as NodeValue
+        ).value as PathValue
+      ).commands,
+    );
+    // VW keeps the (10,0) vertex; RDP drops it — proves real VW ran, not RDP fallback.
+    expect(vw.some((c) => (c as { x: number }).x === 10)).toBe(true);
+    expect(rdp.some((c) => (c as { x: number }).x === 10)).toBe(false);
+    expect(vw.length).toBeGreaterThan(rdp.length);
+  });
+
+  it('VW collapses a collinear redundant line to its endpoints (area guarantee)', () => {
+    // Every triangle on a straight line has area 0, so any positive threshold drops all
+    // interior vertices — the honest within-tolerance proof for VW (area, not deviation).
+    const path = redundantLine(20);
+    const out = decodeCommands(
+      (
+        (
+          simplifyNode.execute({ path: { type: 'path', value: path } }, { tolerance: 0.5, method: 'vw' })
+            .path as NodeValue
+        ).value as PathValue
+      ).commands,
+    );
+    expect(out.length).toBe(2);
+    expect(out[0].type).toBe(PathCmd.Move);
+    expect(out[1].type).toBe(PathCmd.Line);
+  });
+
+  it('VW reduces command count monotonically as threshold grows', () => {
+    const b = new PathBuilder().moveTo(0, 0);
+    for (let i = 1; i <= 60; i++) b.lineTo(i, Math.sin(i / 6) * 5);
+    const path = b.build();
+    const count = (tol: number): number =>
+      decodeCommands(
+        (
+          (
+            simplifyNode.execute({ path: { type: 'path', value: path } }, { tolerance: tol, method: 'vw' })
+              .path as NodeValue
+          ).value as PathValue
+        ).commands,
+      ).length;
+    const low = count(0.1);
+    const mid = count(2);
+    const high = count(20);
+    expect(mid).toBeLessThanOrEqual(low);
+    expect(high).toBeLessThanOrEqual(mid);
+  });
+
   it('preserves geometry within tolerance', () => {
     const b = new PathBuilder().moveTo(0, 0);
     const orig: Array<{ x: number; y: number }> = [{ x: 0, y: 0 }];

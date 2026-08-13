@@ -51,6 +51,7 @@ import { fillNode } from './style/fill';
 import { opacityNode } from './style/opacity';
 import { shadowNode } from './style/shadow';
 import { strokeNode } from './style/stroke';
+import { textOnPathNode } from './text/text-on-path';
 import { textToPathNode } from './text/text-to-path';
 import { rotateNode } from './transform/rotate';
 import { scaleNode } from './transform/scale';
@@ -134,6 +135,7 @@ export function createDefaultRegistry(pathOps?: PathOpsBackend): NodeRegistry {
 
   // Text
   registry.register(textToPathNode);
+  registry.register(textOnPathNode);
 
   // Mesh nodes (Plan 2b)
   registry.register(gradientMeshNode);

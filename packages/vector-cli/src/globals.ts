@@ -10,7 +10,7 @@ import { openFile, saveFile } from './commands/file';
 import type { EvalContext } from './context';
 import { formatEdgesTable, formatNodesTable } from './formatters/table';
 import { formatDAGTree } from './formatters/tree';
-import { createHelpers, createWordArtHelpers } from './helpers';
+import { createHelpers, createWordArtHelpers, type OutlineOpts } from './helpers';
 import { PreviewManager } from './preview';
 
 // -- Generators --
@@ -302,8 +302,21 @@ export interface GlobalBindings {
   ) => ChainableNode[];
   repeat: (n: number, fn: (i: number, t: number) => ChainableNode) => ChainableNode[];
   // Word art
-  arcText: (str: string, radius: number, startAngle?: number, spread?: number, fontSize?: number) => ChainableNode[];
-  wavyText: (str: string, amplitude?: number, frequency?: number, fontSize?: number) => ChainableNode[];
+  arcText: (
+    str: string,
+    radius: number,
+    startAngle?: number,
+    spread?: number,
+    fontSize?: number,
+    outline?: OutlineOpts,
+  ) => ChainableNode[];
+  wavyText: (
+    str: string,
+    amplitude?: number,
+    frequency?: number,
+    fontSize?: number,
+    outline?: OutlineOpts,
+  ) => ChainableNode[];
   ribbon: (width: number, height: number, notch?: number) => ChainableNode;
   badge: (width: number, height: number, notchSize?: number) => ChainableNode;
   burst: (rays: number, outerR: number, innerR: number) => ChainableNode;

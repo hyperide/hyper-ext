@@ -188,6 +188,29 @@ describe('helpers', () => {
       expect(ctx.graph.nodeCount).toBe(2);
     });
 
+    it('arcText positions individual chars by default (one node per glyph)', () => {
+      const ctx = createContext();
+      runInSandbox(ctx, 'arcText("abc", 80)');
+      // 3 chars × (textToPath + translate + rotate) = 9 nodes
+      expect(ctx.graph.nodeCount).toBe(9);
+    });
+
+    it('arcText outline mode builds an arc curve + single textOnPath node', () => {
+      const ctx = createContext();
+      runInSandbox(ctx, 'arcText("abc", 80, -90, 180, 24, { fontUrl: "mock://f.ttf" })');
+      // arc generator + textOnPath = 2 nodes, 1 edge
+      expect(ctx.graph.nodeCount).toBe(2);
+      expect(ctx.graph.edgeCount).toBe(1);
+    });
+
+    it('wavyText outline mode builds a sine curve + single textOnPath node', () => {
+      const ctx = createContext();
+      runInSandbox(ctx, 'wavyText("abc", 15, 0.3, 24, { fontUrl: "mock://f.ttf" })');
+      // svgPath sine curve + textOnPath = 2 nodes, 1 edge
+      expect(ctx.graph.nodeCount).toBe(2);
+      expect(ctx.graph.edgeCount).toBe(1);
+    });
+
     it('should access input global', () => {
       const ctx = createContext();
       ctx.stdinData = 'Hello World';
