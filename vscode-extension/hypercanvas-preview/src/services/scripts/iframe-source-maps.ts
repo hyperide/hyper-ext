@@ -1,3 +1,4 @@
+import { isFetchableModuleFrameUrl } from '@shared/element-tracing/module-frame-url';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import type { Fiber } from '@shared/element-tracing/fiber-internals';
 import { isSyntheticPreviewPath, selectNonSyntheticCachedLocation } from '@shared/element-tracing/synthetic-preview';
@@ -15,25 +16,21 @@ export const clientInternalFrames = new Set<string>();
 export const serverSourceMapCache = new Map<string, SourceLocation | null>();
 
 /** Extract client chunk frames (HTTP URLs) from an Error.stack string.
- *  Supports Next.js (_next/static/chunks/) AND Vite (/src/ source files). */
+ *  Supports Next.js (_next/static/chunks/), bun chunks, and any Vite-served module —
+ *  /src/ source files AND /@fs/ out-of-root files (symlinked workspace packages served
+ *  from prebuilt dist, HYP-1161). The fetchability rule is the SHARED
+ *  isFetchableModuleFrameUrl — do not re-narrow it locally; the SaaS
+ *  ModuleSourceMapResolver reads the same predicate. */
 export function extractClientChunkFrames(err: Error): Array<{ url: string; line: number; col: number }> {
   const frames: Array<{ url: string; line: number; col: number }> = [];
   for (const ln of (err.stack ?? '').split('\n')) {
     const m = ln.match(/^\s+at\s+(?:[^(]+\s+\()?(.+):(\d+):(\d+)\)?$/);
     if (!m) continue;
     const url = m[1];
-    // Next.js static chunk URLs
-    if (url.includes('_next/static/chunks/')) {
-      frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
-      continue;
-    }
-    // Bun hot dev server bundled chunks — source map needed to resolve to src file
-    if (url.includes('/_bun/client/') || url.includes('/_bun/')) {
-      frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
-      continue;
-    }
-    // Vite source files (React 19: _debugStack has compiled positions that need source map)
-    if (url.startsWith('http') && url.includes('/src/') && !url.includes('node_modules')) {
+    // React 19: _debugStack has compiled positions that need source map warmup.
+    // /@fs/ frames (no /src/ segment) MUST be included — excluding them was the
+    // HYP-1161 collapse-to-call-site root cause for cross-package components.
+    if (isFetchableModuleFrameUrl(url)) {
       frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
     }
   }

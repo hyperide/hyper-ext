@@ -166,14 +166,17 @@ async function loadInlineSourceMap(url: string): Promise<SourceMapV3 | null> {
   const decoded = atob(encoded);
   return JSON.parse(decoded) as SourceMapV3;
 }
-async function loadExternalSourceMap(url: string): Promise<SourceMapV3 | null> {
+async function loadExternalSourceMap(url: string): Promise<{ sm: SourceMapV3; mapUrl: string } | null> {
   const mapUrl = url.endsWith('.map') ? url : buildMapUrl(url);
   const mapRes = await fetch(mapUrl);
   if (!mapRes.ok) return null;
   if (mapRes.status === 204) return null;
   const contentType = mapRes.headers.get('content-type') ?? '';
   if (contentType.includes('text/html')) return null;
-  return (await mapRes.json()) as SourceMapV3;
+  // Return the fetched map URL alongside: warmClientChunk needs it as the spec base for
+  // `../`-escaping bundle-map sources (HYP-1161), and recomputing buildMapUrl there would
+  // duplicate the work on the hot warming path.
+  return { sm: (await mapRes.json()) as SourceMapV3, mapUrl };
 }
 /**
  * Async: fetch source map for one client chunk URL, resolve and cache the given position.
@@ -186,14 +189,25 @@ async function warmClientChunk(url: string, line: number, col: number): Promise<
   pendingClientFetches.add(key);
   try {
     let sm: SourceMapV3 | null = null;
+    // Spec base for resolveInSourceMap's `../`-escaping bundle-map sources (prebuilt
+    // workspace-package dist, HYP-1161): the .map file URL for external maps, the
+    // module URL itself for inline maps.
+    let mapBaseUrl = url;
     if (isViteSourceUrl(url)) {
       sm = await loadInlineSourceMap(url);
       if (!sm) {
-        sm = await loadExternalSourceMap(url);
+        const ext = await loadExternalSourceMap(url);
+        if (ext) {
+          sm = ext.sm;
+          mapBaseUrl = ext.mapUrl;
+        }
       }
     } else {
-      sm = await loadExternalSourceMap(url);
-      if (!sm) {
+      const ext = await loadExternalSourceMap(url);
+      if (ext) {
+        sm = ext.sm;
+        mapBaseUrl = ext.mapUrl;
+      } else {
         sm = await loadInlineSourceMap(url);
       }
     }
@@ -201,7 +215,7 @@ async function warmClientChunk(url: string, line: number, col: number): Promise<
       clientSourceMapCache.set(key, null);
       return;
     }
-    let loc = resolveInSourceMap(sm, line, col);
+    let loc = resolveInSourceMap(sm, line, col, mapBaseUrl);
     if (loc && !loc.fileName.includes('/')) {
       try {
         const parsed = new URL(url);

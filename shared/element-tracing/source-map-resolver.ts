@@ -28,6 +28,9 @@ export interface SourceMapV3 {
   sections?: SourceMapSection[]; // Indexed maps only; absent in flat maps
 }
 
+/** Scheme prefix (`webpack://`, `data:`, vite-internal) — a source carrying one is "absolute" per spec. */
+const SOURCE_SCHEME_RE = /^[a-zA-Z][a-zA-Z\d+\-.]*:/;
+
 // ─── Base64 VLQ decoder ───────────────────────────────────────────────────────
 
 /**
@@ -66,12 +69,21 @@ function decodeVlqAt(s: string, pos: number): [number, number] {
  * @param sm - Parsed source map JSON
  * @param genLine - 1-based generated line (from V8 Error.stack or similar)
  * @param genCol  - 1-based generated column (from V8 Error.stack)
+ * @param baseUrl - OPTIONAL: the map's own URL (module URL for inline maps, the .map
+ *   file URL for external ones). Only consulted for sources that ESCAPE the module
+ *   dir (`../…` — bundle maps of prebuilt workspace packages, HYP-1161); every other
+ *   source shape resolves exactly as before.
  * @returns Original SourceLocation, or null if no mapping is found
  */
-export function resolveInSourceMap(sm: SourceMapV3, genLine: number, genCol: number): SourceLocation | null {
+export function resolveInSourceMap(
+  sm: SourceMapV3,
+  genLine: number,
+  genCol: number,
+  baseUrl?: string,
+): SourceLocation | null {
   // Indexed source map (Turbopack / Next.js): dispatch to section resolver
   if (sm.sections) {
-    return resolveInIndexedSourceMap(sm.sections, genLine, genCol);
+    return resolveInIndexedSourceMap(sm.sections, genLine, genCol, baseUrl);
   }
 
   if (!sm.mappings) return null;
@@ -141,6 +153,24 @@ export function resolveInSourceMap(sm: SourceMapV3, genLine: number, genCol: num
   const root = (sm.sourceRoot ?? '').replace(/\/$/, '');
   let filePath = root ? `${root}/${rawSource}` : rawSource;
 
+  // HYP-1161: a source that escapes the module dir (`../…`) comes from a BUNDLE map —
+  // e.g. a prebuilt workspace-package `dist/*.mjs` served via Vite `/@fs/…` whose map
+  // points at `../src/components/ui/Button.tsx`. The legacy normalization below strips
+  // every leading `../`, producing a root-ambiguous `src/components/ui/Button.tsx` that
+  // names no openable file (the click then collapsed to the host call-site). When the
+  // caller supplies the map's base URL, resolve the escape against it per the
+  // source-map spec, then strip the origin's leading slash to the same `@fs/…`
+  // convention the extension's warm path already commits (HYP-443). No baseUrl (the
+  // PanelRouter server-map path) → legacy behavior, unchanged.
+  if (baseUrl && filePath.startsWith('../')) {
+    filePath = resolveMapSourcePath(filePath, baseUrl).replace(/^\//, '');
+    return {
+      fileName: filePath,
+      line: bestSrcLine + 1, // 0-based → 1-based
+      column: bestSrcCol, // stays 0-based (SourceLocation.column is 0-based)
+    };
+  }
+
   // Normalise: strip protocol prefix, keeping absolute paths for file:// URIs
   try {
     const u = new URL(filePath);
@@ -179,6 +209,7 @@ function resolveInIndexedSourceMap(
   sections: SourceMapSection[],
   genLine: number,
   genCol: number,
+  baseUrl?: string,
 ): SourceLocation | null {
   if (sections.length === 0) return null;
 
@@ -207,5 +238,33 @@ function resolveInIndexedSourceMap(
   // Sections using the `url` form (external reference) cannot be resolved here.
   if (!bestSection.map) return null;
 
-  return resolveInSourceMap(bestSection.map, innerGenLine, innerGenCol);
+  return resolveInSourceMap(bestSection.map, innerGenLine, innerGenCol, baseUrl);
+}
+
+/**
+ * Resolve a source-map `sources` entry against its base URL per the source-map spec,
+ * returning the URL pathname (origin stripped).
+ *
+ * Bundle maps (a prebuilt workspace-package `dist/*.mjs` served via Vite `/@fs/…`,
+ * HYP-1161) carry DOT-RELATIVE sources (`../src/components/ui/Button.tsx`, relative to
+ * `dist/`) — taken verbatim such a string is a useless nodeRef: it names no file the
+ * AST boundary can open. Per spec the source resolves against the map's own URL (the
+ * module URL for inline maps, the `.map` URL for external ones), yielding the canonical
+ * served path (`/@fs/<abs>/packages/cms-spa/src/components/ui/Button.tsx`) that
+ * `stripViteFsPrefix`/`toProjectRelative` downstream already canonicalize.
+ *
+ * Scheme-carrying sources (`webpack://…`) bypass resolution (spec: an "absolute" source
+ * is used as-is) and non-URL bases fall back to the raw source. `sourceRoot` is NOT
+ * handled here — callers that support it (the SaaS ModuleSourceMapResolver) join it
+ * first; Vite dev/bundle maps this path targets do not set one.
+ */
+export function resolveMapSourcePath(source: string, baseUrl: string): string {
+  if (!source) return source;
+  // Scheme-carrying source (webpack://, vite-internal, data:) — already "absolute" per spec.
+  if (SOURCE_SCHEME_RE.test(source)) return source;
+  try {
+    return new URL(source, baseUrl).pathname;
+  } catch {
+    return source;
+  }
 }

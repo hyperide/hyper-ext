@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { resolveInSourceMap, type SourceMapV3 } from '../source-map-resolver';
+import { resolveInSourceMap, resolveMapSourcePath, type SourceMapV3 } from '../source-map-resolver';
 
 // ─── VLQ encoding helpers (for constructing test fixtures) ───────────────────
 
@@ -288,5 +288,87 @@ describe('resolveInSourceMap — indexed (sections) format', () => {
     const sm: SourceMapV3 = { sources: ['flat.tsx'], mappings: seg };
     const r = resolveInSourceMap(sm, 1, 1);
     expect(r?.fileName).toBe('flat.tsx');
+  });
+});
+
+describe('resolveMapSourcePath (HYP-1161)', () => {
+  it('resolves a dot-relative bundle-map source against the module URL (/@fs/ dist → package src)', () => {
+    // Ground truth (conloca): the prebuilt workspace-package bundle
+    // /@fs/<abs>/packages/cms-spa/dist/ui-*.mjs maps to sources like
+    // "../src/components/ui/Button.tsx" (relative to dist/). Taken verbatim that string
+    // is a useless nodeRef; per the source-map spec it resolves against the module URL.
+    expect(
+      resolveMapSourcePath(
+        '../src/components/ui/Button.tsx',
+        'http://localhost:63310/@fs/Users/ultra/work/repo/packages/cms-spa/dist/ui-Cpvb8-tM.mjs',
+      ),
+    ).toBe('/@fs/Users/ultra/work/repo/packages/cms-spa/src/components/ui/Button.tsx');
+  });
+
+  it('resolves a basename-only source against the module directory (Vite transform maps, HYP-594)', () => {
+    expect(resolveMapSourcePath('Hero.tsx', 'http://localhost:5173/src/components/Hero.tsx?t=123')).toBe(
+      '/src/components/Hero.tsx',
+    );
+  });
+
+  it('keeps root-absolute and full-URL sources as-is (origin stripped to pathname)', () => {
+    expect(resolveMapSourcePath('/src/App.tsx', 'http://localhost:5173/src/main.tsx')).toBe('/src/App.tsx');
+    expect(
+      resolveMapSourcePath('/@fs/Users/x/mono/packages/ui/src/Card.tsx', 'http://localhost:5173/src/main.tsx'),
+    ).toBe('/@fs/Users/x/mono/packages/ui/src/Card.tsx');
+  });
+
+  it('returns scheme-carrying sources (webpack://, vite-internal) unchanged', () => {
+    expect(
+      resolveMapSourcePath('webpack://_N_E/./src/page.tsx', 'http://localhost:3000/_next/static/chunks/p.js'),
+    ).toBe('webpack://_N_E/./src/page.tsx');
+  });
+
+  it('falls back to the raw source when the base is not a URL', () => {
+    expect(resolveMapSourcePath('../src/Button.tsx', 'not-a-url')).toBe('../src/Button.tsx');
+  });
+});
+
+describe('resolveInSourceMap — baseUrl for ../-escaping bundle sources (HYP-1161)', () => {
+  // Real conloca shape: prebuilt workspace-package bundle served via /@fs/…/dist/*.mjs,
+  // map sources are dot-relative to dist/ ("../src/components/ui/Button.tsx").
+  const CMS_SPA_MODULE = 'http://localhost:64658/@fs/Users/ultra/work/repo/packages/cms-spa/dist/ui-Cpvb8-tM.mjs';
+  const CMS_SPA_MAP = `${CMS_SPA_MODULE}.map`;
+
+  function bundleMap(): SourceMapV3 {
+    // Single segment at gen line 1, gen col 0 → srcIdx 0, srcLine 42 (0-based → 43), srcCol 8.
+    const mappings = encodeSegment([0, 0, 42, 8]);
+    return { sources: ['../src/components/ui/Button.tsx'], mappings };
+  }
+
+  it('WITHOUT baseUrl: legacy behavior preserved (leading ../ stripped — PanelRouter server-map path)', () => {
+    const r = resolveInSourceMap(bundleMap(), 1, 1);
+    // The pre-HYP-1161 form: root-ambiguous, kept verbatim for callers with no base URL.
+    expect(r?.fileName).toBe('src/components/ui/Button.tsx');
+  });
+
+  it('WITH the .map baseUrl: resolves the escape against the map URL per spec → canonical @fs/ path', () => {
+    const r = resolveInSourceMap(bundleMap(), 1, 1, CMS_SPA_MAP);
+    expect(r).toEqual({
+      fileName: '@fs/Users/ultra/work/repo/packages/cms-spa/src/components/ui/Button.tsx',
+      line: 43,
+      column: 8,
+    });
+    // Editable per isEditableSourcePath → the click resolves to the element's OWN source
+    // instead of collapsing to the host call-site.
+  });
+
+  it('WITH the module baseUrl (inline map): same canonicalization', () => {
+    const r = resolveInSourceMap(bundleMap(), 1, 1, CMS_SPA_MODULE);
+    expect(r?.fileName).toBe('@fs/Users/ultra/work/repo/packages/cms-spa/src/components/ui/Button.tsx');
+  });
+
+  it('WITH baseUrl: basename and root-relative sources are untouched by the new branch', () => {
+    const basename: SourceMapV3 = { sources: ['HostField.tsx'], mappings: encodeSegment([0, 0, 66, 3]) };
+    // Basename sources keep flowing to the caller's URL-dir prefix branch (HYP-594) —
+    // resolveInSourceMap must NOT pre-resolve them.
+    expect(resolveInSourceMap(basename, 1, 1, CMS_SPA_MAP)?.fileName).toBe('HostField.tsx');
+    const rootRel: SourceMapV3 = { sources: ['src/app/App.tsx'], mappings: encodeSegment([0, 0, 9, 4]) };
+    expect(resolveInSourceMap(rootRel, 1, 1, CMS_SPA_MAP)?.fileName).toBe('src/app/App.tsx');
   });
 });

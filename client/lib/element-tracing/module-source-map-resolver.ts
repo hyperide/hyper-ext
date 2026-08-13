@@ -13,6 +13,7 @@
  */
 
 import type { Fiber } from '../../../shared/element-tracing/fiber-internals';
+import { isFetchableModuleFrameUrl } from '../../../shared/element-tracing/module-frame-url';
 import { stripContainerPrefix, stripPreviewProxyPrefix } from '../../../shared/element-tracing/path-normalization';
 import { resolveInSourceMap, type SourceMapV3 } from '../../../shared/element-tracing/source-map-resolver';
 import type { SourceLocation } from '../../../shared/element-tracing/types';
@@ -49,8 +50,9 @@ function extractModuleFrame(err: Error): ModuleFrame | null {
     const m = line.match(STACK_FRAME_RE);
     if (!m) continue;
     const url = m[1];
-    if (!url.startsWith('http://') && !url.startsWith('https://')) continue;
-    if (url.includes('/node_modules/')) continue;
+    // Shared predicate (do not re-narrow locally): also covers Vite /@fs/ out-of-root
+    // frames — symlinked workspace packages served from prebuilt dist (HYP-1161).
+    if (!isFetchableModuleFrameUrl(url)) continue;
     return { url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) };
   }
   return null;
