@@ -14,9 +14,11 @@
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { buildSampleScaffold, normalizeSampleComponentName } from '../../../lib/preview-generator/sample-scaffold';
+import { ensureSample, buildSampleScaffold, normalizeSampleComponentName } from '@lib/preview-generator';
 import { escapeRegex, extractComponentName } from '../../../lib/preview-generator/scanner';
 import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
+import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
+import { VSCodeFileIO } from './vscode-file-io';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
 import { SyncPositionService } from './services/SyncPositionService';
@@ -629,6 +631,25 @@ export class PreviewPanel {
         selection: new vscode.Range(lineNumber - 1, 0, lineNumber - 1, 0),
       });
       return true;
+    }
+
+    // When no prop values were provided, try AI generation first (BUG-6: auto-generate props).
+    // Falls through to the deterministic scaffold if AI is not configured or returns null.
+    const hasPropValues = propValues && Object.keys(propValues).length > 0;
+    if (!hasPropValues) {
+      const aiGenerated = await ensureSample({
+        io: new VSCodeFileIO(),
+        absolutePath: absPath,
+        componentName,
+        sampleName: exportName,
+        generate: createExtensionSampleGenerator(this._context),
+      });
+      if (aiGenerated.exists) {
+        if (notifySampleCreated) {
+          await this._onSampleCreatedCallback?.(componentPath);
+        }
+        return true;
+      }
     }
 
     // Generate a minimal sample scaffold — include user-provided prop values if available
