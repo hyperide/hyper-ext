@@ -28,6 +28,7 @@
   "publisher": "hyperide",
   "main": "./out/extension.js",
   "scripts": {
+    "preinstall": "node scripts/assert-npm.mjs",
     "vscode:prepublish": "npm run build",
     "build": "node esbuild.js --production && node scripts/check-webview-bundles.mjs && tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
     "check:webview-bundles": "node scripts/check-webview-bundles.mjs",
