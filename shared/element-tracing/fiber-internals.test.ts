@@ -10,6 +10,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   type Fiber,
   findNearestSourceLocation,
+  getItemIndexFromFiber,
   isRenderedFilePath,
   parseDebugStackFrames,
   recoverNonSyntheticSourceLocation,
@@ -139,5 +140,74 @@ describe('findNearestSourceLocation _debugOwner fallback', () => {
       line: 7,
       column: 2,
     });
+  });
+});
+
+describe('getItemIndexFromFiber — React 19 .map() of components', () => {
+  const FEED_MAP_CALL_SITE = 'http://localhost:5173/src/components/Feed.tsx:57:8';
+
+  // Build the real React-19 fiber shape for `tweets.map(t => <Tweet .../>)`:
+  //   <main>                       host (the map container = compParent)
+  //     <Tweet/> <Tweet/> <Tweet/> component fibers, ALL with the same call-site _debugStack
+  //       <article>                host root each Tweet returns
+  //         <div>                  host wrapper
+  //           <div class="text">   deep host element the user clicks
+  // Every host fiber carries its OWN `_debugStack` (React 19), which is exactly why the
+  // old "nearest fiber with _debugStack" walk collapsed deep clicks to index 0.
+  function buildMappedFeed(): { articles: Fiber[]; texts: Fiber[] } {
+    const main = stackFiber(['http://localhost:5173/src/components/Feed.tsx:50:4'], { tag: 5, type: 'main' });
+    const articles: Fiber[] = [];
+    const texts: Fiber[] = [];
+    let prev: Fiber | null = null;
+    for (let i = 0; i < 3; i++) {
+      const tweet = stackFiber([FEED_MAP_CALL_SITE], { tag: 0, return: main });
+      const article = stackFiber(['http://localhost:5173/src/components/Tweet.tsx:48:6'], {
+        tag: 5,
+        type: 'article',
+        return: tweet,
+      });
+      tweet.child = article;
+      const wrapper = stackFiber(['http://localhost:5173/src/components/Tweet.tsx:60:8'], {
+        tag: 5,
+        type: 'div',
+        return: article,
+      });
+      article.child = wrapper;
+      const text = stackFiber(['http://localhost:5173/src/components/Tweet.tsx:77:10'], {
+        tag: 5,
+        type: 'div',
+        return: wrapper,
+      });
+      wrapper.child = text;
+      if (prev) prev.sibling = tweet;
+      else main.child = tweet;
+      prev = tweet;
+      articles.push(article);
+      texts.push(text);
+    }
+    return { articles, texts };
+  }
+
+  it('resolves a DEEP host element to the clicked instance index (regression: was always 0)', () => {
+    const { texts } = buildMappedFeed();
+    expect(getItemIndexFromFiber(texts[0])).toBe(0);
+    expect(getItemIndexFromFiber(texts[1])).toBe(1);
+    expect(getItemIndexFromFiber(texts[2])).toBe(2);
+  });
+
+  it('resolves the repeated component ROOT host element by index', () => {
+    const { articles } = buildMappedFeed();
+    expect(getItemIndexFromFiber(articles[0])).toBe(0);
+    expect(getItemIndexFromFiber(articles[1])).toBe(1);
+    expect(getItemIndexFromFiber(articles[2])).toBe(2);
+  });
+
+  it('returns 0 for a deep element in a NON-repeated (single) component instance', () => {
+    const main = stackFiber(['http://localhost:5173/src/components/Page.tsx:10:4'], { tag: 5, type: 'main' });
+    const only = stackFiber(['http://localhost:5173/src/components/Page.tsx:12:6'], { tag: 0, return: main });
+    main.child = only;
+    const text = stackFiber(['http://localhost:5173/src/components/Tweet.tsx:77:10'], { tag: 5, return: only });
+    only.child = text;
+    expect(getItemIndexFromFiber(text)).toBe(0);
   });
 });

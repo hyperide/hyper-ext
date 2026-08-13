@@ -270,14 +270,101 @@ export function parseDebugStackFrames(err: Error): SourceLocation[] {
   return frames;
 }
 
+/** Fiber tags that represent a user/library COMPONENT instance (not a host DOM node). */
+const COMPONENT_FIBER_TAGS = new Set<number>([
+  FiberTag.FunctionComponent,
+  FiberTag.ClassComponent,
+  FiberTag.ForwardRef,
+  FiberTag.MemoComponent,
+  FiberTag.SimpleMemoComponent,
+]);
+
+function isComponentFiber(fiber: Fiber): boolean {
+  return COMPONENT_FIBER_TAGS.has(fiber.tag);
+}
+
+/**
+ * Resolve a component fiber's JSX call site — where `<Comp/>` was written (e.g. the
+ * `.map()` body in the parent). React 19 puts this in `_debugStack`; under RSC/Turbopack
+ * `parseDebugStack` returns null (`.next/` paths) so the source-map `resolveLocation`
+ * callback is the fallback.
+ */
+function readComponentCallSite(
+  fiber: Fiber,
+  resolveLocation?: (fiber: Fiber) => SourceLocation | null,
+): SourceLocation | null {
+  const fromStack = fiber._debugStack ? parseDebugStack(fiber._debugStack) : null;
+  return fromStack ?? resolveLocation?.(fiber) ?? null;
+}
+
+/**
+ * Index of `compFiber` among its same-call-site component siblings, or null when the call
+ * site has only one instance (not a repeated `.map()` level) or can't be resolved.
+ */
+function componentSiblingIndex(
+  compFiber: Fiber,
+  resolveLocation?: (fiber: Fiber) => SourceLocation | null,
+): number | null {
+  const compLoc = readComponentCallSite(compFiber, resolveLocation);
+  const compParent = compFiber.return;
+  if (compLoc === null || compParent === null) return null;
+
+  let matchCount = 0;
+  let selfIndex = -1;
+  let current: Fiber | null = compParent.child;
+  while (current !== null) {
+    if (isComponentFiber(current)) {
+      const loc = readComponentCallSite(current, resolveLocation);
+      if (loc && sameLocation(loc, compLoc)) {
+        if (current === compFiber) selfIndex = matchCount;
+        matchCount++;
+      }
+    }
+    current = current.sibling;
+  }
+  return matchCount > 1 && selfIndex >= 0 ? selfIndex : null;
+}
+
+/**
+ * React 19 item index for a deep host element inside a `.map()`ed COMPONENT.
+ *
+ * Why this is its own walk: React 19 sets `_debugStack` on EVERY host fiber, not just
+ * components — so "walk up to the nearest fiber with `_debugStack`" stops at the clicked
+ * element's immediate host parent and never reaches the repeated component, collapsing
+ * every instance to index 0 (the map-item-click regression). Instead we walk up by component
+ * TAG and, at the first ancestor component level whose call site has >1 sibling instances,
+ * return this element's index within that group. Climbs past non-repeated component levels
+ * so nested components still resolve to the outer repeated instance. Returns 0 when no
+ * repeated component level exists.
+ */
+function getReact19ComponentInstanceIndex(
+  start: Fiber,
+  resolveLocation?: (fiber: Fiber) => SourceLocation | null,
+): number {
+  let compFiber: Fiber | null = start;
+  while (compFiber !== null) {
+    while (compFiber !== null && !isComponentFiber(compFiber)) {
+      compFiber = compFiber.return;
+    }
+    if (compFiber === null) return 0;
+
+    const indexAtLevel = componentSiblingIndex(compFiber, resolveLocation);
+    if (indexAtLevel !== null) return indexAtLevel;
+
+    // Not repeated at this component level — climb to the next component ancestor.
+    compFiber = compFiber.return;
+  }
+  return 0;
+}
+
 /**
  * Count preceding instances rendered from the same JSX call site.
  * Supports React 18 (`_debugSource` on the fiber) and React 19 (`_debugStack` on the parent
  * component fiber). Handles `.map()` lists where multiple elements share the same call site.
  *
  * React 18: compares `_debugSource` among fiber siblings at the same level.
- * React 19: walks up to the nearest component fiber with `_debugStack`, then compares
- * parsed source locations among component-level siblings.
+ * React 19: prefers the immediate DOM-sibling group (repeated host nodes); else walks up the
+ * component-fiber chain to count repeated component instances (`getReact19ComponentInstanceIndex`).
  */
 export function getItemIndexFromFiber(fiber: Fiber, resolveLocation?: (fiber: Fiber) => SourceLocation | null): number {
   // React 18: _debugSource on the fiber directly
@@ -331,35 +418,10 @@ export function getItemIndexFromFiber(fiber: Fiber, resolveLocation?: (fiber: Fi
     if (hostIndex > 0) return hostIndex;
   }
 
-  // Fallback: walk up to the nearest component fiber that has _debugStack and
-  // compare component-level siblings. This handles repeated component instances.
-  let compFiber: Fiber | null = parent;
-  while (compFiber !== null && !compFiber._debugStack) {
-    compFiber = compFiber.return;
-  }
-  if (compFiber === null || !compFiber._debugStack) return 0;
-
-  // parseDebugStack returns null for RSC/Turbopack (_debugStack has .next/ paths).
-  // Fall back to resolveLocation callback which uses source map caches.
-  const compLoc = parseDebugStack(compFiber._debugStack) ?? resolveLocation?.(compFiber) ?? null;
-  if (compLoc === null) return 0;
-
-  const compParent = compFiber.return;
-  if (compParent === null) return 0;
-
-  let index = 0;
-  let current: Fiber | null = compParent.child;
-  while (current !== null) {
-    if (current === compFiber) return index;
-    if (current._debugStack) {
-      const loc = parseDebugStack(current._debugStack) ?? resolveLocation?.(current) ?? null;
-      if (loc && sameLocation(loc, compLoc)) {
-        index++;
-      }
-    }
-    current = current.sibling;
-  }
-  return 0;
+  // Fallback: the clicked host element's own DOM siblings do not repeat (it is a deep
+  // element inside a `.map()`ed COMPONENT, e.g. <Tweet> rows). Count repeated component
+  // instances by walking up the component-fiber chain. (HYP map-item-click regression.)
+  return getReact19ComponentInstanceIndex(fiber, resolveLocation);
 }
 
 /**

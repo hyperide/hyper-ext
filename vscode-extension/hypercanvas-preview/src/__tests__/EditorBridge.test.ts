@@ -99,6 +99,40 @@ describe('EditorBridge', () => {
       expect(mockEditor.revealRange).toHaveBeenCalled();
     });
 
+    it('SELECTS the full element range when an end position is supplied (Go-to-Code)', async () => {
+      // BUG C: Go-to-Code must highlight the element's JSX, not drop a zero-width caret.
+      await goToCode('/src/App.tsx', 5, 9, { endLine: 7, endColumn: 17 });
+      expect(mockEditor.selection).toEqual(
+        expect.objectContaining({
+          start: expect.objectContaining({ line: 4, character: 8 }), // 5:9 → (4,8)
+          end: expect.objectContaining({ line: 6, character: 16 }), // 7:17 → (6,16)
+        }),
+      );
+      // A real range, not a caret.
+      const sel = mockEditor.selection as unknown as { start: { line: number }; end: { line: number } };
+      expect(sel.end.line).not.toBe(sel.start.line);
+    });
+
+    it('places a caret (zero-width) when no end position is supplied', async () => {
+      await goToCode('/src/App.tsx', 5, 9);
+      const sel = mockEditor.selection as unknown as {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+      expect(sel.start).toEqual(sel.end);
+    });
+
+    it('focuses the editor tab on editor:goToCode (preserveFocus false)', async () => {
+      const wv = createMockWebview();
+      await handleEditorMessage(
+        { type: 'editor:goToCode', path: '/src/App.tsx', line: 5, column: 9, endLine: 5, endColumn: 20 },
+        wv as never,
+      );
+      const call = (vscode.window.showTextDocument as ReturnType<typeof mock>).mock.calls[0];
+      const options = call[1] as { preserveFocus: boolean };
+      expect(options.preserveFocus).toBe(false);
+    });
+
     it('resolves relative paths against workspace root', async () => {
       await goToCode('src/Button.tsx', 1, 1);
       const call = (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mock.calls[0];

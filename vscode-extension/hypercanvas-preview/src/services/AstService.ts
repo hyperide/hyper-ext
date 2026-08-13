@@ -1260,6 +1260,46 @@ export class AstService {
   }
 
   /**
+   * Resolve a selected element to its full JSX source RANGE for "Go to Code".
+   *
+   * Unlike `getElementLocation` (start point only, and only for node-map `filePath:counter`
+   * refs), this accepts the runtime's source-location elementId (`fileName:line:column`),
+   * finds the element in its OWN source file (cross-file aware via
+   * `_resolveElementInCorrectFile`), and returns start + end so the editor can SELECT the
+   * element's JSX rather than just drop a caret. Babel `loc` is 1-based line / 0-based column.
+   * For a `.map()`ed element all instances share one source range, so the clicked instance's
+   * code is selected regardless of itemIndex.
+   */
+  async getElementRange(
+    filePath: string,
+    elementId: NodeRef,
+  ): Promise<{
+    filePath: string;
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+  } | null> {
+    await this.ensureInitialized();
+    try {
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, elementId);
+      const loc = resolved?.result?.element?.loc;
+      if (!resolved || !loc) return null;
+      return {
+        filePath: resolved.resolvedPath,
+        startLine: loc.start.line,
+        startColumn: loc.start.column,
+        endLine: loc.end.line,
+        endColumn: loc.end.column,
+      };
+    } catch (error) {
+      console.error('[AstService.getElementRange] Error:', error);
+      return null;
+    }
+  }
+
+  /**
    * Resolve the selected element's component reference to its master component
    * definition (the "Go to main component" affordance — HYP-563).
    *

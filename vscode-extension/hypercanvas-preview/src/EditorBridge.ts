@@ -29,7 +29,7 @@ export function setMovePreviewToRight(fn: (() => void) | null): void {
  */
 export type EditorMessage =
   | { type: 'editor:openFile'; path: string; line?: number; column?: number }
-  | { type: 'editor:goToCode'; path: string; line: number; column: number }
+  | { type: 'editor:goToCode'; path: string; line: number; column: number; endLine?: number; endColumn?: number }
   | { type: 'editor:getActiveFile'; requestId: string };
 
 /**
@@ -46,6 +46,8 @@ export async function handleEditorMessage(message: EditorMessage, webview: vscod
     case 'editor:goToCode':
       await goToCode(message.path, message.line, message.column, {
         preserveFocus: false,
+        endLine: message.endLine,
+        endColumn: message.endColumn,
       });
       break;
 
@@ -98,7 +100,7 @@ export async function goToCode(
   filePath: string,
   line: number,
   column: number,
-  options?: { preserveFocus?: boolean },
+  options?: { preserveFocus?: boolean; endLine?: number; endColumn?: number },
 ): Promise<void> {
   if (isBundleArtifactPath(filePath)) {
     console.log(`[EditorBridge] Skipping bundle artifact: ${filePath}:${line}:${column}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
@@ -106,7 +108,13 @@ export async function goToCode(
   }
   try {
     const uri = resolveFilePath(filePath);
-    const position = new vscode.Position(line - 1, column - 1);
+    const start = new vscode.Position(line - 1, column - 1);
+    // When an end position is supplied (Go-to-Code from a canvas selection), SELECT the whole
+    // JSX element so the editor highlights the exact element — not just place a caret at its start.
+    const end =
+      options?.endLine != null && options?.endColumn != null
+        ? new vscode.Position(options.endLine - 1, options.endColumn - 1)
+        : start;
 
     const doc = await vscode.workspace.openTextDocument(uri);
     const targetColumn = getNonPreviewColumn();
@@ -115,8 +123,8 @@ export async function goToCode(
       preserveFocus: options?.preserveFocus ?? true,
     });
 
-    editor.selection = new vscode.Selection(position, position);
-    editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+    editor.selection = new vscode.Selection(start, end);
+    editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
 
     console.log(`[EditorBridge] Navigated to ${filePath}:${line}:${column}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
   } catch (error) {

@@ -1234,13 +1234,25 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !selectedIds?.length || !this._panel) return;
 
-    const loc = await this._panelRouter.astBridge.astService.getElementLocation(componentPath, selectedIds[0]);
-    // Re-read the webview AFTER the await: the panel can be disposed during getElementLocation
+    // Resolve the selected element to its full JSX range in its OWN source file. The
+    // selectedId is a source-location ref (`fileName:line:column`); the previous
+    // `getElementLocation(componentPath, selectedIds[0])` passed no nodeRef and resolved
+    // nothing, so Go-to-Code did nothing at all. getElementRange is cross-file aware and
+    // returns start+end so the editor selects the element's JSX, not just a caret.
+    const range = await this._panelRouter.astBridge.astService.getElementRange(componentPath, selectedIds[0]);
+    // Re-read the webview AFTER the await: the panel can be disposed during getElementRange
     // and the getter throws on a disposed panel (see `_liveWebview`). Abort cleanly if so.
     const webview = this._liveWebview();
-    if (loc && webview) {
+    if (range && webview) {
       await handleEditorMessage(
-        { type: 'editor:goToCode', path: componentPath, line: loc.line, column: loc.column + 1 },
+        {
+          type: 'editor:goToCode',
+          path: range.filePath,
+          line: range.startLine,
+          column: range.startColumn + 1,
+          endLine: range.endLine,
+          endColumn: range.endColumn + 1,
+        },
         webview,
       );
     }

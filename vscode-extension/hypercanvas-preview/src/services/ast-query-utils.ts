@@ -41,9 +41,17 @@ export async function findElementAtPosition(
     const sourceLocation = { fileName: absolutePath, line, column: column - 1 };
     const entry = deps.nodeMapService.resolveSourceLocation(sourceLocation);
 
+    // Go-to-visual sends this nodeRef to the iframe, which resolves it against its fiber
+    // source index keyed by `fileName:line:column` (`parseSourceRef`). The node map's own
+    // `entry.nodeRef` is the builder's synthetic `filePath:counter` form — `parseSourceRef`
+    // returns null for it, so go-to-visual silently resolved nothing. Return a SOURCE-LOCATION
+    // ref built from `entry.loc` (project-relative path, source line/column) so the iframe's
+    // exact / closest-line fallback can find the rendered element. (go-to-visual fix)
+    const sourceRef = entry ? (`${entry.loc.fileName}:${entry.loc.line}:${entry.loc.column}` as NodeRef) : undefined;
+
     return {
       tagName,
-      ...(entry ? { nodeRef: entry.nodeRef } : {}),
+      ...(sourceRef ? { nodeRef: sourceRef } : {}),
     };
   } catch (error) {
     console.warn('[findElementAtPosition] parse failed (expected for broken/partial files):', error);

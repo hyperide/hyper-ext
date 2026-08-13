@@ -26,15 +26,20 @@ export async function handleContextMenuGoToCode(
   const componentPath = deps.currentComponent;
   if (!componentPath || !elementId) return;
 
-  const loc = await deps.panelRouter.astBridge.astService.getElementLocation(componentPath, elementId);
+  // Resolve the selected element to its full JSX range in its OWN file so the editor selects
+  // the element (not just a caret) and focuses its tab. The old `getElementLocation(path, id)`
+  // passed no nodeRef and always returned null — context-menu Go-to-Code did nothing.
+  const range = await deps.panelRouter.astBridge.astService.getElementRange(componentPath, elementId);
 
-  if (loc) {
+  if (range) {
     await handleEditorMessage(
       {
         type: 'editor:goToCode',
-        path: componentPath,
-        line: loc.line,
-        column: loc.column + 1,
+        path: range.filePath,
+        line: range.startLine,
+        column: range.startColumn + 1,
+        endLine: range.endLine,
+        endColumn: range.endColumn + 1,
       },
       webview,
     );
