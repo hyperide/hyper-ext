@@ -201,4 +201,8 @@ describe('getTypeString', () => {
   it('handles union types containing a qualified name', () => {
     expect(getTypeString(parseTypeNode('React.ReactNode | undefined'))).toBe('React.ReactNode | undefined');
   });
+
+  it('handles 3-part qualified name (React.JSX.Element)', () => {
+    expect(getTypeString(parseTypeNode('React.JSX.Element'))).toBe('React.JSX.Element');
+  });
 });

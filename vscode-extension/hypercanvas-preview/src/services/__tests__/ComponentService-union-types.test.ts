@@ -137,4 +137,19 @@ describe('ComponentService string-literal union extraction (HYP-454)', () => {
     expect(sample.values.variant).toBe('primary');
     expect(sample.unsatisfied).not.toContain('variant');
   });
+
+  // HYP-454 gap: optional marker on TSPropertySignature (`?:`) was ignored, causing
+  // optional inline union props to be marked required:true and land in unsatisfied.
+  it('inline destructured optional union → required:false, NOT in unsatisfied (HYP-454 optional)', async () => {
+    const source = `
+      export function Button({ variant }: { variant?: 'primary' | 'ghost' }) {
+        return <button className={variant} />;
+      }
+    `;
+    const info = await parse(source, 'src/ui/Button.tsx');
+    const variant = info?.props.find((pr) => pr.name === 'variant');
+    expect(variant?.required).toBe(false);
+    const sample = generateSamplePropValues(info?.props ?? []);
+    expect(sample.unsatisfied).not.toContain('variant');
+  });
 });

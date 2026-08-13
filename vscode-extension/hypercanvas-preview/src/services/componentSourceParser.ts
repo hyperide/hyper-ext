@@ -14,6 +14,15 @@ const traverse = (_traverse as { default?: typeof _traverse }).default ?? _trave
 const ALWAYS_OPTIONAL_PROP_NAMES = new Set(['className', 'children', 'ref', 'key', 'asChild']);
 
 /**
+ * Stringify a TSQualifiedName or Identifier recursively.
+ * Handles any depth: React.JSX.Element → 'React.JSX.Element'.
+ */
+function qualifiedNameToString(name: t.TSQualifiedName | t.Identifier): string {
+  if (t.isIdentifier(name)) return name.name;
+  return `${qualifiedNameToString(name.left)}.${name.right.name}`;
+}
+
+/**
  * Convert a TypeScript AST type node to a human-readable type string.
  * Pure / no VS Code dependency — safe to import in tests.
  *
@@ -46,13 +55,8 @@ export function getTypeString(node: t.TSType): string {
     return `${getTypeString(node.elementType)}[]`;
   }
   if (t.isTSTypeReference(node)) {
-    if (t.isIdentifier(node.typeName)) return node.typeName.name;
-    if (t.isTSQualifiedName(node.typeName)) {
-      const left = node.typeName.left;
-      const right = node.typeName.right;
-      if (t.isIdentifier(left) && t.isIdentifier(right)) {
-        return `${left.name}.${right.name}`;
-      }
+    if (t.isIdentifier(node.typeName) || t.isTSQualifiedName(node.typeName)) {
+      return qualifiedNameToString(node.typeName);
     }
   }
   if (t.isTSFunctionType(node)) return 'Function';
@@ -94,18 +98,20 @@ export function isForwardRefCall(init: t.Expression | null | undefined): init is
  * Only processes TSTypeLiteral (e.g. `{ variant }: { variant: 'primary' | 'ghost' }`).
  * TSTypeReference (`{ variant }: ButtonProps`) is intentionally left out — the
  * interface/import-resolution path in ComponentService owns those.
- * Returns a map from prop name to type string, or null when no inline type is present.
+ * Returns a map from prop name to `{ type, optional }`, or null when no inline type is present.
+ * The `optional` field reflects the TSPropertySignature `?:` marker so callers can
+ * propagate optionality independently of the destructuring default.
  */
 function extractInlineTypeAnnotations(
   pattern: t.ObjectPattern,
   getTypeString: (node: t.TSType) => string,
-): Map<string, string> | null {
+): Map<string, { type: string; optional: boolean }> | null {
   const annotation = pattern.typeAnnotation;
   if (!annotation || !t.isTSTypeAnnotation(annotation)) return null;
   const typeNode = annotation.typeAnnotation;
   if (!t.isTSTypeLiteral(typeNode)) return null;
 
-  const map = new Map<string, string>();
+  const map = new Map<string, { type: string; optional: boolean }>();
   for (const member of typeNode.members) {
     if (
       t.isTSPropertySignature(member) &&
@@ -113,7 +119,10 @@ function extractInlineTypeAnnotations(
       member.typeAnnotation &&
       t.isTSTypeAnnotation(member.typeAnnotation)
     ) {
-      map.set(member.key.name, getTypeString(member.typeAnnotation.typeAnnotation));
+      map.set(member.key.name, {
+        type: getTypeString(member.typeAnnotation.typeAnnotation),
+        optional: member.optional === true,
+      });
     }
   }
   return map.size > 0 ? map : null;
@@ -143,8 +152,12 @@ export function extractPropsFromDestructuring(
       // string-literal defaults — those are what the enum branch can match against.
       const defaultValue = stringLiteralDefault(prop.value);
       const hasDefault = defaultValue !== undefined;
-      const isOptional = ALWAYS_OPTIONAL_PROP_NAMES.has(name) || /^on[A-Z]/.test(name) || hasRest || hasDefault;
-      const type = inlineTypes?.get(name) ?? 'unknown';
+      // Also treat as optional when the TSPropertySignature carries `?:` (HYP-454).
+      const inlineEntry = inlineTypes?.get(name);
+      const annotationOptional = inlineEntry?.optional === true;
+      const isOptional =
+        ALWAYS_OPTIONAL_PROP_NAMES.has(name) || /^on[A-Z]/.test(name) || hasRest || hasDefault || annotationOptional;
+      const type = inlineEntry?.type ?? 'unknown';
       result.push({ name, type, required: !isOptional, defaultValue });
     }
   }
