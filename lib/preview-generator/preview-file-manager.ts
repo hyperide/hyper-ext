@@ -30,7 +30,7 @@ import {
   type ProviderWrapConfig,
   type SSRMockConfig,
 } from './generator';
-import { ensureGitExclude, ensureStandaloneEntry } from './preview-file-ops';
+import { clearSkipWorktree, ensureGitExclude, ensureSkipWorktree, ensureStandaloneEntry } from './preview-file-ops';
 import { buildEntry, computeImportPath } from './preview-build-entry';
 import { getSampleFilePath } from './sample-ensurer';
 import {
@@ -1397,12 +1397,33 @@ export class PreviewFileManager {
       const appendedSource = `${source}\n// @hyperide-managed\nif (${condition}) { ${importBody}; }\n`;
       onBeforeWrite?.();
       await this.io.writeFile(entryFilePath, appendedSource);
+      await this._skipWorktreeEntry(entryFilePath);
       return true;
     }
 
     onBeforeWrite?.();
     await this.io.writeFile(entryFilePath, recast.print(ast).code);
+    await this._skipWorktreeEntry(entryFilePath);
     return true;
+  }
+
+  /**
+   * Call git update-index --skip-worktree on a patched tracked entry file so
+   * the @hyperide-managed injection no longer appears in `git status` (HYP-35).
+   * No-op if not in a git repo or if git is unavailable.
+   */
+  private async _skipWorktreeEntry(absoluteFilePath: string): Promise<void> {
+    const gitRoot = await this.findGitRoot(dirname(absoluteFilePath));
+    if (gitRoot) ensureSkipWorktree(absoluteFilePath, gitRoot);
+  }
+
+  /**
+   * Remove the skip-worktree flag after reverting the @hyperide-managed patch
+   * so git tracks the file again (counterpart to _skipWorktreeEntry).
+   */
+  private async _clearSkipWorktreeEntry(absoluteFilePath: string): Promise<void> {
+    const gitRoot = await this.findGitRoot(dirname(absoluteFilePath));
+    if (gitRoot) clearSkipWorktree(absoluteFilePath, gitRoot);
   }
 
   /**
@@ -1411,7 +1432,14 @@ export class PreviewFileManager {
    */
   async revertEntryFile(filePath: string): Promise<void> {
     const source = await this.io.readFile(filePath);
-    if (!source.includes('@hyperide-managed')) return;
+    if (!source.includes('@hyperide-managed')) {
+      // File already clean (or never patched). Unconditionally clear the flag —
+      // --no-skip-worktree on a file that was never flagged is a no-op, but this
+      // guards against crash/kill scenarios where the flag was left dangling after
+      // a prior patchEntryFile that never completed its paired revert (HYP-35).
+      await this._clearSkipWorktreeEntry(filePath);
+      return;
+    }
 
     const ast = recast.parse(source, { parser: RECAST_PARSER });
 
@@ -1434,8 +1462,10 @@ export class PreviewFileManager {
     if (reverted.includes('@hyperide-managed')) {
       const idx = reverted.lastIndexOf('\n// @hyperide-managed');
       await this.io.writeFile(filePath, idx >= 0 ? reverted.slice(0, idx) : reverted);
+      await this._clearSkipWorktreeEntry(filePath);
       return;
     }
     await this.io.writeFile(filePath, reverted);
+    await this._clearSkipWorktreeEntry(filePath);
   }
 }

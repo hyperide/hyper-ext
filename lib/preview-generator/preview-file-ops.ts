@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { dirname, join, relative } from 'node:path';
 import type { FileIO } from '../ast/file-io';
 
@@ -39,6 +40,41 @@ export async function ensureGitExclude(
   } catch {
     // .git is a file in linked worktrees — silently skip
   }
+}
+
+/**
+ * Mark a tracked entry file as skip-worktree so the @hyperide-managed injection
+ * no longer pollutes `git status` (HYP-35). The flag is purely local — it is
+ * never committed and has no effect on CI or other developers. No-op if the
+ * file is not in a git repo, if git is unavailable, or if the flag is already set.
+ *
+ * Uses a repo-relative path so the path matches what git holds in its index.
+ * Precondition: both absoluteFilePath and gitRoot must be in the same symlink
+ * resolution form (callers should ensure findGitRoot uses the same base as
+ * absoluteFilePath to avoid a mismatch from path.relative).
+ */
+export function ensureSkipWorktree(absoluteFilePath: string, gitRoot: string): void {
+  const relPath = relative(gitRoot, absoluteFilePath);
+  spawnSync('git', ['update-index', '--skip-worktree', relPath], {
+    cwd: gitRoot,
+    stdio: 'ignore',
+  });
+}
+
+/**
+ * Remove the skip-worktree flag added by ensureSkipWorktree after the
+ * @hyperide-managed injection is reverted so git tracks the file again.
+ *
+ * Same path-form precondition as ensureSkipWorktree.
+ * Failures are intentionally silent: a dangling skip-worktree flag is recoverable
+ * (developer sees no unintended changes in git status; next revert call retries).
+ */
+export function clearSkipWorktree(absoluteFilePath: string, gitRoot: string): void {
+  const relPath = relative(gitRoot, absoluteFilePath);
+  spawnSync('git', ['update-index', '--no-skip-worktree', relPath], {
+    cwd: gitRoot,
+    stdio: 'ignore',
+  });
 }
 
 export async function ensureStandaloneEntry(
