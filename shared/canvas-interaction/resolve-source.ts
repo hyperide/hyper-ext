@@ -11,6 +11,7 @@
  */
 
 import { debugSourceToLocation, type Fiber, getItemIndexFromFiber } from '../element-tracing/fiber-internals';
+import { isSyntheticPreviewPath } from '../element-tracing/synthetic-preview';
 import type { SourceLocation } from '../element-tracing/types';
 
 export interface ResolvedCallSiteTarget {
@@ -76,6 +77,12 @@ export function resolveCallSiteTarget(
     if (current._debugSource) {
       const callerSource = debugSourceToLocation(current._debugSource);
       if (callerSource.fileName !== directSource.fileName) {
+        // The synthetic preview entry (__canvas_preview__.tsx) imports and renders
+        // the user component, so it is the first cross-file ancestor — but it is
+        // never a valid go-to-code target. When the call site is the synthetic
+        // wrapper, there is no real call site between the element and the wrapper,
+        // so the element's own (direct) source is the correct target. (HYP-429)
+        if (isSyntheticPreviewPath(callerSource.fileName)) break;
         return { source: callerSource, itemIndex: getItemIndexFromFiber(current) };
       }
     }

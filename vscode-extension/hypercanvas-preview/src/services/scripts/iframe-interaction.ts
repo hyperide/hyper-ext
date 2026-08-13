@@ -39,6 +39,7 @@ import {
 } from '@shared/element-tracing/fiber-internals';
 import { FiberSourceIndex, getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-index';
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
+import { isSyntheticPreviewPath, selectNonSyntheticCachedLocation } from '@shared/element-tracing/synthetic-preview';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import html2canvas from 'html2canvas';
 import {
@@ -605,7 +606,14 @@ function resolveViaClientSourceMap(fiber: Fiber): SourceLocation | null {
         const key = `${frame.url}:${frame.line}:${frame.col}`;
         if (clientInternalFrames.has(key)) continue; // React-internal frame — skip to next
         const cached = clientSourceMapCache.get(key);
-        if (cached) return cached; // resolved to user source file
+        if (cached) {
+          // The synthetic preview entry (__canvas_preview__.tsx) renders every user
+          // component; Vite source maps can collapse a compiled position back to it.
+          // It is never a valid go-to-code target — skip it so the caller falls back
+          // to the element's own fiber source (the real component file). (HYP-429)
+          if (isSyntheticPreviewPath(cached.fileName)) continue;
+          return cached; // resolved to user source file
+        }
         if (cached === null) return null; // warmed but unresolvable — don't walk ancestors
         // undefined: warm-up still in flight, try next frame
       }
@@ -762,11 +770,14 @@ function warmServerChunkFrames(fiber: Fiber): void {
 function resolveOwnServerSourceMap(fiber: Fiber): SourceLocation | null {
   // HostComponent fibers (tag=5) in React 19.1 RSC have _debugStack directly
   if (fiber._debugStack) {
-    for (const frame of extractServerChunkFrames(fiber._debugStack)) {
-      const cached = serverSourceMapCache.get(`${frame.filePath}:${frame.line}:${frame.col}`);
-      if (cached) return cached;
-      if (cached === null) return null; // warmed but unresolvable
-    }
+    // selectNonSyntheticCachedLocation enforces the synthetic-preview skip on every
+    // resolution path (sync direct + async RSC fallback) — shared with
+    // resolveViaServerSourceMap so the guard stays consistent. (HYP-424 / HYP-429)
+    const frames = extractServerChunkFrames(fiber._debugStack).map((frame) =>
+      serverSourceMapCache.get(`${frame.filePath}:${frame.line}:${frame.col}`),
+    );
+    const picked = selectNonSyntheticCachedLocation(frames);
+    if (picked.found) return picked.value;
   }
   return null;
 }
@@ -796,10 +807,15 @@ function resolveViaServerSourceMap(fiber: Fiber): SourceLocation | null {
   let current: Fiber | null = fiber;
   while (current !== null) {
     if (current._debugStack) {
-      for (const frame of extractServerChunkFrames(current._debugStack)) {
-        const cached = serverSourceMapCache.get(`${frame.filePath}:${frame.line}:${frame.col}`);
-        if (cached !== undefined) return cached;
-      }
+      // Same synthetic-skip selection as resolveOwnServerSourceMap, applied per fiber
+      // as we walk the return chain. This is the async server-map fallback consumed by
+      // resolveClickLocal / retryPendingClick (RSC / React 19 pending click): a clicked
+      // element must never resolve to the synthetic __canvas_preview__ entry. (HYP-424 / HYP-429)
+      const frames = extractServerChunkFrames(current._debugStack).map((frame) =>
+        serverSourceMapCache.get(`${frame.filePath}:${frame.line}:${frame.col}`),
+      );
+      const picked = selectNonSyntheticCachedLocation(frames);
+      if (picked.found) return picked.value;
     }
     current = (current.return as typeof current | undefined) ?? null;
   }

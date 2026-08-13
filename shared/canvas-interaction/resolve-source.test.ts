@@ -116,6 +116,43 @@ describe('resolveCallSiteTarget', () => {
     });
   });
 
+  it('falls back to the real component source when the call site is the synthetic preview wrapper (HYP-429)', () => {
+    // tamagui-whatsapp: the synthetic __canvas_preview__.tsx imports and renders
+    // <ChatInputBar/>. Clicking a div inside ChatInputBar must resolve to the real
+    // component file, never to the synthetic wrapper that is its call site.
+    const directSource = source({
+      fileName: '/app/src/components/ChatInputBar.tsx',
+      line: 18,
+      column: 4,
+    });
+
+    // The call-site ancestor lives in the synthetic preview entry.
+    const previewWrapper = mockFiber({
+      tag: 0,
+      type: function CanvasPreview() {},
+      _debugSource: {
+        fileName: '/app/src/__canvas_preview__.tsx',
+        lineNumber: 12,
+        columnNumber: 6,
+      },
+    });
+    const internalDiv = mockFiber({
+      tag: 5,
+      type: 'div',
+      return: previewWrapper,
+      _debugSource: {
+        fileName: '/app/src/components/ChatInputBar.tsx',
+        lineNumber: 18,
+        columnNumber: 4,
+      },
+    });
+    previewWrapper.child = internalDiv;
+
+    const result = resolveCallSiteTarget(directSource, internalDiv, 'src/__canvas_preview__.tsx', 0);
+
+    expect(result.source).toEqual(directSource);
+  });
+
   it('uses the rendered-file ancestor item index when clicking a nested child inside a map item', () => {
     const buttonSource: DebugSource = {
       fileName: '/app/src/components/Sidebar.tsx',
