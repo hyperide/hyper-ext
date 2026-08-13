@@ -3,6 +3,7 @@
  */
 
 import { getActiveTracer } from '../../element-tracing/active-tracer';
+import { FastPatchService } from '@/lib/fast-patch-service';
 import { findAstNodeBySourceLoc } from '../../element-tracing/id-bridge';
 import { EventEmitter } from '../events/EventEmitter';
 import type { CanvasEngineEvents, CanvasEventName, TreeChangeEvent } from '../events/events';
@@ -54,6 +55,8 @@ export class CanvasEngine {
   // Core components
   public readonly events: EventEmitter;
   public readonly registry: ComponentRegistry;
+  /** Instant per-property CSS injection into the preview iframe (pre-HMR feedback). */
+  public readonly fastPatch = new FastPatchService();
   private tree: DocumentTree;
   private historyManager: HistoryManager;
   private historyController: HistoryController;
@@ -704,6 +707,7 @@ export class CanvasEngine {
     this.tree = new DocumentTree(tree);
     this.historyManager.clear();
     this.clearSelection();
+    this.fastPatch.clearAll();
     this.notifyStateChange();
     this.log('Tree deserialized');
   }
@@ -825,6 +829,8 @@ export class CanvasEngine {
     for (const child of rootChildren) {
       this.tree.delete(child.id);
     }
+
+    this.fastPatch.clearAll();
 
     // Emit tree change event so Zustand store updates
     // Note: notifyStateChange() removed - it bypasses batch mode

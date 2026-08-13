@@ -65,6 +65,8 @@ export function useStyleSync({
   const styleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFlushTimeRef = useRef<number>(0);
   const verificationCleanupRef = useRef<(() => void) | null>(null);
+  /** nodeRef of the last fast-patched element — finishSync must clear the exact key applyPatch used. */
+  const lastFastPatchIdRef = useRef<string | null>(null);
   const selectedKey = selectedIds.join('\0');
   const previousSyncScopeRef = useRef({ filePath, selectedKey });
 
@@ -99,9 +101,16 @@ export function useStyleSync({
   }, [filePath, selectedKey, cancelPendingStyleSync]);
 
   const finishSync = useCallback(() => {
+    // HMR has applied the real change (or we gave up waiting) — drop the
+    // instant fast-patch so the two don't fight.
+    const id = lastFastPatchIdRef.current;
+    if (engine && id) {
+      engine.fastPatch.clearPatch(id);
+      lastFastPatchIdRef.current = null;
+    }
     setIsStyleSyncing(false);
     onSyncEnd?.();
-  }, [onSyncEnd]);
+  }, [onSyncEnd, engine]);
 
   const flushQueue = useCallback(async () => {
     if (styleQueueRef.current.size === 0) return;
@@ -143,6 +152,13 @@ export function useStyleSync({
       if (engine) {
         // SaaS browser mode: route through engine for undo/redo support
         console.log('[useStyleSync] Syncing style changes via engine:', styles);
+
+        // Instant visual feedback before the backend write + HMR round-trip.
+        // Cleared in finishSync once the real change lands. Must use writeId —
+        // the tracer resolves nodeRefs, not parse UUIDs (HYP-593), and the
+        // engine write below targets the same id.
+        engine.fastPatch.applyPatch(writeId, styles);
+        lastFastPatchIdRef.current = writeId;
 
         const domClasses = getDOMClassesFromIframe(writeId);
 
