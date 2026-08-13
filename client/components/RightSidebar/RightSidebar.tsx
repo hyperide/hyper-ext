@@ -1,5 +1,5 @@
 import { TID } from '@shared/data-testid-map';
-import { IconCode, IconPointer } from '@tabler/icons-react';
+import { IconCode, IconComponents, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/hooks/use-toast';
@@ -727,6 +727,26 @@ export default function RightSidebar({
     goToCode(componentPath, childrenLocation.line, childrenLocation.column);
   }, [componentPath, childrenLocation, goToCode]);
 
+  // "Go to main component" (HYP-563): jump from the selected instance to its
+  // master component definition. The extension resolves the JSX tag's import to a
+  // definition file and opens it. Gated to component references (uppercase tag)
+  // in VS Code, where the resolver/RPC lives — see isMasterComponentNavigable.
+  const handleGoToMasterComponent = useCallback(() => {
+    if (!selectedId || !componentPath) return;
+    canvas.sendEvent({
+      type: 'master:goToComponent',
+      elementId: selectedId,
+      nodeRef: selectedId,
+      componentPath,
+      componentName: tagType,
+    });
+  }, [selectedId, componentPath, tagType, canvas]);
+
+  // A selected element points at a master component when its tag is a component
+  // reference (PascalCase), not a host element (`div`). Only surfaced in VS Code,
+  // which owns the AST resolver + editor-open plumbing.
+  const isMasterComponentNavigable = isVSCode && !!selectedId && /^[A-Z]/.test(tagType ?? '');
+
   const handleI18nLocaleChange = useCallback((locale: string) => {
     setI18nActiveLocale(locale);
     // Re-read is triggered automatically via activeLocale in useElementStyleData deps
@@ -1360,11 +1380,29 @@ export default function RightSidebar({
 
       {selectedIds.length === 1 && parsedStyles && (canvasMode !== 'multi' || activeInstanceId) && (
         <>
-          {/* Frame type */}
-          <div className="w-full px-4 py-3 border-b border-border overflow-hidden">
-            <span data-testid={TID.inspector.componentName} className="text-sm font-semibold text-foreground">
+          {/* Frame type + "Go to main component" (HYP-563, Figma-style affordance) */}
+          <div className="w-full px-4 py-3 border-b border-border overflow-hidden flex items-center gap-2">
+            <span
+              data-testid={TID.inspector.componentName}
+              className="text-sm font-semibold text-foreground truncate flex-1 min-w-0"
+            >
               {getFrameType()}
             </span>
+            {isMasterComponentNavigable && (
+              <button
+                type="button"
+                data-testid={TID.inspector.goToMasterComponent}
+                onClick={handleGoToMasterComponent}
+                title={`Go to main component (${getFrameType()})`}
+                aria-label={`Go to main component ${getFrameType()}`}
+                className="group flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground bg-transparent transition-colors duration-150 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+              >
+                <IconComponents
+                  className="w-4 h-4 transition-transform duration-150 group-hover:-translate-y-px group-hover:translate-x-px"
+                  stroke={1.75}
+                />
+              </button>
+            )}
           </div>
 
           {/* Text Content */}

@@ -163,7 +163,12 @@ function collectPatternBindings(pattern: t.Node, out: Set<string>): void {
   }
 }
 
-function jsxNameRoot(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName): string | null {
+/**
+ * Leftmost binding identifier of a JSX tag name. For `<Foo.Bar>` returns `Foo`
+ * (the imported binding), for `<Foo>` returns `Foo`, for `<ns:tag>` returns `ns`.
+ * This is the name to look up against the file's imports.
+ */
+export function jsxNameRoot(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName): string | null {
   if (t.isJSXIdentifier(name)) return name.name;
   if (t.isJSXMemberExpression(name)) {
     const obj = name.object as t.JSXMemberExpression | t.JSXIdentifier;

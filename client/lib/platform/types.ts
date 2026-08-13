@@ -28,6 +28,17 @@ export type PlatformMessage =
       column: number;
     }
 
+  // Inspector → extension host: "Go to main component" (HYP-563). Resolves the
+  // selected element's component reference to its master definition and opens it.
+  // Handled by PanelRouter (shared across inspector + preview panel webviews).
+  | {
+      type: 'master:goToComponent';
+      elementId: string;
+      nodeRef?: string;
+      componentPath: string;
+      componentName?: string;
+    }
+
   // Canvas events
   | { type: 'canvas:componentLoaded'; data: unknown }
   | { type: 'canvas:selectionChanged'; elementIds: string[] }

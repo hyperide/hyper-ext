@@ -8,6 +8,7 @@
  */
 
 import * as fsSync from 'node:fs';
+import * as nodePath from 'node:path';
 import * as t from '@babel/types';
 import { buildJSXElement } from '@lib/ast/element-builder';
 import type { FileIO } from '@lib/ast/file-io';
@@ -16,9 +17,12 @@ import {
   collectJsxExternalRefs,
   collectJsxLocalBindings,
   findImportForName,
+  jsxNameRoot,
   pruneOrphanImports,
   replicateImport,
 } from '@lib/ast/jsx-deps';
+import { type MasterComponentResolution, resolveMasterComponent } from '@lib/ast/master-component-resolver';
+import { buildAliasMapFromTsconfig } from '@lib/ast/tsconfig-alias-map';
 import { cloneElement, setAttribute, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
 import {
   duplicateElementInAST,
@@ -1694,6 +1698,85 @@ export class AstService {
       console.error('[AstService.getElementLocation] Error:', error);
       return null;
     }
+  }
+
+  /**
+   * Resolve the selected element's component reference to its master component
+   * definition (the "Go to main component" affordance — HYP-563).
+   *
+   * Reads the selected JSX element, extracts the leftmost tag identifier
+   * (the imported binding), and resolves its import to a definition file via the
+   * pure `resolveMasterComponent` resolver. tsconfig path aliases are honored.
+   */
+  async getMasterComponentLocation(
+    filePath: string,
+    elementId: string,
+    nodeRef?: NodeRef,
+  ): Promise<MasterComponentResolution> {
+    await this.ensureInitialized();
+    try {
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
+
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
+      if (!resolved) return { kind: 'not-found' };
+
+      const { result, resolvedPath } = resolved;
+      const componentName = jsxNameRoot(result.element.openingElement.name);
+      if (!componentName) return { kind: 'not-found' };
+
+      const importerSource = await this._fileParser.readFileContent(resolvedPath);
+
+      return resolveMasterComponent({
+        importerFilePath: resolvedPath,
+        importerSource,
+        componentName,
+        fileIO: this._fileIO,
+        aliasMap: this._loadAliasMap(resolvedPath),
+      });
+    } catch (error) {
+      console.error('[AstService.getMasterComponentLocation] Error:', error);
+      return { kind: 'not-found' };
+    }
+  }
+
+  // Caches the alias map per tsconfig directory so repeated lookups in the same
+  // project don't re-read/parse the config.
+  private readonly _aliasMapCache = new Map<string, Record<string, string>>();
+
+  /**
+   * Build the tsconfig path-alias map for the project owning `importerFilePath`.
+   * Walks up from the importer's directory to the workspace root and uses the
+   * NEAREST `tsconfig.json` that declares `compilerOptions.paths`. This honors
+   * monorepo layouts where aliases live in a subproject tsconfig
+   * (e.g. `targets/app/tsconfig.json`) rather than the workspace root.
+   */
+  private _loadAliasMap(importerFilePath: string): Record<string, string> {
+    const root = this._workspaceRoot;
+    let dir = nodePath.dirname(importerFilePath);
+
+    // Ascend until we leave the workspace root (or hit the filesystem root).
+    while (dir.startsWith(root)) {
+      const cached = this._aliasMapCache.get(dir);
+      if (cached) return cached;
+
+      try {
+        const source = fsSync.readFileSync(nodePath.join(dir, 'tsconfig.json'), 'utf8');
+        const map = buildAliasMapFromTsconfig(source, dir);
+        if (Object.keys(map).length > 0) {
+          this._aliasMapCache.set(dir, map);
+          return map;
+        }
+      } catch {
+        // No tsconfig here (or no paths) — keep walking up.
+      }
+
+      const parent = nodePath.dirname(dir);
+      if (parent === dir || dir === root) break;
+      dir = parent;
+    }
+
+    return {};
   }
 
   /** Get element's TSX source code (for Copy operation). */

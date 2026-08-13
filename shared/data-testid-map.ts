@@ -74,6 +74,7 @@ export const TID = {
     stateSelect: 'hyper-inspector-state-select',
     // Header
     componentName: 'hyper-inspector-component-name',
+    goToMasterComponent: 'hyper-inspector-go-to-master-component',
     breadcrumb: 'hyper-inspector-breadcrumb',
     // View controls
     viewToggle: (name: string) => `hyper-inspector-view-${name}`,

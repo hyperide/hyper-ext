@@ -117,6 +117,13 @@ export class PanelRouter {
       pathField('componentPath', next);
       return next;
     }
+    if (type === 'master:goToComponent') {
+      const next = { ...m };
+      idField('elementId', next);
+      idField('nodeRef', next);
+      pathField('componentPath', next);
+      return next;
+    }
     return message;
   }
 
@@ -391,7 +398,117 @@ export class PanelRouter {
       return true;
     }
 
+    // "Go to main component" (HYP-563): resolve the selected element's component
+    // reference to its master definition and open it. Handled here (shared router)
+    // so it works from BOTH the inspector webview (RightPanelProvider) and the
+    // preview panel — the inspector button posts through RightPanelProvider, whose
+    // only sink is routeMessage. The inspector pre-gates to component references;
+    // host/inline/external resolutions surface an info message instead of navigating.
+    if (type === 'master:goToComponent') {
+      const { elementId, nodeRef, componentPath, componentName } = message as {
+        elementId?: string;
+        nodeRef?: string;
+        componentPath?: string;
+        componentName?: string;
+      };
+      if (!componentPath || !elementId) return true;
+
+      await this._astBridge.astService.ensureInitialized();
+      const resolution = await this._astBridge.astService.getMasterComponentLocation(componentPath, elementId, nodeRef);
+
+      // Pinpointed a concrete definition — navigate straight there.
+      if (resolution.kind === 'local' && resolution.pinpointed) {
+        await handleEditorMessage(
+          { type: 'editor:goToCode', path: resolution.filePath, line: resolution.line, column: resolution.column + 1 },
+          webview,
+        );
+        return true;
+      }
+
+      // Backstop via the TS language server for cases the pure resolver can't
+      // pinpoint: barrel landings (`local` but not pinpointed), deep/default
+      // re-export chains, baseUrl-only imports misread as external, package.json
+      // `exports`, and TS project references. Host/inline are terminal — never LSP.
+      if (resolution.kind === 'local' || resolution.kind === 'external' || resolution.kind === 'not-found') {
+        const navigated = await this._goToDefinitionViaLsp(componentPath, elementId, nodeRef, webview);
+        if (navigated) return true;
+      }
+
+      // No pinpoint and no LSP result: fall back to the resolved file (the barrel),
+      // which is still one hop from the definition.
+      if (resolution.kind === 'local') {
+        await handleEditorMessage(
+          { type: 'editor:goToCode', path: resolution.filePath, line: resolution.line, column: resolution.column + 1 },
+          webview,
+        );
+        return true;
+      }
+
+      const label = componentName ?? 'Component';
+      const reason =
+        resolution.kind === 'external'
+          ? `"${label}" is defined in an external package (${resolution.packageName}).`
+          : resolution.kind === 'inline'
+            ? `"${label}" is defined inline in the current file.`
+            : resolution.kind === 'host'
+              ? 'This is a plain HTML element with no component definition.'
+              : `Could not locate the definition for "${label}".`;
+      void vscode.window.showInformationMessage(`HyperCanvas: ${reason}`);
+      return true;
+    }
+
     return false;
+  }
+
+  /**
+   * Resolver-miss backstop: use the TypeScript language server's definition
+   * provider at the selected JSX tag to navigate to the component definition.
+   * Returns true if it navigated to a real (non-node_modules) source location.
+   */
+  private async _goToDefinitionViaLsp(
+    componentPath: string,
+    elementId: string,
+    nodeRef: string | undefined,
+    webview: vscode.Webview,
+  ): Promise<boolean> {
+    try {
+      const loc = await this._astBridge.astService.getElementLocation(componentPath, elementId, nodeRef);
+      if (!loc) return false;
+
+      const absolute = path.isAbsolute(componentPath)
+        ? componentPath
+        : path.resolve(this._workspaceRoot, componentPath);
+      const uri = vscode.Uri.file(absolute);
+      // getElementLocation returns the JSX element's 1-based line / Babel 0-based
+      // column (pointing at `<`). VS Code Positions are 0-based; +1 on the column
+      // lands the cursor on the tag identifier so the definition provider resolves
+      // the component symbol rather than the punctuation.
+      const position = new vscode.Position(Math.max(0, loc.line - 1), Math.max(0, loc.column + 1));
+
+      const defs = await vscode.commands.executeCommand<Array<vscode.Location | vscode.LocationLink>>(
+        'vscode.executeDefinitionProvider',
+        uri,
+        position,
+      );
+      const target = (defs ?? [])
+        .map((d) => ('targetUri' in d ? { uri: d.targetUri, range: d.targetRange } : { uri: d.uri, range: d.range }))
+        .find((d) => !d.uri.fsPath.includes('node_modules'));
+      if (!target) return false;
+
+      await handleEditorMessage(
+        {
+          type: 'editor:goToCode',
+          path: target.uri.fsPath,
+          line: target.range.start.line + 1,
+          column: target.range.start.character + 1,
+        },
+        webview,
+      );
+      return true;
+    } catch (e) {
+      console.warn('[PanelRouter] LSP definition fallback failed:', e);
+      return false;
+    }
   }
 
   /**
