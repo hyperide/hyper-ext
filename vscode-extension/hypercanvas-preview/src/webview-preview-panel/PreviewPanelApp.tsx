@@ -388,6 +388,7 @@ const PROJECT_TYPE_LABELS: Record<string, string> = {
   cra: 'CRA',
   remix: 'Remix',
   webpack: 'webpack',
+  bun: 'Bun',
   unknown: 'Unknown bundler',
 };
 

@@ -9,7 +9,7 @@ import type { I18nLibrary } from '../../../shared/i18n-text/types';
 // Project Detection
 // ============================================
 
-export type ProjectType = 'vite' | 'nextjs' | 'cra' | 'remix' | 'webpack' | 'unknown';
+export type ProjectType = 'vite' | 'nextjs' | 'cra' | 'remix' | 'webpack' | 'bun' | 'unknown';
 
 export interface ProjectInfo {
   type: ProjectType;

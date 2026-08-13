@@ -58,6 +58,15 @@ export async function detectProjectType(projectPath: string): Promise<ProjectTyp
   if (deps.vite) return 'vite';
   if (deps.webpack || deps['webpack-dev-server'] || deps['webpack-cli']) return 'webpack';
 
+  // Bun as bundler: @types/bun is the clearest signal (Vite/webpack projects don't have it).
+  // bun-plugin-* deps or a dev script invoking bun directly (bun --hot / bun src/) also count.
+  const hasBunTypes = Boolean(deps['@types/bun']);
+  const hasBunPlugin = Object.keys(deps).some((k) => k.startsWith('bun-plugin-'));
+  const scripts = packageJson.scripts as Record<string, string> | undefined;
+  const devScript = scripts?.dev ?? scripts?.start ?? '';
+  const bunDirectInvocation = /\bbun\s+(--hot|--watch|src\/|index\.)/.test(devScript);
+  if (hasBunTypes || hasBunPlugin || bunDirectInvocation) return 'bun';
+
   // Check for config files
   if (await fileExists(path.join(projectPath, 'next.config.js'))) return 'nextjs';
   if (await fileExists(path.join(projectPath, 'next.config.mjs'))) return 'nextjs';
@@ -85,6 +94,8 @@ export function getDevCommand(type: ProjectType): string {
       return 'dev';
     case 'webpack':
       return 'dev';
+    case 'bun':
+      return 'dev';
     default:
       return 'dev';
   }
@@ -105,6 +116,8 @@ export function getDefaultPort(type: ProjectType): number {
       // Remix v2 uses Vite under the hood — default Vite port
       return 5173;
     case 'webpack':
+      return 3000;
+    case 'bun':
       return 3000;
     default:
       return 3000;
@@ -330,9 +343,9 @@ async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
  * works for the common client-component case. Promoted to full-edit; the
  * readonly badge stays available for genuine non-writable systems.
  */
-const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'webpack', 'nextjs'];
+const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'webpack', 'nextjs', 'bun'];
 
-// 'unknown' and 'bun' → unsupported (no dev server management)
+// 'unknown' → unsupported (no dev server management)
 
 /**
  * Compute project capabilities based on three axes:
