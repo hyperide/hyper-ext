@@ -1,12 +1,20 @@
 import * as vscode from 'vscode';
 
 /**
- * Auto-update existing MCP config files with the new port.
- * Called on every extension activation to keep port in sync.
+ * Matches the `url = "http://127.0.0.1:<port>/mcp[?token=...]"` line in a Codex `config.toml`.
+ * The optional `(?:\?[^"]*)?` group tolerates the `?token=<bearer>` query the URL now carries
+ * (HyperMcpServer.url) so a re-write replaces the whole prior value, token and all, instead of
+ * appending a duplicate. Single source (shared-util-single-source): both the auto-update path
+ * and writeCodexConfig() replace with this — a future host/port-format change touches one place.
  */
-export async function autoUpdateMcpConfigs(workspaceRoot: string, port: number): Promise<void> {
-  const url = `http://127.0.0.1:${port}/mcp`;
+const CODEX_MCP_URL_LINE = /url\s*=\s*"http:\/\/127\.0\.0\.1:\d+\/mcp(?:\?[^"]*)?"/;
 
+/**
+ * Auto-update existing MCP config files with the new port (and bearer token — the URL is
+ * `http://127.0.0.1:<port>/mcp?token=<token>`, see HyperMcpServer.url). Called on every
+ * extension activation to keep both in sync, since a fresh token is minted per start().
+ */
+export async function autoUpdateMcpConfigs(workspaceRoot: string, url: string): Promise<void> {
   // Check and update .mcp.json (Claude Code)
   const mcpJsonPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.mcp.json');
   try {
@@ -55,7 +63,7 @@ export async function autoUpdateMcpConfigs(workspaceRoot: string, port: number):
     const content = await vscode.workspace.fs.readFile(codexConfigPath);
     const toml = new TextDecoder().decode(content);
     if (toml.includes('hyper-canvas')) {
-      const updated = toml.replace(/url\s*=\s*"http:\/\/127\.0\.0\.1:\d+\/mcp"/, `url = "${url}"`);
+      const updated = toml.replace(CODEX_MCP_URL_LINE, `url = "${url}"`);
       await vscode.workspace.fs.writeFile(codexConfigPath, Buffer.from(updated, 'utf-8'));
       console.log('[HyperMCP] Updated .codex/config.toml with new port');
     }
@@ -206,7 +214,7 @@ export async function writeCodexConfig(workspaceRoot: string, url: string): Prom
 
   if (toml.includes('[mcp_servers.hyper-canvas]')) {
     // Update existing entry
-    toml = toml.replace(/url\s*=\s*"http:\/\/127\.0\.0\.1:\d+\/mcp"/, `url = "${url}"`);
+    toml = toml.replace(CODEX_MCP_URL_LINE, `url = "${url}"`);
   } else {
     // Append new entry
     const entry = `\n[mcp_servers.hyper-canvas]\ntype = "http"\nurl = "${url}"\n`;
@@ -317,8 +325,12 @@ async function appendCodexCompanions(workspaceRoot: string, companions: Companio
 /**
  * Register MCP server with VS Code Copilot (1.99+).
  * Uses runtime check — no engine version bump needed.
+ *
+ * `url` is the full authenticated URL from HyperMcpServer.url (`?token=<bearer token>`) — the
+ * server rejects unauthenticated requests, so this must be the live value, not a port-only
+ * reconstruction.
  */
-export function registerCopilotMcp(context: vscode.ExtensionContext, port: number): void {
+export function registerCopilotMcp(context: vscode.ExtensionContext, url: string): void {
   const lm = vscode.lm as Record<string, unknown> | undefined;
   if (typeof lm?.registerMcpServerDefinitionProvider !== 'function') {
     console.log('[HyperMCP] vscode.lm.registerMcpServerDefinitionProvider not available (VS Code < 1.99)');
@@ -345,7 +357,7 @@ export function registerCopilotMcp(context: vscode.ExtensionContext, port: numbe
       provideMcpServerDefinitions: async () => [
         new McpHttpServerDefinition(
           'HyperCanvas',
-          vscode.Uri.parse(`http://127.0.0.1:${port}/mcp`),
+          vscode.Uri.parse(url),
           undefined,
           context.extension.packageJSON.version,
         ),

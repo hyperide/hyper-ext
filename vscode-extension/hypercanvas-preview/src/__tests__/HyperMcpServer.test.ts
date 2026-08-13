@@ -1,3 +1,4 @@
+import * as http from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { HyperMcpServer } from '../mcp/HyperMcpServer';
 import { type HyperMcpServices, resolveFilePath } from '../mcp/types';
@@ -59,19 +60,27 @@ describe('HyperMcpServer', () => {
   });
 
   it('should return 404 for non-/mcp paths', async () => {
-    const response = await fetch(`http://127.0.0.1:${server.port}/other`);
+    const response = await fetch(`http://127.0.0.1:${server.port}/other`, {
+      headers: { Authorization: `Bearer ${server.token}` },
+    });
     expect(response.status).toBe(404);
   });
 
   it('should return 405 for GET on /mcp (stateless mode)', async () => {
-    const response = await fetch(`http://127.0.0.1:${server.port}/mcp`);
+    const response = await fetch(`http://127.0.0.1:${server.port}/mcp`, {
+      headers: { Authorization: `Bearer ${server.token}` },
+    });
     expect(response.status).toBe(405);
   });
 
   it('should handle MCP initialize request', async () => {
     const response = await fetch(`http://127.0.0.1:${server.port}/mcp`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: `Bearer ${server.token}`,
+      },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
@@ -94,7 +103,11 @@ describe('HyperMcpServer', () => {
     // First initialize
     await fetch(`http://127.0.0.1:${server.port}/mcp`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: `Bearer ${server.token}`,
+      },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
@@ -110,7 +123,11 @@ describe('HyperMcpServer', () => {
     // Then list tools
     const response = await fetch(`http://127.0.0.1:${server.port}/mcp`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: `Bearer ${server.token}`,
+      },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 2,
@@ -153,6 +170,147 @@ describe('HyperMcpServer', () => {
   it('should dispose cleanly', () => {
     server.dispose();
     expect(server.port).toBe(0);
+  });
+});
+
+/**
+ * @file tg#7273 — the loopback MCP HTTP server used to set `Access-Control-Allow-Origin: *`
+ * with no authentication at all. Binding to 127.0.0.1 does NOT stop a browser-origin
+ * attacker: any website the user visits can, via the browser, POST to the loopback server
+ * (CORS `*` lets it through) and invoke MCP tools — a CSRF/DNS-rebinding-style local RCE
+ * against a server that executes actions (file writes, navigation, etc.). Fix: drop the
+ * permissive CORS header, validate Host to defeat rebinding, and require a per-start random
+ * bearer token on every /mcp request.
+ */
+describe('HyperMcpServer — loopback security (tg#7273)', () => {
+  let server: HyperMcpServer;
+
+  beforeEach(async () => {
+    server = new HyperMcpServer(createMockServices());
+    await server.start();
+  });
+
+  afterEach(() => {
+    server.dispose();
+  });
+
+  it('rejects a POST /mcp with no token as 401', async () => {
+    const response = await fetch(`http://127.0.0.1:${server.port}/mcp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it('rejects a POST /mcp with a wrong token as 401', async () => {
+    const response = await fetch(`http://127.0.0.1:${server.port}/mcp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer not-the-real-token' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it('accepts a POST /mcp with the correct bearer token', async () => {
+    const response = await fetch(`http://127.0.0.1:${server.port}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: `Bearer ${server.token}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '1.0' } },
+      }),
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it('accepts the token as a ?token= query param (config-writer fallback)', async () => {
+    const response = await fetch(`http://127.0.0.1:${server.port}/mcp?token=${server.token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '1.0' } },
+      }),
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it('does not send Access-Control-Allow-Origin on the /mcp OPTIONS preflight', async () => {
+    const response = await fetch(`http://127.0.0.1:${server.port}/mcp`, { method: 'OPTIONS' });
+    expect(response.status).toBe(204);
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
+  it('rejects a request with a non-loopback Host header as 403 (anti-DNS-rebinding)', async () => {
+    // fetch() to 127.0.0.1 always sends a matching Host, so hit the server on the raw
+    // socket via node:http to spoof an attacker-controlled Host header directly.
+    const response = await new Promise<{ status: number }>((resolve, reject) => {
+      const req = http.request(
+        {
+          host: '127.0.0.1',
+          port: server.port,
+          path: '/mcp',
+          method: 'POST',
+          headers: {
+            Host: 'attacker.example.com',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${server.token}`,
+          },
+        },
+        (res) => {
+          res.resume();
+          resolve({ status: res.statusCode ?? 0 });
+        },
+      );
+      req.on('error', reject);
+      req.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }));
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it('generates a fresh token on every start()', async () => {
+    const firstToken = server.token;
+    server.dispose();
+    await server.start();
+    expect(server.token).not.toBe(firstToken);
+    expect(server.token.length).toBeGreaterThan(0);
+  });
+
+  it('url getter carries the current token as a query param', () => {
+    expect(server.url).toBe(`http://127.0.0.1:${server.port}/mcp?token=${server.token}`);
+  });
+
+  it('clears the token on dispose()', () => {
+    expect(server.token.length).toBeGreaterThan(0);
+    server.dispose();
+    expect(server.token).toBe('');
+  });
+
+  it('accepts a case-insensitive bearer auth scheme (RFC 7235)', async () => {
+    const response = await fetch(`http://127.0.0.1:${server.port}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: `bearer ${server.token}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '1.0' } },
+      }),
+    });
+    expect(response.status).toBe(200);
   });
 });
 

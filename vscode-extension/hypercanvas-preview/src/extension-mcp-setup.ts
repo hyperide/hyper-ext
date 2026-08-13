@@ -70,8 +70,8 @@ export function setupMcpServer(
   server
     .start()
     .then((port) => {
-      autoUpdateMcpConfigs(workspaceRoot, port);
-      registerCopilotMcp(context, port);
+      autoUpdateMcpConfigs(workspaceRoot, server.url);
+      registerCopilotMcp(context, server.url);
       mcpStatusBarItem.text = '$(plug) Hyper MCP';
       mcpStatusBarItem.tooltip = `HyperCanvas MCP: http://127.0.0.1:${port}/mcp\nClick to configure AI agents`;
       mcpStatusBarItem.show();
