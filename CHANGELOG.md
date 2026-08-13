@@ -6,6 +6,12 @@ All notable changes to HyperCanvas Preview are documented here.
 
 ### Bug fixes
 
+## [0.1.70] — 2026-07-14
+
+### Bug fixes
+
+- **Inspector style writes no longer fail with "Element not found" on React 19 + Vite dev-server apps** — a regression from HYP-897 (shipped ext-v0.1.65 → ext-v0.1.69) committed a `_debugStack` call-site frame verbatim, which under React 19 is the COMPILED position in the jsxDEV-transformed module, not the original source; clicking an element inside an imported component resolved to a nonexistent line and every inspector style write failed. `resolveCallSiteTarget` now threads a source-map mapper so the `_debugStack` ancestor resolves to the mapped original position (HYP-970, #658)
+
 ## [0.1.69] — 2026-07-12
 
 ### Bug fixes
