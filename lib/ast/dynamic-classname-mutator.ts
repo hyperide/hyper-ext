@@ -42,7 +42,7 @@ export function detectClassNameType(element: t.JSXElement): 'string' | 'template
  */
 function modifyStringLiteralInPlace(
   stringLiteral: t.StringLiteral,
-  newClasses: Record<string, string>,
+  newClasses: string,
   changedStyleKeys: string[],
   _specificClassesToRemove?: string[], // kept for API compatibility, not used
 ): void {
@@ -63,8 +63,7 @@ function modifyStringLiteralInPlace(
   console.log('[modifyStringLiteralInPlace] After prefix removal, preserved:', preserved);
 
   // Add new classes
-  const newClassString = Object.values(newClasses).join(' ');
-  const newValue = [preserved, newClassString].filter(Boolean).join(' ').trim();
+  const newValue = [preserved, newClasses].filter(Boolean).join(' ').trim();
 
   // Modify in place
   stringLiteral.value = newValue;
@@ -412,7 +411,7 @@ function modifyByLocations(
   ast: t.File,
   sourceCode: string,
   locations: ClassNameLocation[],
-  newClasses: Record<string, string>,
+  newClasses: string,
   changedStyleKeys: string[],
 ): number {
   // Group locations by literalValue to handle multiple properties targeting same string
@@ -505,18 +504,13 @@ function removeConflictingClassesFromString(classes: string, prefixes: string[])
  * Also removes conflicting classes from ALL quasis
  * className={`base block ${dynamic}`} -> className={`base ${dynamic} flex`}
  */
-function appendToLastString(
-  element: t.JSXElement,
-  newClasses: Record<string, string>,
-  changedStyleKeys: string[],
-): void {
+function appendToLastString(element: t.JSXElement, newClasses: string, changedStyleKeys: string[]): void {
   const attr = getAttribute(element, 'className');
   if (!attr || !t.isJSXExpressionContainer(attr)) return;
 
   const expr = attr.expression;
   if (!t.isTemplateLiteral(expr)) return;
 
-  const classString = Object.values(newClasses).join(' ');
   const prefixes = getConflictingPrefixes(changedStyleKeys);
 
   // Remove conflicting classes from ALL quasis (not just last one)
@@ -538,7 +532,7 @@ function appendToLastString(
 
   // Append new classes to last quasi
   const existingInLast = lastQuasi.value.raw.trim();
-  const newValue = existingInLast ? `${existingInLast} ${classString}` : classString;
+  const newValue = existingInLast ? `${existingInLast} ${newClasses}` : newClasses;
 
   lastQuasi.value.raw = ` ${newValue}`;
   lastQuasi.value.cooked = ` ${newValue}`;
@@ -584,12 +578,10 @@ interface InPlaceReplaceResult {
  */
 function replaceConflictingInStaticLiterals(
   expr: t.Expression,
-  newClasses: Record<string, string>,
+  newClasses: string,
   changedStyleKeys: string[],
   state?: string,
 ): InPlaceReplaceResult {
-  const classString = Object.values(newClasses).join(' ');
-
   const visit = (node: t.Expression): InPlaceReplaceResult => {
     if (t.isStringLiteral(node)) {
       const { preserved, removed } = removeConflictingClasses(node.value, changedStyleKeys, state);
@@ -601,10 +593,10 @@ function replaceConflictingInStaticLiterals(
       // class would glue onto the preceding operand's last class at runtime (`...p-2text-blue-500`).
       const lead = /^\s*/.exec(node.value)?.[0] ?? '';
       const trail = /\s*$/.exec(node.value)?.[0] ?? '';
-      const core = classString ? [preserved, classString].filter(Boolean).join(' ').trim() : preserved.trim();
+      const core = newClasses ? [preserved, newClasses].filter(Boolean).join(' ').trim() : preserved.trim();
       node.value = `${lead}${core}${trail}`;
       // After injection the literal unconditionally carries the new class (when there is one).
-      return { handledConflict: true, guaranteedNewClass: Boolean(classString) };
+      return { handledConflict: true, guaranteedNewClass: Boolean(newClasses) };
     }
 
     if (t.isParenthesizedExpression(node)) {
@@ -701,14 +693,12 @@ function replaceConflictingInStaticLiterals(
  */
 function wrapInConcatenation(
   element: t.JSXElement,
-  newClasses: Record<string, string>,
+  newClasses: string,
   changedStyleKeys: string[],
   state?: string,
 ): void {
   const attr = getAttribute(element, 'className');
   if (!attr) return;
-
-  const classString = Object.values(newClasses).join(' ');
 
   let expr: t.Expression;
 
@@ -734,7 +724,7 @@ function wrapInConcatenation(
   // lived only in some branches / a dynamic sub-expression). Append it so the inspector's intent
   // always applies. Conflicts already stripped above won't duplicate the OLD class; at worst the new
   // class appears twice (harmless — same class).
-  const newExpr = t.binaryExpression('+', t.parenthesizedExpression(expr), t.stringLiteral(` ${classString}`));
+  const newExpr = t.binaryExpression('+', t.parenthesizedExpression(expr), t.stringLiteral(` ${newClasses}`));
 
   setAttribute(element, 'className', t.jsxExpressionContainer(newExpr));
 }
@@ -742,11 +732,7 @@ function wrapInConcatenation(
 /**
  * Modify static className (fallback to existing logic)
  */
-function modifyStaticClassName(
-  element: t.JSXElement,
-  newClasses: Record<string, string>,
-  changedStyleKeys: string[],
-): void {
+function modifyStaticClassName(element: t.JSXElement, newClasses: string, changedStyleKeys: string[]): void {
   const attr = getAttribute(element, 'className');
   if (!attr || !t.isStringLiteral(attr)) return;
 
@@ -756,11 +742,8 @@ function modifyStaticClassName(
   // Remove conflicting classes
   const preservedClasses = removeConflictingClassesFromString(existingClassName, prefixes);
 
-  // Generate new classes
-  const newClassString = Object.values(newClasses).join(' ');
-
   // Combine preserved + new classes
-  const finalClassName = [preservedClasses, newClassString].filter(Boolean).join(' ').trim();
+  const finalClassName = [preservedClasses, newClasses].filter(Boolean).join(' ').trim();
 
   setAttribute(element, 'className', t.stringLiteral(finalClassName));
 }
@@ -773,7 +756,7 @@ export function modifyDynamicClassName(
   sourceCode: string,
   element: t.JSXElement,
   locations: ClassNameLocation[],
-  newClasses: Record<string, string>,
+  newClasses: string,
   changedStyleKeys: string[],
   fallback: 'append' | 'wrap',
   state?: string,

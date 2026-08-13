@@ -45,13 +45,15 @@ function firstJsxElement(ast: t.File): t.JSXElement {
  */
 function writeColor(
   code: string,
+  // Test ergonomics: callers pass a {property: class} bag; the property is carried by
+  // changedStyleKeys, so we flatten to the space-joined class string the API now takes.
   newClasses: Record<string, string>,
   changedStyleKeys: string[],
   fallback: 'append' | 'wrap' = 'append',
 ): string {
   const ast = parseToAst(code);
   const element = firstJsxElement(ast);
-  modifyDynamicClassName(ast, code, element, [], newClasses, changedStyleKeys, fallback);
+  modifyDynamicClassName(ast, code, element, [], Object.values(newClasses).join(' '), changedStyleKeys, fallback);
 
   // Generate only the className expression so failures render the class string,
   // not raw JSX (whose angle brackets break bun's diff renderer).
