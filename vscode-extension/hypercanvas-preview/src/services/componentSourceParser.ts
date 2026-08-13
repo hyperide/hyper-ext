@@ -4,12 +4,11 @@
  */
 
 import * as path from 'node:path';
-import _traverse, { type NodePath } from '@babel/traverse';
+import type { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { parseCode } from '@lib/ast/parser';
+import { traverseWithoutScope } from '@lib/ast/traverser';
 import type { ComponentInfo, PropInfo } from '@lib/types';
-
-const traverse = (_traverse as { default?: typeof _traverse }).default ?? _traverse;
 
 const ALWAYS_OPTIONAL_PROP_NAMES = new Set(['className', 'children', 'ref', 'key', 'asChild']);
 
@@ -198,7 +197,7 @@ export function parseComponentSource(componentPath: string, sourceCode: string):
       propsPerName.set(name, entry);
     };
 
-    traverse(ast, {
+    traverseWithoutScope(ast, {
       ExportDefaultDeclaration(nodePath: NodePath<t.ExportDefaultDeclaration>) {
         hasDefaultExport = true;
         const declaration = nodePath.node.declaration;

@@ -157,6 +157,49 @@ describe('parseComponentSource', () => {
   });
 });
 
+describe('Remix root.tsx with a Layout name collision (HYP-784 duplicate-declaration crash)', () => {
+  // A Remix v2 `app/root.tsx` legitimately exports a `Layout` document-shell. This fixture
+  // ALSO imports antd's `Layout` — a genuine top-level name collision in the user's source.
+  // babel-traverse's scope crawl rejects that with `TypeError: Duplicate declaration "Layout"`,
+  // which used to crash the (scope-free) component walk → null. The walk never reads scope, so
+  // it now degrades gracefully and still resolves the default-export component (HYP-784).
+  const remixRootSource = `
+import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
+import { ConfigProvider, Layout, Menu } from 'antd';
+
+const { Header, Sider, Content } = Layout;
+
+export function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <head><Meta /><Links /></head>
+      <body><ConfigProvider>{children}</ConfigProvider><ScrollRestoration /><Scripts /></body>
+    </html>
+  );
+}
+
+export default function App() {
+  return (
+    <Layout>
+      <Header>header</Header>
+      <Content><Outlet /></Content>
+    </Layout>
+  );
+}
+`;
+
+  it('does not crash on the duplicate Layout declaration (returns component info, not null)', () => {
+    const result = parseComponentSource('app/root.tsx', remixRootSource);
+    expect(result).not.toBeNull();
+  });
+
+  it('resolves the default-export component name (App), not the colliding Layout', () => {
+    const result = parseComponentSource('app/root.tsx', remixRootSource);
+    expect(result?.name).toBe('App');
+    expect(result?.hasDefaultExport).toBe(true);
+  });
+});
+
 describe('getTypeString', () => {
   /**
    * Helper: parse a TSPropertySignature from a minimal interface source and return

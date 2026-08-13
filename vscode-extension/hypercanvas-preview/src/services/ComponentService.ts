@@ -7,9 +7,10 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import _traverse, { type NodePath } from '@babel/traverse';
+import { type NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { parseCode } from '@lib/ast/parser';
+import { traverseWithoutScope } from '@lib/ast/traverser';
 import { type ComponentNode, type ParseContext, parseJSXElement } from '@lib/services/component-parser';
 import { convertComponentNodesToTreeNodes } from '@lib/services/tree-adapter';
 import type { ComponentInfo, ComponentTree, PropInfo, TreeNode } from '@lib/types';
@@ -30,8 +31,6 @@ export interface ScanResult {
   needsSetup?: boolean;
   setupReason?: SetupReason;
 }
-
-const traverse = (_traverse as { default?: typeof _traverse }).default ?? _traverse;
 
 /**
  * Read the props-parameter type name from a destructured first param, e.g.
@@ -412,7 +411,7 @@ export class ComponentService {
       const exportedVarNames: string[] = [];
 
       // Look for component declarations and exports
-      traverse(ast, {
+      traverseWithoutScope(ast, {
         // Default export
         ExportDefaultDeclaration(nodePath: NodePath<t.ExportDefaultDeclaration>) {
           hasDefaultExport = true;
@@ -676,7 +675,7 @@ export class ComponentService {
     let exportedName: string | null = null;
 
     // First pass: find exported component name
-    traverse(ast, {
+    traverseWithoutScope(ast, {
       ExportDefaultDeclaration(nodePath: NodePath<t.ExportDefaultDeclaration>) {
         const decl = nodePath.node.declaration;
         if (t.isIdentifier(decl)) {
@@ -694,7 +693,7 @@ export class ComponentService {
     if (result) return result;
 
     // Second pass: find the function body and extract return JSX
-    traverse(ast, {
+    traverseWithoutScope(ast, {
       FunctionDeclaration(nodePath: NodePath<t.FunctionDeclaration>) {
         if (result) return;
         if (nodePath.node.id && nodePath.node.id.name === exportedName) {
@@ -720,7 +719,7 @@ export class ComponentService {
 
     // Fallback: if no export default found, look for first PascalCase function
     if (!result && !exportedName) {
-      traverse(ast, {
+      traverseWithoutScope(ast, {
         FunctionDeclaration(nodePath: NodePath<t.FunctionDeclaration>) {
           if (result) return;
           if (nodePath.node.id && /^[A-Z]/.test(nodePath.node.id.name)) {
@@ -834,7 +833,7 @@ export class ComponentService {
   private _collectLocalTypes(ast: t.File): Map<string, t.TSInterfaceBody | t.TSTypeLiteral> {
     const types = new Map<string, t.TSInterfaceBody | t.TSTypeLiteral>();
 
-    traverse(ast, {
+    traverseWithoutScope(ast, {
       TSInterfaceDeclaration(nodePath: NodePath<t.TSInterfaceDeclaration>) {
         types.set(nodePath.node.id.name, nodePath.node.body);
       },
@@ -855,7 +854,7 @@ export class ComponentService {
   private _collectImportMap(ast: t.File): Map<string, { source: string; importedName: string }> {
     const imports = new Map<string, { source: string; importedName: string }>();
 
-    traverse(ast, {
+    traverseWithoutScope(ast, {
       ImportDeclaration(nodePath: NodePath<t.ImportDeclaration>) {
         const source = nodePath.node.source.value;
         for (const specifier of nodePath.node.specifiers) {

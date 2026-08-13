@@ -4,7 +4,7 @@
  */
 
 import _generate from '@babel/generator';
-import _traverse, { type NodePath } from '@babel/traverse';
+import _traverse, { type NodePath, type TraverseOptions } from '@babel/traverse';
 import * as t from '@babel/types';
 import type { FindElementResult } from '../types';
 
@@ -14,6 +14,30 @@ const generate = (_generate as unknown as { default: typeof _generate }).default
 const traverse = _traverse.default || _traverse;
 
 /**
+ * Traverse an AST (whole file or a subtree) WITHOUT babel's scope analysis.
+ *
+ * STRUCTURAL WALKS ONLY. Use this exclusively for visitors that inspect node type/shape and never
+ * read `path.scope`, bindings, or do reference resolution. `noScope: true` disables babel's scope
+ * crawl, so any visitor that depends on scope WILL break silently — those must call
+ * `@babel/traverse` directly with scope enabled.
+ *
+ * Why it exists: babel's scope crawl throws `TypeError: Duplicate declaration "X"` on any file with
+ * a genuine top-level identifier collision — e.g. a Remix `app/root.tsx` where the user's
+ * `import { Layout } from 'antd'` clashes with Remix's standard exported `Layout` document-shell
+ * function. `@babel/parser` tolerates the collision; the post-parse scope crawl does not. The
+ * component-parse / JSX-structure walks that use this helper are purely structural, so the crawl is
+ * dead weight that only crashes them and trips the preview's console.error gate (HYP-784). Skipping
+ * it lets the walk degrade gracefully and still read the structure. The actual parse still surfaces
+ * genuine syntax errors — only the post-parse scope check is bypassed.
+ *
+ * Accepts any `t.Node`, so it also covers function-body subtree walks (which otherwise have to hand
+ * babel a fake scope to avoid the crawl).
+ */
+export function traverseWithoutScope(node: t.Node, visitors: TraverseOptions): void {
+  traverse(node, { ...visitors, noScope: true });
+}
+
+/**
  * Find all JSX elements in AST
  * @param ast - AST to search in
  * @returns Array of all JSX elements with their paths
@@ -21,7 +45,7 @@ const traverse = _traverse.default || _traverse;
 export function findAllJSXElements(ast: t.File): Array<{ element: t.JSXElement; path: NodePath<t.JSXElement> }> {
   const elements: Array<{ element: t.JSXElement; path: NodePath<t.JSXElement> }> = [];
 
-  traverse(ast, {
+  traverseWithoutScope(ast, {
     JSXElement(path: NodePath<t.JSXElement>) {
       elements.push({
         element: path.node,
@@ -42,7 +66,7 @@ export function traverseJSXElements(
   ast: t.File,
   visitor: (element: t.JSXElement, path: NodePath<t.JSXElement>) => undefined | boolean,
 ): void {
-  traverse(ast, {
+  traverseWithoutScope(ast, {
     JSXElement(path: NodePath<t.JSXElement>) {
       const shouldStop = visitor(path.node, path);
       if (shouldStop === true) {
@@ -63,7 +87,7 @@ export function findElementAtPosition(ast: t.File, line: number, column: number)
     size: number;
   } | null = null;
 
-  traverse(ast, {
+  traverseWithoutScope(ast, {
     JSXElement(path: NodePath<t.JSXElement>) {
       const loc = path.node.loc;
       if (!loc) return;

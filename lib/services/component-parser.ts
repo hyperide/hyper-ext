@@ -8,14 +8,11 @@
 
 import { randomUUID } from 'node:crypto';
 import _generate from '@babel/generator';
-import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
-import { analyzeJSXChildren } from '../ast/traverser';
+import { analyzeJSXChildren, traverseWithoutScope } from '../ast/traverser';
 import type { MapDataSourceCategory } from './map-datasource-classifier';
 
 const generate = (_generate as { default?: typeof _generate }).default ?? _generate;
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = _traverse.default || _traverse;
 
 // ============================================
 // Types
@@ -126,7 +123,7 @@ export function findLocalFunctionDefinition(
     loc: t.SourceLocation;
   } | null = null;
 
-  traverse(parseContext.fileAST, {
+  traverseWithoutScope(parseContext.fileAST, {
     VariableDeclarator(path: { node: t.VariableDeclarator; stop: () => void }) {
       if (
         t.isIdentifier(path.node.id) &&
@@ -172,7 +169,7 @@ export function findLocalComponentDefinition(
     loc: t.SourceLocation;
   } | null = null;
 
-  traverse(parseContext.fileAST, {
+  traverseWithoutScope(parseContext.fileAST, {
     VariableDeclarator(path: { node: t.VariableDeclarator; stop: () => void }) {
       if (t.isIdentifier(path.node.id) && path.node.id.name === componentName && path.node.loc) {
         const init = path.node.init;
@@ -247,59 +244,48 @@ function parseLocalComponentBody(
   // Block statement - find return statements
   if (t.isBlockStatement(body)) {
     let nestedFunctionDepth = 0;
-    traverse(
-      body,
-      {
-        enter(path: { node: t.Node }) {
-          if (
-            t.isArrowFunctionExpression(path.node) ||
-            t.isFunctionExpression(path.node) ||
-            t.isFunctionDeclaration(path.node)
-          ) {
-            nestedFunctionDepth++;
-          }
-        },
-        exit(path: { node: t.Node }) {
-          if (
-            t.isArrowFunctionExpression(path.node) ||
-            t.isFunctionExpression(path.node) ||
-            t.isFunctionDeclaration(path.node)
-          ) {
-            nestedFunctionDepth--;
-          }
-        },
-        ReturnStatement(path: { node: t.ReturnStatement }) {
-          if (nestedFunctionDepth > 0) return;
+    traverseWithoutScope(body, {
+      enter(path: { node: t.Node }) {
+        if (
+          t.isArrowFunctionExpression(path.node) ||
+          t.isFunctionExpression(path.node) ||
+          t.isFunctionDeclaration(path.node)
+        ) {
+          nestedFunctionDepth++;
+        }
+      },
+      exit(path: { node: t.Node }) {
+        if (
+          t.isArrowFunctionExpression(path.node) ||
+          t.isFunctionExpression(path.node) ||
+          t.isFunctionDeclaration(path.node)
+        ) {
+          nestedFunctionDepth--;
+        }
+      },
+      ReturnStatement(path: { node: t.ReturnStatement }) {
+        if (nestedFunctionDepth > 0) return;
 
-          if (path.node.argument && t.isJSXElement(path.node.argument)) {
-            const node = parseJSXElement(
-              path.node.argument,
-              mapContext,
-              condContext,
-              undefined,
-              parseContext,
-              expandedComponents,
-            );
-            if (node) result.push(node);
-          } else if (path.node.argument && t.isJSXFragment(path.node.argument)) {
-            for (const child of path.node.argument.children) {
-              if (t.isJSXElement(child)) {
-                const node = parseJSXElement(
-                  child,
-                  mapContext,
-                  condContext,
-                  undefined,
-                  parseContext,
-                  expandedComponents,
-                );
-                if (node) result.push(node);
-              }
+        if (path.node.argument && t.isJSXElement(path.node.argument)) {
+          const node = parseJSXElement(
+            path.node.argument,
+            mapContext,
+            condContext,
+            undefined,
+            parseContext,
+            expandedComponents,
+          );
+          if (node) result.push(node);
+        } else if (path.node.argument && t.isJSXFragment(path.node.argument)) {
+          for (const child of path.node.argument.children) {
+            if (t.isJSXElement(child)) {
+              const node = parseJSXElement(child, mapContext, condContext, undefined, parseContext, expandedComponents);
+              if (node) result.push(node);
             }
           }
-        },
+        }
       },
-      { noScope: true } as unknown as t.Node,
-    );
+    });
   }
 
   return result;
@@ -346,76 +332,65 @@ function parseLocalFunctionBody(
 
     // Second pass: find .push() calls and return statements
     let nestedFunctionDepth = 0;
-    traverse(
-      body,
-      {
-        enter(path: { node: t.Node }) {
-          if (
-            t.isArrowFunctionExpression(path.node) ||
-            t.isFunctionExpression(path.node) ||
-            t.isFunctionDeclaration(path.node)
-          ) {
-            nestedFunctionDepth++;
-          }
-        },
-        exit(path: { node: t.Node }) {
-          if (
-            t.isArrowFunctionExpression(path.node) ||
-            t.isFunctionExpression(path.node) ||
-            t.isFunctionDeclaration(path.node)
-          ) {
-            nestedFunctionDepth--;
-          }
-        },
-        CallExpression(path: { node: t.CallExpression }) {
-          // Check for array.push(JSX)
-          if (
-            t.isMemberExpression(path.node.callee) &&
-            t.isIdentifier(path.node.callee.object) &&
-            arrayVars.has(path.node.callee.object.name) &&
-            t.isIdentifier(path.node.callee.property) &&
-            path.node.callee.property.name === 'push'
-          ) {
-            for (const arg of path.node.arguments) {
-              if (t.isJSXElement(arg)) {
-                const node = parseJSXElement(arg, mapContext, condContext, undefined, parseContext, expandedComponents);
-                if (node) result.push(node);
-              }
-            }
-          }
-        },
-        ReturnStatement(path: { node: t.ReturnStatement }) {
-          if (nestedFunctionDepth > 0) return;
-
-          if (path.node.argument && t.isJSXElement(path.node.argument)) {
-            const node = parseJSXElement(
-              path.node.argument,
-              mapContext,
-              condContext,
-              undefined,
-              parseContext,
-              expandedComponents,
-            );
-            if (node) result.push(node);
-          } else if (path.node.argument && t.isJSXFragment(path.node.argument)) {
-            for (const child of path.node.argument.children) {
-              if (t.isJSXElement(child)) {
-                const node = parseJSXElement(
-                  child,
-                  mapContext,
-                  condContext,
-                  undefined,
-                  parseContext,
-                  expandedComponents,
-                );
-                if (node) result.push(node);
-              }
-            }
-          }
-        },
+    traverseWithoutScope(body, {
+      enter(path: { node: t.Node }) {
+        if (
+          t.isArrowFunctionExpression(path.node) ||
+          t.isFunctionExpression(path.node) ||
+          t.isFunctionDeclaration(path.node)
+        ) {
+          nestedFunctionDepth++;
+        }
       },
-      { noScope: true } as unknown as t.Node,
-    );
+      exit(path: { node: t.Node }) {
+        if (
+          t.isArrowFunctionExpression(path.node) ||
+          t.isFunctionExpression(path.node) ||
+          t.isFunctionDeclaration(path.node)
+        ) {
+          nestedFunctionDepth--;
+        }
+      },
+      CallExpression(path: { node: t.CallExpression }) {
+        // Check for array.push(JSX)
+        if (
+          t.isMemberExpression(path.node.callee) &&
+          t.isIdentifier(path.node.callee.object) &&
+          arrayVars.has(path.node.callee.object.name) &&
+          t.isIdentifier(path.node.callee.property) &&
+          path.node.callee.property.name === 'push'
+        ) {
+          for (const arg of path.node.arguments) {
+            if (t.isJSXElement(arg)) {
+              const node = parseJSXElement(arg, mapContext, condContext, undefined, parseContext, expandedComponents);
+              if (node) result.push(node);
+            }
+          }
+        }
+      },
+      ReturnStatement(path: { node: t.ReturnStatement }) {
+        if (nestedFunctionDepth > 0) return;
+
+        if (path.node.argument && t.isJSXElement(path.node.argument)) {
+          const node = parseJSXElement(
+            path.node.argument,
+            mapContext,
+            condContext,
+            undefined,
+            parseContext,
+            expandedComponents,
+          );
+          if (node) result.push(node);
+        } else if (path.node.argument && t.isJSXFragment(path.node.argument)) {
+          for (const child of path.node.argument.children) {
+            if (t.isJSXElement(child)) {
+              const node = parseJSXElement(child, mapContext, condContext, undefined, parseContext, expandedComponents);
+              if (node) result.push(node);
+            }
+          }
+        }
+      },
+    });
   }
 
   return result;
