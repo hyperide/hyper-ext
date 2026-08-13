@@ -793,25 +793,6 @@ export function activate(context: vscode.ExtensionContext) {
         console.error('[HyperIDE] componentError auto-wrapper generation failed:', err);
       });
     });
-
-    // Activate newly created SampleDefault: force-regen preview file (bypasses fast-path that
-    // would skip re-reading the component source) then navigate iframe to the updated sample.
-    previewPanel.onSampleCreated((componentPath) => {
-      const currentWorkspaceRoot = syncWorkspaceRuntime();
-      const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
-      const relPath = relative(currentWorkspaceRoot, absPath);
-      const panelRef = previewPanel;
-      if (!panelRef) return;
-      previewManager
-        .forceRefreshComponent(relPath)
-        .then(async () => {
-          await devServerManager?.awaitRecompile();
-          panelRef.setComponentParam(relPath);
-        })
-        .catch((err) => {
-          console.error('[HyperIDE] sampleCreated forceRefresh failed:', err);
-        });
-    });
   }
 
   context.subscriptions.push(
@@ -1046,6 +1027,10 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => syncWorkspaceRuntime()));
 
+  // Activate a newly created SampleDefault. Single handler (HYP-548): an earlier
+  // duplicate registration force-regenerated the preview but then clobbered the
+  // monorepo prefix via a single-arg setComponentParam — both fired on the same
+  // event and raced. Consolidated here with the correct repo-relative two-arg call.
   previewPanel.onSampleCreated(async (componentPath) => {
     syncWorkspaceRuntime();
     // componentPath comes from the repo-rooted previewPanel → repo-relative. previewManager
@@ -1056,7 +1041,9 @@ export function activate(context: vscode.ExtensionContext) {
     const relativePath = relative(activeWorkspaceRoot, absComponentPath);
     // No isUiPrimitive guard here: onSampleCreated fires only after SampleDefault is written,
     // meaning the primitive is now previewable and must be registered in __canvas_preview__.tsx.
-    await previewManager.ensureComponent([relativePath]);
+    // Force-regen (not ensureComponent): the component source was just mutated in place, so the
+    // preview file must be rewritten bypassing the fast-path that would skip re-reading it.
+    await previewManager.forceRefreshComponent(relativePath);
     await devServerManager?.awaitRecompile();
     previewPanel?.setComponentParam(repoRelativePath, relativePath);
     previewPanel?.refresh();
