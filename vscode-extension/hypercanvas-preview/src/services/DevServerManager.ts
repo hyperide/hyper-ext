@@ -199,6 +199,44 @@ export function buildInstallCommand(packageManager: PackageManager): { cmd: stri
   }
 }
 
+/**
+ * Characters allowed in a command token that is concatenated into a shell
+ * string. Deliberately restrictive: letters, digits, and the punctuation that
+ * appears in package-manager invocations (`run`, `--force`, `--port`, `5173`,
+ * `dev:web`, `@scope/pkg`, `./bin`, `--`). Everything else — whitespace and
+ * every shell metacharacter — is rejected.
+ */
+const SHELL_SAFE_TOKEN = /^[A-Za-z0-9_@:./=-]+$/;
+
+/**
+ * Fold a `{ cmd, args }` command into a single shell string.
+ *
+ * We spawn dev-server / package-manager commands with `shell: true` (needed so
+ * PATH shims, corepack, and npm/pnpm/yarn `.cmd` wrappers resolve). Node 20+
+ * deprecates passing a non-empty `args` array together with `shell: true`
+ * (DEP0190) because the shell re-parses the args. Passing the whole command as
+ * one string with no `args` array quiets the warning and is the shape Node
+ * documents for the shell case.
+ *
+ * Because the string is re-parsed by the shell, we do NOT attempt to quote
+ * arbitrary input (double-quoting is a false safety contract — a POSIX shell
+ * still expands `$(...)`, `$VAR`, and backticks inside double quotes). Instead
+ * every token must match {@link SHELL_SAFE_TOKEN}; an unsafe token throws. All
+ * real callers pass controlled tokens (package-manager name, `run`/`install`,
+ * the dev-script key, `--`, numeric `--port`/`--host`), so this never fires in
+ * practice but turns any future injection vector into a loud, early error
+ * instead of a silently-built injectable command line.
+ */
+export function toShellCommandString(cmd: string, args: string[]): string {
+  const tokens = [cmd, ...args];
+  for (const token of tokens) {
+    if (!SHELL_SAFE_TOKEN.test(token)) {
+      throw new Error(`Refusing to build shell command: unsafe token ${JSON.stringify(token)}`);
+    }
+  }
+  return tokens.join(' ');
+}
+
 export class DevServerManager {
   private _process: ChildProcess | null = null;
   private _port: number | null = null;
@@ -611,8 +649,9 @@ export class DevServerManager {
         appendScriptCliArgs(command, packageManager, portArgs);
       }
 
-      // Spawn process
-      const child = spawn(command.cmd, command.args, {
+      // Spawn process. Fold args into the command string (no `args` array) so
+      // `shell: true` does not trigger DEP0190 (deprecated: args + shell:true).
+      const child = spawn(toShellCommandString(command.cmd, command.args), {
         cwd: this._projectPath,
         env: {
           ...process.env,
@@ -1099,8 +1138,10 @@ export class DevServerManager {
     this._appendLog(`[HyperIDE] Repairing dependencies with ${command.cmd} ${command.args.join(' ')}\n`);
 
     await new Promise<void>((resolve, reject) => {
+      // Fold args into the command string (no `args` array) so `shell: true`
+      // does not trigger DEP0190 (deprecated: args + shell:true).
       // nosemgrep: spawn-shell-true -- package-manager commands may resolve through shell shims/corepack
-      const child = spawn(command.cmd, command.args, {
+      const child = spawn(toShellCommandString(command.cmd, command.args), {
         cwd: this._projectPath,
         env: {
           ...process.env,

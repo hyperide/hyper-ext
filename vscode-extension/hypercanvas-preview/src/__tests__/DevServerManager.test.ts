@@ -56,7 +56,35 @@ const {
   isDynamicImportStalenessMessage,
   portInjectionArgs,
   shouldRepairDependencies,
+  toShellCommandString,
 } = await import('../services/DevServerManager');
+
+describe('toShellCommandString (DEP0190: fold args into one string for shell:true spawn)', () => {
+  it('joins a plain package-manager command and its args', () => {
+    expect(toShellCommandString('npm', ['run', 'dev'])).toBe('npm run dev');
+  });
+
+  it('preserves injected --port CLI args', () => {
+    expect(toShellCommandString('pnpm', ['dev', '--', '--port', '5173'])).toBe('pnpm dev -- --port 5173');
+  });
+
+  it('returns a bare command when there are no args', () => {
+    expect(toShellCommandString('bun', [])).toBe('bun');
+  });
+
+  it('allows the punctuation that appears in real package-manager tokens', () => {
+    expect(toShellCommandString('npm', ['run', 'dev:web'])).toBe('npm run dev:web');
+    expect(toShellCommandString('pnpm', ['--filter', '@scope/pkg', 'dev'])).toBe('pnpm --filter @scope/pkg dev');
+  });
+
+  it('throws on a token containing whitespace or a shell metacharacter (no false-safety quoting)', () => {
+    expect(() => toShellCommandString('npm', ['run', 'dev script'])).toThrow(/unsafe token/);
+    expect(() => toShellCommandString('npm', ['run', 'dev&&rm'])).toThrow(/unsafe token/);
+    expect(() => toShellCommandString('npm', ['run', 'dev$(whoami)'])).toThrow(/unsafe token/);
+    expect(() => toShellCommandString('npm', ['run', 'dev`id`'])).toThrow(/unsafe token/);
+    expect(() => toShellCommandString('npm', ['run', 'dev*'])).toThrow(/unsafe token/);
+  });
+});
 
 describe('anyDirtyDocIsViteConfig (dirty vite.config guard for the best-effort dedupe patch)', () => {
   const ROOT = '/proj';

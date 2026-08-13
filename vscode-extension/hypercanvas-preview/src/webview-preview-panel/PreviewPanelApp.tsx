@@ -357,8 +357,15 @@ function PreviewContent() {
     );
   }
 
+  // The floating mode HUD reserves a bottom gutter so the previewed app never
+  // sits under it. Reserve the gutter only while the HUD is actually shown.
+  const modeToolbarVisible = shouldShowModeToolbar(readonlyStubVisible);
+
   return (
-    <div data-testid={TID.preview.surface} style={surfaceStyle}>
+    <div
+      data-testid={TID.preview.surface}
+      style={modeToolbarVisible ? { ...surfaceStyle, paddingBottom: MODE_TOOLBAR_GUTTER } : surfaceStyle}
+    >
       {isReadonly && readonlyDismissed && <ReadonlyBadge cssSystem={projectCapabilities.cssSystem} />}
       {appMode && (
         <div style={addressBarRowStyle}>
@@ -451,7 +458,7 @@ function PreviewContent() {
       {/* Hide the floating mode HUD while the readonly stub covers the surface —
           otherwise the z-[1000] HUD floats over the stub's Continue button and
           intercepts its pointer events, wedging the user at the stub (HYP-782). */}
-      {shouldShowModeToolbar(readonlyStubVisible) && <ModeToolbar canvas={canvas} />}
+      {modeToolbarVisible && <ModeToolbar canvas={canvas} />}
 
       <CanvasElementContextMenu
         selectedIds={contextMenu ? [contextMenu.elementId] : []}
@@ -740,6 +747,8 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
   // The `preview:setScope` message / onScopeChange handler stay for those automatic paths
   // and the chrome-detected "Generate wrapper" prompt; only the manual toggle was removed.
   return (
+    // MODE_TOOLBAR_SYNC: `h-12` (height) and `bottom-8` (offset) here feed the
+    // reserved-gutter arithmetic in MODE_TOOLBAR_GUTTER — keep them in sync.
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 h-12 px-2 bg-popover rounded-[14px] shadow-[0_2px_4px_rgba(0,0,0,0.15),0_2px_16px_rgba(0,0,0,0.15)] border border-border z-[1000]">
       {TOOLBAR_BUTTONS.map(({ mode, icon: Icon, boardOnly }) => {
         const isActive = activeMode === mode;
@@ -792,11 +801,28 @@ const addressBarRowStyle: React.CSSProperties = {
   padding: '8px 16px',
 };
 
+// Geometry of the floating mode HUD, kept in sync with ModeToolbar's Tailwind
+// classes (see the `MODE_TOOLBAR_SYNC` marker at its className). If you change
+// the pill's `h-12` height or `bottom-8` offset, update these — the reserved
+// gutter below is derived from them and would otherwise silently desync.
+const MODE_TOOLBAR_HEIGHT = 48; // h-12
+const MODE_TOOLBAR_BOTTOM_OFFSET = 32; // bottom-8
+const MODE_TOOLBAR_BREATHING_GAP = 16;
+
+// Height of the reserved gutter at the bottom of the surface while the floating
+// mode HUD is visible. The iframe wrapper shrinks by this much so the previewed
+// app never renders UNDER the pill (the pill covered a bottom-center "Invite
+// email" input in the conloca demo). The pill stays `fixed` and floats in this
+// reserved gutter over the editor background, not over app content.
+const MODE_TOOLBAR_GUTTER = MODE_TOOLBAR_HEIGHT + MODE_TOOLBAR_BOTTOM_OFFSET + MODE_TOOLBAR_BREATHING_GAP;
+
 const surfaceStyle: React.CSSProperties = {
   position: 'relative',
   width: '100%',
   height: '100%',
   overflow: 'visible',
+  // padding (the mode-HUD gutter) must not add to the 100% height and overflow.
+  boxSizing: 'border-box',
   // Column layout so the app-mode address bar sits ABOVE the iframe and pushes it
   // down rather than overlapping it (HYP app-preview: "адресная строка не перекрывала").
   display: 'flex',
