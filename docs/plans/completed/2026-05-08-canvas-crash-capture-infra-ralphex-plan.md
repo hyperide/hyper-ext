@@ -9,9 +9,10 @@ does NOT reproduce in headless Linux Docker — it only repros on the user's
 local macOS Hyper Canvas with bulka after Source Control "Discard All Changes"**.
 
 Static audit of `vscode-extension/src/` revealed all `Object.{keys,entries,values,assign}`
-+ `.push(` call sites are guarded. The throwing frame must live in bundled `out/`
-(post-esbuild) or a third-party dep, but pinpointing it requires a runtime stack
-which we don't have.
+
+- `.push(` call sites are guarded. The throwing frame must live in bundled `out/`
+  (post-esbuild) or a third-party dep, but pinpointing it requires a runtime stack
+  which we don't have.
 
 ## Scope
 
@@ -28,9 +29,7 @@ be filed, file it. No "follow-up needed" placeholders.
 
 - [x] In `vscode-extension/hypercanvas-preview/src/extension.ts` `activate()`,
       register `process.on('unhandledRejection', (reason) => { ... })`.
-- [x] Reason is typed `unknown` — log:
-      - reason if instanceof Error: `{ name, message, stack }`
-      - reason as string otherwise: `JSON.stringify(reason)`
+- [x] Reason is typed `unknown` — log: - reason if instanceof Error: `{ name, message, stack }` - reason as string otherwise: `JSON.stringify(reason)`
 - [x] Always write to `OutputChannel('HyperIDE Diagnostics')`. If the env var
       `HYPERIDE_DIAGNOSTIC_ERROR_SINK` is set (a file path), also append-write
       `JSON.stringify({ ts, kind: 'unhandledRejection', reason: serialized })`
@@ -42,12 +41,9 @@ be filed, file it. No "follow-up needed" placeholders.
 
 ### Task 2: Add user-facing capture command
 
-- [x] Add a command `hypercanvas.startDiagnosticCapture` that:
-      - asks for an output file path (default `~/.hyperide-diagnostics-<ts>.log`)
-      - sets `HYPERIDE_DIAGNOSTIC_ERROR_SINK=<path>` for the current session
-        (via `process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK = path`)
-      - shows an information notification "Diagnostic capture active. Reproduce
-        the bug, then run 'Stop Diagnostic Capture' to finish."
+- [x] Add a command `hypercanvas.startDiagnosticCapture` that: - asks for an output file path (default `~/.hyperide-diagnostics-<ts>.log`) - sets `HYPERIDE_DIAGNOSTIC_ERROR_SINK=<path>` for the current session
+      (via `process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK = path`) - shows an information notification "Diagnostic capture active. Reproduce
+      the bug, then run 'Stop Diagnostic Capture' to finish."
 - [x] Add a `hypercanvas.stopDiagnosticCapture` command that clears the env
       var, opens the resulting log in a new editor tab, and shows summary
       stats (count of unhandled rejections, count of exceptions).
@@ -71,13 +67,11 @@ be filed, file it. No "follow-up needed" placeholders.
 ### Task 4: Propose canvas-discard reproduction strategy
 
 - [x] Manual repro is the only known path until Linux+Docker reproduces. Open
-      a follow-up plan describing two angles:
-      1. User runs the capture command on macOS, attaches the log to a TG
-         message and a follow-up `2026-05-08-canvas-crash-fix-from-stack.md`
-         plan.
-      2. Investigate why bulka-on-Docker doesn't repro — could be `git checkout`
-         vs SCM `cleanAll` triggering different watchers, or HMR timing on
-         vite-vs-webpack.
+      a follow-up plan describing two angles: 1. User runs the capture command on macOS, attaches the log to a TG
+      message and a follow-up `2026-05-08-canvas-crash-fix-from-stack.md`
+      plan. 2. Investigate why bulka-on-Docker doesn't repro — could be `git checkout`
+      vs SCM `cleanAll` triggering different watchers, or HMR timing on
+      vite-vs-webpack.
 
 ### Task 5: Telegram handoff (FILES, not paths)
 

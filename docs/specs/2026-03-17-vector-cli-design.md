@@ -52,22 +52,22 @@ available as globals. `eval()` in isolated scope with frozen prototype chain.
 ### Generators (return ChainableNode)
 
 ```js
-rect(width, height)              // rectangle at origin
-rect(width, height, x, y)       // positioned
-ellipse(rx, ry)                  // ellipse
-ellipse(rx, ry, cx, cy)         // positioned
-circle(r)                        // shorthand for ellipse(r, r)
-polygon(sides, radius)           // regular polygon
-star(points, outer, inner)       // star
-line(x1, y1, x2, y2)            // line segment
-arc(radius, startAngle, endAngle)
-spiral(spirals, radius)
-arrow(length, width)
-path("M 0 0 L 100 0 Z")        // raw SVG path
-text("Hello", fontSize)          // text to path (requires font)
-mesh(rows, cols)                 // gradient mesh grid
-mesh(rows, cols, w, h)           // sized gradient mesh
-meshFrom(node, rows, cols)       // fit mesh to path bounds
+rect(width, height); // rectangle at origin
+rect(width, height, x, y); // positioned
+ellipse(rx, ry); // ellipse
+ellipse(rx, ry, cx, cy); // positioned
+circle(r); // shorthand for ellipse(r, r)
+polygon(sides, radius); // regular polygon
+star(points, outer, inner); // star
+line(x1, y1, x2, y2); // line segment
+arc(radius, startAngle, endAngle);
+spiral(spirals, radius);
+arrow(length, width);
+path('M 0 0 L 100 0 Z'); // raw SVG path
+text('Hello', fontSize); // text to path (requires font)
+mesh(rows, cols); // gradient mesh grid
+mesh(rows, cols, w, h); // sized gradient mesh
+meshFrom(node, rows, cols); // fit mesh to path bounds
 ```
 
 ### Chaining (.method returns ChainableNode)
@@ -143,6 +143,7 @@ join(a, b)                       // connect open path endpoints
 ```
 
 **Not yet implemented — next phase:**
+
 - `divide(a, b)` — split at all intersections, keep all fragments
 - `cutPath(a, b)` — like divide but strokes only
 - `combine(a, b, ...)` — compound path preserving subpaths
@@ -191,63 +192,63 @@ export("graph", "icon.graph")    // export binary
 
 ```js
 // Undo/Redo
-undo()                           // undo last operation
-undo(3)                          // undo 3 steps
-redo()                           // redo last
-redo(3)                          // redo 3 steps
+undo(); // undo last operation
+undo(3); // undo 3 steps
+redo(); // redo last
+redo(3); // redo 3 steps
 
 // History inspection
-history()                        // full history list with timestamps
-history(10)                      // last 10 entries
-diff(entry)                      // show what changed in entry
-replay(n)                        // replay from base to entry n
-compact()                        // compact old history into base state
+history(); // full history list with timestamps
+history(10); // last 10 entries
+diff(entry); // show what changed in entry
+replay(n); // replay from base to entry n
+compact(); // compact old history into base state
 
 // Mute/unmute — disable node without removing it
-mute(node)                       // skip during execution (passthrough)
-unmute(node)                     // re-enable
-toggle(node)                     // toggle mute state
+mute(node); // skip during execution (passthrough)
+unmute(node); // re-enable
+toggle(node); // toggle mute state
 
 // DAG manipulation — reorder by remove + insert
-remove(node)                     // remove node from graph (edges severed)
-insert(node, after)              // insert node into edge chain after target
-reorder(node, before)            // shorthand: remove + insert before target
+remove(node); // remove node from graph (edges severed)
+insert(node, after); // insert node into edge chain after target
+reorder(node, before); // shorthand: remove + insert before target
 ```
 
 ### Inspection
 
 ```js
-nodes()                          // list all nodes (table)
-edges()                          // list all edges
-info(node)                       // show node details
-tree()                           // ASCII DAG tree
-scene()                          // show scene graph
-stats()                          // execution stats
+nodes(); // list all nodes (table)
+edges(); // list all edges
+info(node); // show node details
+tree(); // ASCII DAG tree
+scene(); // show scene graph
+stats(); // execution stats
 ```
 
 ### Canvas
 
 ```js
-canvas(width, height)            // set canvas size
-canvas()                         // show current size
-background(color)                // set background
+canvas(width, height); // set canvas size
+canvas(); // show current size
+background(color); // set background
 ```
 
 ### Network Operations
 
 ```js
-const net = toNetwork(path)      // path → vector network
-const paths = toPaths(network)   // network → paths
-findRegions(network)             // find fillable regions
-splitIntersections(network)      // resolve crossings
+const net = toNetwork(path); // path → vector network
+const paths = toPaths(network); // network → paths
+findRegions(network); // find fillable regions
+splitIntersections(network); // resolve crossings
 ```
 
 ### Hit Testing & Geometry
 
 ```js
-hitTest(x, y)                    // what's at this point?
-nearest(x, y)                    // nearest point on any shape
-pointAt(node, 0.5)              // point at 50% along path
+hitTest(x, y); // what's at this point?
+nearest(x, y); // nearest point on any shape
+pointAt(node, 0.5); // point at 50% along path
 ```
 
 ## Architecture
@@ -301,8 +302,8 @@ ChainableNode pointing to the latest node.
 ```typescript
 class ChainableNode {
   constructor(
-    private ctx: EvalContext,  // shared graph + registry + executor
-    private nodeId: string,    // current terminal node
+    private ctx: EvalContext, // shared graph + registry + executor
+    private nodeId: string, // current terminal node
   ) {}
 
   fill(color: string): ChainableNode {
@@ -341,29 +342,49 @@ interface EvalContext {
 function createSandbox(ctx: EvalContext): Record<string, unknown> {
   return {
     // Generators
-    rect: (w, h, x, y) => { /* add node, return ChainableNode */ },
-    circle: (r) => { /* ... */ },
-    ellipse: (rx, ry, cx, cy) => { /* ... */ },
+    rect: (w, h, x, y) => {
+      /* add node, return ChainableNode */
+    },
+    circle: (r) => {
+      /* ... */
+    },
+    ellipse: (rx, ry, cx, cy) => {
+      /* ... */
+    },
     // ... all generators
 
     // Boolean ops
-    union: (a, b) => { /* ... */ },
-    subtract: (a, b) => { /* ... */ },
+    union: (a, b) => {
+      /* ... */
+    },
+    subtract: (a, b) => {
+      /* ... */
+    },
 
     // File ops
-    open: (path) => { /* ... */ },
-    save: (path?) => { /* ... */ },
+    open: (path) => {
+      /* ... */
+    },
+    save: (path?) => {
+      /* ... */
+    },
 
     // History
     undo: () => ctx.history.undo(ctx.graph),
     redo: () => ctx.history.redo(ctx.graph),
 
     // Inspection
-    nodes: () => { /* print table */ },
-    tree: () => { /* print ASCII DAG */ },
+    nodes: () => {
+      /* print table */
+    },
+    tree: () => {
+      /* print ASCII DAG */
+    },
 
     // Canvas
-    canvas: (w, h) => { /* ... */ },
+    canvas: (w, h) => {
+      /* ... */
+    },
 
     // Console
     console,
@@ -403,6 +424,7 @@ No raw `eval()` — `new Function()` with explicit scope. No access to
 ## Live SVG Preview
 
 In TUI mode, every graph mutation triggers:
+
 1. Execute graph → `sceneToSvg()`
 2. Write SVG to preview file
 3. External viewer (browser, VS Code, Quick Look) auto-reloads via file watch
@@ -413,9 +435,9 @@ vecli --preview preview.svg       # enable live preview on start
 
 ```js
 // In REPL
-preview("preview.svg")           // start live preview to file
-preview(false)                   // stop preview
-preview()                        // show current preview path
+preview('preview.svg'); // start live preview to file
+preview(false); // stop preview
+preview(); // show current preview path
 ```
 
 The preview file is overwritten on every change — debounced at 100ms to avoid
@@ -436,10 +458,10 @@ script completes.
 
 ```js
 // icon.js
-canvas(24, 24)
-const bg = rect(24, 24).fill("#4A90D9").roundCorners(4)
-const arrow = path("M 7 12 L 12 7 L 17 12 M 12 7 L 12 17").stroke("#fff", 2, "round", "round")
-group(bg, arrow).export("svg", "up-arrow.svg")
+canvas(24, 24);
+const bg = rect(24, 24).fill('#4A90D9').roundCorners(4);
+const arrow = path('M 7 12 L 12 7 L 17 12 M 12 7 L 12 17').stroke('#fff', 2, 'round', 'round');
+group(bg, arrow).export('svg', 'up-arrow.svg');
 ```
 
 ```bash

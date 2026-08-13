@@ -17,10 +17,7 @@ it cannot always prove which project source declaration should be edited.
 ## Types
 
 ```typescript
-type SourceConfidence =
-  | 'exact'
-  | 'probable'
-  | 'computed-only';
+type SourceConfidence = 'exact' | 'probable' | 'computed-only';
 ```
 
 `SourceConfidence` belongs to source ownership records such as
@@ -138,8 +135,12 @@ A probable owner can become writable when one of these happens:
 Examples:
 
 ```css
-.card { padding-left: 12px; }
-.sidebar .card { padding-left: 16px; }
+.card {
+  padding-left: 12px;
+}
+.sidebar .card {
+  padding-left: 16px;
+}
 ```
 
 If the selected element computes to `16px`, `.sidebar .card` may be the current
@@ -255,7 +256,7 @@ diagnostics: [
     level: 'warning',
     message: 'Multiple CSS selectors could own padding-left; writing to selected .card source tab.',
   },
-]
+];
 ```
 
 Diagnostics should distinguish:

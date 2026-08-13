@@ -22,6 +22,7 @@ treats the no-order div as last, so the renumber sequence is wrong.
 ### Finding 2 — cursor position not threaded into write plan
 
 Claude was applying Fix 1 when limit hit:
+
 > Fix 1: pass cursor-derived position into `_resolveOrderWritePlan`.
 
 The drag-handler in `iframe-interaction.ts` `_dragPointerUp` knows where the
@@ -36,6 +37,7 @@ Address both findings, add unit-test coverage, codex review pass to confirm
 no new findings.
 
 Out of scope:
+
 - Drag insertion correctness for non-order-driven parents (unchanged path).
 - Tamagui `$md`/etc. responsive variants (HYP-300 deferred).
 - Anything in other parallel ralphex plans.
@@ -56,7 +58,7 @@ Out of scope:
 - [x] Update `computeOrderWritePlan` sort comparator to use the new numeric.
 - [x] Existing 53 unit tests + new test from Task 1 must all pass.
 
-### Task 3: Thread cursor-derived position into _resolveOrderWritePlan
+### Task 3: Thread cursor-derived position into \_resolveOrderWritePlan
 
 - [x] Inspect `_dragPointerUp` in `vscode-extension/.../iframe-interaction.ts`
       — `_dragPointerUp` already computes `position: 'before' | 'after'` from
@@ -92,9 +94,7 @@ Out of scope:
 ### Task 5: TG handoff with E2E screenshot
 
 - [x] After Docker image rebuilds (corepack pnpm fix in main), run the two
-      tw-order specs in `ext-test-projects/e2e/tests/project-dependent/`:
-      - `bulka-tw-order-reorder.spec.ts`
-      - `bulka-tw-order-md-breakpoint.spec.ts`
+      tw-order specs in `ext-test-projects/e2e/tests/project-dependent/`: - `bulka-tw-order-reorder.spec.ts` - `bulka-tw-order-md-breakpoint.spec.ts`
       via `HYPER_E2E_SHARDS=1 bun run test:docker -- --project=dep:bulka-the-dog`.
       SKIPPED — blocked by the documented bulka Docker dev-server bring-up
       regression (MEMORY.md "bulka Docker dev-server bring-up regression

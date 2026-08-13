@@ -101,10 +101,7 @@ preview UI that should be reused instead of the bare-bones text.
 ### Task 3: Add timeout-based error fallback
 
 - [x] After 10 seconds of preview being on the loading screen (no iframe
-      `onLoad` event), transition to an error screen with:
-      - "Component didn't load" heading + recovery copy
-      - "Retry" button
-      - "Open output panel" link to surface dev server logs
+      `onLoad` event), transition to an error screen with: - "Component didn't load" heading + recovery copy - "Retry" button - "Open output panel" link to surface dev server logs
 
       Implementation: `PreviewPanelApp.tsx` adds `iframeLoadTimedOut` state
       and a watchdog `setTimeout` (10s, configurable via
@@ -122,6 +119,7 @@ preview UI that should be reused instead of the bare-bones text.
       which is the same command registered in `extension.ts` for the
       "Show dev server output" path (already calls
       `devServerManager.showOutput()`).
+
 - [x] Wire the retry to re-trigger the iframe load (cycle `previewUrl` with
       a cache-buster, or unmount/remount). Implementation uses iframe
       remount via a `key={`${iframeSrc}-${retryNonce}`}` prop —
@@ -150,19 +148,16 @@ preview UI that should be reused instead of the bare-bones text.
 ### Task 4: Verify error path is visible
 
 - [x] `componentError` already wins over the loading shell — verified by code
-      inspection of `PreviewPanelApp.tsx`:
-      - The loading-spinner overlay is gated `!componentError`
-      - The timeout overlay is gated `!componentError`
-      - The new iframe-error overlay (added below) is gated `!componentError`
-      - `ComponentErrorOverlay` itself uses `zIndex: 100` (vs spinner/timeout/error
-        at `zIndex: 15`), so even if the gating regressed, layering would still
-        put the render-error UI on top.
+      inspection of `PreviewPanelApp.tsx`: - The loading-spinner overlay is gated `!componentError` - The timeout overlay is gated `!componentError` - The new iframe-error overlay (added below) is gated `!componentError` - `ComponentErrorOverlay` itself uses `zIndex: 100` (vs spinner/timeout/error
+      at `zIndex: 15`), so even if the gating regressed, layering would still
+      put the render-error UI on top.
 
       The `componentError` overlay appears immediately on
       `hypercanvas:componentError` postMessage from the iframe ErrorBoundary
       (`usePreviewBridge.ts:115-130`) regardless of iframe load state. No
       change needed here, only documentation in the codebase via comments
       next to the new gating clause.
+
 - [x] `iframe.onError` now propagates to a visible recovery UI. Previously
       `handleIframeError` only sent a `previewError` canvas event that the
       extension host logged via `console.error` (see

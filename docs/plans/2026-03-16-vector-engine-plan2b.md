@@ -20,6 +20,7 @@ deflate, and `fzstd` for zstandard decompression.
 **Spec:** `docs/specs/2026-03-13-vector-engine-design.md`
 
 **Scope:** Plan 2b of ~4:
+
 - Plan 1 (done): Core SDK — 24 nodes, SVG export, undo/redo
 - Plan 2 (done): Advanced ops — 21 more nodes, geometry, deformations, vector networks
 - **Plan 2b (this):** Gradient mesh nodes, envelope distort, splitIntersections,
@@ -78,6 +79,7 @@ The `MeshValue` type, tessellation, and `meshFromBounds` utility already exist.
 This task creates the `NodeTypeDefinition` wrappers.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/mesh/gradient-mesh.ts`
 - Create: `packages/vector-engine/src/nodes/mesh/mesh-nodes.test.ts`
 
@@ -96,9 +98,17 @@ describe('gradientMeshNode', () => {
   });
 
   it('should create a mesh with given dimensions', () => {
-    const result = gradientMeshNode.execute({}, {
-      rows: 2, cols: 3, width: 100, height: 100, x: 0, y: 0,
-    });
+    const result = gradientMeshNode.execute(
+      {},
+      {
+        rows: 2,
+        cols: 3,
+        width: 100,
+        height: 100,
+        x: 0,
+        y: 0,
+      },
+    );
     const meshVal = result.mesh as NodeValue;
     expect(meshVal.type).toBe('mesh');
     const mesh = meshVal.value as any;
@@ -108,9 +118,17 @@ describe('gradientMeshNode', () => {
   });
 
   it('should place vertices at correct grid positions', () => {
-    const result = gradientMeshNode.execute({}, {
-      rows: 1, cols: 1, width: 100, height: 50, x: 10, y: 20,
-    });
+    const result = gradientMeshNode.execute(
+      {},
+      {
+        rows: 1,
+        cols: 1,
+        width: 100,
+        height: 50,
+        x: 10,
+        y: 20,
+      },
+    );
     const mesh = (result.mesh as NodeValue).value as any;
     expect(mesh.vertices[0].position).toEqual({ x: 10, y: 20 });
     expect(mesh.vertices[1].position).toEqual({ x: 110, y: 20 });
@@ -119,9 +137,18 @@ describe('gradientMeshNode', () => {
   });
 
   it('should support initial vertex color', () => {
-    const result = gradientMeshNode.execute({}, {
-      rows: 1, cols: 1, width: 100, height: 100, x: 0, y: 0, color: '#ff0000',
-    });
+    const result = gradientMeshNode.execute(
+      {},
+      {
+        rows: 1,
+        cols: 1,
+        width: 100,
+        height: 100,
+        x: 0,
+        y: 0,
+        color: '#ff0000',
+      },
+    );
     const mesh = (result.mesh as NodeValue).value as any;
     expect(mesh.vertices[0].color).toBe('#ff0000');
   });
@@ -191,6 +218,7 @@ feat(vector-engine): gradient mesh generator node (HYP-308)
 Takes a path input, computes bounds, creates a mesh grid fitted to it.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/mesh/mesh-from-path-node.ts`
 - Modify: `packages/vector-engine/src/nodes/mesh/mesh-nodes.test.ts`
 
@@ -202,12 +230,8 @@ import { PathBuilder } from '../../path/builder';
 
 describe('meshFromPathNode', () => {
   it('should create mesh fitted to path bounds', () => {
-    const rect = new PathBuilder()
-      .moveTo(10, 20).lineTo(110, 20).lineTo(110, 120).lineTo(10, 120).close().build();
-    const result = meshFromPathNode.execute(
-      { path: { type: 'path', value: rect } as NodeValue },
-      { rows: 2, cols: 2 },
-    );
+    const rect = new PathBuilder().moveTo(10, 20).lineTo(110, 20).lineTo(110, 120).lineTo(10, 120).close().build();
+    const result = meshFromPathNode.execute({ path: { type: 'path', value: rect } as NodeValue }, { rows: 2, cols: 2 });
     const mesh = (result.mesh as NodeValue).value as any;
     expect(mesh.rows).toBe(2);
     expect(mesh.cols).toBe(2);
@@ -282,6 +306,7 @@ path is mapped to normalized UV coordinates within the mesh's bounding box,
 then displaced by the mesh vertex positions.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/deformation/envelope-distort.ts`
 - Modify: `packages/vector-engine/src/nodes/deformation/deformation.test.ts`
 
@@ -294,8 +319,7 @@ import { meshFromBounds } from '../../mesh/mesh-from-path';
 
 describe('envelope distort', () => {
   it('should deform path using undistorted mesh (identity)', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const mesh = meshFromBounds({ x: 0, y: 0, width: 100, height: 100 }, 1, 1);
     const result = envelopeDistortNode.execute(
       {
@@ -325,8 +349,7 @@ describe('envelope distort', () => {
   });
 
   it('should handle mesh with multiple cells', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const mesh = meshFromBounds({ x: 0, y: 0, width: 100, height: 100 }, 2, 2);
     const result = envelopeDistortNode.execute(
       {
@@ -360,6 +383,7 @@ describe('envelope distort', () => {
 ```
 
 Algorithm:
+
 1. Flatten input path → polyline points
 2. Get mesh bounding box (from vertex positions, not original grid bounds)
 3. For each point:
@@ -367,7 +391,7 @@ Algorithm:
    b. Find which mesh cell (row, col) the point falls in
    c. Get the 4 corner vertices of that cell
    d. Bilinear interpolation: `P = (1-s)(1-t)*TL + s*(1-t)*TR + (1-s)*t*BL + s*t*BR`
-      where s, t are local coordinates within the cell
+   where s, t are local coordinates within the cell
 4. Re-fit curves with `fitCurve`
 
 The key insight: the mesh stores where each grid point **should be**. A regular
@@ -375,6 +399,7 @@ undistorted mesh maps points to themselves (identity). Moving mesh vertices
 distorts the mapped output.
 
 Node definition:
+
 ```typescript
 export const envelopeDistortNode: NodeTypeDefinition = {
   type: 'envelopeDistort',
@@ -407,6 +432,7 @@ feat(vector-engine): envelope distort deformation node (HYP-308)
 Low-level intersection functions: line×line, line×cubic, cubic×cubic.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/curve/intersect-bezier.ts`
 - Create: `packages/vector-engine/src/curve/intersect-bezier.test.ts`
 
@@ -414,18 +440,16 @@ Low-level intersection functions: line×line, line×cubic, cubic×cubic.
 
 ```typescript
 import { describe, expect, it } from 'bun:test';
-import {
-  intersectLineLine,
-  intersectLineCubic,
-  intersectCubicCubic,
-} from './intersect-bezier';
+import { intersectLineLine, intersectLineCubic, intersectCubicCubic } from './intersect-bezier';
 import type { Point } from '../types';
 
 describe('intersectLineLine', () => {
   it('should find intersection of perpendicular lines', () => {
     const hits = intersectLineLine(
-      { x: 0, y: 50 }, { x: 100, y: 50 },  // horizontal
-      { x: 50, y: 0 }, { x: 50, y: 100 },  // vertical
+      { x: 0, y: 50 },
+      { x: 100, y: 50 }, // horizontal
+      { x: 50, y: 0 },
+      { x: 50, y: 100 }, // vertical
     );
     expect(hits.length).toBe(1);
     expect(hits[0].point.x).toBeCloseTo(50, 5);
@@ -435,18 +459,12 @@ describe('intersectLineLine', () => {
   });
 
   it('should return empty for parallel lines', () => {
-    const hits = intersectLineLine(
-      { x: 0, y: 0 }, { x: 100, y: 0 },
-      { x: 0, y: 10 }, { x: 100, y: 10 },
-    );
+    const hits = intersectLineLine({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 0, y: 10 }, { x: 100, y: 10 });
     expect(hits.length).toBe(0);
   });
 
   it('should return empty for non-intersecting segments', () => {
-    const hits = intersectLineLine(
-      { x: 0, y: 0 }, { x: 50, y: 0 },
-      { x: 60, y: 10 }, { x: 60, y: 100 },
-    );
+    const hits = intersectLineLine({ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 60, y: 10 }, { x: 60, y: 100 });
     expect(hits.length).toBe(0);
   });
 });
@@ -455,16 +473,24 @@ describe('intersectLineCubic', () => {
   it('should find intersection of horizontal line with arch curve', () => {
     // Cubic arch from (0,0) to (100,0) peaking at y≈75
     const hits = intersectLineCubic(
-      { x: -10, y: 37 }, { x: 110, y: 37 },  // horizontal line at y=37
-      { x: 0, y: 0 }, { x: 33, y: 100 }, { x: 66, y: 100 }, { x: 100, y: 0 },
+      { x: -10, y: 37 },
+      { x: 110, y: 37 }, // horizontal line at y=37
+      { x: 0, y: 0 },
+      { x: 33, y: 100 },
+      { x: 66, y: 100 },
+      { x: 100, y: 0 },
     );
     expect(hits.length).toBe(2); // Enters and exits the arch
   });
 
   it('should return empty when line misses curve', () => {
     const hits = intersectLineCubic(
-      { x: 0, y: 200 }, { x: 100, y: 200 },  // way above
-      { x: 0, y: 0 }, { x: 33, y: 100 }, { x: 66, y: 100 }, { x: 100, y: 0 },
+      { x: 0, y: 200 },
+      { x: 100, y: 200 }, // way above
+      { x: 0, y: 0 },
+      { x: 33, y: 100 },
+      { x: 66, y: 100 },
+      { x: 100, y: 0 },
     );
     expect(hits.length).toBe(0);
   });
@@ -475,16 +501,28 @@ describe('intersectCubicCubic', () => {
     // Curve A: arch up
     // Curve B: arch down (crosses A)
     const hits = intersectCubicCubic(
-      { x: 0, y: 50 }, { x: 33, y: 150 }, { x: 66, y: 150 }, { x: 100, y: 50 },
-      { x: 0, y: 100 }, { x: 33, y: 0 }, { x: 66, y: 0 }, { x: 100, y: 100 },
+      { x: 0, y: 50 },
+      { x: 33, y: 150 },
+      { x: 66, y: 150 },
+      { x: 100, y: 50 },
+      { x: 0, y: 100 },
+      { x: 33, y: 0 },
+      { x: 66, y: 0 },
+      { x: 100, y: 100 },
     );
     expect(hits.length).toBeGreaterThanOrEqual(1);
   });
 
   it('should return empty for non-intersecting curves', () => {
     const hits = intersectCubicCubic(
-      { x: 0, y: 0 }, { x: 33, y: 50 }, { x: 66, y: 50 }, { x: 100, y: 0 },
-      { x: 0, y: 200 }, { x: 33, y: 250 }, { x: 66, y: 250 }, { x: 100, y: 200 },
+      { x: 0, y: 0 },
+      { x: 33, y: 50 },
+      { x: 66, y: 50 },
+      { x: 100, y: 0 },
+      { x: 0, y: 200 },
+      { x: 33, y: 250 },
+      { x: 66, y: 250 },
+      { x: 100, y: 200 },
     );
     expect(hits.length).toBe(0);
   });
@@ -492,11 +530,12 @@ describe('intersectCubicCubic', () => {
 ```
 
 Return type:
+
 ```typescript
 export interface IntersectionHit {
   point: Point;
-  t1: number;  // parameter on first curve (0..1)
-  t2: number;  // parameter on second curve (0..1)
+  t1: number; // parameter on first curve (0..1)
+  t2: number; // parameter on second curve (0..1)
 }
 ```
 
@@ -526,6 +565,7 @@ midpoint, check if line intersects each half's bounding box. Recurse until flat 
 then do line-line intersection. Converges fast.
 
 **intersectCubicCubic**: Bézier clipping algorithm:
+
 1. Compute fat line of curve A (min/max distance from chord)
 2. Clip curve B against this fat line → reduce B's parameter range
 3. Swap A and B, repeat
@@ -550,6 +590,7 @@ Find all pairwise segment intersections in a VectorNetwork and split segments
 at intersection points, creating new vertices.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/network/split.ts`
 - Modify: `packages/vector-engine/src/network/network.test.ts`
 
@@ -562,8 +603,10 @@ describe('splitIntersections', () => {
   it('should split two crossing line segments at intersection', () => {
     const network: VectorNetwork = {
       vertices: [
-        { x: 0, y: 0 }, { x: 100, y: 100 },  // diagonal \
-        { x: 100, y: 0 }, { x: 0, y: 100 },   // diagonal /
+        { x: 0, y: 0 },
+        { x: 100, y: 100 }, // diagonal \
+        { x: 100, y: 0 },
+        { x: 0, y: 100 }, // diagonal /
       ],
       segments: [
         { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
@@ -584,8 +627,10 @@ describe('splitIntersections', () => {
   it('should not split non-intersecting segments', () => {
     const network: VectorNetwork = {
       vertices: [
-        { x: 0, y: 0 }, { x: 100, y: 0 },
-        { x: 0, y: 50 }, { x: 100, y: 50 },
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 0, y: 50 },
+        { x: 100, y: 50 },
       ],
       segments: [
         { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
@@ -601,8 +646,10 @@ describe('splitIntersections', () => {
   it('should handle X pattern (4 regions after findRegions)', () => {
     const network: VectorNetwork = {
       vertices: [
-        { x: 0, y: 0 }, { x: 100, y: 100 },
-        { x: 100, y: 0 }, { x: 0, y: 100 },
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+        { x: 100, y: 0 },
+        { x: 0, y: 100 },
       ],
       segments: [
         { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
@@ -623,7 +670,9 @@ describe('splitIntersections', () => {
   it('should skip segments sharing a vertex (no false intersection)', () => {
     const network: VectorNetwork = {
       vertices: [
-        { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 100 },
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 50, y: 100 },
       ],
       segments: [
         { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
@@ -645,14 +694,14 @@ describe('splitIntersections', () => {
     // Two crossing curves
     const network: VectorNetwork = {
       vertices: [
-        { x: 0, y: 50 }, { x: 100, y: 50 },
-        { x: 50, y: 0 }, { x: 50, y: 100 },
+        { x: 0, y: 50 },
+        { x: 100, y: 50 },
+        { x: 50, y: 0 },
+        { x: 50, y: 100 },
       ],
       segments: [
-        { start: 0, end: 1,
-          tangentStart: { x: 33, y: 50 }, tangentEnd: { x: -33, y: 50 } },
-        { start: 2, end: 3,
-          tangentStart: { x: 50, y: 33 }, tangentEnd: { x: -50, y: -33 } },
+        { start: 0, end: 1, tangentStart: { x: 33, y: 50 }, tangentEnd: { x: -33, y: 50 } },
+        { start: 2, end: 3, tangentStart: { x: 50, y: 33 }, tangentEnd: { x: -50, y: -33 } },
       ],
       regions: [],
     };
@@ -678,6 +727,7 @@ describe('splitIntersections', () => {
 ```
 
 Algorithm:
+
 1. For each pair of segments (i, j) where i < j:
    a. Skip if segments share a vertex (adjacent — no real intersection)
    b. Determine segment types (line or cubic based on tangent handles)
@@ -713,6 +763,7 @@ feat(vector-engine): splitIntersections for vector network edge expansion (HYP-3
 Integrate harfbuzzjs (WASM HarfBuzz port) for complex script text shaping.
 
 **Files:**
+
 - Modify: `packages/vector-engine/package.json` (add `harfbuzzjs` dependency)
 - Create: `packages/vector-engine/src/nodes/text/shaper.ts`
 - Modify: `packages/vector-engine/src/nodes/text/text.test.ts`
@@ -799,11 +850,7 @@ export async function initShaper(): Promise<void> {
   return initPromise;
 }
 
-export function shapeText(
-  fontBlob: ArrayBuffer | null,
-  text: string,
-  fontSize: number,
-): ShapedGlyph[] {
+export function shapeText(fontBlob: ArrayBuffer | null, text: string, fontSize: number): ShapedGlyph[] {
   if (!fontBlob || !text || !hbInstance) return [];
 
   try {
@@ -883,6 +930,7 @@ feat(vector-engine): HarfBuzz text shaping via harfbuzzjs WASM (HYP-308)
 Parse `.fig` files (Figma binary format) into decoded node data.
 
 **Files:**
+
 - Modify: `packages/vector-engine/package.json` (add dependencies)
 - Create: `packages/vector-engine/src/import/fig-import.ts`
 - Create: `packages/vector-engine/src/import/fig-import.test.ts`
@@ -977,7 +1025,7 @@ export function parseFigFile(data: ArrayBuffer): FigParseResult {
     const bytes = new Uint8Array(data);
 
     // Check for zip header (PK\x03\x04)
-    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B;
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b;
 
     let payload: Uint8Array;
     if (isZip) {
@@ -1038,6 +1086,7 @@ feat(vector-engine): FIG file parser with Kiwi binary decoder (HYP-308)
 Convert parsed FIG nodes into vector-engine ImportResult (nodes + edges).
 
 **Files:**
+
 - Create: `packages/vector-engine/src/import/fig-mapper.ts`
 - Modify: `packages/vector-engine/src/import/fig-import.test.ts`
 
@@ -1049,13 +1098,15 @@ import type { FigNode } from './fig-import';
 
 describe('FIG node mapper', () => {
   it('should map RECTANGLE to rectangle node', () => {
-    const figNodes: FigNode[] = [{
-      type: 'RECTANGLE',
-      name: 'Rect1',
-      id: 'node-1',
-      children: [],
-      properties: { width: 100, height: 50, x: 10, y: 20 },
-    }];
+    const figNodes: FigNode[] = [
+      {
+        type: 'RECTANGLE',
+        name: 'Rect1',
+        id: 'node-1',
+        children: [],
+        properties: { width: 100, height: 50, x: 10, y: 20 },
+      },
+    ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
     const rect = result.nodes.find((n) => n.type === 'rectangle');
     expect(rect).toBeDefined();
@@ -1063,59 +1114,70 @@ describe('FIG node mapper', () => {
   });
 
   it('should map ELLIPSE to ellipse node', () => {
-    const figNodes: FigNode[] = [{
-      type: 'ELLIPSE',
-      name: 'Circle1',
-      id: 'node-2',
-      children: [],
-      properties: { width: 100, height: 100 },
-    }];
+    const figNodes: FigNode[] = [
+      {
+        type: 'ELLIPSE',
+        name: 'Circle1',
+        id: 'node-2',
+        children: [],
+        properties: { width: 100, height: 100 },
+      },
+    ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
     expect(result.nodes.find((n) => n.type === 'ellipse')).toBeDefined();
   });
 
   it('should map VECTOR to svgPath node', () => {
-    const figNodes: FigNode[] = [{
-      type: 'VECTOR',
-      name: 'Path1',
-      id: 'node-3',
-      children: [],
-      properties: { fillGeometry: 'M 0 0 L 100 0 L 100 100 Z' },
-    }];
+    const figNodes: FigNode[] = [
+      {
+        type: 'VECTOR',
+        name: 'Path1',
+        id: 'node-3',
+        children: [],
+        properties: { fillGeometry: 'M 0 0 L 100 0 L 100 100 Z' },
+      },
+    ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
     expect(result.nodes.find((n) => n.type === 'svgPath')).toBeDefined();
   });
 
   it('should map GROUP with children', () => {
-    const figNodes: FigNode[] = [{
-      type: 'GROUP',
-      name: 'Group1',
-      id: 'node-4',
-      children: [{
-        type: 'RECTANGLE',
-        name: 'Child',
-        id: 'node-5',
-        children: [],
-        properties: { width: 50, height: 50 },
-      }],
-      properties: {},
-    }];
+    const figNodes: FigNode[] = [
+      {
+        type: 'GROUP',
+        name: 'Group1',
+        id: 'node-4',
+        children: [
+          {
+            type: 'RECTANGLE',
+            name: 'Child',
+            id: 'node-5',
+            children: [],
+            properties: { width: 50, height: 50 },
+          },
+        ],
+        properties: {},
+      },
+    ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
     expect(result.nodes.find((n) => n.type === 'group')).toBeDefined();
     expect(result.nodes.find((n) => n.type === 'rectangle')).toBeDefined();
   });
 
   it('should add fill node for solid fills', () => {
-    const figNodes: FigNode[] = [{
-      type: 'RECTANGLE',
-      name: 'Colored',
-      id: 'node-6',
-      children: [],
-      properties: {
-        width: 100, height: 100,
-        fills: [{ type: 'SOLID', color: { r: 1, g: 0, b: 0, a: 1 } }],
+    const figNodes: FigNode[] = [
+      {
+        type: 'RECTANGLE',
+        name: 'Colored',
+        id: 'node-6',
+        children: [],
+        properties: {
+          width: 100,
+          height: 100,
+          fills: [{ type: 'SOLID', color: { r: 1, g: 0, b: 0, a: 1 } }],
+        },
       },
-    }];
+    ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
     const fill = result.nodes.find((n) => n.type === 'fill');
     expect(fill).toBeDefined();
@@ -1123,13 +1185,15 @@ describe('FIG node mapper', () => {
   });
 
   it('should handle unknown node types gracefully', () => {
-    const figNodes: FigNode[] = [{
-      type: 'UNKNOWN_FANCY_THING',
-      name: 'Mystery',
-      id: 'node-99',
-      children: [],
-      properties: {},
-    }];
+    const figNodes: FigNode[] = [
+      {
+        type: 'UNKNOWN_FANCY_THING',
+        name: 'Mystery',
+        id: 'node-99',
+        children: [],
+        properties: {},
+      },
+    ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
     // Should not crash, may produce a placeholder or skip
     expect(result.nodes.length).toBeGreaterThanOrEqual(0);
@@ -1153,10 +1217,7 @@ describe('FIG node mapper', () => {
 import type { ImportResult, ImportedNode, ImportedEdge } from './svg-import';
 import type { FigNode } from './fig-import';
 
-export function mapFigToGraph(
-  figNodes: FigNode[],
-  canvas: { width: number; height: number },
-): ImportResult {
+export function mapFigToGraph(figNodes: FigNode[], canvas: { width: number; height: number }): ImportResult {
   const nodes: ImportedNode[] = [];
   const edges: ImportedEdge[] = [];
   let idCounter = 0;
@@ -1164,14 +1225,28 @@ export function mapFigToGraph(
 
   function walk(figNode: FigNode, parentId?: string): void {
     switch (figNode.type) {
-      case 'RECTANGLE': { /* map to rectangle node + style nodes */ break; }
-      case 'ELLIPSE': { /* map to ellipse node */ break; }
-      case 'VECTOR': { /* map to svgPath node using fillGeometry */ break; }
-      case 'BOOLEAN_OPERATION': { /* map to boolean node */ break; }
+      case 'RECTANGLE': {
+        /* map to rectangle node + style nodes */ break;
+      }
+      case 'ELLIPSE': {
+        /* map to ellipse node */ break;
+      }
+      case 'VECTOR': {
+        /* map to svgPath node using fillGeometry */ break;
+      }
+      case 'BOOLEAN_OPERATION': {
+        /* map to boolean node */ break;
+      }
       case 'GROUP':
-      case 'FRAME': { /* map to group node, recurse children */ break; }
-      case 'TEXT': { /* map to textToPath node */ break; }
-      default: { /* skip with warning */ break; }
+      case 'FRAME': {
+        /* map to group node, recurse children */ break;
+      }
+      case 'TEXT': {
+        /* map to textToPath node */ break;
+      }
+      default: {
+        /* skip with warning */ break;
+      }
     }
     // Map fills → fill node, strokes → stroke node, effects → shadow/blur nodes
     // Wire edges: generator → fill → stroke
@@ -1198,6 +1273,7 @@ feat(vector-engine): FIG node mapper — Figma types to engine graph (HYP-308)
 ### Task 9: Register New Nodes + Update Exports
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/nodes/register-all.ts`
 - Modify: `packages/vector-engine/src/index.ts`
 - Modify: `packages/vector-engine/src/network/index.ts`
@@ -1205,6 +1281,7 @@ feat(vector-engine): FIG node mapper — Figma types to engine graph (HYP-308)
 - [ ] **Step 1: Update register-all.ts**
 
 Add 4 new nodes:
+
 ```typescript
 import { gradientMeshNode } from './mesh/gradient-mesh';
 import { meshFromPathNode } from './mesh/mesh-from-path-node';
@@ -1228,7 +1305,12 @@ export { meshFromPathNode } from './nodes/mesh/mesh-from-path-node';
 // Envelope distort
 export { envelopeDistortNode } from './nodes/deformation/envelope-distort';
 // Curve intersection
-export { intersectLineLine, intersectLineCubic, intersectCubicCubic, type IntersectionHit } from './curve/intersect-bezier';
+export {
+  intersectLineLine,
+  intersectLineCubic,
+  intersectCubicCubic,
+  type IntersectionHit,
+} from './curve/intersect-bezier';
 // Network: splitIntersections
 export { splitIntersections } from './network/split';
 // Text shaping
@@ -1267,6 +1349,7 @@ feat(vector-engine): register Plan 2b nodes and update public API (HYP-308)
 ### Task 10: Integration Tests + Coverage
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/integration-advanced.test.ts`
 
 - [ ] **Step 1: Add integration tests**
@@ -1276,9 +1359,18 @@ describe('Plan 2b integration', () => {
   it('should create gradient mesh and tessellate', () => {
     const registry = createDefaultRegistry();
     const graph = VectorGraphModel.create('test', 'Mesh', 200, 200);
-    const meshNode = graph.addNode({ type: 'gradientMesh', params: {
-      rows: 2, cols: 2, width: 100, height: 100, x: 0, y: 0, color: '#ff0000',
-    }});
+    const meshNode = graph.addNode({
+      type: 'gradientMesh',
+      params: {
+        rows: 2,
+        cols: 2,
+        width: 100,
+        height: 100,
+        x: 0,
+        y: 0,
+        color: '#ff0000',
+      },
+    });
     const executor = new GraphExecutor(registry);
     // Mesh nodes don't produce path output (different NodeValue type)
     // This verifies the node executes without error
@@ -1289,8 +1381,10 @@ describe('Plan 2b integration', () => {
   it('should split intersections then find regions', () => {
     const network: VectorNetwork = {
       vertices: [
-        { x: 0, y: 0 }, { x: 100, y: 100 },
-        { x: 100, y: 0 }, { x: 0, y: 100 },
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+        { x: 100, y: 0 },
+        { x: 0, y: 100 },
       ],
       segments: [
         { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
@@ -1328,10 +1422,10 @@ test(vector-engine): Plan 2b integration tests and coverage (HYP-308)
 
 ## Deferred to Plan 3+
 
-| Feature | Reason | Plan |
-|---------|--------|------|
-| CanvasKit gradient mesh rendering | Needs CanvasKit WASM initialization | Plan 3 (Renderer) |
-| Mesh SVG export (rasterize to `<image>`) | Needs Canvas2D or CanvasKit for rasterization | Plan 3 |
-| Mesh bezier handle interpolation | Bilinear sufficient for v1, bicubic for quality | Plan 3 |
-| FIG vectorNetworkBlob binary decode | Needs reverse-engineered binary format | If OpenPencil publishes decoder |
-| Complex script font loading | Need system font enumeration | Plan 4 (Editor UI) |
+| Feature                                  | Reason                                          | Plan                            |
+| ---------------------------------------- | ----------------------------------------------- | ------------------------------- |
+| CanvasKit gradient mesh rendering        | Needs CanvasKit WASM initialization             | Plan 3 (Renderer)               |
+| Mesh SVG export (rasterize to `<image>`) | Needs Canvas2D or CanvasKit for rasterization   | Plan 3                          |
+| Mesh bezier handle interpolation         | Bilinear sufficient for v1, bicubic for quality | Plan 3                          |
+| FIG vectorNetworkBlob binary decode      | Needs reverse-engineered binary format          | If OpenPencil publishes decoder |
+| Complex script font loading              | Need system font enumeration                    | Plan 4 (Editor UI)              |

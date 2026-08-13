@@ -31,11 +31,12 @@ Reduce warnings from 103 to as close to 0 as possible. Fix root causes, do not d
   - Document the justification in the comment.
 - For `consistent-type-imports`: replace `import('module').Type` with explicit `import type { Type } from 'module'` at top level.
 - For `no-unsafe-optional-chaining`: add explicit null checks.
-- For `no-unused-vars` catch params: prefix with `_` (oxlint allows `_error` but warns on `_error`? Actually oxlint warns on `_error` if it's "caught but never used". Wait — the warning says "Catch parameter '_error' is caught but never used." The rule is `no-unused-vars`. In oxlint, prefixing with `_` should suppress it... but it doesn't? Actually oxlint's no-unused-vars typically ignores `_` prefixed vars. But here it warns on `_error`. Let me check the rule config. Maybe it should be configured to ignore `_`-prefixed catch params. Actually — looking at the warning: "! eslint(no-unused-vars): Catch parameter '_error' is caught but never used." — the `!` means warning. The rule is enabled but `_error` is not being ignored. The fix is either: a) configure oxlint to ignore `_`-prefixed catch params, or b) rename to just `_` or c) use the error in the catch block.
+- For `no-unused-vars` catch params: prefix with `_` (oxlint allows `_error` but warns on `_error`? Actually oxlint warns on `_error` if it's "caught but never used". Wait — the warning says "Catch parameter '_error' is caught but never used." The rule is `no-unused-vars`. In oxlint, prefixing with `_`should suppress it... but it doesn't? Actually oxlint's no-unused-vars typically ignores`_`prefixed vars. But here it warns on`\_error`. Let me check the rule config. Maybe it should be configured to ignore `_`-prefixed catch params. Actually — looking at the warning: "! eslint(no-unused-vars): Catch parameter '_error' is caught but never used." — the `!`means warning. The rule is enabled but`_error`is not being ignored. The fix is either: a) configure oxlint to ignore`_`-prefixed catch params, or b) rename to just `\_` or c) use the error in the catch block.
 
 Actually, the best fix for `catch (_error)` is to either:
+
 - Rename to `catch` (no binding) if Bun/Node supports it
-- Or use `catch (_)` 
+- Or use `catch (_)`
 - Or actually log/use the error
 
 Since Bun supports `catch { ... }` without binding, we can use that.

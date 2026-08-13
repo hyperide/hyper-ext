@@ -64,17 +64,17 @@ Under **Permissions & events**, set:
 
 ### Repository Permissions
 
-| Permission | Access |
-|------------|--------|
-| Contents | Read and write |
-| Metadata | Read-only |
+| Permission    | Access                    |
+| ------------- | ------------------------- |
+| Contents      | Read and write            |
+| Metadata      | Read-only                 |
 | Pull requests | Read and write (optional) |
-| Issues | Read and write (optional) |
+| Issues        | Read and write (optional) |
 
 ### Account Permissions
 
-| Permission | Access |
-|------------|--------|
+| Permission      | Access    |
+| --------------- | --------- |
 | Email addresses | Read-only |
 
 ### Subscribe to Events
@@ -193,15 +193,15 @@ Check that all three environment variables are set:
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/github-app/status` | Check if GitHub App is configured |
-| GET | `/api/github-app/install-url` | Get installation URL (auth required) |
-| GET | `/api/github-app/callback` | Handle post-installation redirect |
-| GET | `/api/github-app/installations` | List user's installations (auth required) |
-| GET | `/api/github-app/installations/:id/repositories` | List accessible repos |
-| DELETE | `/api/github-app/installations/:id` | Remove installation |
-| POST | `/api/github-app/webhook` | GitHub webhook handler |
+| Method | Endpoint                                         | Description                               |
+| ------ | ------------------------------------------------ | ----------------------------------------- |
+| GET    | `/api/github-app/status`                         | Check if GitHub App is configured         |
+| GET    | `/api/github-app/install-url`                    | Get installation URL (auth required)      |
+| GET    | `/api/github-app/callback`                       | Handle post-installation redirect         |
+| GET    | `/api/github-app/installations`                  | List user's installations (auth required) |
+| GET    | `/api/github-app/installations/:id/repositories` | List accessible repos                     |
+| DELETE | `/api/github-app/installations/:id`              | Remove installation                       |
+| POST   | `/api/github-app/webhook`                        | GitHub webhook handler                    |
 
 ## Security Notes
 

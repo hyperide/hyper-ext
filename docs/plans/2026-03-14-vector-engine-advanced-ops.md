@@ -19,6 +19,7 @@ solver for automatic region detection.
 **Spec:** `docs/specs/2026-03-13-vector-engine-design.md`
 
 **Scope:** This is Plan 2 of ~4:
+
 - Plan 1 (done): Core SDK — types, graph, executor, 23 nodes, SVG export, undo/redo
 - **Plan 2 (this):** Advanced ops — geometry, path ops, deformations, variable stroke,
   groups, text, gradient mesh, vector networks, SVG import
@@ -26,6 +27,7 @@ solver for automatic region detection.
 - Plan 4: Editor UI + HyperIDE integration (tools, panels, toolbar, MCP tools)
 
 **Known bugs from Plan 1** (fixed in Chunk 1):
+
 - HYP-311: VectorGraphModel rejects valid parallel edges (`multi=false`)
 - HYP-310: `computeBounds` arc extents underestimate sweep geometry
 
@@ -128,6 +130,7 @@ VectorGraphModel uses `DirectedGraph` with `multi=false` (graphology default).
 Two edges between the same nodes on different ports throw before cycle checking.
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/graph/vector-graph.ts:41`
 - Modify: `packages/vector-engine/src/graph/vector-graph.test.ts`
 
@@ -154,11 +157,13 @@ it('should allow parallel edges between same nodes on different ports', () => {
 ```bash
 bun test packages/vector-engine/src/graph/vector-graph.test.ts
 ```
+
 Expected: FAIL — graphology throws on second addDirectedEdge.
 
 - [ ] **Step 3: Fix — enable multi-graph**
 
 In `vector-graph.ts:41`, change:
+
 ```typescript
 this.g = new DirectedGraph<NodeAttrs, EdgeAttrs>({ multi: true });
 ```
@@ -183,6 +188,7 @@ fix(vector-engine): allow parallel edges between same nodes (HYP-311)
 requires SVG arc-to-center parameterization (spec §B.2.4) to find actual angular extent.
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/path/bounds.ts`
 - Modify: `packages/vector-engine/src/path/bounds.test.ts`
 
@@ -227,6 +233,7 @@ compute center, start/end angles, then check if the arc crosses 0°, 90°, 180°
 extremes. Track the actual extreme points on the ellipse at those angles.
 
 Algorithm (from SVG spec §B.2.4):
+
 1. Compute (x1', y1') in rotated frame
 2. Compute center (cx', cy') from formula
 3. Compute startAngle, deltaAngle
@@ -255,6 +262,7 @@ Current mute logic forwards first input → first output regardless of types.
 Per spec: if output type differs from input type, dependents receive nothing.
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/graph/executor.ts:124-134`
 - Modify: `packages/vector-engine/src/graph/executor.test.ts`
 
@@ -272,7 +280,9 @@ it('should skip muted node when input/output types mismatch', () => {
     inputs: [{ name: 'path', type: 'path' }],
     outputs: [{ name: 'style', type: 'style' }],
     params: [],
-    execute() { return { style: { type: 'style', value: {} } }; },
+    execute() {
+      return { style: { type: 'style', value: {} } };
+    },
   });
   // ... build graph with muted type-changer, verify downstream gets no output
 });
@@ -324,6 +334,7 @@ Convert cubic/quad beziers and arcs to polylines (array of points). Needed by
 deformation nodes which operate on vertex arrays, then re-fit curves.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/path/flatten.ts`
 - Create: `packages/vector-engine/src/path/flatten.test.ts`
 
@@ -426,6 +437,7 @@ feat(vector-engine): adaptive path flattening utility (HYP-308)
 Compute total arc-length of a path and signed area (for winding direction).
 
 **Files:**
+
 - Create: `packages/vector-engine/src/path/geometry.ts`
 - Create: `packages/vector-engine/src/path/geometry.test.ts`
 
@@ -462,7 +474,7 @@ describe('pathLength', () => {
       { type: PathCmd.Move, x: r, y: 0 },
       { type: PathCmd.Cubic, cx1: r, cy1: r * k, cx2: r * k, cy2: r, x: 0, y: r },
     ]);
-    expect(pathLength(cmds)).toBeCloseTo(Math.PI / 2 * r, 0);
+    expect(pathLength(cmds)).toBeCloseTo((Math.PI / 2) * r, 0);
   });
 });
 
@@ -532,6 +544,7 @@ Given a path and a normalized offset (0..1), compute the point, tangent vector,
 and normal vector at that position along the path.
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/path/geometry.ts`
 - Modify: `packages/vector-engine/src/path/geometry.test.ts`
 
@@ -593,10 +606,11 @@ export interface PointAtOffsetResult {
   normal: Point;
 }
 
-export function pointAtOffset(commands: Float64Array, offset: number): PointAtOffsetResult
+export function pointAtOffset(commands: Float64Array, offset: number): PointAtOffsetResult;
 ```
 
 Algorithm:
+
 1. Compute total path length
 2. Target distance = offset × totalLength
 3. Walk segments accumulating length until reaching target
@@ -620,6 +634,7 @@ Fit smooth bezier curves through an array of points. Used by deformation nodes
 after operating on flattened polylines.
 
 **Files:**
+
 - Modify: `packages/vector-engine/package.json` (add `fit-curve` dependency)
 - Create: `packages/vector-engine/src/curve/fit.ts`
 - Create: `packages/vector-engine/src/curve/fit.test.ts`
@@ -706,8 +721,7 @@ export function fitCurve(points: Point[], error: number): PathValue {
   // Close if first and last points coincide
   const first = points[0];
   const last = points[points.length - 1];
-  const isClosed = first && last &&
-    Math.abs(first.x - last.x) < 0.01 && Math.abs(first.y - last.y) < 0.01;
+  const isClosed = first && last && Math.abs(first.x - last.x) < 0.01 && Math.abs(first.y - last.y) < 0.01;
   if (isClosed) builder.close();
   return builder.build();
 }
@@ -730,6 +744,7 @@ feat(vector-engine): fit-curve wrapper for polyline → bezier conversion (HYP-3
 Round corners replaces sharp vertices with arcs. Chamfer replaces with straight cuts.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/path-ops/round-corners.ts`
 - Create: `packages/vector-engine/src/nodes/path-ops/chamfer.ts`
 - Create: `packages/vector-engine/src/nodes/path-ops/path-ops-advanced.test.ts`
@@ -745,24 +760,17 @@ import { decodeCommands, PathCmd } from '../../path/commands';
 
 describe('round corners', () => {
   it('should replace square corners with arcs', () => {
-    const square = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = roundCornersNode.execute(
-      { path: { type: 'path', value: square } },
-      { radius: 10 },
-    );
+    const square = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const result = roundCornersNode.execute({ path: { type: 'path', value: square } }, { radius: 10 });
     const path = (result.path as any).value;
     const cmds = decodeCommands(path.commands);
     // Should contain Arc commands (or cubics approximating arcs)
-    const hasCurves = cmds.some((c) =>
-      c.type === PathCmd.Arc || c.type === PathCmd.Cubic,
-    );
+    const hasCurves = cmds.some((c) => c.type === PathCmd.Arc || c.type === PathCmd.Cubic);
     expect(hasCurves).toBe(true);
   });
 
   it('should clamp radius to half of shortest edge', () => {
-    const narrow = new PathBuilder()
-      .moveTo(0, 0).lineTo(10, 0).lineTo(10, 100).lineTo(0, 100).close().build();
+    const narrow = new PathBuilder().moveTo(0, 0).lineTo(10, 0).lineTo(10, 100).lineTo(0, 100).close().build();
     const result = roundCornersNode.execute(
       { path: { type: 'path', value: narrow } },
       { radius: 50 }, // More than half of 10px edge
@@ -774,12 +782,8 @@ describe('round corners', () => {
 
 describe('chamfer', () => {
   it('should replace corners with straight cuts', () => {
-    const square = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = chamferNode.execute(
-      { path: { type: 'path', value: square } },
-      { distance: 10 },
-    );
+    const square = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const result = chamferNode.execute({ path: { type: 'path', value: square } }, { distance: 10 });
     const path = (result.path as any).value;
     const cmds = decodeCommands(path.commands);
     // Chamfer adds extra line segments (8 edges instead of 4)
@@ -794,6 +798,7 @@ describe('chamfer', () => {
 - [ ] **Step 3: Implement round-corners.ts**
 
 Node definition following existing pattern. Algorithm:
+
 1. Decode path to commands
 2. For each pair of adjacent line segments meeting at a vertex:
    - Compute the angle between segments
@@ -822,6 +827,7 @@ feat(vector-engine): round corners and chamfer path operations (HYP-308)
 - **Trim Path**: Extract sub-path between start% and end% (After Effects style).
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/path-ops/subdivide.ts`
 - Create: `packages/vector-engine/src/nodes/path-ops/trim-path.ts`
 - Modify: `packages/vector-engine/src/nodes/path-ops/path-ops-advanced.test.ts`
@@ -831,14 +837,8 @@ feat(vector-engine): round corners and chamfer path operations (HYP-308)
 ```typescript
 describe('subdivide', () => {
   it('should split a cubic segment at midpoint', () => {
-    const path = new PathBuilder()
-      .moveTo(0, 0)
-      .cubicTo(10, 20, 30, 40, 50, 60)
-      .build();
-    const result = subdivideNode.execute(
-      { path: { type: 'path', value: path } },
-      { segmentIndex: 0, t: 0.5 },
-    );
+    const path = new PathBuilder().moveTo(0, 0).cubicTo(10, 20, 30, 40, 50, 60).build();
+    const result = subdivideNode.execute({ path: { type: 'path', value: path } }, { segmentIndex: 0, t: 0.5 });
     const cmds = decodeCommands((result.path as any).value.commands);
     // One cubic becomes two cubics
     expect(cmds.filter((c) => c.type === PathCmd.Cubic).length).toBe(2);
@@ -847,24 +847,16 @@ describe('subdivide', () => {
 
 describe('trim path', () => {
   it('should extract sub-path between 25% and 75%', () => {
-    const path = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(200, 0).lineTo(300, 0).build();
-    const result = trimPathNode.execute(
-      { path: { type: 'path', value: path } },
-      { start: 0.25, end: 0.75 },
-    );
+    const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(200, 0).lineTo(300, 0).build();
+    const result = trimPathNode.execute({ path: { type: 'path', value: path } }, { start: 0.25, end: 0.75 });
     // Result path should be ~half the original length
     const outPath = (result.path as any).value;
     expect(outPath.commands.length).toBeGreaterThan(0);
   });
 
   it('should handle wrap-around (start > end)', () => {
-    const path = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = trimPathNode.execute(
-      { path: { type: 'path', value: path } },
-      { start: 0.75, end: 0.25 },
-    );
+    const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const result = trimPathNode.execute({ path: { type: 'path', value: path } }, { start: 0.75, end: 0.25 });
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 });
@@ -898,6 +890,7 @@ feat(vector-engine): subdivide and trim path operations (HYP-308)
 - **Smooth**: Convert corner vertices to smooth (symmetric tangent handles).
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/path-ops/enforce-winding.ts`
 - Create: `packages/vector-engine/src/nodes/path-ops/smooth.ts`
 - Modify: `packages/vector-engine/src/nodes/path-ops/path-ops-advanced.test.ts`
@@ -907,12 +900,8 @@ feat(vector-engine): subdivide and trim path operations (HYP-308)
 ```typescript
 describe('enforce winding', () => {
   it('should reverse CCW path when CW requested', () => {
-    const ccw = new PathBuilder()
-      .moveTo(0, 0).lineTo(0, 100).lineTo(100, 100).close().build();
-    const result = enforceWindingNode.execute(
-      { path: { type: 'path', value: ccw } },
-      { direction: 'cw' },
-    );
+    const ccw = new PathBuilder().moveTo(0, 0).lineTo(0, 100).lineTo(100, 100).close().build();
+    const result = enforceWindingNode.execute({ path: { type: 'path', value: ccw } }, { direction: 'cw' });
     const outPath = (result.path as any).value;
     // The output area should have the requested sign
     expect(pathArea(outPath.commands)).toBeGreaterThan(0);
@@ -921,12 +910,8 @@ describe('enforce winding', () => {
 
 describe('smooth', () => {
   it('should convert polyline corners to cubic curves', () => {
-    const zigzag = new PathBuilder()
-      .moveTo(0, 0).lineTo(50, 100).lineTo(100, 0).build();
-    const result = smoothNode.execute(
-      { path: { type: 'path', value: zigzag } },
-      { smoothness: 0.5 },
-    );
+    const zigzag = new PathBuilder().moveTo(0, 0).lineTo(50, 100).lineTo(100, 0).build();
+    const result = smoothNode.execute({ path: { type: 'path', value: zigzag } }, { smoothness: 0.5 });
     const cmds = decodeCommands((result.path as any).value.commands);
     const hasCubics = cmds.some((c) => c.type === PathCmd.Cubic);
     expect(hasCubics).toBe(true);
@@ -962,6 +947,7 @@ feat(vector-engine): enforce winding and smooth path operations (HYP-308)
 Add `offset` and `removeSelfIntersections` to the WASM backend interface and mock.
 
 **Files:**
+
 - Modify: `packages/vector-wasm/src/types.ts`
 - Modify: `packages/vector-wasm/src/mock-pathops.ts`
 - Modify: `packages/vector-wasm/src/index.ts`
@@ -1010,6 +996,7 @@ feat(vector-wasm): extend PathOpsBackend with offset, removeSelfIntersections (H
 Create node definitions for operations that delegate to PathOpsBackend.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/path-ops/offset.ts`
 - Create: `packages/vector-engine/src/nodes/path-ops/stroke-to-path.ts`
 - Create: `packages/vector-engine/src/nodes/path-ops/dash-path.ts`
@@ -1032,12 +1019,8 @@ describe('WASM path ops nodes', () => {
   const dashNode = createDashNode(backend);
 
   it('should run offset node without error', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = offsetNode.execute(
-      { path: { type: 'path', value: rect } },
-      { distance: 10 },
-    );
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const result = offsetNode.execute({ path: { type: 'path', value: rect } }, { distance: 10 });
     expect((result.path as any).type).toBe('path');
   });
 
@@ -1052,10 +1035,7 @@ describe('WASM path ops nodes', () => {
 
   it('should run dash node', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
-    const result = dashNode.execute(
-      { path: { type: 'path', value: line } },
-      { dashArray: [10, 5], dashOffset: 0 },
-    );
+    const result = dashNode.execute({ path: { type: 'path', value: line } }, { dashArray: [10, 5], dashOffset: 0 });
     expect((result.path as any).type).toBe('path');
   });
 });
@@ -1076,9 +1056,7 @@ export function createOffsetNode(backend: PathOpsBackend): NodeTypeDefinition {
     category: 'pathOp',
     inputs: [{ name: 'path', type: 'path' }],
     outputs: [{ name: 'path', type: 'path' }],
-    params: [
-      { name: 'distance', type: 'number', default: 10, step: 1 },
-    ],
+    params: [{ name: 'distance', type: 'number', default: 10, step: 1 }],
     execute(inputs, params) {
       const pathVal = inputs.path as NodeValue;
       const result = backend.offset(pathVal.value as PathValue, params.distance as number);
@@ -1107,6 +1085,7 @@ feat(vector-engine): WASM-backed path ops nodes — offset, stroke-to-path, dash
 Group node collects multiple path inputs into a SceneGroup with shared transform/opacity.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/structural/group.ts`
 - Create: `packages/vector-engine/src/nodes/structural/structural.test.ts`
 - Modify: `packages/vector-engine/src/graph/executor.ts` (group terminal handling)
@@ -1122,16 +1101,21 @@ import type { NodeValue } from '../../types';
 
 describe('group node', () => {
   it('should merge multiple paths into compound path output', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const circle = new PathBuilder()
-      .moveTo(50, 0).arcTo(50, 50, 0, 1, 1, 50, 100).arcTo(50, 50, 0, 1, 1, 50, 0).close().build();
+      .moveTo(50, 0)
+      .arcTo(50, 50, 0, 1, 1, 50, 100)
+      .arcTo(50, 50, 0, 1, 1, 50, 0)
+      .close()
+      .build();
 
     const result = groupNode.execute(
-      { children: [
-        { type: 'path', value: rect },
-        { type: 'path', value: circle },
-      ] as NodeValue[] },
+      {
+        children: [
+          { type: 'path', value: rect },
+          { type: 'path', value: circle },
+        ] as NodeValue[],
+      },
       { opacity: 0.8 },
     );
 
@@ -1161,9 +1145,7 @@ export const groupNode: NodeTypeDefinition = {
     { name: 'path', type: 'path' },
     { name: 'transform', type: 'transform' },
   ],
-  params: [
-    { name: 'opacity', type: 'number', default: 1, min: 0, max: 1, step: 0.01 },
-  ],
+  params: [{ name: 'opacity', type: 'number', default: 1, min: 0, max: 1, step: 0.01 }],
   execute(inputs, params) {
     const childInput = inputs.children;
     const children = Array.isArray(childInput)
@@ -1220,6 +1202,7 @@ Mask content by another path's opacity. Different from clip (hard edge) — alph
 uses gradient opacity for feathered edges.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/structural/alpha-mask.ts`
 - Modify: `packages/vector-engine/src/nodes/structural/structural.test.ts`
 
@@ -1228,10 +1211,8 @@ uses gradient opacity for feathered edges.
 ```typescript
 describe('alpha mask node', () => {
   it('should output path with mask metadata in style', () => {
-    const content = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const mask = new PathBuilder()
-      .moveTo(20, 20).lineTo(80, 20).lineTo(80, 80).lineTo(20, 80).close().build();
+    const content = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const mask = new PathBuilder().moveTo(20, 20).lineTo(80, 20).lineTo(80, 80).lineTo(20, 80).close().build();
 
     const result = alphaMaskNode.execute(
       {
@@ -1271,6 +1252,7 @@ Shadow and blur are already supported in `StyleValue` and SVG export (filter ele
 Just need dedicated node definitions.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/style/shadow.ts`
 - Create: `packages/vector-engine/src/nodes/style/blur.ts`
 - Modify: `packages/vector-engine/src/nodes/style/style.test.ts`
@@ -1280,8 +1262,7 @@ Just need dedicated node definitions.
 ```typescript
 describe('shadow node', () => {
   it('should add shadow to style', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const result = shadowNode.execute(
       {
         path: { type: 'path', value: rect },
@@ -1305,10 +1286,7 @@ describe('shadow node', () => {
 
 describe('blur node', () => {
   it('should add blur to style', () => {
-    const result = blurNode.execute(
-      { style: { type: 'style', value: {} } },
-      { radius: 5 },
-    );
+    const result = blurNode.execute({ style: { type: 'style', value: {} } }, { radius: 5 });
     expect((result.style as any).value.blur).toBe(5);
   });
 });
@@ -1340,9 +1318,7 @@ export const shadowNode: NodeTypeDefinition = {
     { name: 'blur', type: 'number', default: 6, min: 0 },
   ],
   execute(inputs, params) {
-    const existingStyle = inputs.style
-      ? (inputs.style as NodeValue).value as StyleValue
-      : {};
+    const existingStyle = inputs.style ? ((inputs.style as NodeValue).value as StyleValue) : {};
     return {
       path: inputs.path,
       style: {
@@ -1377,6 +1353,7 @@ feat(vector-engine): shadow and blur style nodes (HYP-308)
 ## Chunk 6: Deformation Nodes
 
 All deformations follow the same pipeline:
+
 1. Flatten input path to polyline (using `flattenPath` from Task 4)
 2. Manipulate vertex positions
 3. Re-fit curves (using `fitCurve` from Task 7)
@@ -1384,6 +1361,7 @@ All deformations follow the same pipeline:
 ### Task 16: Roughen & Zigzag
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/deformation/roughen.ts`
 - Create: `packages/vector-engine/src/nodes/deformation/zigzag.ts`
 - Create: `packages/vector-engine/src/nodes/deformation/deformation.test.ts`
@@ -1450,6 +1428,7 @@ describe('zigzag', () => {
 - [ ] **Step 3: Implement roughen.ts**
 
 Algorithm:
+
 1. Flatten path → polyline points
 2. Between each pair of points, insert `detail` intermediate points
 3. Offset each intermediate point by random amount (seeded PRNG) perpendicular to segment
@@ -1461,6 +1440,7 @@ Seeded PRNG: simple mulberry32 based on `seed` param — ensures deterministic o
 - [ ] **Step 4: Implement zigzag.ts**
 
 Algorithm:
+
 1. Flatten path → polyline points
 2. For each segment, compute `ridgesPerSegment` evenly-spaced points
 3. Alternate displacement direction (left/right of segment normal)
@@ -1480,6 +1460,7 @@ feat(vector-engine): roughen and zigzag deformation nodes (HYP-308)
 ### Task 17: Pucker/Bloat & Twist
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/deformation/pucker-bloat.ts`
 - Create: `packages/vector-engine/src/nodes/deformation/twist.ts`
 - Modify: `packages/vector-engine/src/nodes/deformation/deformation.test.ts`
@@ -1489,35 +1470,23 @@ feat(vector-engine): roughen and zigzag deformation nodes (HYP-308)
 ```typescript
 describe('pucker/bloat', () => {
   it('should pull points toward center (pucker, amount > 0)', () => {
-    const square = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = puckerBloatNode.execute(
-      { path: { type: 'path', value: square } },
-      { amount: 50 },
-    );
+    const square = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const result = puckerBloatNode.execute({ path: { type: 'path', value: square } }, { amount: 50 });
     const outPath = (result.path as any).value;
     expect(outPath.commands.length).toBeGreaterThan(0);
   });
 
   it('should push points away from center (bloat, amount < 0)', () => {
-    const square = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = puckerBloatNode.execute(
-      { path: { type: 'path', value: square } },
-      { amount: -50 },
-    );
+    const square = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const result = puckerBloatNode.execute({ path: { type: 'path', value: square } }, { amount: -50 });
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 });
 
 describe('twist', () => {
   it('should rotate points around center by angle proportional to distance', () => {
-    const square = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = twistNode.execute(
-      { path: { type: 'path', value: square } },
-      { angle: 45 },
-    );
+    const square = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const result = twistNode.execute({ path: { type: 'path', value: square } }, { angle: 45 });
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 });
@@ -1528,6 +1497,7 @@ describe('twist', () => {
 - [ ] **Step 3: Implement pucker-bloat.ts**
 
 Algorithm:
+
 1. Flatten path, compute centroid (average of all points)
 2. For each point: move toward/away from centroid by `amount/100` proportion
 3. Re-fit curves with fitCurve
@@ -1535,6 +1505,7 @@ Algorithm:
 - [ ] **Step 4: Implement twist.ts**
 
 Algorithm:
+
 1. Flatten path, compute centroid and max radius
 2. For each point: compute normalized distance from center (0..1)
 3. Rotate point around centroid by `angle × distance/maxRadius` degrees
@@ -1555,6 +1526,7 @@ feat(vector-engine): pucker/bloat and twist deformation nodes (HYP-308)
 Warp distorts a path along a predefined shape (arc, flag, wave, etc.).
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/deformation/warp.ts`
 - Modify: `packages/vector-engine/src/nodes/deformation/deformation.test.ts`
 
@@ -1563,32 +1535,20 @@ Warp distorts a path along a predefined shape (arc, flag, wave, etc.).
 ```typescript
 describe('warp', () => {
   it('should bend a path along an arc', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
-    const result = warpNode.execute(
-      { path: { type: 'path', value: rect } },
-      { warpType: 'arc', bend: 50 },
-    );
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
+    const result = warpNode.execute({ path: { type: 'path', value: rect } }, { warpType: 'arc', bend: 50 });
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 
   it('should support wave warp type', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
-    const result = warpNode.execute(
-      { path: { type: 'path', value: rect } },
-      { warpType: 'wave', bend: 30 },
-    );
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
+    const result = warpNode.execute({ path: { type: 'path', value: rect } }, { warpType: 'wave', bend: 30 });
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 
   it('should return identity at bend=0', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
-    const result = warpNode.execute(
-      { path: { type: 'path', value: rect } },
-      { warpType: 'arc', bend: 0 },
-    );
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
+    const result = warpNode.execute({ path: { type: 'path', value: rect } }, { warpType: 'arc', bend: 0 });
     // With bend=0, output should approximate input
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
@@ -1600,12 +1560,14 @@ describe('warp', () => {
 - [ ] **Step 3: Implement warp.ts**
 
 Supported warp types (Illustrator parity):
+
 - `arc`: bend top/bottom edges along circular arc
 - `wave`: sinusoidal distortion
 - `flag`: alternating wave across horizontal axis
 - `bulge`: radial expansion from center
 
 Algorithm:
+
 1. Flatten path, compute bounding box
 2. Normalize each point to (0..1, 0..1) relative to bbox
 3. Apply warp function based on type + bend%
@@ -1630,6 +1592,7 @@ Width profile defines stroke width at different positions along the path.
 The node generates an outlined fill path (offset left + offset right + caps).
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/stroke/variable-stroke.ts`
 - Create: `packages/vector-engine/src/nodes/stroke/variable-stroke.test.ts`
 - Modify: `packages/vector-engine/src/types.ts` (add WidthPoint type)
@@ -1638,9 +1601,9 @@ The node generates an outlined fill path (offset left + offset right + caps).
 
 ```typescript
 export interface WidthPoint {
-  offset: number;   // 0..1 along path length
-  width: number;    // stroke width at this point
-  taper?: 'sharp' | 'round';  // endpoint taper style
+  offset: number; // 0..1 along path length
+  width: number; // stroke width at this point
+  taper?: 'sharp' | 'round'; // endpoint taper style
 }
 ```
 
@@ -1686,10 +1649,7 @@ describe('variable stroke', () => {
   });
 
   it('should handle curved input path', () => {
-    const curve = new PathBuilder()
-      .moveTo(0, 0)
-      .cubicTo(33, 50, 66, 50, 100, 0)
-      .build();
+    const curve = new PathBuilder().moveTo(0, 0).cubicTo(33, 50, 66, 50, 100, 0).build();
     const result = variableStrokeNode.execute(
       { path: { type: 'path', value: curve } },
       {
@@ -1711,6 +1671,7 @@ describe('variable stroke', () => {
 - [ ] **Step 4: Implement variable-stroke.ts**
 
 Algorithm:
+
 1. Sample N points along path using `pointAtOffset` (N = path length / 2px)
 2. At each sample point, interpolate width from profile
 3. Compute left and right offset points using normal × width/2
@@ -1727,11 +1688,16 @@ export const variableStrokeNode: NodeTypeDefinition = {
   outputs: [{ name: 'path', type: 'path' }],
   params: [
     { name: 'profile', type: 'json', default: '[{"offset":0,"width":10},{"offset":1,"width":10}]' },
-    { name: 'cap', type: 'enum', default: 'round', options: [
-      { value: 'butt', label: 'Butt' },
-      { value: 'round', label: 'Round' },
-      { value: 'square', label: 'Square' },
-    ]},
+    {
+      name: 'cap',
+      type: 'enum',
+      default: 'round',
+      options: [
+        { value: 'butt', label: 'Butt' },
+        { value: 'round', label: 'Round' },
+        { value: 'square', label: 'Square' },
+      ],
+    },
   ],
   execute(inputs, params) {
     // ...
@@ -1758,6 +1724,7 @@ feat(vector-engine): variable width stroke node (HYP-308)
 Convert text string + font to path outlines. Latin scripts only (no complex shaping).
 
 **Files:**
+
 - Modify: `packages/vector-engine/package.json` (add `opentype.js` dependency)
 - Create: `packages/vector-engine/src/nodes/text/text-to-path.ts`
 - Create: `packages/vector-engine/src/nodes/text/text.test.ts`
@@ -1787,11 +1754,14 @@ describe('text to path', () => {
   });
 
   it('should output empty path when no font loaded', () => {
-    const result = textToPathNode.execute({}, {
-      text: 'Hello',
-      fontSize: 24,
-      fontUrl: '',
-    });
+    const result = textToPathNode.execute(
+      {},
+      {
+        text: 'Hello',
+        fontSize: 24,
+        fontUrl: '',
+      },
+    );
     const pathVal = (result.path as any).value;
     // Without a font, should output an empty path (not crash)
     expect(pathVal.commands.length).toBe(0);
@@ -1848,11 +1818,21 @@ export const textToPathNode: NodeTypeDefinition = {
       // Convert opentype commands to our PathBuilder
       for (const cmd of opentypePath.commands) {
         switch (cmd.type) {
-          case 'M': builder.moveTo(cmd.x, cmd.y); break;
-          case 'L': builder.lineTo(cmd.x, cmd.y); break;
-          case 'C': builder.cubicTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.x, cmd.y); break;
-          case 'Q': builder.quadTo(cmd.x1, cmd.y1, cmd.x, cmd.y); break;
-          case 'Z': builder.close(); break;
+          case 'M':
+            builder.moveTo(cmd.x, cmd.y);
+            break;
+          case 'L':
+            builder.lineTo(cmd.x, cmd.y);
+            break;
+          case 'C':
+            builder.cubicTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.x, cmd.y);
+            break;
+          case 'Q':
+            builder.quadTo(cmd.x1, cmd.y1, cmd.x, cmd.y);
+            break;
+          case 'Z':
+            builder.close();
+            break;
         }
       }
     } catch {
@@ -1878,6 +1858,7 @@ feat(vector-engine): text-to-path node via opentype.js (HYP-308)
 Add MeshValue type and tessellation algorithm (bezier patches → triangles).
 
 **Files:**
+
 - Create: `packages/vector-engine/src/mesh/types.ts`
 - Create: `packages/vector-engine/src/mesh/tessellate.ts`
 - Create: `packages/vector-engine/src/mesh/mesh-from-path.ts`
@@ -1939,15 +1920,16 @@ export interface MeshValue {
 }
 
 export interface TessellatedMesh {
-  positions: number[];  // flat [x1,y1, x2,y2, ...]
-  colors: string[];     // per-vertex color (one per position pair)
-  indices: number[];    // triangle indices
+  positions: number[]; // flat [x1,y1, x2,y2, ...]
+  colors: string[]; // per-vertex color (one per position pair)
+  indices: number[]; // triangle indices
 }
 ```
 
 - [ ] **Step 4: Implement tessellate.ts**
 
 Bilinear subdivision of each bezier patch:
+
 1. For each cell (row, col), get 4 corner vertices
 2. Subdivide along both axes `subdivisionLevel` times
 3. Interpolate positions bilinearly (with bezier handles if present)
@@ -1988,6 +1970,7 @@ feat(vector-engine): gradient mesh types and tessellation (HYP-308)
 Types from Figma model: vertices, segments, regions.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/network/types.ts`
 - Modify: `packages/vector-engine/src/types.ts` (add network to NodeValue)
 - Create: `packages/vector-engine/src/network/network.test.ts`
@@ -2013,15 +1996,15 @@ export interface VectorVertex {
 }
 
 export interface VectorSegment {
-  start: number;       // vertex index
-  end: number;         // vertex index
+  start: number; // vertex index
+  end: number; // vertex index
   tangentStart: Point; // bezier control handle (0,0 = straight line)
   tangentEnd: Point;
 }
 
 export interface VectorRegion {
   windingRule: 'evenOdd' | 'nonZero';
-  loops: number[][];   // arrays of segment indices forming closed chains
+  loops: number[][]; // arrays of segment indices forming closed chains
   fills: FillStyle[];
 }
 
@@ -2062,11 +2045,13 @@ describe('VectorNetwork types', () => {
         { start: 1, end: 2, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
         { start: 2, end: 0, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
       ],
-      regions: [{
-        windingRule: 'nonZero',
-        loops: [[0, 1, 2]],
-        fills: [{ type: 'solid', color: '#ff0000' }],
-      }],
+      regions: [
+        {
+          windingRule: 'nonZero',
+          loops: [[0, 1, 2]],
+          fills: [{ type: 'solid', color: '#ff0000' }],
+        },
+      ],
     };
     expect(network.vertices.length).toBe(3);
     expect(network.segments.length).toBe(3);
@@ -2094,6 +2079,7 @@ feat(vector-engine): vector network types and NodeValue extension (HYP-308)
 Convert between sequential SVG paths and graph-based vector networks.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/network/convert.ts`
 - Modify: `packages/vector-engine/src/network/network.test.ts`
 
@@ -2105,8 +2091,7 @@ import { PathBuilder } from '../path/builder';
 
 describe('path → network → path roundtrip', () => {
   it('should convert a closed triangle', () => {
-    const path = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(50, 86.6).close().build();
+    const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(50, 86.6).close().build();
 
     const network = pathToNetwork(path);
     expect(network.vertices.length).toBe(3);
@@ -2119,10 +2104,7 @@ describe('path → network → path roundtrip', () => {
   });
 
   it('should convert a cubic bezier curve', () => {
-    const path = new PathBuilder()
-      .moveTo(0, 0)
-      .cubicTo(33, 100, 66, 100, 100, 0)
-      .build();
+    const path = new PathBuilder().moveTo(0, 0).cubicTo(33, 100, 66, 100, 100, 0).build();
 
     const network = pathToNetwork(path);
     expect(network.vertices.length).toBe(2);
@@ -2149,10 +2131,10 @@ describe('path → network → path roundtrip', () => {
     // T-junction: vertex at center connected to 3 endpoints
     const network: VectorNetwork = {
       vertices: [
-        { x: 50, y: 50 },  // center
-        { x: 0, y: 50 },   // left
+        { x: 50, y: 50 }, // center
+        { x: 0, y: 50 }, // left
         { x: 100, y: 50 }, // right
-        { x: 50, y: 0 },   // top
+        { x: 50, y: 0 }, // top
       ],
       segments: [
         { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
@@ -2211,6 +2193,7 @@ Find fillable regions from a vector network's segment graph. This is the core
 algorithm that makes vector networks useful — automatic region detection.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/network/topology.ts`
 - Modify: `packages/vector-engine/src/network/network.test.ts`
 
@@ -2223,7 +2206,9 @@ describe('topology solver', () => {
   it('should find one region in a triangle', () => {
     const network: VectorNetwork = {
       vertices: [
-        { x: 0, y: 100 }, { x: 100, y: 100 }, { x: 50, y: 0 },
+        { x: 0, y: 100 },
+        { x: 100, y: 100 },
+        { x: 50, y: 0 },
       ],
       segments: [
         { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
@@ -2241,10 +2226,10 @@ describe('topology solver', () => {
     // Square ABCD with diagonal AC → 2 triangular regions
     const network: VectorNetwork = {
       vertices: [
-        { x: 0, y: 0 },   // A
-        { x: 100, y: 0 },  // B
-        { x: 100, y: 100 },// C
-        { x: 0, y: 100 },  // D
+        { x: 0, y: 0 }, // A
+        { x: 100, y: 0 }, // B
+        { x: 100, y: 100 }, // C
+        { x: 0, y: 100 }, // D
       ],
       segments: [
         { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } }, // AB
@@ -2262,7 +2247,10 @@ describe('topology solver', () => {
   it('should handle T-junction (no closed regions)', () => {
     const network: VectorNetwork = {
       vertices: [
-        { x: 50, y: 50 }, { x: 0, y: 50 }, { x: 100, y: 50 }, { x: 50, y: 0 },
+        { x: 50, y: 50 },
+        { x: 0, y: 50 },
+        { x: 100, y: 50 },
+        { x: 50, y: 0 },
       ],
       segments: [
         { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
@@ -2279,7 +2267,9 @@ describe('topology solver', () => {
     // Triangle with a dangling tail from one vertex
     const network: VectorNetwork = {
       vertices: [
-        { x: 0, y: 100 }, { x: 100, y: 100 }, { x: 50, y: 0 },
+        { x: 0, y: 100 },
+        { x: 100, y: 100 },
+        { x: 50, y: 0 },
         { x: 50, y: -50 }, // dangling
       ],
       segments: [
@@ -2311,6 +2301,7 @@ describe('topology solver', () => {
 ```
 
 Algorithm (from spec):
+
 1. Build adjacency list from segments (bidirectional)
 2. Find leftmost vertex
 3. Travel clockwise from first vertex (relative to imaginary edge below)
@@ -2340,6 +2331,7 @@ feat(vector-engine): minimal cycle basis topology solver (HYP-308)
 Wire VectorNetwork into the scene builder and SVG export pipeline.
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/graph/executor.ts`
 - Modify: `packages/vector-engine/src/graph/scene-builder.ts`
 - Modify: `packages/vector-engine/src/index.ts`
@@ -2353,7 +2345,10 @@ describe('VectorNetwork integration', () => {
   it('should convert network to paths for scene/SVG export', () => {
     const network: VectorNetwork = {
       vertices: [
-        { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 },
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 },
       ],
       segments: [
         { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
@@ -2361,11 +2356,13 @@ describe('VectorNetwork integration', () => {
         { start: 2, end: 3, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
         { start: 3, end: 0, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
       ],
-      regions: [{
-        windingRule: 'nonZero',
-        loops: [[0, 1, 2, 3]],
-        fills: [{ type: 'solid', color: '#ff0000' }],
-      }],
+      regions: [
+        {
+          windingRule: 'nonZero',
+          loops: [[0, 1, 2, 3]],
+          fills: [{ type: 'solid', color: '#ff0000' }],
+        },
+      ],
     };
 
     const paths = networkToPaths(network);
@@ -2391,6 +2388,7 @@ export { findRegions } from './topology';
 ```
 
 Add to main `index.ts`:
+
 ```typescript
 // Vector networks
 export * from './network';
@@ -2414,6 +2412,7 @@ A generator node that stores a raw SVG `d` string. Used by SVG import for `<path
 elements that don't map to a specific generator (rectangle, ellipse, etc.).
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/generators/svg-path.ts`
 - Modify: `packages/vector-engine/src/nodes/generators/generators.test.ts`
 
@@ -2470,6 +2469,7 @@ Parse SVG string into vector-engine graph nodes. Uses `txml` (4KB, zero-dep, MIT
 for XML parsing — no regex tokenizer.
 
 **Files:**
+
 - Modify: `packages/vector-engine/package.json` (add `txml` dependency)
 - Create: `packages/vector-engine/src/import/svg-import.ts`
 - Create: `packages/vector-engine/src/import/svg-import.test.ts`
@@ -2506,7 +2506,8 @@ describe('SVG import', () => {
   });
 
   it('should import fill and stroke styles', () => {
-    const svg = '<svg viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="#ff0000" stroke="#000" stroke-width="2"/></svg>';
+    const svg =
+      '<svg viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="#ff0000" stroke="#000" stroke-width="2"/></svg>';
     const result = svgToGraph(svg);
     const fillNode = result.nodes.find((n) => n.type === 'fill');
     expect(fillNode).toBeDefined();
@@ -2521,7 +2522,8 @@ describe('SVG import', () => {
   });
 
   it('should import circle and ellipse as generator nodes', () => {
-    const svg = '<svg viewBox="0 0 200 200"><circle cx="50" cy="50" r="40"/><ellipse cx="150" cy="50" rx="40" ry="20"/></svg>';
+    const svg =
+      '<svg viewBox="0 0 200 200"><circle cx="50" cy="50" r="40"/><ellipse cx="150" cy="50" rx="40" ry="20"/></svg>';
     const result = svgToGraph(svg);
     const ellipseNodes = result.nodes.filter((n) => n.type === 'ellipse');
     expect(ellipseNodes.length).toBe(2);
@@ -2532,7 +2534,7 @@ describe('SVG import', () => {
     const result = svgToGraph(svg);
     const pathNode = result.nodes.find((n) => n.type === 'svgPath');
     expect(pathNode).toBeDefined();
-    expect((pathNode!.params.d as string)).toContain('M');
+    expect(pathNode!.params.d as string).toContain('M');
   });
 
   it('should import polyline with points attribute as svgPath', () => {
@@ -2640,6 +2642,7 @@ feat(vector-engine): SVG import pipeline via txml (HYP-308)
 Full pipeline: create graph → execute → export SVG → import SVG → compare.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/integration-advanced.test.ts`
 
 - [ ] **Step 1: Write tests**
@@ -2647,8 +2650,12 @@ Full pipeline: create graph → execute → export SVG → import SVG → compar
 ```typescript
 import { describe, expect, it } from 'bun:test';
 import {
-  VectorGraphModel, GraphExecutor, createDefaultRegistry, sceneToSvg,
-  PathBuilder, computeBounds,
+  VectorGraphModel,
+  GraphExecutor,
+  createDefaultRegistry,
+  sceneToSvg,
+  PathBuilder,
+  computeBounds,
 } from './index';
 import { pathLength, pointAtOffset } from './path/geometry';
 import { flattenPath } from './path/flatten';
@@ -2692,10 +2699,7 @@ describe('advanced integration', () => {
   });
 
   it('should flatten and re-fit a curved path', () => {
-    const curve = new PathBuilder()
-      .moveTo(0, 0)
-      .cubicTo(33, 100, 66, 100, 100, 0)
-      .build();
+    const curve = new PathBuilder().moveTo(0, 0).cubicTo(33, 100, 66, 100, 100, 0).build();
 
     const points = flattenPath(curve.commands, 1.0);
     expect(points.length).toBeGreaterThan(2);
@@ -2746,12 +2750,14 @@ test(vector-engine): advanced ops end-to-end integration tests (HYP-308)
 Wire all new nodes into register-all.ts and index.ts.
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/nodes/register-all.ts`
 - Modify: `packages/vector-engine/src/index.ts`
 
 - [ ] **Step 1: Update register-all.ts**
 
 Add imports and registrations for all new nodes (21 total):
+
 - Generators: svgPathNode
 - Structural: groupNode, alphaMaskNode
 - Style: shadowNode, blurNode
@@ -2764,6 +2770,7 @@ Add imports and registrations for all new nodes (21 total):
 - [ ] **Step 2: Update index.ts**
 
 Export all new modules:
+
 ```typescript
 // Path utilities
 export { flattenPath } from './path/flatten';
@@ -2820,13 +2827,13 @@ feat(vector-engine): register all Plan 2 nodes and update public API (HYP-308)
 
 These features are excluded from Plan 2 to keep scope manageable:
 
-| Feature | Reason | Dependency |
-|---------|--------|------------|
-| FIG import (.fig parser) | Needs `@open-pencil/core` dep, reverse-engineered schema | Vector networks, Group nodes |
-| rustybuzz-wasm text shaping | WASM build pipeline, complex scripts only | Text to Path node |
-| Envelope Distort | Needs mesh deformation grid, most complex deformation | Gradient mesh types |
-| Gradient mesh nodes | Node definitions need mesh NodeValue (added but nodes deferred) | Mesh tessellation |
-| Kiwi binary serialization | File format concern, not SDK functionality | All node types stable |
-| Snapshot cache / persistence | Runtime concern for Plan 3 (renderer) | Executor, HistoryManager |
-| `splitIntersections(network)` | Edge expansion prerequisite for `findRegions` in production | Topology solver |
-| Divide / Trim / Crop path ops | CanvasKit-specific boolean variants, need real backend | PathOpsBackend |
+| Feature                       | Reason                                                          | Dependency                   |
+| ----------------------------- | --------------------------------------------------------------- | ---------------------------- |
+| FIG import (.fig parser)      | Needs `@open-pencil/core` dep, reverse-engineered schema        | Vector networks, Group nodes |
+| rustybuzz-wasm text shaping   | WASM build pipeline, complex scripts only                       | Text to Path node            |
+| Envelope Distort              | Needs mesh deformation grid, most complex deformation           | Gradient mesh types          |
+| Gradient mesh nodes           | Node definitions need mesh NodeValue (added but nodes deferred) | Mesh tessellation            |
+| Kiwi binary serialization     | File format concern, not SDK functionality                      | All node types stable        |
+| Snapshot cache / persistence  | Runtime concern for Plan 3 (renderer)                           | Executor, HistoryManager     |
+| `splitIntersections(network)` | Edge expansion prerequisite for `findRegions` in production     | Topology solver              |
+| Divide / Trim / Crop path ops | CanvasKit-specific boolean variants, need real backend          | PathOpsBackend               |

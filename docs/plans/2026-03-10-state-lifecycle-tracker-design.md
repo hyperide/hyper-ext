@@ -48,12 +48,12 @@ Hook: PostToolUse(AskUserQuestion) → render-state.py → auto-show
   "started_at": "2026-03-10T10:00:00Z",
 
   "phases": {
-    "linear":    "done",
-    "plan":      "done",
-    "worktree":  "done",
-    "impl":      "active",
-    "pr":        "pending",
-    "cleanup":   "pending"
+    "linear": "done",
+    "plan": "done",
+    "worktree": "done",
+    "impl": "active",
+    "pr": "pending",
+    "cleanup": "pending"
   },
 
   "commits": [
@@ -83,15 +83,15 @@ Hook: PostToolUse(AskUserQuestion) → render-state.py → auto-show
 
   "pr": {
     "steps": {
-      "assess":          "pending",
-      "prep":            "pending",
-      "create":          "pending",
-      "review":          "pending",
+      "assess": "pending",
+      "prep": "pending",
+      "create": "pending",
+      "review": "pending",
       "security_review": "pending",
-      "ci":              "pending",
-      "pre_merge":       "pending",
-      "merge":           "pending",
-      "cleanup":         "pending"
+      "ci": "pending",
+      "pre_merge": "pending",
+      "merge": "pending",
+      "cleanup": "pending"
     }
   }
 }
@@ -109,10 +109,10 @@ Hook: PostToolUse(AskUserQuestion) → render-state.py → auto-show
 
   "phases": {
     "brainstorm": "done",
-    "plan":       "done",
-    "sdd":        "active",
-    "finish":     "pending",
-    "cleanup":    "pending"
+    "plan": "done",
+    "sdd": "active",
+    "finish": "pending",
+    "cleanup": "pending"
   },
 
   "tasks": [
@@ -120,8 +120,8 @@ Hook: PostToolUse(AskUserQuestion) → render-state.py → auto-show
       "name": "Hook installation script",
       "status": "done",
       "steps": {
-        "implement":      "done",
-        "spec_review":    "done",
+        "implement": "done",
+        "spec_review": "done",
         "quality_review": "done"
       },
       "retries": {}
@@ -130,8 +130,8 @@ Hook: PostToolUse(AskUserQuestion) → render-state.py → auto-show
       "name": "CLI integration",
       "status": "active",
       "steps": {
-        "implement":      "done",
-        "spec_review":    "active",
+        "implement": "done",
+        "spec_review": "active",
         "quality_review": "pending"
       },
       "retries": { "spec_review": 2 },
@@ -144,8 +144,8 @@ Hook: PostToolUse(AskUserQuestion) → render-state.py → auto-show
       "name": "Documentation",
       "status": "pending",
       "steps": {
-        "implement":      "pending",
-        "spec_review":    "pending",
+        "implement": "pending",
+        "spec_review": "pending",
         "quality_review": "pending"
       }
     }
@@ -155,10 +155,10 @@ Hook: PostToolUse(AskUserQuestion) → render-state.py → auto-show
 
   "finish": {
     "steps": {
-      "verify_tests":    "pending",
+      "verify_tests": "pending",
       "present_options": "pending",
-      "execute":         "pending",
-      "cleanup":         "pending"
+      "execute": "pending",
+      "cleanup": "pending"
     }
   }
 }
@@ -196,15 +196,15 @@ If all remaining steps are `done`/`skipped`, no promotion happens.
 
 ### Phase mapping (`/task` → state phases)
 
-| /task Phase                  | State phase | Notes                                                 |
-| ---------------------------- | ----------- | ----------------------------------------------------- |
-| Phase 0: Task Identification | `linear`    | Includes input parsing, Linear lookup, status update  |
-| Phase 1: Planning            | `plan`      | Includes /review-plan                                 |
-| Phase 2: Worktree Setup      | `worktree`  |                                                       |
-| Phase 3: Dev Server          | `impl`      | Folded into impl — dev server is impl infrastructure  |
-| Phase 4: Implementation Loop | `impl`      | Main work phase, commits tracked separately           |
-| Phase 5: PR + Merge          | `pr`        | PR sub-steps tracked in `pr.steps`                    |
-| Phase 6: Cleanup             | `cleanup`   |                                                       |
+| /task Phase                  | State phase | Notes                                                |
+| ---------------------------- | ----------- | ---------------------------------------------------- |
+| Phase 0: Task Identification | `linear`    | Includes input parsing, Linear lookup, status update |
+| Phase 1: Planning            | `plan`      | Includes /review-plan                                |
+| Phase 2: Worktree Setup      | `worktree`  |                                                      |
+| Phase 3: Dev Server          | `impl`      | Folded into impl — dev server is impl infrastructure |
+| Phase 4: Implementation Loop | `impl`      | Main work phase, commits tracked separately          |
+| Phase 5: PR + Merge          | `pr`        | PR sub-steps tracked in `pr.steps`                   |
+| Phase 6: Cleanup             | `cleanup`   |                                                      |
 
 ### Progress calculation
 
@@ -277,17 +277,17 @@ Implementation: bash + `jq` for JSON manipulation.
 
 ### Symbols
 
-| Symbol     | Meaning                                     |
-| ---------- | ------------------------------------------- |
-| `◆`        | done                                        |
-| `◇`        | active (current step)                       |
-| `○`        | pending                                     |
-| `─`        | skipped                                     |
-| `━`        | completed portion of progress bar           |
-| `╸`        | progress bar head (boundary)                |
-| `·`        | remaining portion                           |
-| **bold**   | current phase in pipeline (ANSI `\033[1m`)  |
-| `├─` `└─`  | parallel agents                             |
+| Symbol    | Meaning                                    |
+| --------- | ------------------------------------------ |
+| `◆`       | done                                       |
+| `◇`       | active (current step)                      |
+| `○`       | pending                                    |
+| `─`       | skipped                                    |
+| `━`       | completed portion of progress bar          |
+| `╸`       | progress bar head (boundary)               |
+| `·`       | remaining portion                          |
+| **bold**  | current phase in pipeline (ANSI `\033[1m`) |
+| `├─` `└─` | parallel agents                            |
 
 ### `/task` renders
 
@@ -384,10 +384,12 @@ Add to `.claude/settings.local.json` PostToolUse array:
 ```json
 {
   "matcher": "AskUserQuestion",
-  "hooks": [{
-    "type": "command",
-    "command": "test -f .claude/state.json && python3 .claude/scripts/render-state.py 2>/dev/null || true"
-  }]
+  "hooks": [
+    {
+      "type": "command",
+      "command": "test -f .claude/state.json && python3 .claude/scripts/render-state.py 2>/dev/null || true"
+    }
+  ]
 }
 ```
 
@@ -411,46 +413,46 @@ The state bar appears as the first section of the dashboard, above the git/PR se
 
 Add `state.sh` calls at each phase transition and commit step:
 
-| Point in /task        | state.sh call                                     |
-| --------------------- | ------------------------------------------------- |
-| Phase 0 start         | `init task HYP-XXX` or `init task "description"`  |
-| Phase 0 Linear found  | `phase linear done`                               |
-| Phase 1 Plan start    | `phase plan active`                               |
-| Phase 1 Plan done     | `phase plan done`                                 |
-| Phase 2 Worktree done | `phase worktree done && phase impl active`        |
-| Each /commit step     | delegated to /commit integration                  |
-| Phase 5 PR start      | `phase pr active`                                 |
-| Phase 6 Cleanup done  | `phase cleanup done`                              |
+| Point in /task        | state.sh call                                    |
+| --------------------- | ------------------------------------------------ |
+| Phase 0 start         | `init task HYP-XXX` or `init task "description"` |
+| Phase 0 Linear found  | `phase linear done`                              |
+| Phase 1 Plan start    | `phase plan active`                              |
+| Phase 1 Plan done     | `phase plan done`                                |
+| Phase 2 Worktree done | `phase worktree done && phase impl active`       |
+| Each /commit step     | delegated to /commit integration                 |
+| Phase 5 PR start      | `phase pr active`                                |
+| Phase 6 Cleanup done  | `phase cleanup done`                             |
 
 ### `/commit` command
 
 Add state.sh calls at each sub-step:
 
-| Point in /commit | state.sh call                                       |
-| ---------------- | --------------------------------------------------- |
-| Start commit     | `commit-add "message"`                              |
-| TDD done         | `commit-step tdd done`                              |
-| Codex done       | `commit-step codex done`                            |
-| Hygiene done     | `commit-step hygiene done`                          |
-| Stage done       | `commit-step stage done`                            |
-| Commit done      | `commit-step commit done && commit-done <hash>`     |
-| TDD skipped      | `commit-step tdd skipped`                           |
-| Codex skipped    | `commit-step codex skipped`                         |
+| Point in /commit | state.sh call                                   |
+| ---------------- | ----------------------------------------------- |
+| Start commit     | `commit-add "message"`                          |
+| TDD done         | `commit-step tdd done`                          |
+| Codex done       | `commit-step codex done`                        |
+| Hygiene done     | `commit-step hygiene done`                      |
+| Stage done       | `commit-step stage done`                        |
+| Commit done      | `commit-step commit done && commit-done <hash>` |
+| TDD skipped      | `commit-step tdd skipped`                       |
+| Codex skipped    | `commit-step codex skipped`                     |
 
 ### `/pr` command
 
-| Point in /pr               | state.sh call                      |
-| -------------------------- | ---------------------------------- |
-| Phase 0 done               | `pr-step assess done`              |
-| Phase 1 done               | `pr-step prep done`                |
-| Phase 2 done               | `pr-step create done`              |
-| /review done               | `pr-step review done`              |
-| /security-review done      | `pr-step security_review done`     |
-| /security-review skipped   | `pr-step security_review skipped`  |
-| CI passed                  | `pr-step ci done`                  |
-| Phase 5 pre-merge review   | `pr-step pre_merge done`           |
-| Merge done                 | `pr-step merge done`               |
-| Cleanup done               | `pr-step cleanup done`             |
+| Point in /pr             | state.sh call                     |
+| ------------------------ | --------------------------------- |
+| Phase 0 done             | `pr-step assess done`             |
+| Phase 1 done             | `pr-step prep done`               |
+| Phase 2 done             | `pr-step create done`             |
+| /review done             | `pr-step review done`             |
+| /security-review done    | `pr-step security_review done`    |
+| /security-review skipped | `pr-step security_review skipped` |
+| CI passed                | `pr-step ci done`                 |
+| Phase 5 pre-merge review | `pr-step pre_merge done`          |
+| Merge done               | `pr-step merge done`              |
+| Cleanup done             | `pr-step cleanup done`            |
 
 ### Superpowers skills
 

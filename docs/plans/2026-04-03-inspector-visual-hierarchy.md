@@ -20,6 +20,7 @@ separate visual treatment, separate ticket if needed.
 ### Task 1: Extension CSS — fix `--background` and add toggle tokens
 
 **Files:**
+
 - Modify: `vscode-extension/hypercanvas-preview/src/webview/styles.css:34` (fix `--background`)
 - Modify: `vscode-extension/hypercanvas-preview/src/webview/styles.css` (append toggle blocks after line 53)
 
@@ -93,6 +94,7 @@ Expected: PASS (Biome checks CSS via `biome.jsonc` include paths)
 ### Task 2: SaaS CSS — add toggle tokens and utility classes
 
 **Files:**
+
 - Modify: `client/global.css:63` (add tokens in `:root`)
 - Modify: `client/global.css:102` (add tokens in `.dark`)
 - Modify: `client/global.css:142` (add tokens in `@media` block)
@@ -103,10 +105,10 @@ Expected: PASS (Biome checks CSS via `biome.jsonc` include paths)
 In `client/global.css`, inside the `:root` block (after line 63 — `--sidebar-ring`), add:
 
 ```css
-    /* SYNC: vscode-extension/hypercanvas-preview/src/webview/styles.css — toggle hierarchy tokens */
-    --toggle-container: 210 40% 96.1%;
-    --toggle-active: 0 0% 100%;
-    --toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+/* SYNC: vscode-extension/hypercanvas-preview/src/webview/styles.css — toggle hierarchy tokens */
+--toggle-container: 210 40% 96.1%;
+--toggle-active: 0 0% 100%;
+--toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 ```
 
 - [ ] **Step 2: Add toggle tokens to `.dark`**
@@ -114,9 +116,9 @@ In `client/global.css`, inside the `:root` block (after line 63 — `--sidebar-r
 In the `.dark` block (after line 102 — `--sidebar-ring`), add:
 
 ```css
-    --toggle-container: 217.2 32.6% 17.5%;
-    --toggle-active: 217.2 32.6% 23%;
-    --toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+--toggle-container: 217.2 32.6% 17.5%;
+--toggle-active: 217.2 32.6% 23%;
+--toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 ```
 
 - [ ] **Step 3: Add toggle tokens to `@media (prefers-color-scheme: dark)` block**
@@ -124,9 +126,9 @@ In the `.dark` block (after line 102 — `--sidebar-ring`), add:
 In the `@media` block (after line 142 — `--sidebar-ring`), add:
 
 ```css
-      --toggle-container: 217.2 32.6% 17.5%;
-      --toggle-active: 217.2 32.6% 23%;
-      --toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+--toggle-container: 217.2 32.6% 17.5%;
+--toggle-active: 217.2 32.6% 23%;
+--toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 ```
 
 - [ ] **Step 4: Add toggle utility classes inside `@layer utilities`**
@@ -134,18 +136,18 @@ In the `@media` block (after line 142 — `--sidebar-ring`), add:
 In `client/global.css`, before the closing `}` of `@layer utilities` (before line 288's `}`), add:
 
 ```css
-  /* Toggle hierarchy — visual depth for toggle button groups */
-  .toggle-container {
-    background: hsl(var(--toggle-container));
-    border-radius: 6px;
-    padding: 2px;
-  }
+/* Toggle hierarchy — visual depth for toggle button groups */
+.toggle-container {
+  background: hsl(var(--toggle-container));
+  border-radius: 6px;
+  padding: 2px;
+}
 
-  .toggle-active {
-    background: hsl(var(--toggle-active));
-    box-shadow: var(--toggle-active-shadow);
-    border-radius: 4px;
-  }
+.toggle-active {
+  background: hsl(var(--toggle-active));
+  box-shadow: var(--toggle-active-shadow);
+  border-radius: 4px;
+}
 ```
 
 - [ ] **Step 5: Verify lint passes**
@@ -158,6 +160,7 @@ Expected: PASS
 ### Task 3: Write smoke test for PositionSection (will fail — old classes)
 
 **Files:**
+
 - Create: `client/components/RightSidebar/sections/__tests__/PositionSection.test.tsx`
 
 - [ ] **Step 1: Write the test file**
@@ -185,18 +188,14 @@ describe('PositionSection toggle classes', () => {
   });
 
   it('applies toggle-active to selected position button', () => {
-    const { container } = render(
-      <PositionSection {...defaultProps} selectedPosition="abs" />,
-    );
+    const { container } = render(<PositionSection {...defaultProps} selectedPosition="abs" />);
     const buttons = container.querySelectorAll('button');
     const absButton = Array.from(buttons).find((b) => b.textContent === 'abs');
     expect(absButton?.classList.contains('toggle-active')).toBe(true);
   });
 
   it('does not apply bg-muted or bg-background to inactive buttons', () => {
-    const { container } = render(
-      <PositionSection {...defaultProps} selectedPosition="static" />,
-    );
+    const { container } = render(<PositionSection {...defaultProps} selectedPosition="static" />);
     const buttons = container.querySelectorAll('button');
     for (const button of buttons) {
       if (button.textContent !== 'static') {
@@ -207,9 +206,7 @@ describe('PositionSection toggle classes', () => {
   });
 
   it('does not apply old border classes to active button', () => {
-    const { container } = render(
-      <PositionSection {...defaultProps} selectedPosition="fixed" />,
-    );
+    const { container } = render(<PositionSection {...defaultProps} selectedPosition="fixed" />);
     const buttons = container.querySelectorAll('button');
     const fixedButton = Array.from(buttons).find((b) => b.textContent === 'fixed');
     expect(fixedButton?.classList.contains('border-border')).toBe(false);
@@ -232,6 +229,7 @@ If it fails for a different reason (import resolution, missing mock, DOM not ava
 ### Task 4: Swap toggle classes in PositionSection (test passes)
 
 **Files:**
+
 - Modify: `client/components/RightSidebar/sections/PositionSection.tsx:52-104`
 
 - [ ] **Step 1: Add `toggle-container` to the button group container**
@@ -264,13 +262,13 @@ className={`flex-[1.4] h-6 px-2 text-xs rounded-l flex items-center justify-cent
 
 Apply the same transformation to all 5 buttons:
 
-| Button | Line | Active before | Active after | Inactive before | Inactive after |
-|--------|------|---------------|--------------|-----------------|----------------|
-| static | 57-59 | `bg-background border border-border font-medium` | `toggle-active font-medium` | `bg-muted` | `''` |
-| rel | 67-69 | `bg-background border border-border font-medium` | `toggle-active font-medium` | `bg-muted` | `''` |
-| abs | 77-79 | `bg-background border border-border font-medium` | `toggle-active font-medium` | `bg-muted` | `''` |
-| fixed | 87-90 | `bg-background border border-border font-medium` | `toggle-active font-medium` | `bg-muted` | `''` |
-| sticky | 98-100 | `bg-background border border-border font-medium` | `toggle-active font-medium` | `bg-muted` | `''` |
+| Button | Line   | Active before                                    | Active after                | Inactive before | Inactive after |
+| ------ | ------ | ------------------------------------------------ | --------------------------- | --------------- | -------------- |
+| static | 57-59  | `bg-background border border-border font-medium` | `toggle-active font-medium` | `bg-muted`      | `''`           |
+| rel    | 67-69  | `bg-background border border-border font-medium` | `toggle-active font-medium` | `bg-muted`      | `''`           |
+| abs    | 77-79  | `bg-background border border-border font-medium` | `toggle-active font-medium` | `bg-muted`      | `''`           |
+| fixed  | 87-90  | `bg-background border border-border font-medium` | `toggle-active font-medium` | `bg-muted`      | `''`           |
+| sticky | 98-100 | `bg-background border border-border font-medium` | `toggle-active font-medium` | `bg-muted`      | `''`           |
 
 - [ ] **Step 3: Run the smoke test — verify it passes**
 
@@ -287,6 +285,7 @@ Expected: PASS — no regressions.
 ### Task 5: Write smoke test for LayoutSection (will fail — old classes)
 
 **Files:**
+
 - Create: `client/components/RightSidebar/sections/__tests__/LayoutSection.test.tsx`
 
 - [ ] **Step 1: Write the test file**
@@ -348,33 +347,21 @@ describe('LayoutSection toggle classes', () => {
   });
 
   it('applies toggle-active to selected layout button', () => {
-    const { container } = render(
-      <LayoutSection {...defaultProps} selectedLayout="col" />,
-    );
-    const colButton = container.querySelector(
-      `[data-testid="hyper-inspector-layout-flex-direction"]`,
-    );
+    const { container } = render(<LayoutSection {...defaultProps} selectedLayout="col" />);
+    const colButton = container.querySelector(`[data-testid="hyper-inspector-layout-flex-direction"]`);
     expect(colButton?.classList.contains('toggle-active')).toBe(true);
   });
 
   it('does not apply bg-muted or bg-background to inactive buttons', () => {
-    const { container } = render(
-      <LayoutSection {...defaultProps} selectedLayout="layout" />,
-    );
-    const colButton = container.querySelector(
-      `[data-testid="hyper-inspector-layout-flex-direction"]`,
-    );
+    const { container } = render(<LayoutSection {...defaultProps} selectedLayout="layout" />);
+    const colButton = container.querySelector(`[data-testid="hyper-inspector-layout-flex-direction"]`);
     expect(colButton?.classList.contains('bg-muted')).toBe(false);
     expect(colButton?.classList.contains('bg-background')).toBe(false);
   });
 
   it('does not apply old border classes to active button', () => {
-    const { container } = render(
-      <LayoutSection {...defaultProps} selectedLayout="row" />,
-    );
-    const rowButton = container.querySelector(
-      `[data-testid="hyper-inspector-view-row"]`,
-    );
+    const { container } = render(<LayoutSection {...defaultProps} selectedLayout="row" />);
+    const rowButton = container.querySelector(`[data-testid="hyper-inspector-view-row"]`);
     expect(rowButton?.classList.contains('border-border')).toBe(false);
     expect(rowButton?.classList.contains('bg-background')).toBe(false);
   });
@@ -392,6 +379,7 @@ Expected: FAIL — `toggle-container` not found, active button has `border-borde
 ### Task 6: Swap toggle classes in LayoutSection (test passes)
 
 **Files:**
+
 - Modify: `client/components/RightSidebar/sections/LayoutSection.tsx:306-353`
 
 - [ ] **Step 1: Add `toggle-container` to the layout type button group container**
@@ -426,12 +414,12 @@ className={cn(
 
 Apply to all 4 buttons:
 
-| Button | Line | Active before | Active after | Inactive before | Inactive after |
-|--------|------|---------------|--------------|-----------------|----------------|
-| layout | 311-313 | `border border-border bg-background` | `toggle-active` | `bg-muted` | (nothing) |
-| col | 322-324 | `border border-border bg-background` | `toggle-active` | `bg-muted` | (nothing) |
-| row | 333-336 | `border border-border bg-background` | `toggle-active` | `bg-muted` | (nothing) |
-| grid | 346-348 | `border border-border bg-background` | `toggle-active` | `bg-muted` | (nothing) |
+| Button | Line    | Active before                        | Active after    | Inactive before | Inactive after |
+| ------ | ------- | ------------------------------------ | --------------- | --------------- | -------------- |
+| layout | 311-313 | `border border-border bg-background` | `toggle-active` | `bg-muted`      | (nothing)      |
+| col    | 322-324 | `border border-border bg-background` | `toggle-active` | `bg-muted`      | (nothing)      |
+| row    | 333-336 | `border border-border bg-background` | `toggle-active` | `bg-muted`      | (nothing)      |
+| grid   | 346-348 | `border border-border bg-background` | `toggle-active` | `bg-muted`      | (nothing)      |
 
 Note: `font-medium` is NOT present in LayoutSection's active state (unlike PositionSection), so don't add it.
 
@@ -450,6 +438,7 @@ Expected: PASS — no regressions.
 ### Task 7: Extension CSS theme variant tests
 
 **Files:**
+
 - Create: `vscode-extension/hypercanvas-preview/src/__tests__/toggle-theme-variants.test.ts`
 
 - [ ] **Step 1: Write theme variant tests**
@@ -462,10 +451,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const cssPath = resolve(
-  import.meta.dir,
-  '../../src/webview/styles.css',
-);
+const cssPath = resolve(import.meta.dir, '../../src/webview/styles.css');
 const cssContent = readFileSync(cssPath, 'utf-8');
 
 function applyTheme(themeClass: string) {
@@ -529,6 +515,7 @@ Expected: PASS — no regressions.
 - [ ] **Step 1: Build extension CSS and verify output**
 
 Run:
+
 ```bash
 cd vscode-extension/hypercanvas-preview && npm run build:css
 grep -q 'toggle-container' out/webview.css && echo "OK: toggle-container found" || echo "FAIL: toggle-container missing"
@@ -552,6 +539,7 @@ Expected: PASS — no warnings, no errors.
 Run: `git diff`
 
 Check:
+
 - `--background` fix is the only change in the variable block (no accidental edits)
 - SYNC comments in both CSS files reference each other correctly
 - `body.vscode-high-contrast-light` is present alongside `body.vscode-high-contrast`

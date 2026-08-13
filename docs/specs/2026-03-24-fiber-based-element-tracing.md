@@ -33,16 +33,16 @@ injecting anything into user code.
 
 ### Why this works without losses
 
-| Concern | data-uniq-id | Fiber + WS position sync |
-|---------|-------------|--------------------------|
-| DOM → source mapping | Read `dataset.uniqId` from DOM | Read `_debugSource` from fiber |
-| Source → DOM mapping | `querySelector('[data-uniq-id]')` | Match source position against node map |
-| Server mutations | `findElementByUuid(ast, uuid)` | `findElementAtPosition(ast, line, col)` (already exists) |
-| Survives file edits | UUID persists in source | Server re-parses → pushes updated positions via WS |
-| Library components | ❌ Can't inject | ✅ Fiber exists on every DOM node |
-| Cross-file components | ❌ Single-file only | ✅ Fiber chain: `div(Card.tsx:15) → Card(Page.tsx:7)` |
-| Map items (.map()) | Same UUID + itemIndex | Same source position + fiber sibling index |
-| Multi-instance (board) | `data-canvas-instance-id` scoping | Fiber tree per instance root |
+| Concern                | data-uniq-id                      | Fiber + WS position sync                                 |
+| ---------------------- | --------------------------------- | -------------------------------------------------------- |
+| DOM → source mapping   | Read `dataset.uniqId` from DOM    | Read `_debugSource` from fiber                           |
+| Source → DOM mapping   | `querySelector('[data-uniq-id]')` | Match source position against node map                   |
+| Server mutations       | `findElementByUuid(ast, uuid)`    | `findElementAtPosition(ast, line, col)` (already exists) |
+| Survives file edits    | UUID persists in source           | Server re-parses → pushes updated positions via WS       |
+| Library components     | ❌ Can't inject                   | ✅ Fiber exists on every DOM node                        |
+| Cross-file components  | ❌ Single-file only               | ✅ Fiber chain: `div(Card.tsx:15) → Card(Page.tsx:7)`    |
+| Map items (.map())     | Same UUID + itemIndex             | Same source position + fiber sibling index               |
+| Multi-instance (board) | `data-canvas-instance-id` scoping | Fiber tree per instance root                             |
 
 ### Framework support
 
@@ -57,13 +57,13 @@ no fallback, clear error message. This is acceptable because HyperCanvas always 
 `_debugSource` is added by `@babel/plugin-transform-react-jsx-source` (included in `@babel/preset-react`
 in dev mode) or equivalent SWC transform. Verified/expected behavior per bundler:
 
-| Build tool | Plugin | `_debugSource` format | `columnNumber` reliable? |
-|-----------|--------|----------------------|--------------------------|
-| Vite + `@vitejs/plugin-react` (Babel) | `@babel/preset-react` | `{ fileName, lineNumber, columnNumber }` | Yes, **1-based** (verified) |
-| Vite + `@vitejs/plugin-react-swc` | SWC built-in | `{ fileName, lineNumber, columnNumber }` | Verify in Phase 2 |
-| Next.js (SWC compiler) | SWC built-in | `{ fileName, lineNumber, columnNumber }` | Verify in Phase 2 |
-| CRA (react-scripts) | `@babel/preset-react` | `{ fileName, lineNumber, columnNumber }` | Yes |
-| Custom Webpack + Babel | Must include preset-react | Same as Babel | Depends on config |
+| Build tool                            | Plugin                    | `_debugSource` format                    | `columnNumber` reliable?    |
+| ------------------------------------- | ------------------------- | ---------------------------------------- | --------------------------- |
+| Vite + `@vitejs/plugin-react` (Babel) | `@babel/preset-react`     | `{ fileName, lineNumber, columnNumber }` | Yes, **1-based** (verified) |
+| Vite + `@vitejs/plugin-react-swc`     | SWC built-in              | `{ fileName, lineNumber, columnNumber }` | Verify in Phase 2           |
+| Next.js (SWC compiler)                | SWC built-in              | `{ fileName, lineNumber, columnNumber }` | Verify in Phase 2           |
+| CRA (react-scripts)                   | `@babel/preset-react`     | `{ fileName, lineNumber, columnNumber }` | Yes                         |
+| Custom Webpack + Babel                | Must include preset-react | Same as Babel                            | Depends on config           |
 
 **Phase 1 deliverable:** `ReactAdapter.detect()` must validate both presence AND format of
 `_debugSource`. If `columnNumber` is missing or 0, fall back to line-only matching
@@ -165,9 +165,9 @@ The universal element identifier — where the JSX element is written in source:
 
 ```typescript
 interface SourceLocation {
-  fileName: string;     // absolute or project-relative path
-  line: number;         // 1-based
-  column: number;       // 0-based
+  fileName: string; // absolute or project-relative path
+  line: number; // 1-based
+  column: number; // 0-based
 }
 ```
 
@@ -184,6 +184,7 @@ When a file is re-parsed, `NodeMapService` must map old nodeRefs to new ones. Tw
 depending on who caused the re-parse:
 
 **Server-initiated mutation** (we know exactly what changed):
+
 - Server holds the Babel `NodePath` of the mutated node during the mutation
 - After `writeAST()` + re-parse, server re-traverses and finds the same node
   by tracking it through the mutation (it was just modified, we know its new position)
@@ -192,6 +193,7 @@ depending on who caused the re-parse:
   sibling insertions (unlike raw child index which breaks)
 
 **External edit** (fs watcher, unknown changes):
+
 - Build composite keys for all nodes in both old and new AST
 - Key: `(tag, depth, parentTag, indexAmongSameTagSiblings)` — more resilient than raw path
 - Match old keys to new keys
@@ -202,13 +204,13 @@ depending on who caused the re-parse:
 ```typescript
 interface NodeMapEntry {
   nodeRef: string;
-  tag: string;               // "div", "Card", "Fragment"
+  tag: string; // "div", "Card", "Fragment"
   loc: SourceLocation;
   endLoc: SourceLocation;
   parentRef: string | null;
-  children: string[];         // child nodeRefs
-  isComponent: boolean;       // true for user components, false for host elements
-  componentName?: string;     // "Card", "Button" — for component elements
+  children: string[]; // child nodeRefs
+  isComponent: boolean; // true for user components, false for host elements
+  componentName?: string; // "Card", "Button" — for component elements
 }
 
 type NodeMap = Map<string, NodeMapEntry>;
@@ -218,7 +220,7 @@ type NodeMap = Map<string, NodeMapEntry>;
 
 ```typescript
 interface FrameworkAdapter {
-  readonly name: string;  // "react", "vue", "svelte"
+  readonly name: string; // "react", "vue", "svelte"
 
   /** Check if this adapter can handle the current page */
   detect(doc: Document): boolean;
@@ -241,18 +243,18 @@ interface FrameworkAdapter {
 
 interface ComponentInfo {
   name: string;
-  source: SourceLocation | null;  // where this component is USED (not defined)
+  source: SourceLocation | null; // where this component is USED (not defined)
   definitionSource?: SourceLocation; // where component function is DEFINED
   /** Serializable prop summary — values truncated for transport */
   props: Record<string, string>;
-  isLibrary: boolean;  // true if defined in node_modules
+  isLibrary: boolean; // true if defined in node_modules
 }
 
 interface ComponentTreeNode {
   name: string;
   source: SourceLocation | null;
   children: ComponentTreeNode[];
-  domElement: HTMLElement | null;  // null for non-host components
+  domElement: HTMLElement | null; // null for non-host components
   fiberTag?: number;
 }
 ```
@@ -268,7 +270,7 @@ for forwardRef → `fiber.type.render`.
 
 ```typescript
 class ReactAdapter implements FrameworkAdapter {
-  readonly name = "react";
+  readonly name = 'react';
 
   detect(doc: Document): boolean {
     const root = this.findReactRoot(doc);
@@ -277,7 +279,7 @@ class ReactAdapter implements FrameworkAdapter {
     const fiber = this.getFiberFromDOM(root);
     const source = this.findNearestDebugSource(fiber);
     if (!source) return false;
-    return typeof source.fileName === "string" && typeof source.lineNumber === "number";
+    return typeof source.fileName === 'string' && typeof source.lineNumber === 'number';
   }
 
   getSourceLocation(element: HTMLElement): SourceLocation | null {
@@ -295,9 +297,7 @@ class ReactAdapter implements FrameworkAdapter {
   getComponentChain(element: HTMLElement): ComponentInfo[] {
     const fiber = this.getFiberFromDOM(element);
     if (!fiber) return [];
-    return traceToRoot(fiber)
-      .filter(isUserComponent)
-      .map(fiberToComponentInfo);
+    return traceToRoot(fiber).filter(isUserComponent).map(fiberToComponentInfo);
   }
 
   getItemIndex(element: HTMLElement): number {
@@ -325,9 +325,12 @@ class ReactAdapter implements FrameworkAdapter {
     const matches: HTMLElement[] = [];
     this.walkFibers(rootFiber, (fiber) => {
       const ds = fiber._debugSource;
-      if (ds && ds.fileName === source.fileName &&
-          ds.lineNumber === source.line &&
-          (source.column === 0 || (ds.columnNumber ?? 0) === source.column)) {
+      if (
+        ds &&
+        ds.fileName === source.fileName &&
+        ds.lineNumber === source.line &&
+        (source.column === 0 || (ds.columnNumber ?? 0) === source.column)
+      ) {
         // Find nearest host fiber (actual DOM element)
         const host = this.findHostFiber(fiber);
         if (host?.stateNode instanceof HTMLElement) {
@@ -352,9 +355,7 @@ class ReactAdapter implements FrameworkAdapter {
   }
 
   private getFiberFromDOM(el: HTMLElement): Fiber | null {
-    const key = Object.keys(el).find(
-      k => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$")
-    );
+    const key = Object.keys(el).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
     return key ? (el as any)[key] : null;
   }
 }
@@ -386,10 +387,10 @@ type TracingServerMessage = NodeMapUpdate | NodeMapInvalidate | ResolveElementRe
 
 ### Implementations
 
-| Platform | Class | Transport | Why |
-|----------|-------|-----------|-----|
-| SaaS | `WSTracingTransport` | Dedicated WS channel `element-tracing` | Direct browser↔server, lowest latency |
-| VS Code | `PostMessageTracingTransport` | iframe → postMessage → webview → extension host | Multi-panel broadcast via StateHub for free; WS adds second transport with zero benefit (see below) |
+| Platform | Class                         | Transport                                       | Why                                                                                                 |
+| -------- | ----------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| SaaS     | `WSTracingTransport`          | Dedicated WS channel `element-tracing`          | Direct browser↔server, lowest latency                                                               |
+| VS Code  | `PostMessageTracingTransport` | iframe → postMessage → webview → extension host | Multi-panel broadcast via StateHub for free; WS adds second transport with zero benefit (see below) |
 
 **Why not WS in the extension:**
 
@@ -414,10 +415,10 @@ All messages use the types below regardless of transport.
 ```typescript
 /** Pushed after every file parse (initial load, mutation, external edit) */
 interface NodeMapUpdate {
-  type: "node-map-update";
+  type: 'node-map-update';
   filePath: string;
-  fileHash: string;       // detect stale maps
-  version: number;        // monotonic counter per file, for ordering
+  fileHash: string; // detect stale maps
+  version: number; // monotonic counter per file, for ordering
   nodes: NodeMapEntry[];
   /** Old nodeRef → new nodeRef mapping for selection persistence */
   refMapping?: Record<string, string>;
@@ -427,7 +428,7 @@ interface NodeMapUpdate {
 
 /** Pushed when a file is deleted or renamed */
 interface NodeMapInvalidate {
-  type: "node-map-invalidate";
+  type: 'node-map-invalidate';
   filePath: string;
 }
 ```
@@ -437,7 +438,7 @@ interface NodeMapInvalidate {
 ```typescript
 /** Client resolves a DOM click to a source location, asks server for nodeRef */
 interface ResolveElement {
-  type: "resolve-element";
+  type: 'resolve-element';
   requestId: string;
   source: SourceLocation;
   itemIndex: number;
@@ -445,7 +446,7 @@ interface ResolveElement {
 
 /** Server responds with the matched nodeRef */
 interface ResolveElementResponse {
-  type: "resolve-element-response";
+  type: 'resolve-element-response';
   requestId: string;
   nodeRef: string | null;
   entry: NodeMapEntry | null;
@@ -567,13 +568,13 @@ Timeout: if either event doesn't arrive within 3s, force-sync with whatever is a
 **Phase 1 additions (from CF review):**
 
 - [ ] **CF-1: 3-tier stability cascade** — replace single composite key in `stability.ts`
-  with tiered matching (structural key → ancestry path → position proximity) + content
-  fingerprint. Must land before Phase 2 makes stability user-facing. See CF-1 for design.
+      with tiered matching (structural key → ancestry path → position proximity) + content
+      fingerprint. Must land before Phase 2 makes stability user-facing. See CF-1 for design.
 - [ ] **CF-3: `FiberSourceIndex`** — reverse index `Map<sourceKey, HTMLElement[]>` rebuilt
-  on `onCommitFiberRoot`. Replaces O(N) `walkFibers` in `findDOMElement()` with O(1) lookup.
-  See CF-3 for design.
+      on `onCommitFiberRoot`. Replaces O(N) `walkFibers` in `findDOMElement()` with O(1) lookup.
+      See CF-3 for design.
 - [ ] **CF-5: `getItemIndex` WeakMap cache** — `WeakMap<Fiber, Map<sourceKey, Map<Fiber, number>>>`.
-  O(1) amortized lookup, auto-invalidation via GC. See CF-5.
+      O(1) amortized lookup, auto-invalidation via GC. See CF-5.
 
 ### Phase 2: Switch to fiber + remove data-uniq-id
 
@@ -598,31 +599,31 @@ Extend responses with `MutationResponse` (nodeRef + newLoc).
 
 **Complete mutation route inventory:**
 
-| Route file | Input field | Notes |
-|-----------|------------|-------|
-| `updateComponentStyles.ts` | `selectedId` | Most frequent operation |
-| `updateComponentProps.ts` | `selectedId` | |
-| `updateComponentPropsBatch.ts` | `selectedId` | |
-| `deleteElement.ts` | `elementId` | Clears selection after |
-| `deleteElements.ts` | `elementId` (array) | Batch delete |
-| `duplicateElement.ts` | `elementId` | Returns new element ref |
-| `renameComponent.ts` | `selectedId` | |
-| `wrapElement.ts` | `elementId` | Manual UUID matching |
-| `editMap.ts` | `selectedId` | Manual data-uniq-id matching |
-| `editCondition.ts` | `selectedId` | |
-| `insertElement.ts` | parent UUID | Parent/sibling targeting |
-| `pasteElement.ts` | parent UUID | Parent/sibling targeting |
-| `copyElementTsx.ts` | `elementId` | Read-only (copy to clipboard) |
-| `updateElementText.ts` | `selectedId` | |
+| Route file                     | Input field         | Notes                         |
+| ------------------------------ | ------------------- | ----------------------------- |
+| `updateComponentStyles.ts`     | `selectedId`        | Most frequent operation       |
+| `updateComponentProps.ts`      | `selectedId`        |                               |
+| `updateComponentPropsBatch.ts` | `selectedId`        |                               |
+| `deleteElement.ts`             | `elementId`         | Clears selection after        |
+| `deleteElements.ts`            | `elementId` (array) | Batch delete                  |
+| `duplicateElement.ts`          | `elementId`         | Returns new element ref       |
+| `renameComponent.ts`           | `selectedId`        |                               |
+| `wrapElement.ts`               | `elementId`         | Manual UUID matching          |
+| `editMap.ts`                   | `selectedId`        | Manual data-uniq-id matching  |
+| `editCondition.ts`             | `selectedId`        |                               |
+| `insertElement.ts`             | parent UUID         | Parent/sibling targeting      |
+| `pasteElement.ts`              | parent UUID         | Parent/sibling targeting      |
+| `copyElementTsx.ts`            | `elementId`         | Read-only (copy to clipboard) |
+| `updateElementText.ts`         | `selectedId`        |                               |
 
 **Read-only routes that also use UUID-based identification:**
 
-| Route file | Input field | Notes |
-|-----------|------------|-------|
-| `getElementLocation.ts` | `uniqId` query param | Returns source position by UUID |
-| `findElementAtPosition.ts` | returns `uniqId` | Searches by `data-uniq-id` |
-| `comments.ts` | `elementId` | Switches to `data-comment-id` anchoring (see Phase 2e) |
-| `ide.ts` | `uniqId` (internal) | IDE integration (open-in-editor, sync cursor) |
+| Route file                 | Input field          | Notes                                                  |
+| -------------------------- | -------------------- | ------------------------------------------------------ |
+| `getElementLocation.ts`    | `uniqId` query param | Returns source position by UUID                        |
+| `findElementAtPosition.ts` | returns `uniqId`     | Searches by `data-uniq-id`                             |
+| `comments.ts`              | `elementId`          | Switches to `data-comment-id` anchoring (see Phase 2e) |
+| `ide.ts`                   | `uniqId` (internal)  | IDE integration (open-in-editor, sync cursor)          |
 
 Extension `AstService` re-implements several of these locally — must be updated in parallel.
 
@@ -639,7 +640,7 @@ Extension `AstService` re-implements several of these locally — must be update
 - [ ] Migration script: strip `data-uniq-id` attributes from existing project files
 - [ ] Update all tests (lib/ast, server/routes, client interaction)
 - [ ] Final grep sweep: `grep -r 'data-uniq-id\|uniqId\|dataset.uniqId' client/ shared/ server/ lib/`
-  to catch any remaining references (~25 client files expected)
+      to catch any remaining references (~25 client files expected)
 
 **2d. React 19 `_debugStack` support**
 
@@ -650,15 +651,16 @@ React 19 removed `_debugSource` entirely. `ReactAdapter` must support both React
 - [ ] Implement `parseDebugStack()` — parse V8 Error stack string, extract URL + line + col
 - [ ] Add `urlToSourcePath()` — strip dev server origin from stack URLs
 - [ ] Update `ReactAdapter.detect()` to recognize React 19 fibers (no `_debugSource`,
-  has `_debugStack`)
+      has `_debugStack`)
 - [ ] Dual-path in `getSourceLocation()`: `_debugSource` (React 18) → `_debugStack` (React 19)
 - [ ] Update `getItemIndex()` and `findDOMElement()` for React 19 fibers
 - [ ] Update `findNearestDebugSource()` → `findNearestDebugInfo()` (try `_debugSource`
-  then `_debugStack`)
+      then `_debugStack`)
 - [ ] Test with React 19 project from `ext-test-projects/` (e.g., `nextjs-tw-sample`)
 - [ ] Verify `_debugStack` rate limit (`ownerStackLimit`) — if hit, document limitation
 
 **Known limitations (React 19):**
+
 - Stack URLs in Next.js/webpack are chunk URLs — need source map resolution (deferred,
   Vite projects work immediately)
 - Column accuracy: `jsxDEV()` call column may differ from original JSX column
@@ -670,13 +672,13 @@ Replace UUID-based comment anchoring with `data-comment-id` attribute on comment
 See CF-2 for full design.
 
 - [ ] Add `data-comment-id` to AST mutator as protected attribute (never removed during
-  mutations except explicit comment deletion)
+      mutations except explicit comment deletion)
 - [ ] On comment create: AST mutation adds `data-comment-id={commentId}` to target element
 - [ ] On comment delete: AST mutation removes `data-comment-id` attribute
 - [ ] Migrate `comments.ts` routes from `elementId` (UUID) to `commentId` (data-comment-id)
 - [ ] DB migration: `comments.comment_id` as UUID, drop old `element_id` column if present
 - [ ] Orphan detection: on file parse, find `data-comment-id` values not in DB → clean up;
-  find DB comments whose `comment_id` not in any parsed file → mark orphaned
+      find DB comments whose `comment_id` not in any parsed file → mark orphaned
 - [ ] Extension: show inline decorations (gutter icons) on lines with `data-comment-id`
 - [ ] Extension: CodeLens or hover to show comment text, click opens comments panel
 
@@ -710,6 +712,7 @@ These are NOT in scope for initial implementation but become possible:
 **Target:** DOM click → nodeRef resolution < 5ms.
 
 Current `data-uniq-id` is O(1) via `dataset.uniqId`. New system:
+
 - Fiber walk to `_debugSource`: O(depth), typically 5-15 nodes → < 1ms
 - NodeMap lookup by `fileName:line:col`: `Map<string, NodeMapEntry>` keyed by
   `${fileName}:${line}:${col}` → O(1) lookup
@@ -729,6 +732,7 @@ the project configuration (container mount path is already known from the Docker
 `ReactAdapter` sends raw `_debugSource.fileName`; the server normalizes it before NodeMap lookup.
 
 Normalization rules:
+
 1. If `fileName` starts with container prefix (`/app/`) → replace with host project path
 2. If `fileName` is already a host path → use as-is (local dev without Docker)
 3. If `fileName` is relative → resolve against project root
@@ -738,22 +742,22 @@ and applied transparently in `NodeMapService.resolveSourceLocation()`.
 
 ## Risks & Mitigations
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| `_debugSource` absent | No tracing | Detect in `ReactAdapter.detect()` + clear error; dev mode only |
-| `_debugSource` format differs (SWC vs Babel) | Wrong positions | Validate format in Phase 1; adapter normalizes field names |
-| `columnNumber` missing (0) | Can't distinguish elements on same line | Accept ambiguity for single-line JSX; rare in practice |
-| Container paths in `_debugSource.fileName` | NodeMap lookup miss | Path mapping layer in NodeMapService (see above) |
-| **React 19 removed `_debugSource`** | No tracing on React 19 | React 19 replaces `_debugSource` with `_debugOwner` (different structure: `{ name, env, stack, debugStack }` — no fileName/lineNumber). **ReactAdapter must support both**: `_debugSource` (React 18) and `_debugOwner.stack` frame parsing (React 19). See verification results below. |
-| Fiber internals change in future React | Adapter breaks | Adapter abstraction isolates; `__reactFiber$` stable since React 16 |
-| memo/forwardRef wrapper fibers | `_debugSource` on wrong node | `findNearestDebugSource()` unwraps by checking fiber tags |
-| WS disconnect during mutation | Stale node map | Client re-requests full map on reconnect; mutations work via REST |
-| External edit between click and mutation | nodeRef stale | Server validates nodeRef version; returns error if stale, client retries |
-| Race: HMR vs WS map timing | DOM/map mismatch | Sync state machine (see above); queue clicks, replay when synced |
-| Large files (1000+ nodes) | Map payload size | Gzip; delta updates if needed (deferred) |
-| Pre-hydration clicks (SSR) | No fiber yet | Guard: disable selection until `ReactAdapter.detect()` returns true |
-| `dangerouslySetInnerHTML` content | No fiber | Known limitation — static HTML without React reconciler is not selectable |
-| Portals | DOM/fiber tree mismatch | Overlay positioning uses DOM coords (getBoundingClientRect), not fiber tree |
+| Risk                                         | Impact                                  | Mitigation                                                                                                                                                                                                                                                                              |
+| -------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_debugSource` absent                        | No tracing                              | Detect in `ReactAdapter.detect()` + clear error; dev mode only                                                                                                                                                                                                                          |
+| `_debugSource` format differs (SWC vs Babel) | Wrong positions                         | Validate format in Phase 1; adapter normalizes field names                                                                                                                                                                                                                              |
+| `columnNumber` missing (0)                   | Can't distinguish elements on same line | Accept ambiguity for single-line JSX; rare in practice                                                                                                                                                                                                                                  |
+| Container paths in `_debugSource.fileName`   | NodeMap lookup miss                     | Path mapping layer in NodeMapService (see above)                                                                                                                                                                                                                                        |
+| **React 19 removed `_debugSource`**          | No tracing on React 19                  | React 19 replaces `_debugSource` with `_debugOwner` (different structure: `{ name, env, stack, debugStack }` — no fileName/lineNumber). **ReactAdapter must support both**: `_debugSource` (React 18) and `_debugOwner.stack` frame parsing (React 19). See verification results below. |
+| Fiber internals change in future React       | Adapter breaks                          | Adapter abstraction isolates; `__reactFiber$` stable since React 16                                                                                                                                                                                                                     |
+| memo/forwardRef wrapper fibers               | `_debugSource` on wrong node            | `findNearestDebugSource()` unwraps by checking fiber tags                                                                                                                                                                                                                               |
+| WS disconnect during mutation                | Stale node map                          | Client re-requests full map on reconnect; mutations work via REST                                                                                                                                                                                                                       |
+| External edit between click and mutation     | nodeRef stale                           | Server validates nodeRef version; returns error if stale, client retries                                                                                                                                                                                                                |
+| Race: HMR vs WS map timing                   | DOM/map mismatch                        | Sync state machine (see above); queue clicks, replay when synced                                                                                                                                                                                                                        |
+| Large files (1000+ nodes)                    | Map payload size                        | Gzip; delta updates if needed (deferred)                                                                                                                                                                                                                                                |
+| Pre-hydration clicks (SSR)                   | No fiber yet                            | Guard: disable selection until `ReactAdapter.detect()` returns true                                                                                                                                                                                                                     |
+| `dangerouslySetInnerHTML` content            | No fiber                                | Known limitation — static HTML without React reconciler is not selectable                                                                                                                                                                                                               |
+| Portals                                      | DOM/fiber tree mismatch                 | Overlay positioning uses DOM coords (getBoundingClientRect), not fiber tree                                                                                                                                                                                                             |
 
 ## Out of Scope
 
@@ -807,6 +811,7 @@ that make source location resolution non-trivial:
 **Root cause:** React 19's `_debugStack` captures an `Error` at the JSX call site
 (`jsxDEV()`). The stack frames contain **compiled positions**, not source positions.
 For Next.js + Turbopack, these are:
+
 - Client components: `_next/static/chunks/<hash>.js:1:N` — bundle chunk, source map available via HTTP
 - Server components (RSC): `Server/file:///abs-path/.next/dev/server/chunks/ssr/<hash>.js` —
   server-side path, not browser-accessible at all
@@ -817,6 +822,7 @@ for these frames, which silently disables selection for the element.
 
 **What is NOT fixed:** When all stack frames are compiled chunks, `parseDebugStack` returns `null`
 and the inspector shows nothing. This affects:
+
 - All Next.js Server Components (RSC with `env: "Server"`)
 - Next.js client components when Turbopack doesn't provide per-file source frames
 
@@ -878,13 +884,13 @@ within ±5 lines. Only if exactly 1 candidate (no ambiguity). Handles rename + w
 
 **Fingerprint:** hash of `(sorted prop/attribute names, JSX element children count,
 subtree height)`. Excludes text content and prop values (too brittle). Computed during
-existing AST traversal at O(N*K) where K = average props per node (3-5).
+existing AST traversal at O(N\*K) where K = average props per node (3-5).
 
 **Edge case: identical siblings** (two `<li>` with no distinguishing props):
 No algorithm can tell them apart without semantic info. System reports ambiguity
 instead of silent wrong match — the only honest answer.
 
-**Performance:** O(N*K) with ~3-4x constant factor over current. For 500 nodes: microseconds.
+**Performance:** O(N\*K) with ~3-4x constant factor over current. For 500 nodes: microseconds.
 
 **References:** GumTree tree diff algorithm (top-down hash + bottom-up propagation),
 React Fast Refresh (component families by moduleId + name).
@@ -900,12 +906,12 @@ Unlike `data-uniq-id` (injected on ALL elements → hundreds of attributes → d
 `data-comment-id` is injected only on elements that have comments (~1-5 per file).
 The trade-off is fundamentally different:
 
-| | `data-uniq-id` (removing) | `data-comment-id` (proposed) |
-|--|--|--|
-| Scale | Every JSX element (hundreds) | Only commented elements (1-5/file) |
-| Diff noise | Massive | Negligible |
-| When injected | Always, on project open | On comment creation only |
-| Library components | Needed but impossible | Not needed — comments target user code |
+|                    | `data-uniq-id` (removing)    | `data-comment-id` (proposed)           |
+| ------------------ | ---------------------------- | -------------------------------------- |
+| Scale              | Every JSX element (hundreds) | Only commented elements (1-5/file)     |
+| Diff noise         | Massive                      | Negligible                             |
+| When injected      | Always, on project open      | On comment creation only               |
+| Library components | Needed but impossible        | Not needed — comments target user code |
 
 **Lifecycle:**
 
@@ -918,6 +924,7 @@ The trade-off is fundamentally different:
    reorder, wrap/unwrap, indentation changes.
 
 **What it survives:**
+
 - Our AST mutations — attribute on the element, preserved through mutation pipeline
 - External edits (VS Code) — in source code, IDE undo/redo/cut/paste carries it
 - Git branch switch — committed to source
@@ -929,6 +936,7 @@ never removed or modified during mutations except explicit comment deletion. AI 
 through AST routes automatically preserve it.
 
 **Edge cases:**
+
 - AI rewrites element as raw text (not through AST) → may lose attribute → detect on
   next parse, mark comment as orphaned, show re-attach UI
 - User manually removes attribute → comment orphaned, expected behavior
@@ -943,6 +951,7 @@ Extension already parses AST — finding these attributes is trivial.
 attribute in source. No anchor columns needed — the attribute IS the anchor.
 
 **Rejected alternatives:**
+
 - SourceLocation + content hash in DB: content hash breaks on prop/text edits (the
   exact scenario when comments matter — you comment on elements you're editing).
   Multi-tier heuristic resolution is fragile, degrades to guessing.
@@ -964,14 +973,16 @@ class FiberSourceIndex {
   private index: Map<string, HTMLElement[]> | null = null;
 
   // Called from __REACT_DEVTOOLS_GLOBAL_HOOK__.onCommitFiberRoot
-  invalidate(): void { this.index = null; }
+  invalidate(): void {
+    this.index = null;
+  }
 
   findDOMElement(source: SourceLocation, itemIndex: number): HTMLElement | null {
-    this.ensureBuilt();  // lazy O(N) rebuild if invalidated
+    this.ensureBuilt(); // lazy O(N) rebuild if invalidated
     const key = `${source.fileName}:${source.line}:${source.column}`;
     const matches = this.index!.get(key);
     if (!matches) return null;
-    const live = matches.filter(el => document.contains(el)); // Suspense safety
+    const live = matches.filter((el) => document.contains(el)); // Suspense safety
     return live[itemIndex] ?? null;
   }
 }
@@ -979,13 +990,13 @@ class FiberSourceIndex {
 
 **Performance:**
 
-| Operation | Cost |
-|-----------|------|
-| Lookup | O(1) Map.get + O(K) filter live elements |
-| Full rebuild (worst) | O(N), ~0.5-1ms for 8000 fibers |
-| Incremental (`subtreeFlags` optimization) | O(changed), ~0.01-0.1ms |
-| Invalidation frequency | 1-5x per user interaction |
-| Memory | ~50-110KB for 2000-5000 nodes |
+| Operation                                 | Cost                                     |
+| ----------------------------------------- | ---------------------------------------- |
+| Lookup                                    | O(1) Map.get + O(K) filter live elements |
+| Full rebuild (worst)                      | O(N), ~0.5-1ms for 8000 fibers           |
+| Incremental (`subtreeFlags` optimization) | O(changed), ~0.01-0.1ms                  |
+| Invalidation frequency                    | 1-5x per user interaction                |
+| Memory                                    | ~50-110KB for 2000-5000 nodes            |
 
 **`subtreeFlags` optimization:** React fibers have `subtreeFlags: Flags` — propagated
 child work flags. If `subtreeFlags === 0`, skip entire subtree (no descendants changed).
@@ -1011,12 +1022,14 @@ CRA/Webpack 3-15s. Compilation errors → HMR never arrives.
 **Solution: Server hints + Vite event listener + progressive timeout.**
 
 1. **Server hints in `NodeMapUpdate`:**
+
    ```typescript
    interface NodeMapUpdate {
      // ... existing fields
      hmrExpected: boolean; // false for comment-only, type-only, whitespace changes
    }
    ```
+
    Server knows what it mutated → can predict if HMR fires. If `false` → client goes
    to `synced` immediately on NodeMap receipt. External edits → always `true`.
 
@@ -1072,12 +1085,12 @@ React 19 replaced `_debugSource` with `_debugStack` (Error object captured insid
 
 **React 19 fiber debug properties:**
 
-| Property | Type | Content |
-|----------|------|---------|
-| `_debugStack` | `Error` | Error object with stack to JSX call site |
-| `_debugTask` | `console.Task` | async task context |
-| `_debugOwner` | `Fiber \| null` | parent component |
-| `_debugSource` | — | **does not exist** (removed from fiber type) |
+| Property       | Type            | Content                                      |
+| -------------- | --------------- | -------------------------------------------- |
+| `_debugStack`  | `Error`         | Error object with stack to JSX call site     |
+| `_debugTask`   | `console.Task`  | async task context                           |
+| `_debugOwner`  | `Fiber \| null` | parent component                             |
+| `_debugSource` | —               | **does not exist** (removed from fiber type) |
 
 **How React DevTools solves it:** V8 `Error.prepareStackTrace` + structured `CallSite`
 objects → `getScriptNameOrSourceURL()`, `getLineNumber()`, `getColumnNumber()`.
@@ -1105,12 +1118,14 @@ Stack parsing: skip header + `jsxDEV` frame, parse 2nd frame with Chrome regex:
 `/^\s*at .+\((.+):(\d+):(\d+)\)$/` → extract URL, strip dev server origin → fileName.
 
 **Open risks:**
+
 - `_debugStack` may have rate limit (`trackActualOwner` + `ownerStackLimit`) — needs
   runtime verification
 - Next.js/webpack: chunk URLs need source map resolution (separate research)
 - Column accuracy: transpiled `jsxDEV()` may differ from original JSX column
 
 **Rejected alternatives:**
+
 - Custom Babel/SWC plugin (5-7 days, needs per-project setup)
 - `data-inspector-*` attributes (Babel-only, no SWC, adds DOM noise)
 
@@ -1118,8 +1133,9 @@ Stack parsing: skip header + `jsxDEV` frame, parse 2nd frame with Chrome regex:
 a follow-up task.
 
 **References:**
+
 - [React Issue #31981](https://github.com/facebook/react/issues/31981) — Reintroduce debugSource
-- [React Issue #32574](https://github.com/facebook/react/issues/32574) — Bring back _debugSource
-- [React PR #28265](https://github.com/facebook/react/pull/28265) — Remove __self and __source
+- [React Issue #32574](https://github.com/facebook/react/issues/32574) — Bring back \_debugSource
+- [React PR #28265](https://github.com/facebook/react/pull/28265) — Remove **self and **source
 - [React PR #33143](https://github.com/facebook/react/pull/33143) — Structured callsite extraction
 - [V8 Stack Trace API](https://v8.dev/docs/stack-trace-api)

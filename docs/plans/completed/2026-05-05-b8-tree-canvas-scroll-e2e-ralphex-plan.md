@@ -35,9 +35,11 @@ Do not change unrelated code. Do not kill existing ralphex processes.
 - Telegram heartbeat every 15 min.
 
 This ralphex run is isolated. Use this Hyper Canvas worktree:
+
 - `/Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b8-tree-scroll/hyper-canvas-draft`
 
 Create it with:
+
 ```bash
 git -C /Users/ultra/work/hyper-canvas-draft worktree add \
   /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b8-tree-scroll/hyper-canvas-draft \
@@ -107,7 +109,7 @@ Acceptance: test is GREEN with the fixed extension.
 ### Task 5: Add PanelRouter Integration Test
 
 - [x] Add test to `src/__tests__/PanelRouter.test.ts`:
-  `iframe:scrollToElement` message is echoed back to the webview that sent it.
+      `iframe:scrollToElement` message is echoed back to the webview that sent it.
 - [x] Run `bun test vscode-extension/hypercanvas-preview/src/__tests__/PanelRouter.test.ts`.
 
 Acceptance: test passes.
@@ -120,8 +122,8 @@ Acceptance: test passes.
 ### Task 7: Commit
 
 - [x] Commit with message: `test(e2e): add tree→canvas scroll regression test (B8)`.
-  If additional fixes were needed: `fix(tree): ensure iframe:scrollToElement echo reaches iframe`.
-  NOTE: All changes were committed in earlier tasks — 43b2de52 (scroll fix), fa706f59 (panel-router test), 7abde7f3 (lint), fd520827 (elements-tree unit tests).
+      If additional fixes were needed: `fix(tree): ensure iframe:scrollToElement echo reaches iframe`.
+      NOTE: All changes were committed in earlier tasks — 43b2de52 (scroll fix), fa706f59 (panel-router test), 7abde7f3 (lint), fd520827 (elements-tree unit tests).
 
 ### Task 8: Telegram Handoff
 

@@ -12,6 +12,7 @@ Working comparison:
 `client/components/BulkaDay.tsx`
 
 Observed behavior:
+
 - `Alert` props are optional, but preview shows the component error overlay.
 - `Generate values` does nothing useful when generation is unavailable.
 - `Create Sample` appends `SampleDefault`, but the preview still stays on the placeholder.
@@ -19,6 +20,7 @@ Observed behavior:
   `<Alert />`, which has no visible children.
 
 Important distinction:
+
 - Optional props do not guarantee visible render output.
 - `Alert` is a primitive/container and needs children, while `BulkaDay` renders complete UI without props.
 

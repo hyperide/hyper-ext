@@ -7,6 +7,7 @@ Learn how to select and navigate elements in the canvas.
 ### Single Selection
 
 Click any element in the canvas to select it. The selected element shows:
+
 - A blue outline
 - Resize handles (in Design mode)
 - Properties in the right sidebar
@@ -14,6 +15,7 @@ Click any element in the canvas to select it. The selected element shows:
 ### Multiple Selection
 
 Select multiple elements by:
+
 - Holding `Shift` and clicking additional elements
 - Using the element tree in the left sidebar
 
@@ -21,13 +23,13 @@ Select multiple elements by:
 
 Navigate the element tree with keyboard shortcuts:
 
-| Action | Shortcut | Description |
-|--------|----------|-------------|
-| Next sibling | `Tab` | Move to next sibling element |
-| Previous sibling | `Shift+Tab` | Move to previous sibling |
-| Select children | `Enter` | Select all direct children |
-| Select parent | `Shift+Enter` | Move up to parent element |
-| Deselect all | `Esc` | Clear selection |
+| Action           | Shortcut      | Description                  |
+| ---------------- | ------------- | ---------------------------- |
+| Next sibling     | `Tab`         | Move to next sibling element |
+| Previous sibling | `Shift+Tab`   | Move to previous sibling     |
+| Select children  | `Enter`       | Select all direct children   |
+| Select parent    | `Shift+Enter` | Move up to parent element    |
+| Deselect all     | `Esc`         | Clear selection              |
 
 ### Example Workflow
 
@@ -47,21 +49,19 @@ The left sidebar shows the complete element hierarchy:
 - Expand/collapse with arrow icons
 - Visual indentation shows nesting
 
-import { Callout } from 'nextra/components'
+import { Callout } from 'nextra/components';
 
-<Callout type="tip">
-  Use the element tree when the canvas is too crowded to click precisely.
-</Callout>
+<Callout type="tip">Use the element tree when the canvas is too crowded to click precisely.</Callout>
 
 ## Selection Indicators
 
 When an element is selected:
 
-| Indicator | Location | Purpose |
-|-----------|----------|---------|
-| Blue outline | Canvas | Shows selection boundary |
-| Highlight | Element tree | Shows selected in hierarchy |
-| Header | Right sidebar | Shows element tag name |
+| Indicator    | Location      | Purpose                     |
+| ------------ | ------------- | --------------------------- |
+| Blue outline | Canvas        | Shows selection boundary    |
+| Highlight    | Element tree  | Shows selected in hierarchy |
+| Header       | Right sidebar | Shows element tag name      |
 
 ## Multi-Select Behavior
 

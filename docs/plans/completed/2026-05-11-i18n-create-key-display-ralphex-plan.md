@@ -31,6 +31,7 @@ called, the key button shows `newKey` immediately. The optimistic state is clear
 `i18nBinding.key` updates to match it (confirming the RPC round-trip completed).
 
 Do **not** touch:
+
 - `handleI18nKeyChange` in `RightSidebar.tsx` (write logic is correct).
 - `useElementStyleData` or `StyleReadService` (read pipeline is correct).
 - Any other bug fixes or refactors.
@@ -93,11 +94,11 @@ Screenshot the RED failure and note the actual text vs. expected.
 `keyInput.toHaveText(NEW_KEY, { timeout: 30_000 })` also times out; or
 `i18n-text-input` never becomes enabled; or inspector shows empty/blank.
 → The read pipeline is broken — `StyleReadService` can't find the element after recast
-  reformat, or the `styles:readClassName` response has `i18nText: undefined` and the
-  `prev.i18nText` fallback keeps showing the old binding permanently.
+reformat, or the `styles:readClassName` response has `i18nText: undefined` and the
+`prev.i18nText` fallback keeps showing the old binding permanently.
 → Fix: investigate `_positionForwardingCache` + `NodeMapService.resolveNodeRef` +
-  `findElementByPosition` interaction. The element coordinates after recast reformat
-  may not be forwarded correctly. See AstService lines 874-908.
+`findElementByPosition` interaction. The element coordinates after recast reformat
+may not be forwarded correctly. See AstService lines 874-908.
 
 **How to tell them apart from the test output:**
 Add a second assertion with 30 s timeout AFTER the 2 s one. If the 30 s assertion passes,
@@ -120,11 +121,13 @@ In `client/components/RightSidebar/sections/I18nTextInspector.tsx`:
 1. Add `const [optimisticKey, setOptimisticKey] = useState<string | null>(null)`.
 
 2. Change `currentKey` derivation:
+
    ```ts
    const currentKey = optimisticKey ?? (i18nBinding.kind === 'i18n' ? i18nBinding.key : '');
    ```
 
 3. In `commitKey`, set the optimistic key before calling `onKeyChange`:
+
    ```ts
    const commitKey = (key: string) => {
      if (!key) {
@@ -132,7 +135,7 @@ In `client/components/RightSidebar/sections/I18nTextInspector.tsx`:
        setKeySearch('');
        return;
      }
-     setOptimisticKey(key);   // ← optimistic display
+     setOptimisticKey(key); // ← optimistic display
      onKeyChange?.(key);
      setShowKeyDropdown(false);
      setKeySearch('');
@@ -140,6 +143,7 @@ In `client/components/RightSidebar/sections/I18nTextInspector.tsx`:
    ```
 
 4. Add an effect that clears the optimistic key once the prop catches up:
+
    ```ts
    const realKey = i18nBinding.kind === 'i18n' ? i18nBinding.key : '';
    useEffect(() => {
@@ -165,6 +169,7 @@ In `client/components/RightSidebar/sections/I18nTextInspector.tsx`:
 Only do this if Task 1 RED shows the key never appears (Case B).
 
 Investigate the chain:
+
 1. Does `_updateNodeMap` in `AstService.updateI18nKey` run BEFORE the
    `styles:readClassName` RPC arrives? Add a log to confirm.
 2. Does `NodeMapService.resolveNodeRef(nodeRef)` return the forwarded position?
@@ -188,6 +193,7 @@ Fix whichever link in the chain is broken. Minimal change — no big refactors.
 - [x] Send TG report + screenshot via `send-tg-report.sh` and `send-tg-file.sh`
 
 1. Build and install extension:
+
    ```bash
    cd /Users/ultra/work/hyper-canvas-draft
    bun run build:ext && bun run install:ext
@@ -237,6 +243,7 @@ Run `/commit` — full checklist (knip, self-review, codex review, commit, post-
 Branch: `main` (this is a one-file fix, no worktree needed).
 
 Commit message example:
+
 ```
 fix(i18n): optimistic key display in inspector after Create
 

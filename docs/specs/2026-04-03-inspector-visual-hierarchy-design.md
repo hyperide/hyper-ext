@@ -16,10 +16,12 @@ inputs and toggles lose contrast.
 Both components use the same pattern — ternary on active state:
 
 **PositionSection.tsx** — container: `flex items-center mb-2 whitespace-nowrap`
+
 - Active: `bg-background border border-border font-medium`
 - Inactive: `bg-muted`
 
 **LayoutSection.tsx** — container: `flex items-center mb-3`
+
 - Active: `border border-border bg-background`
 - Inactive: `bg-muted`
 
@@ -33,11 +35,11 @@ Background-based visual hierarchy (no borders), matching the Figma reference.
 
 ### Three bg levels
 
-| Level | Purpose | Dark | Light |
-|-------|---------|------|-------|
-| 1 — Panel | Section background | `--vscode-sideBar-background` | `--vscode-sideBar-background` |
-| 2 — Toggle container | Groups toggle buttons | `--toggle-container-bg` (subtle overlay) | `--toggle-container-bg` (subtle overlay) |
-| 3 — Active pill | Selected toggle button | `--toggle-active-bg` (lighter overlay) | `--toggle-active-bg` (white + shadow) |
+| Level                | Purpose                | Dark                                     | Light                                    |
+| -------------------- | ---------------------- | ---------------------------------------- | ---------------------------------------- |
+| 1 — Panel            | Section background     | `--vscode-sideBar-background`            | `--vscode-sideBar-background`            |
+| 2 — Toggle container | Groups toggle buttons  | `--toggle-container-bg` (subtle overlay) | `--toggle-container-bg` (subtle overlay) |
+| 3 — Active pill      | Selected toggle button | `--toggle-active-bg` (lighter overlay)   | `--toggle-active-bg` (white + shadow)    |
 
 Input fields (`bg-muted` = `--vscode-input-background`) already have correct
 structure (icon + value inside one bg container). They become visible once Level 1
@@ -49,11 +51,11 @@ Dedicated CSS custom properties so toggle styles reference tokens, not raw rgba.
 
 **Extension** (raw color values, no HSL):
 
-| Token | Dark | Light | High Contrast (Dark) | High Contrast Light |
-|-------|------|-------|----------------------|---------------------|
-| `--toggle-container-bg` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.06)` | `transparent` | `transparent` |
-| `--toggle-active-bg` | `rgba(255,255,255,0.12)` | `#fff` | `transparent` | `transparent` |
-| `--toggle-active-shadow` | `none` | `0 1px 2px rgba(0,0,0,0.08)` | `none` | `none` |
+| Token                    | Dark                     | Light                        | High Contrast (Dark) | High Contrast Light |
+| ------------------------ | ------------------------ | ---------------------------- | -------------------- | ------------------- |
+| `--toggle-container-bg`  | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.06)`           | `transparent`        | `transparent`       |
+| `--toggle-active-bg`     | `rgba(255,255,255,0.12)` | `#fff`                       | `transparent`        | `transparent`       |
+| `--toggle-active-shadow` | `none`                   | `0 1px 2px rgba(0,0,0,0.08)` | `none`               | `none`              |
 
 High-contrast (both Dark and Light): uses `var(--vscode-contrastBorder)` border
 instead of bg differentiation. Both HC themes share the same token values — the
@@ -61,11 +63,11 @@ border color itself differs per theme via the VS Code variable.
 
 **SaaS** (HSL triplets for Tailwind):
 
-| Token | Light | Dark |
-|-------|-------|------|
-| `--toggle-container` | `210 40% 96.1%` (= `--muted`) | `217.2 32.6% 17.5%` (= `--muted`) |
-| `--toggle-active` | `0 0% 100%` (white) | `217.2 32.6% 23%` (lighter than container) |
-| `--toggle-active-shadow` | `0 1px 2px rgba(0,0,0,0.06)` | `0 1px 2px rgba(0,0,0,0.2)` |
+| Token                    | Light                         | Dark                                       |
+| ------------------------ | ----------------------------- | ------------------------------------------ |
+| `--toggle-container`     | `210 40% 96.1%` (= `--muted`) | `217.2 32.6% 17.5%` (= `--muted`)          |
+| `--toggle-active`        | `0 0% 100%` (white)           | `217.2 32.6% 23%` (lighter than container) |
+| `--toggle-active-shadow` | `0 1px 2px rgba(0,0,0,0.06)`  | `0 1px 2px rgba(0,0,0,0.2)`                |
 
 Dark mode active pill is _lighter_ than container (+5.5% lightness), not darker —
 matches the extension behavior and Figma reference.
@@ -241,14 +243,14 @@ This catches class regressions during refactoring without testing visual appeara
 
 ### Files touched
 
-| File | Type of change |
-|------|---------------|
-| `vscode-extension/hypercanvas-preview/src/webview/styles.css` | CSS variable fix + toggle tokens + toggle classes (extension) |
-| `client/global.css` | Toggle tokens in `:root`/`.dark`/`@media` + toggle classes in `@layer utilities` (SaaS) |
-| `client/components/RightSidebar/sections/PositionSection.tsx` | Toggle class swap (shared component) |
-| `client/components/RightSidebar/sections/LayoutSection.tsx` | Toggle class swap (shared component) |
-| `client/components/RightSidebar/sections/__tests__/PositionSection.test.tsx` | Smoke test (new) |
-| `client/components/RightSidebar/sections/__tests__/LayoutSection.test.tsx` | Smoke test (new) |
+| File                                                                         | Type of change                                                                          |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `vscode-extension/hypercanvas-preview/src/webview/styles.css`                | CSS variable fix + toggle tokens + toggle classes (extension)                           |
+| `client/global.css`                                                          | Toggle tokens in `:root`/`.dark`/`@media` + toggle classes in `@layer utilities` (SaaS) |
+| `client/components/RightSidebar/sections/PositionSection.tsx`                | Toggle class swap (shared component)                                                    |
+| `client/components/RightSidebar/sections/LayoutSection.tsx`                  | Toggle class swap (shared component)                                                    |
+| `client/components/RightSidebar/sections/__tests__/PositionSection.test.tsx` | Smoke test (new)                                                                        |
+| `client/components/RightSidebar/sections/__tests__/LayoutSection.test.tsx`   | Smoke test (new)                                                                        |
 
 ### Theme compatibility
 
@@ -266,17 +268,18 @@ This catches class regressions during refactoring without testing visual appeara
 
 Test in the following themes after implementation:
 
-| Environment | Theme | Check |
-|-------------|-------|-------|
-| VS Code | Default Dark | Inputs visible, toggle active pill lighter than container |
-| VS Code | Default Light | Inputs visible, toggle active pill white with shadow |
-| VS Code | High Contrast Dark | Active pill has visible border, no invisible overlays |
-| VS Code | High Contrast Light | Active pill has visible border, contrast adequate on light HC bg |
-| VS Code | Dracula / One Dark Pro | Alpha overlays produce visible contrast on non-default bg |
-| SaaS | Light | Toggle matches Figma reference |
-| SaaS | Dark | Active pill lighter than container (not darker) |
+| Environment | Theme                  | Check                                                            |
+| ----------- | ---------------------- | ---------------------------------------------------------------- |
+| VS Code     | Default Dark           | Inputs visible, toggle active pill lighter than container        |
+| VS Code     | Default Light          | Inputs visible, toggle active pill white with shadow             |
+| VS Code     | High Contrast Dark     | Active pill has visible border, no invisible overlays            |
+| VS Code     | High Contrast Light    | Active pill has visible border, contrast adequate on light HC bg |
+| VS Code     | Dracula / One Dark Pro | Alpha overlays produce visible contrast on non-default bg        |
+| SaaS        | Light                  | Toggle matches Figma reference                                   |
+| SaaS        | Dark                   | Active pill lighter than container (not darker)                  |
 
 Automated:
+
 - `bun run test` — smoke tests verify correct CSS classes on toggle components
 - Theme variant unit tests — load compiled extension CSS into happy-dom, set
   `document.body.className` to each theme class, verify CSS custom property values

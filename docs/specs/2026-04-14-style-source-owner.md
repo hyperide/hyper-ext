@@ -60,12 +60,7 @@ type SourceForm =
   // through the recursive props editor or explicit prop selection only.
   | 'arbitraryElementProp';
 
-type CssSyntaxId =
-  | 'css'
-  | 'scss'
-  | 'sass'
-  | 'less'
-  | 'stylus';
+type CssSyntaxId = 'css' | 'scss' | 'sass' | 'less' | 'stylus';
 
 interface StyleSourceOwner {
   cssSystem: CssSystemId;
@@ -565,7 +560,7 @@ GitHub: [css-modules/css-modules](https://github.com/css-modules/css-modules)
 ```tsx
 import styles from './Card.module.css';
 
-<div className={styles.card} />
+<div className={styles.card} />;
 ```
 
 ```css
@@ -735,7 +730,7 @@ The same `className` expression can produce multiple source owners:
     condition: { state: 'base' },
     confidence: 'probable',
   },
-]
+];
 ```
 
 Dynamic class expression analysis is shared. It does not imply Tailwind and it
@@ -749,7 +744,7 @@ concrete selectors like `.block_primary` or `.block_secondary`.
 ```tsx
 import './global.css';
 
-<div className="card featured" />
+<div className="card featured" />;
 ```
 
 ```typescript
@@ -773,7 +768,7 @@ selector is carried by `selector`.
 ```tsx
 import './App.scss';
 
-<div className={`block_${mod}`} />
+<div className={`block_${mod}`} />;
 ```
 
 ```typescript
@@ -997,7 +992,7 @@ Examples:
     condition: { state: 'base' },
     confidence: 'exact',
   },
-]
+];
 ```
 
 `Computed` is identified by reserved `id: 'computed'` and by the absence of

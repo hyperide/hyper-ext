@@ -25,6 +25,7 @@ activeProject.status, gatewayError ─→ useDiagnosticSync ──────�
 ```
 
 Key design decisions:
+
 - Both sync hooks are always mounted (React rules of hooks); `enabled` flag gates their logic
 - `useDiagnosticSync` call moves from `LogsPanel` → `CanvasEditor` (LogsPanel becomes presentational)
 - `LogsPanel` gets `onClear` prop instead of calling `useDiagnosticSync` itself
@@ -45,6 +46,7 @@ Key design decisions:
 ### Task 1: Create `useNodePodDiagnosticSync`
 
 **Files:**
+
 - Create: `client/hooks/useNodePodDiagnosticSync.ts`
 
 - [ ] Create the file with this exact content:
@@ -123,11 +125,7 @@ export function useNodePodDiagnosticSync({
   // Sync runtime error
   useEffect(() => {
     if (!enabled) return;
-    setRuntimeError(
-      runtimeError
-        ? { type: 'RuntimeError', message: runtimeError, framework: 'vite' }
-        : null,
-    );
+    setRuntimeError(runtimeError ? { type: 'RuntimeError', message: runtimeError, framework: 'vite' } : null);
   }, [enabled, runtimeError, setRuntimeError]);
 
   return { clear };
@@ -159,6 +157,7 @@ cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && git
 ### Task 2: Refactor `LogsPanel` — remove internal sync, accept `onClear` prop
 
 **Files:**
+
 - Modify: `client/pages/Editor/components/LogsPanel.tsx`
 
 `LogsPanel` currently calls `useDiagnosticSync` and uses `persistedClear`. Move sync to
@@ -257,9 +256,11 @@ cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && git
 ### Task 3: Wire both adapters in `CanvasEditor`
 
 **Files:**
+
 - Modify: `client/pages/Editor/CanvasEditor.tsx`
 
 Three changes:
+
 1. Import and call `useDiagnosticSync` (moved from LogsPanel)
 2. Import and call `useNodePodDiagnosticSync`
 3. Show LogsPanel during NodePod boot; pass `onClear`
@@ -322,6 +323,7 @@ const { isLogsPanelOpen, isLogsPanelCollapsed, handleLogsDismiss, handleExpandLo
 - [ ] Find the LogsPanel render block (around line 1399-1413). Update it:
 
 Old condition:
+
 ```
 (hasGatewayError || runtimeError || parseErrorAsRuntimeError || isLogsPanelOpen)
 ```

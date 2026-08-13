@@ -27,8 +27,7 @@ extension-host logs.
 - `BulkaDay.tsx` renders in the preview and posts `previewLoaded`.
 - `previewLoaded` currently means the iframe loaded. It is not proof that the
   selected React component rendered successfully.
-- `/test-preview?component=client%2Fcomponents%2FBulkaDay.tsx` is no longer a
-  404.
+- `/test-preview?component=client%2Fcomponents%2FBulkaDay.tsx` is no longer a 404.
 - The generated `client/__canvas_preview__.tsx` now includes:
   - `GalleryProvider` / `GalleryLightbox`
   - `MenubarSampleDefault`
@@ -372,11 +371,7 @@ const diagnostics = await createDiagnosticsSession({
 });
 
 try {
-  await setupPreviewWithDevServer(
-    instance.window,
-    'client/components/BulkaDay.tsx',
-    instance.app,
-  );
+  await setupPreviewWithDevServer(instance.window, 'client/components/BulkaDay.tsx', instance.app);
   // Then switch to FAQ, menubar, and sheet through the actual UI.
 } finally {
   await diagnostics.close();

@@ -15,6 +15,7 @@ SCM gutter), Hyper Canvas crashes. Console shows:
 (Two stacked rejections in the screenshot.)
 
 Observed file states at crash time (Source Control panel):
+
 - `project-structure.json` (untracked / `??`) — extension-managed cache file in `.hyperide/`
 - `client/__canvas_preview__.tsx` (untracked) — extension-generated entry file
 - `client/App.tsx` (modified `M`) — user changes being discarded
@@ -23,7 +24,7 @@ Observed file states at crash time (Source Control panel):
 Discarding `__canvas_preview__.tsx` itself produces a 404 in the iframe; closing and
 reopening Hyper Canvas regenerates the file (via `_patchEntryFile`) and restores the preview.
 That part is working as designed. The bug is the **uncaught rejection** when discarding
-*other* files while the extension's caches are still pointing at the old AST/structure.
+_other_ files while the extension's caches are still pointing at the old AST/structure.
 
 ### Suspect surface
 
@@ -52,6 +53,7 @@ state machine — just identify the unguarded `Object` op and add the smallest c
 or fix the upstream that produces the `null`/`undefined`.
 
 Out of scope:
+
 - Refactoring `FileStructureStore` or `PreviewPanel` lifecycle (deferred FSM ticket exists
   in MEMORY).
 - Locale switcher / new-key visibility (separate plan).

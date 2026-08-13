@@ -2,8 +2,9 @@
 
 ## Context
 
-Drag-and-drop реorder работает, но без визуального фидбека. Пользователь двигает элемент — 
+Drag-and-drop реorder работает, но без визуального фидбека. Пользователь двигает элемент —
 ничего не происходит визуально до момента дропа. Нужно:
+
 1. Ghost-элемент — визуальная копия тянется за курсором (чуть крупнее + тень = "парит")
 2. Drop-indicator — синяя полоска показывает куда будет вставлен элемент
 
@@ -32,10 +33,14 @@ Drag-and-drop реorder работает, но без визуального ф�
   z-index: 2147483647 !important;
   pointer-events: none !important;
   transform: scale(1.03) !important;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.22), 0 0 0 2px rgba(59,130,246,0.5) !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.22),
+    0 0 0 2px rgba(59, 130, 246, 0.5) !important;
   opacity: 0.88 !important;
   border-radius: 4px !important;
-  transition: transform 0.12s ease, box-shadow 0.12s ease !important;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease !important;
   will-change: transform, left, top !important;
 }
 
@@ -61,8 +66,12 @@ Drag-and-drop реorder работает, но без визуального ф�
   border-radius: 50% !important;
   background: #3b82f6 !important;
 }
-.hyper-drop-indicator::before { left: -3px !important; }
-.hyper-drop-indicator::after  { right: -3px !important; }
+.hyper-drop-indicator::before {
+  left: -3px !important;
+}
+.hyper-drop-indicator::after {
+  right: -3px !important;
+}
 ```
 
 ### 2. `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts`
@@ -70,15 +79,17 @@ Drag-and-drop реorder работает, но без визуального ф�
 Расширить drag state machine (после строки 1099):
 
 **Новые переменные состояния:**
+
 ```ts
 let _dragGhostEl: HTMLElement | null = null;
 let _dragIndicatorEl: HTMLElement | null = null;
-let _dragOffsetX = 0;   // cursor-to-element-topleft offset
+let _dragOffsetX = 0; // cursor-to-element-topleft offset
 let _dragOffsetY = 0;
 let _dragSourceEl: HTMLElement | null = null;
 ```
 
 **В `_dragPointerMove`** — при переходе `pending → dragging`:
+
 ```ts
 // Создать ghost
 const sourceEl = /* document.querySelector(`[data-uniq-id="${_dragSourceId}"]`) or elementFromPoint at start */
@@ -107,11 +118,12 @@ _dragIndicatorEl = indicator;
 ```
 
 **В `_dragPointerMove`** — когда `_dragState === 'dragging'`:
+
 ```ts
 // Двигать ghost
 if (_dragGhostEl) {
   _dragGhostEl.style.left = `${e.clientX - _dragOffsetX}px`;
-  _dragGhostEl.style.top  = `${e.clientY - _dragOffsetY}px`;
+  _dragGhostEl.style.top = `${e.clientY - _dragOffsetY}px`;
 }
 
 // Обновить indicator
@@ -136,14 +148,25 @@ if (_dragIndicatorEl) {
 ```
 
 **В `_dragPointerUp`** — cleanup:
+
 ```ts
 // Убрать ghost и indicator
-if (_dragGhostEl) { _dragGhostEl.remove(); _dragGhostEl = null; }
-if (_dragIndicatorEl) { _dragIndicatorEl.remove(); _dragIndicatorEl = null; }
-if (_dragSourceEl) { _dragSourceEl.style.opacity = ''; _dragSourceEl = null; }
+if (_dragGhostEl) {
+  _dragGhostEl.remove();
+  _dragGhostEl = null;
+}
+if (_dragIndicatorEl) {
+  _dragIndicatorEl.remove();
+  _dragIndicatorEl = null;
+}
+if (_dragSourceEl) {
+  _dragSourceEl.style.opacity = '';
+  _dragSourceEl = null;
+}
 ```
 
 **Важный нюанс**: ghost клонирует DOM включая dataset. Нужно убрать `data-uniq-id` у клона чтобы `elementFromPoint` не путал его с оригиналом:
+
 ```ts
 ghost.removeAttribute('data-uniq-id');
 ```
@@ -155,6 +178,7 @@ ghost.removeAttribute('data-uniq-id');
 ### Получить source element в pointerdown
 
 В `_dragPointerDown` уже есть `e.target`. Нужно сохранить его:
+
 ```ts
 _dragSourceEl = e.target as HTMLElement;
 ```
@@ -169,10 +193,10 @@ CSS transition `transform 0.12s ease` на `.hyper-drag-ghost` — ghost поя�
 
 ## Файлы
 
-| Файл | Изменение |
-|------|-----------|
+| Файл                                          | Изменение                                                                             |
+| --------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `shared/canvas-interaction/style-injector.ts` | Добавить `.hyper-drag-ghost` и `.hyper-drop-indicator` CSS в `buildDesignStylesCSS()` |
-| `vscode-extension/.../iframe-interaction.ts` | Расширить drag state machine: ghost + indicator создание/обновление/cleanup |
+| `vscode-extension/.../iframe-interaction.ts`  | Расширить drag state machine: ghost + indicator создание/обновление/cleanup           |
 
 ## Решения по дизайну
 

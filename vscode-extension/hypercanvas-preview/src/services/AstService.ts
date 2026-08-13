@@ -353,10 +353,7 @@ export class AstService {
   private _initialized = false;
   // Maps "absolutePath:oldLine:oldCol" → new position + fingerprint after recast reformatting.
   // fingerprint guards against stale entries when the file is restored between writes.
-  private readonly _positionForwardingCache = new Map<
-    string,
-    { line: number; column: number; fingerprint: string }
-  >();
+  private readonly _positionForwardingCache = new Map<string, { line: number; column: number; fingerprint: string }>();
 
   /** Convert relative nodeRef (src/foo.tsx:10:5) to absolute (/workspace/src/foo.tsx:10:5) */
   private _normalizeNodeRef(nodeRef: string): string {
@@ -614,7 +611,9 @@ export class AstService {
               // element. Drop the stale entry and fall through to a fresh direct lookup.
               const currentFp = this._getElementFingerprint(fwdResult.element);
               if (!forwarded.fingerprint || currentFp === forwarded.fingerprint) {
-                dbg(`[AstService] Position forwarded: ${nodeRef} ${line}:${column} → ${forwarded.line}:${forwarded.column}`);
+                dbg(
+                  `[AstService] Position forwarded: ${nodeRef} ${line}:${column} → ${forwarded.line}:${forwarded.column}`,
+                );
                 return fwdResult;
               }
               dbg(`[AstService] Position forwarding stale (fp mismatch), discarding: ${fwdKey}`);
@@ -830,14 +829,20 @@ export class AstService {
         // Client may have stale previousKey (e.g. after HMR, i18nText is preserved from
         // prior read via ?? fallback). Fall back: replace first StringLiteral in first
         // JSXExpressionContainer with nextKey so the write succeeds regardless.
-        dbg(`[updateI18nKey] fallback: element type=${result.element.type} children=${result.element.children.length} childTypes=${result.element.children.map((c) => c.type).join(',')}`);
+        dbg(
+          `[updateI18nKey] fallback: element type=${result.element.type} children=${result.element.children.length} childTypes=${result.element.children.map((c) => c.type).join(',')}`,
+        );
         for (const child of result.element.children) {
           if (!t.isJSXExpressionContainer(child)) continue;
           const expr = child.expression;
-          dbg(`[updateI18nKey] fallback: expr.type=${expr.type} isCall=${t.isCallExpression(expr)} isStr=${t.isStringLiteral(expr)}`);
+          dbg(
+            `[updateI18nKey] fallback: expr.type=${expr.type} isCall=${t.isCallExpression(expr)} isStr=${t.isStringLiteral(expr)}`,
+          );
           if (t.isCallExpression(expr) && expr.arguments.length > 0) {
             const firstArg = expr.arguments[0];
-            dbg(`[updateI18nKey] fallback: firstArg.type=${firstArg.type} isStringLiteral=${t.isStringLiteral(firstArg)}`);
+            dbg(
+              `[updateI18nKey] fallback: firstArg.type=${firstArg.type} isStringLiteral=${t.isStringLiteral(firstArg)}`,
+            );
             if (t.isStringLiteral(firstArg)) {
               firstArg.value = nextKey;
               changed = true;
@@ -882,7 +887,9 @@ export class AstService {
           const getFingerprint = this._getElementFingerprint.bind(this);
           traverseJSXElements(newAst, (elem) => {
             const elemFp = getFingerprint(elem);
-            dbg(`[updateI18nKey] fwd-traverse ${elem.loc?.start.line}:${elem.loc?.start.column} fp=${elemFp} expected=${fp} match=${elemFp === fp}`);
+            dbg(
+              `[updateI18nKey] fwd-traverse ${elem.loc?.start.line}:${elem.loc?.start.column} fp=${elemFp} expected=${fp} match=${elemFp === fp}`,
+            );
             if (elem.loc && elemFp === fp) {
               newPos = { line: elem.loc.start.line, column: elem.loc.start.column };
               return true; // stop traversal

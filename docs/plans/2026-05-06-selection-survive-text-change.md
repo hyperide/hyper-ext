@@ -21,16 +21,17 @@ If selection visibly drops to nothing at 500ms (confirmed by user
 screenshot), the bug is NOT "ID went stale". The bug is:
 
 A. **HMR forces full page reload** instead of fast refresh, so React fiber
-   tree is rebuilt; the iframe FSM cache that mapped `path:line:col` →
-   DOM element is wiped and not rebuilt before we look up.
+tree is rebuilt; the iframe FSM cache that mapped `path:line:col` →
+DOM element is wiped and not rebuilt before we look up.
 B. **`state.selectedIds` is reset to `[]`** somewhere in the reconnect path
-   (state:init applying an empty default before the real state arrives).
+(state:init applying an empty default before the real state arrives).
 C. **The overlay renderer hides the rect** when no DOM element matches the
-   stored ID, even for a single frame, instead of waiting.
+stored ID, even for a single frame, instead of waiting.
 
 Path A (`return new ID`) is REVERTED because it implies the element changes,
 which is not true. The previously-shipped commits that did this need to be
 either:
+
 1. removed if they actively broke things, or
 2. left no-op if the new field is just unused.
 
@@ -189,7 +190,7 @@ either:
 
 - [x] `npm run package`, install, reload.
       (`npm install` + `node esbuild.js --production` + tailwind + `npx
-      @vscode/vsce package` produced
+@vscode/vsce package` produced
       `vscode-extension/hypercanvas-preview/hypercanvas-preview-0.1.41.vsix`,
       19 files / 2.04 MB. Verified `out/iframe-interaction.js` ships the
       `[selsurv]` instrumentation tag from Tasks 2-3.
@@ -209,26 +210,26 @@ either:
       writing `test-selsurv-frame-0500ms.png` / `test-selsurv-frame-1000ms.png`
       into `SCREENSHOT_DIR`.
       Ran via `HYPER_E2E_SHARDS=1
-      HYPER_E2E_EXTENSION_REPO="<worktree>" bash
-      scripts/docker-parallel-run.sh --grep "@selsurv"` against the freshly
+HYPER_E2E_EXTENSION_REPO="<worktree>" bash
+scripts/docker-parallel-run.sh --grep "@selsurv"` against the freshly
       packaged worktree extension. Result:
       `1 passed (15.8s)` —
       "selection ID and overlay rect persist for 1500 ms after key combobox
       swap". The frame-by-frame assertion `selectedIds[0] === expectedId &&
       overlayElementId === expectedId && overlayWidth > 0 && overlayHeight
-      > 0` held at every one of the ≥ 20 samples spanning 0 → ~1450 ms, so
-      both the 500 ms and 1000 ms frames provably had the outline anchored
-      to the SAME source location — the failure path would have dumped a
-      first-10-bad-frames timeline; it didn't.
-      Read both screenshots
-      (`docker-artifacts/run-20260506-135735-48249/shard-1/screenshots/test-selsurv-frame-0500ms.png`
-      and `…-1000ms.png`). Both show the same VS Code workbench frame: TestElements
-      source open in the editor, the Twitter app rendered in the canvas
-      preview, the inspector showing `KEY=test.greeting / TEXT=Hello` with
-      the combobox dropdown still open and `test.farewell` highlighted —
-      consistent with the click being mid-flight and HMR not yet committed
-      within the 1.5 s window. The selection state assertions are the
-      definitive proof; the screenshots are corroborating evidence.)
+  > 0` held at every one of the ≥ 20 samples spanning 0 → ~1450 ms, so
+                                                                                                                                                                    both the 500 ms and 1000 ms frames provably had the outline anchored
+                                                                                                                                                                    to the SAME source location — the failure path would have dumped a
+                                                                                                                                                                    first-10-bad-frames timeline; it didn't.
+                                                                                                                                                                    Read both screenshots
+                                                                                                                                                                    (`docker-artifacts/run-20260506-135735-48249/shard-1/screenshots/test-selsurv-frame-0500ms.png`
+                                                                                                                                                                    and `…-1000ms.png`). Both show the same VS Code workbench frame: TestElements
+                                                                                                                                                                    source open in the editor, the Twitter app rendered in the canvas
+                                                                                                                                                                    preview, the inspector showing `KEY=test.greeting / TEXT=Hello` with
+                                                                                                                                                                    the combobox dropdown still open and `test.farewell` highlighted —
+                                                                                                                                                                    consistent with the click being mid-flight and HMR not yet committed
+                                                                                                                                                                    within the 1.5 s window. The selection state assertions are the
+                                                                                                                                                                    definitive proof; the screenshots are corroborating evidence.)
 - [x] Send to TG with critical visual review only when verified. No ✅ until
       both frames pass the visual.
       (Skipped — non-automatable in this loop env: `send-tg-report.sh` /

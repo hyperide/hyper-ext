@@ -53,31 +53,31 @@ Recommended: **GLM via Z.ai** — flat-rate starting from $10/mo.
 
 ## Settings
 
-| Setting | Default | Description |
-|---|---|---|
-| `hypercanvas.ai.provider` | `glm` | AI provider: `claude`, `openai`, `glm`, `proxy`, `opencode` |
-| `hypercanvas.ai.backend` | — | Backend for proxy/opencode providers (e.g. `gemini`, `deepseek`) |
-| `hypercanvas.ai.model` | — | Model identifier (e.g. `claude-sonnet-4-20250514`, `gpt-4o`) |
-| `hypercanvas.ai.baseURL` | — | Custom base URL for AI provider API |
-| `hypercanvas.devServer.autoStart` | `false` | Auto-start dev server when opening preview |
-| `hypercanvas.preview.defaultPort` | `3000` | Default port for dev server |
-| `hypercanvas.preview.syncPositions` | `true` | Sync cursor position with canvas selection |
+| Setting                             | Default | Description                                                      |
+| ----------------------------------- | ------- | ---------------------------------------------------------------- |
+| `hypercanvas.ai.provider`           | `glm`   | AI provider: `claude`, `openai`, `glm`, `proxy`, `opencode`      |
+| `hypercanvas.ai.backend`            | —       | Backend for proxy/opencode providers (e.g. `gemini`, `deepseek`) |
+| `hypercanvas.ai.model`              | —       | Model identifier (e.g. `claude-sonnet-4-20250514`, `gpt-4o`)     |
+| `hypercanvas.ai.baseURL`            | —       | Custom base URL for AI provider API                              |
+| `hypercanvas.devServer.autoStart`   | `false` | Auto-start dev server when opening preview                       |
+| `hypercanvas.preview.defaultPort`   | `3000`  | Default port for dev server                                      |
+| `hypercanvas.preview.syncPositions` | `true`  | Sync cursor position with canvas selection                       |
 
 ## Commands
 
-| Command | Keybinding | Description |
-|---|---|---|
-| Hyper: Open Preview | — | Open the visual preview panel |
-| Hyper: Refresh Preview | — | Refresh the preview iframe |
-| Hyper: Go to Visual | `Cmd+Shift+V` | Jump from code to canvas element |
-| Hyper: Start Dev Server | — | Start the project dev server |
-| Hyper: Stop Dev Server | — | Stop the running dev server |
-| Hyper: Configure AI API Key | — | Set API key for the selected AI provider |
-| Hyper: Open Explorer | — | Open the component explorer sidebar |
-| Hyper: Open Inspector | — | Open the style inspector sidebar |
-| Hyper: Open AI Chat | — | Open the AI chat panel |
-| Hyper: Start Diagnostic Capture | — | Start capturing extension-host errors to a structured NDJSON log |
-| Hyper: Stop Diagnostic Capture | — | Stop capture, open the log, and show rejection/exception counts |
+| Command                         | Keybinding    | Description                                                      |
+| ------------------------------- | ------------- | ---------------------------------------------------------------- |
+| Hyper: Open Preview             | —             | Open the visual preview panel                                    |
+| Hyper: Refresh Preview          | —             | Refresh the preview iframe                                       |
+| Hyper: Go to Visual             | `Cmd+Shift+V` | Jump from code to canvas element                                 |
+| Hyper: Start Dev Server         | —             | Start the project dev server                                     |
+| Hyper: Stop Dev Server          | —             | Stop the running dev server                                      |
+| Hyper: Configure AI API Key     | —             | Set API key for the selected AI provider                         |
+| Hyper: Open Explorer            | —             | Open the component explorer sidebar                              |
+| Hyper: Open Inspector           | —             | Open the style inspector sidebar                                 |
+| Hyper: Open AI Chat             | —             | Open the AI chat panel                                           |
+| Hyper: Start Diagnostic Capture | —             | Start capturing extension-host errors to a structured NDJSON log |
+| Hyper: Stop Diagnostic Capture  | —             | Stop capture, open the log, and show rejection/exception counts  |
 
 ## Requirements
 

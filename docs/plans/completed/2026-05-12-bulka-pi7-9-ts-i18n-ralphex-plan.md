@@ -18,6 +18,7 @@
 ### Current failure pattern
 
 From Docker run-20260512-002106-89890 shard-2:
+
 - "text input shows translation..." → **skipped** (3189ms). The spec's skip guard fires because `h1#hero-title` is not found in the canvas. This means the canvas preview either failed to load bulka-the-dog or loaded a different project.
 - "editing hero.title updates translations.ts..." → **failed** (19646ms). Runs ~19s and fails. The spec comment says "expected to fail at `not.toBeDisabled()` assertion", meaning `i18n-text-input` stays disabled.
 
@@ -50,6 +51,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- \
 ```
 
 Check:
+
 - `[setupPreview +*ms] entry:auto-detected` — does it show `projectDir="bulka-the-dog"`?
 - Does `h1#hero-title` check pass or skip?
 - If it skips: the project loading is wrong → fix is same as bulka-discard plan Task 1 (pass component path explicitly to `setupPreviewWithDevServer`).
@@ -86,6 +88,7 @@ Screenshot the GREEN result.
 ### Task 5: TG report
 
 Send via `cd /Users/ultra/xp/codex-tg-bot && bash scripts/send-tg-report.sh`:
+
 - Which task fixed it (project load or editability or write path)
 - Files changed, commits
 - Screenshot of all 3 pi7-9 tests GREEN

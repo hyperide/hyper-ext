@@ -8,6 +8,7 @@
 `ext-test-projects/e2e/tests/project-independent/bulka-i18n-key-bugs.spec.ts`).
 
 Steps:
+
 1. Select `i18n-t-fixture` element (`<p>{t('test.greeting')}</p>`).
 2. First key change: open combobox → pick `test.farewell`. Poll source file until
    `t('test.farewell')` appears (12s timeout). This reliably passes (~2s).
@@ -37,6 +38,7 @@ keyBusy={loading || (!!i18nDispatch && !!writeInProgress)}
 ```
 
 So `keyBusy` is true while either:
+
 - `loading` is true (useElementStyleData is fetching), OR
 - `writeInProgress` is non-null.
 
@@ -163,6 +165,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "I18N-KEY-BUG-4" 2>&1 | tail -1
 ```
 
 Collect the `[HC i18n-key debug]` lines from stdout. They will show:
+
 - Whether `commitKey` was called for the second click at all.
 - If called, whether it aborted and what `realKey` was at that point.
 - If `handleI18nKeyChange` was called and what `i18nText.key` was.
@@ -185,6 +188,7 @@ keyBusy={loading || (!!i18nDispatch && !!writeInProgress)}
 ```
 
 `writeInProgress` is cleared in the `finally` block of `handleI18nKeyChange`:
+
 - Line 842–843: `if (i18nDispatch && getState().writeInProgress?.writeId === writeId) { i18nDispatch({ writeInProgress: null }) }`
 - Line 845: `setStyleRefreshKey((k) => k + 1)` — triggers re-read.
 
@@ -246,6 +250,7 @@ keyBusy={loading || (!!i18nDispatch && !!writeInProgress) || isI18nKeyPending}
 ```
 
 This ensures:
+
 1. `pendingTextKeyRef.current` is set before the write (synchronous, before the async
    IIFE).
 2. `keyBusy` stays true until `i18nText.key` has updated to the new key AND the
@@ -265,11 +270,13 @@ const [pendingKeyWrite, setPendingKeyWrite] = useState<{ key: string; elementId:
 ```
 
 Set it at the start of `handleI18nKeyChange` (same place as `pendingTextKeyRef`):
+
 ```tsx
 setPendingKeyWrite({ key: newKey, elementId: effectiveSelectedId });
 ```
 
 Clear it when `i18nText.key` catches up:
+
 ```tsx
 // In existing render logic (lines 764-770), also call:
 // setPendingKeyWrite(null)
@@ -287,6 +294,7 @@ useEffect(() => {
 ```
 
 Then:
+
 ```tsx
 const isI18nKeyPending = pendingKeyWrite !== null && pendingKeyWrite.elementId === selectedId;
 keyBusy={loading || (!!i18nDispatch && !!writeInProgress) || isI18nKeyPending}
@@ -295,6 +303,7 @@ keyBusy={loading || (!!i18nDispatch && !!writeInProgress) || isI18nKeyPending}
 ### Option B (simpler, possibly sufficient): Bump `styleRefreshKey` BEFORE clearing `writeInProgress`
 
 Swap the order in `finally`:
+
 ```ts
 setStyleRefreshKey((k) => k + 1); // triggers loading=true first
 // then:
@@ -350,6 +359,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "I18N-KEY-BUG" 2>&1 | tail -120
 Expected: all 4 bugs (Bug 1–4) GREEN.
 
 Save screenshots:
+
 - `/tmp/i18n-bug4-second-change.png` — captured by the test automatically.
 - `/tmp/i18n-key-bugs-all-green.png` — terminal output or Playwright HTML report.
 

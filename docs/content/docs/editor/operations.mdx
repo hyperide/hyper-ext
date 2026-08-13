@@ -6,18 +6,18 @@ All the ways to modify elements in the canvas.
 
 Add new elements with keyboard shortcuts:
 
-| Element | Shortcut | Description |
-|---------|----------|-------------|
-| Frame | `F` | Insert container/div |
-| Text | `T` | Insert text element |
-| Button | `B` or `Shift+B` | Insert button |
-| Link | `Shift+L` | Insert link |
-| Image | `Shift+I` or `Cmd+Shift+K` | Insert image |
-| Instance | `I` | Add component instance |
+| Element  | Shortcut                   | Description            |
+| -------- | -------------------------- | ---------------------- |
+| Frame    | `F`                        | Insert container/div   |
+| Text     | `T`                        | Insert text element    |
+| Button   | `B` or `Shift+B`           | Insert button          |
+| Link     | `Shift+L`                  | Insert link            |
+| Image    | `Shift+I` or `Cmd+Shift+K` | Insert image           |
+| Instance | `I`                        | Add component instance |
 
 Elements are inserted into the currently selected element, or at the root if nothing is selected.
 
-import { Callout } from 'nextra/components'
+import { Callout } from 'nextra/components';
 
 <Callout type="info">
   If you've configured custom UI components in project settings, HyperIDE uses those instead of HTML elements.
@@ -27,12 +27,12 @@ import { Callout } from 'nextra/components'
 
 Standard clipboard shortcuts work with TSX code:
 
-| Action | Shortcut | Description |
-|--------|----------|-------------|
-| Copy | `Cmd+C` | Copy as TSX code |
-| Cut | `Cmd+X` | Copy and delete |
-| Paste | `Cmd+V` | Paste TSX into selection |
-| Duplicate | `Cmd+D` | Create inline copy |
+| Action    | Shortcut | Description              |
+| --------- | -------- | ------------------------ |
+| Copy      | `Cmd+C`  | Copy as TSX code         |
+| Cut       | `Cmd+X`  | Copy and delete          |
+| Paste     | `Cmd+V`  | Paste TSX into selection |
+| Duplicate | `Cmd+D`  | Create inline copy       |
 
 ### Copy/Paste Details
 
@@ -52,32 +52,29 @@ Standard clipboard shortcuts work with TSX code:
 
 Remove selected elements:
 
-| Action | Shortcut |
-|--------|----------|
+| Action | Shortcut                |
+| ------ | ----------------------- |
 | Delete | `Delete` or `Backspace` |
 
-<Callout type="warning">
-  Delete is permanent. Use Undo (`Cmd+Z`) immediately if you delete by mistake.
-</Callout>
+<Callout type="warning">Delete is permanent. Use Undo (`Cmd+Z`) immediately if you delete by mistake.</Callout>
 
 ## Undo/Redo
 
 Revert or replay changes:
 
-| Action | Shortcut |
-|--------|----------|
-| Undo | `Cmd+Z` |
-| Redo | `Cmd+Shift+Z` |
+| Action | Shortcut      |
+| ------ | ------------- |
+| Undo   | `Cmd+Z`       |
+| Redo   | `Cmd+Shift+Z` |
 
 Undo/redo works for:
+
 - Style changes
 - Element insertions
 - Element deletions
 - Text content changes
 
-<Callout type="info">
-  Undo/redo is disabled in Board mode — Excalidraw handles its own history.
-</Callout>
+<Callout type="info">Undo/redo is disabled in Board mode — Excalidraw handles its own history.</Callout>
 
 ## Context Menu
 
@@ -95,17 +92,17 @@ Right-click an element for additional options:
 
 Control the canvas view:
 
-| Action | Shortcut |
-|--------|----------|
-| Reset zoom | `Shift+0` or `Cmd+0` |
-| Pan | Mouse wheel + drag |
-| Zoom in/out | Scroll wheel |
+| Action      | Shortcut             |
+| ----------- | -------------------- |
+| Reset zoom  | `Shift+0` or `Cmd+0` |
+| Pan         | Mouse wheel + drag   |
+| Zoom in/out | Scroll wheel         |
 
 ## UI Visibility
 
-| Action | Shortcut |
-|--------|----------|
-| Toggle sidebars | `Cmd+/` |
+| Action          | Shortcut |
+| --------------- | -------- |
+| Toggle sidebars | `Cmd+/`  |
 
 This maximizes canvas space when you need to focus on the preview.
 

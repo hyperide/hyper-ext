@@ -33,12 +33,12 @@ real source for aria-hidden targets).
 
 ## Files to change
 
-| File | Change |
-|------|--------|
-| `server/services/AstService.ts` (and the VS Code AstBridge mirror) | `reorderElement` accepts arbitrary source/target. Walks the JSX AST: finds the lowest common JSX parent, identifies the immediate-child of that parent on each side (`reorderable source`, `reorderable target`), then performs the reorder. Returns a structured error if either side has no path to a common parent (e.g. cross-component). |
-| `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` | `_dragPointerUp`: drop the `liftToCommonSiblings` call, drop `_resolveSourceWithFallback` for drop side. Send raw `sourceLoc` and `dropLoc` only. |
-| `shared/canvas-interaction/drop-target-lift.ts` | **Delete file** + delete its test file. |
-| `shared/canvas-interaction/drag-source-resolver.ts` | Keep as-is (decorative aria-hidden walk-up is still legitimate — the span genuinely has no JSX node of its own). |
+| File                                                                              | Change                                                                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/services/AstService.ts` (and the VS Code AstBridge mirror)                | `reorderElement` accepts arbitrary source/target. Walks the JSX AST: finds the lowest common JSX parent, identifies the immediate-child of that parent on each side (`reorderable source`, `reorderable target`), then performs the reorder. Returns a structured error if either side has no path to a common parent (e.g. cross-component). |
+| `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` | `_dragPointerUp`: drop the `liftToCommonSiblings` call, drop `_resolveSourceWithFallback` for drop side. Send raw `sourceLoc` and `dropLoc` only.                                                                                                                                                                                             |
+| `shared/canvas-interaction/drop-target-lift.ts`                                   | **Delete file** + delete its test file.                                                                                                                                                                                                                                                                                                       |
+| `shared/canvas-interaction/drag-source-resolver.ts`                               | Keep as-is (decorative aria-hidden walk-up is still legitimate — the span genuinely has no JSX node of its own).                                                                                                                                                                                                                              |
 
 ## Acceptance Criteria
 

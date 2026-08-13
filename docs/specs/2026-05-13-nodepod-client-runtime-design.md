@@ -24,6 +24,7 @@ ALTER TABLE users ADD COLUMN client_side_runtime boolean NOT NULL DEFAULT false;
 ```
 
 Drizzle schema (`server/database/schema/auth.ts`):
+
 ```typescript
 clientSideRuntime: boolean('client_side_runtime').notNull().default(false),
 ```
@@ -50,16 +51,16 @@ Public API:
 
 ```typescript
 /** All files for a project currently in OPFS. Returns {} if not yet seeded. */
-export async function readFiles(projectId: string): Promise<Record<string, string>>
+export async function readFiles(projectId: string): Promise<Record<string, string>>;
 
 /** Write one file (called by editor on save). */
-export async function writeFile(projectId: string, path: string, content: string): Promise<void>
+export async function writeFile(projectId: string, path: string, content: string): Promise<void>;
 
 /** Bulk-seed OPFS from a flat file map (one-time bootstrap on first NodePod start). */
-export async function seedFiles(projectId: string, files: Record<string, string>): Promise<void>
+export async function seedFiles(projectId: string, files: Record<string, string>): Promise<void>;
 
 /** Remove all cached files for a project. */
-export async function clearProject(projectId: string): Promise<void>
+export async function clearProject(projectId: string): Promise<void>;
 ```
 
 `useNodePodRuntime.start()` calls `readFiles(projectId)`. If the result is empty (first boot for this project), it bootstraps by fetching the project's file tree via the existing project API, then calls `seedFiles()` to persist to OPFS. Subsequent starts read OPFS directly.
@@ -71,10 +72,11 @@ OPFS key layout: `hyper-nodepod/<projectId>/<relative-path>`. Text files only; b
 ### 4. Client — `User` type gains `clientSideRuntime`
 
 `client/stores/authStore.ts`:
+
 ```typescript
 export interface User {
   // ...existing fields...
-  clientSideRuntime: boolean
+  clientSideRuntime: boolean;
 }
 ```
 
@@ -85,18 +87,18 @@ New module `client/lib/project-runtime/`.
 #### `types.ts`
 
 ```typescript
-export type RuntimeStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'error'
-export type RuntimeMode = 'docker' | 'nodepod'
+export type RuntimeStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'error';
+export type RuntimeMode = 'docker' | 'nodepod';
 
 export interface ProjectRuntime {
-  mode: RuntimeMode
-  status: RuntimeStatus
-  previewUrl: string | null
-  logs: string[]
-  error: string | null
-  start(): Promise<void>
-  stop(): Promise<void>
-  restart(): Promise<void>
+  mode: RuntimeMode;
+  status: RuntimeStatus;
+  previewUrl: string | null;
+  logs: string[];
+  error: string | null;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  restart(): Promise<void>;
 }
 ```
 
@@ -105,6 +107,7 @@ export interface ProjectRuntime {
 Wraps the existing `useProjectControl` + `useProjectSSE` hooks into `ProjectRuntime`. All Docker-specific logic (SSE, polling, container status, `broadcastContainerStatusChange`) stays here. Nothing from the Docker path leaks into consumers.
 
 Interface matches `ProjectRuntime` exactly:
+
 - `status` derived from `activeProject.status` + `isStarting`
 - `previewUrl` built from `activeProject.port` (same logic currently in `CanvasEditor`)
 - `logs` forwarded from SSE log events
@@ -130,17 +133,14 @@ NodePod instance held in a `useRef` (not state) to avoid re-render on each log l
 Factory hook. Selects implementation based on user flag and project framework:
 
 ```typescript
-export function useProjectRuntime(
-  project: ProjectData,
-  user: User,
-): ProjectRuntime {
-  const isNodePodEligible = user.clientSideRuntime && isViteProject(project)
-  const mode: RuntimeMode = isNodePodEligible ? 'nodepod' : 'docker'
+export function useProjectRuntime(project: ProjectData, user: User): ProjectRuntime {
+  const isNodePodEligible = user.clientSideRuntime && isViteProject(project);
+  const mode: RuntimeMode = isNodePodEligible ? 'nodepod' : 'docker';
 
-  const docker = useDockerRuntime(project, { enabled: mode === 'docker' })
-  const nodepod = useNodePodRuntime(project, { enabled: mode === 'nodepod' })
+  const docker = useDockerRuntime(project, { enabled: mode === 'docker' });
+  const nodepod = useNodePodRuntime(project, { enabled: mode === 'nodepod' });
 
-  return mode === 'nodepod' ? nodepod : docker
+  return mode === 'nodepod' ? nodepod : docker;
 }
 ```
 
@@ -151,6 +151,7 @@ Both hooks are always called (React rules of hooks) but guarded by `enabled` fla
 ### 6. Client — `CanvasEditor` refactor
 
 `CanvasEditor` replaces:
+
 ```typescript
 // before
 const { handleStartProject, ... } = useProjectControl(...)
@@ -159,9 +160,10 @@ const { handleStartProject, ... } = useProjectControl(...)
 ```
 
 with:
+
 ```typescript
 // after
-const runtime = useProjectRuntime(activeProject, user)
+const runtime = useProjectRuntime(activeProject, user);
 ```
 
 Uses `runtime.previewUrl`, `runtime.status`, `runtime.start()`, `runtime.stop()`, `runtime.logs` — no mode-specific branching. The `ProjectStartOverlay`, `IframeCanvas`, and `LogsPanel` all consume from `runtime`.

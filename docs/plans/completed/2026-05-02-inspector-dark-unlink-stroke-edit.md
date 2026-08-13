@@ -3,10 +3,12 @@
 ## Context
 
 Manual VS Code extension screenshot shows two inspector issues:
+
 - The unlink/link spacing control does not follow the dark VS Code theme.
 - Stroke is displayed but not editable.
 
 Likely source areas:
+
 - `client/components/RightSidebar/sections/MarginSection.tsx`
 - `client/components/RightSidebar/sections/LayoutSection.tsx`
 - `client/components/RightSidebar/sections/StrokeSection.tsx`

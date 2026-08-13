@@ -21,6 +21,7 @@ This guard was added to make the negative test (PI-9-461, line 1427 — `'nonexi
 return `isError: true` correctly. That test now passes.
 
 But `parseTailwindClasses` in `lib/tailwind/parser.ts` is too narrow — it handles only:
+
 - Arbitrary values: `bg-[...]`, `border-[...]`
 - Position: `absolute`, `relative`, `fixed`, `sticky`
 - Margin: `m-*`, `mx-*`, `my-*`, `mt-*`, etc.
@@ -29,6 +30,7 @@ But `parseTailwindClasses` in `lib/tailwind/parser.ts` is too narrow — it hand
 - Overflow: `overflow-*`
 
 It does NOT handle:
+
 - **Padding**: `p-*`, `px-*`, `py-*`, `pt-*`, `pr-*`, `pb-*`, `pl-*`
 - **Named Tailwind colors**: `bg-blue-500`, `bg-twitter-hover`, `text-white`, `text-gray-900`
 - **`rounded` variants**: `rounded-full`, `rounded-2xl`, `rounded-3xl`, `rounded-none` etc.
@@ -40,10 +42,10 @@ A real DOM className from `react-vite-tw4-twitter` (e.g. `p-2 rounded-full hover
 
 ### Conflict
 
-| Test | Input | Expects | Before fix | After 64638850 |
-|------|-------|---------|-----------|----------------|
-| PI-9-451 (line 1177) | real DOM className | no isError, JSON result | PASS | FAIL |
-| PI-9-461 (line 1427) | `nonexistent-xyz-class-xyzzy` | isError: true | FAIL | PASS |
+| Test                 | Input                         | Expects                 | Before fix | After 64638850 |
+| -------------------- | ----------------------------- | ----------------------- | ---------- | -------------- |
+| PI-9-451 (line 1177) | real DOM className            | no isError, JSON result | PASS       | FAIL           |
+| PI-9-461 (line 1427) | `nonexistent-xyz-class-xyzzy` | isError: true           | FAIL       | PASS           |
 
 Goal: both tests pass simultaneously.
 
@@ -171,6 +173,7 @@ git commit -m "fix(tailwind): extend parseTailwindClasses — padding, named col
 - [x] Include: commit hash, which classes were added to parser, both test results (PI-9-451 GREEN + PI-9-461 GREEN), screenshot
 
 Send via `bash /Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`:
+
 - Commit hash
 - Which classes were added to parser
 - Both test results (PI-9-451 GREEN + PI-9-461 GREEN)

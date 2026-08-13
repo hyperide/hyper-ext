@@ -10,10 +10,12 @@ Two distinct failure modes both hitting the same test:
 `"delete element — removed from file, cascade to children"` in `ast-operations.spec.ts:217`.
 
 **Mode A — silent no-op on Vite projects (~19–24s, assertion failure):**
+
 - S1: `react-vite-tw3-kanban` — 2 failures, 21s and 24s
 - S2: `react-vite-styled-shopify` — 2 failures, ~20s each
 
 Error message (from docker.log line 73131):
+
 ```
 Error: File content should change after delete
 expect(received).not.toBe(expected) // Object.is equality
@@ -31,11 +33,13 @@ The comment at line 235-236 says: `"Failure here means deleteSelected() is broke
 **Critical signal:** `ast-debug.log` for S1 contains zero entries for delete or duplicate operations — `AstService.deleteElement()` is never called. The command ran (no crash, test ran 21s not 360s) but silently no-opped somewhere in the extension command handler.
 
 **Mode B — hanging promise on webpack+CSS Modules (~360–472s, timeout):**
+
 - S3 re-run: `webpack-react-cssmodules-spotify` — 2 failures, 382s and 472s
 
 Root cause: `openExplorerAndSelect` in `setup-preview.ts:909` calls `inspector.getComponentName()` wrapped in `.catch(() => '')`. On webpack+CSS Modules projects, `getComponentName()` returns a promise that **never resolves and never rejects** — `.catch()` never fires → `expect.poll` hangs for the full test.slow() timeout (3 × 120s = 360s).
 
 **Also failing alongside delete element:**
+
 - `duplicate element preserves file integrity` (S1: tw3-kanban; S2: tw4-twitter, cssmodules-spotify, styled-shopify, emotion-dashboard)
 - `duplicate element — file content grows after duplicate` (same projects)
 - Same pattern: content unchanged after operation, AstService never called.
@@ -51,12 +55,14 @@ Alternative hypothesis: entry-file-watcher (added in v0.1.46, commit f898bcdd) f
 ## Scope
 
 **Allowed:**
+
 - `ext-test-projects/e2e/helpers/setup-preview.ts` — fix hanging promise in `openExplorerAndSelect`
 - `ext-test-projects/e2e/tests/project-dependent/ast-operations.spec.ts` — improve test robustness
 - `vscode-extension/hypercanvas-preview/src/extension.ts` — investigate delete/duplicate command handlers (read-only first)
 - `vscode-extension/hypercanvas-preview/src/services/PreviewModeManager.ts` — if entry-file-watcher is the cause
 
 **Forbidden without new plan:**
+
 - Changes to `AstService.ts` or core L1 engine
 - Changes to `useElementSelection.ts` or StateHub — these touch many tests
 
@@ -67,11 +73,9 @@ Alternative hypothesis: entry-file-watcher (added in v0.1.46, commit f898bcdd) f
 **File:** `ext-test-projects/e2e/helpers/setup-preview.ts:909`
 
 Current code (simplified):
+
 ```typescript
-await expect.poll(
-  () => inspector.getComponentName().catch(() => ''),
-  { timeout: 10_000, message: '...' }
-).toBeTruthy();
+await expect.poll(() => inspector.getComponentName().catch(() => ''), { timeout: 10_000, message: '...' }).toBeTruthy();
 ```
 
 **Problem:** `getComponentName()` on webpack+CSS Modules returns a promise that never settles.
@@ -81,15 +85,14 @@ await expect.poll(
 
 ```typescript
 const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
-  Promise.race([
-    p,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('componentName-timeout')), ms)),
-  ]);
+  Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('componentName-timeout')), ms))]);
 
-await expect.poll(
-  () => withTimeout(inspector.getComponentName(), 3_000).catch(() => ''),
-  { timeout: 10_000, message: 'Inspector componentName should appear after tree selection' }
-).toBeTruthy();
+await expect
+  .poll(() => withTimeout(inspector.getComponentName(), 3_000).catch(() => ''), {
+    timeout: 10_000,
+    message: 'Inspector componentName should appear after tree selection',
+  })
+  .toBeTruthy();
 ```
 
 After the fix: on webpack+CSS Modules, each `getComponentName()` attempt times out after 3s, `.catch()` returns `''`, `expect.poll` retries up to 10s total, then the `openExplorerAndSelect` exits (not hangs indefinitely). The caller still gets `{ treeCount }`. Test moves on and the delete assertion fires in ~20s (Mode A territory).
@@ -112,13 +115,16 @@ After the fix: on webpack+CSS Modules, each `getComponentName()` attempt times o
 Based on Task 2 findings, one of:
 
 **If selection state mismatch:**
+
 - After `openExplorerAndSelect`, explicitly sync the tree selection to the extension's selectedElements — e.g., call `canvas.selectElementByNodeRef(...)` after tree click
 - OR: change the test to use `canvas.selectElement(NODEREF)` directly (like the bulka-specific test at line 265) instead of `openExplorerAndSelect`
 
 **If entry-file-watcher interference:**
+
 - In `setupEntryFileWatcher()`: add a guard — don't fire `onComponentSelected()` if the preview is mid-test (e.g., check a test-mode flag) OR debounce long enough that the test's action completes first
 
 **If command handler bug:**
+
 - Fix the command handler to use the correct selection source
 
 - [ ] Implement fix based on Task 2 findings

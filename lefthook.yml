@@ -5,7 +5,7 @@ pre-commit:
       glob: '*.{ts,tsx,js,jsx}'
       run: npx oxlint --config .oxlintrc.json --no-error-on-unmatched-pattern {staged_files}
     format:
-      glob: '*.{ts,tsx,js,jsx,json,jsonc,css,md,yaml,yml}'
+      glob: '*.{ts,tsx,js,jsx,json,jsonc,css,md}'
       run: npx oxfmt --write --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
     typecheck:

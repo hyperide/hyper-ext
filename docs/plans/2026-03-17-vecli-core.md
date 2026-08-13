@@ -58,6 +58,7 @@ packages/vector-cli/
 ### Task 1: Package Scaffolding
 
 **Files:**
+
 - Modify: root `package.json` (add to workspaces)
 - Create: `packages/vector-cli/package.json`
 - Create: `packages/vector-cli/tsconfig.json`
@@ -193,6 +194,7 @@ The core fluent API. Each method call adds a node to the graph,
 connects edges, returns a new ChainableNode.
 
 **Files:**
+
 - Create: `packages/vector-cli/src/chainable.ts`
 - Create: `packages/vector-cli/test/chainable.test.ts`
 
@@ -213,8 +215,7 @@ describe('ChainableNode', () => {
 
   it('should chain fill after generator', () => {
     const ctx = createContext();
-    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 })
-      .fill('#ff0000');
+    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 }).fill('#ff0000');
     expect(ctx.graph.nodeCount).toBe(2);
     expect(ctx.graph.edgeCount).toBe(1);
   });
@@ -231,39 +232,33 @@ describe('ChainableNode', () => {
 
   it('should export SVG', () => {
     const ctx = createContext();
-    const svg = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 })
-      .fill('#ff0000')
-      .export('svg');
+    const svg = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 }).fill('#ff0000').export('svg');
     expect(svg).toContain('<svg');
     expect(svg).toContain('fill="#ff0000"');
   });
 
   it('should compute bounds', () => {
     const ctx = createContext();
-    const bounds = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50, x: 10, y: 20 })
-      .bounds();
+    const bounds = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50, x: 10, y: 20 }).bounds();
     expect(bounds.width).toBeCloseTo(100, 0);
     expect(bounds.height).toBeCloseTo(50, 0);
   });
 
   it('should compute length', () => {
     const ctx = createContext();
-    const len = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 100, x: 0, y: 0 })
-      .length();
+    const len = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 100, x: 0, y: 0 }).length();
     expect(len).toBeCloseTo(400, 0);
   });
 
   it('should chain deformation', () => {
     const ctx = createContext();
-    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 })
-      .roughen(10, 5);
+    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 }).roughen(10, 5);
     expect(ctx.graph.nodeCount).toBe(2);
   });
 
   it('should chain roundCorners', () => {
     const ctx = createContext();
-    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 })
-      .roundCorners(10);
+    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 }).roundCorners(10);
     expect(ctx.graph.nodeCount).toBe(2);
   });
 });
@@ -281,8 +276,15 @@ describe('ChainableNode', () => {
  */
 
 import {
-  sceneToSvg, computeBounds, pathLength, pathArea, pointAtOffset,
-  type BoundingBox, type PathValue, type NodeValue, type PointAtOffsetResult,
+  sceneToSvg,
+  computeBounds,
+  pathLength,
+  pathArea,
+  pointAtOffset,
+  type BoundingBox,
+  type PathValue,
+  type NodeValue,
+  type PointAtOffsetResult,
 } from 'vector-engine';
 import type { EvalContext } from './context';
 import { writeFileSync } from 'node:fs';
@@ -307,58 +309,100 @@ export class ChainableNode {
   }
 
   // -- Style --
-  fill(color: string): ChainableNode { return this.chain('fill', { type: 'solid', color }); }
+  fill(color: string): ChainableNode {
+    return this.chain('fill', { type: 'solid', color });
+  }
   stroke(color: string, width = 1, cap = 'round', join = 'round'): ChainableNode {
     return this.chain('stroke', { color, width, cap, join });
   }
-  opacity(value: number): ChainableNode { return this.chain('opacity', { opacity: value }); }
-  blend(mode: string): ChainableNode { return this.chain('blendMode', { mode }); }
+  opacity(value: number): ChainableNode {
+    return this.chain('opacity', { opacity: value });
+  }
+  blend(mode: string): ChainableNode {
+    return this.chain('blendMode', { mode });
+  }
   shadow(color: string, dx: number, dy: number, blur: number): ChainableNode {
     return this.chain('shadow', { color, offsetX: dx, offsetY: dy, blur });
   }
-  blur(radius: number): ChainableNode { return this.chain('blur', { radius }); }
+  blur(radius: number): ChainableNode {
+    return this.chain('blur', { radius });
+  }
 
   // -- Transform --
-  translate(dx: number, dy: number): ChainableNode { return this.chain('translate', { dx, dy }); }
+  translate(dx: number, dy: number): ChainableNode {
+    return this.chain('translate', { dx, dy });
+  }
   rotate(angle: number, cx?: number, cy?: number): ChainableNode {
     return this.chain('rotate', { angle, cx: cx ?? 0, cy: cy ?? 0 });
   }
   scale(sx: number, sy?: number): ChainableNode {
     return this.chain('scale', { sx, sy: sy ?? sx });
   }
-  skew(sx: number, sy: number): ChainableNode { return this.chain('skew', { skewX: sx, skewY: sy }); }
+  skew(sx: number, sy: number): ChainableNode {
+    return this.chain('skew', { skewX: sx, skewY: sy });
+  }
 
   // -- Path operations --
-  roundCorners(radius: number): ChainableNode { return this.chain('roundCorners', { radius }); }
-  chamfer(distance: number): ChainableNode { return this.chain('chamfer', { distance }); }
-  smooth(smoothness = 0.5): ChainableNode { return this.chain('smooth', { smoothness }); }
-  offset(distance: number): ChainableNode { return this.chain('offset', { distance }); }
-  trim(start: number, end: number): ChainableNode { return this.chain('trimPath', { start, end }); }
-  reverse(): ChainableNode { return this.chain('reversePath', {}); }
-  close(): ChainableNode { return this.chain('closeOpen', {}); }
+  roundCorners(radius: number): ChainableNode {
+    return this.chain('roundCorners', { radius });
+  }
+  chamfer(distance: number): ChainableNode {
+    return this.chain('chamfer', { distance });
+  }
+  smooth(smoothness = 0.5): ChainableNode {
+    return this.chain('smooth', { smoothness });
+  }
+  offset(distance: number): ChainableNode {
+    return this.chain('offset', { distance });
+  }
+  trim(start: number, end: number): ChainableNode {
+    return this.chain('trimPath', { start, end });
+  }
+  reverse(): ChainableNode {
+    return this.chain('reversePath', {});
+  }
+  close(): ChainableNode {
+    return this.chain('closeOpen', {});
+  }
   dash(on: number, off: number): ChainableNode {
     return this.chain('dashPath', { dashArray: JSON.stringify([on, off]), dashOffset: 0 });
   }
-  strokeToPath(): ChainableNode { return this.chain('strokeToPath', { width: 1, cap: 'round', join: 'round' }); }
+  strokeToPath(): ChainableNode {
+    return this.chain('strokeToPath', { width: 1, cap: 'round', join: 'round' });
+  }
   roughen(size: number, detail = 5): ChainableNode {
     return this.chain('roughen', { size, detail, type: 'corner', seed: 42 });
   }
   zigzag(size: number, ridges = 5): ChainableNode {
     return this.chain('zigzag', { size, ridgesPerSegment: ridges, type: 'corner' });
   }
-  puckerBloat(amount: number): ChainableNode { return this.chain('puckerBloat', { amount }); }
-  twist(angle: number): ChainableNode { return this.chain('twist', { angle }); }
-  warp(type: string, bend: number): ChainableNode { return this.chain('warp', { warpType: type, bend }); }
+  puckerBloat(amount: number): ChainableNode {
+    return this.chain('puckerBloat', { amount });
+  }
+  twist(angle: number): ChainableNode {
+    return this.chain('twist', { angle });
+  }
+  warp(type: string, bend: number): ChainableNode {
+    return this.chain('warp', { warpType: type, bend });
+  }
   variableStroke(profile: Array<{ offset: number; width: number }>): ChainableNode {
     return this.chain('variableStroke', { profile: JSON.stringify(profile), cap: 'round' });
   }
-  subdivide(segIndex: number, t = 0.5): ChainableNode { return this.chain('subdivide', { segmentIndex: segIndex, t }); }
-  addPoint(segIndex: number, t = 0.5): ChainableNode { return this.chain('addPoint', { segmentIndex: segIndex, t }); }
-  removePoint(index: number): ChainableNode { return this.chain('removePoint', { pointIndex: index }); }
+  subdivide(segIndex: number, t = 0.5): ChainableNode {
+    return this.chain('subdivide', { segmentIndex: segIndex, t });
+  }
+  addPoint(segIndex: number, t = 0.5): ChainableNode {
+    return this.chain('addPoint', { segmentIndex: segIndex, t });
+  }
+  removePoint(index: number): ChainableNode {
+    return this.chain('removePoint', { pointIndex: index });
+  }
   convertPoint(index: number, type: string): ChainableNode {
     return this.chain('convertPoint', { pointIndex: index, pointType: type });
   }
-  enforceWinding(dir: string): ChainableNode { return this.chain('enforceWinding', { direction: dir }); }
+  enforceWinding(dir: string): ChainableNode {
+    return this.chain('enforceWinding', { direction: dir });
+  }
 
   // -- Terminal operations (return values, not ChainableNode) --
   export(format: string, filename?: string): string {
@@ -376,7 +420,9 @@ export class ChainableNode {
     return svg;
   }
 
-  svg(): string { return this.export('svg'); }
+  svg(): string {
+    return this.export('svg');
+  }
 
   bounds(): BoundingBox {
     const result = this.ctx.executor.execute(this.ctx.graph);
@@ -422,6 +468,7 @@ feat(vector-cli): ChainableNode fluent API (HYP-308)
 Map user-facing function names to ChainableNode constructors + multi-node ops.
 
 **Files:**
+
 - Create: `packages/vector-cli/src/globals.ts`
 - Create: `packages/vector-cli/test/globals.test.ts`
 
@@ -505,26 +552,20 @@ export function createGlobals(ctx: EvalContext): Record<string, Function> {
     // Generators
     rect: (w: number, h: number, x = 0, y = 0) =>
       ChainableNode.generator(ctx, 'rectangle', { width: w, height: h, x, y }),
-    ellipse: (rx: number, ry: number, cx = 0, cy = 0) =>
-      ChainableNode.generator(ctx, 'ellipse', { rx, ry, cx, cy }),
-    circle: (r: number, cx = 0, cy = 0) =>
-      ChainableNode.generator(ctx, 'ellipse', { rx: r, ry: r, cx, cy }),
+    ellipse: (rx: number, ry: number, cx = 0, cy = 0) => ChainableNode.generator(ctx, 'ellipse', { rx, ry, cx, cy }),
+    circle: (r: number, cx = 0, cy = 0) => ChainableNode.generator(ctx, 'ellipse', { rx: r, ry: r, cx, cy }),
     polygon: (sides: number, radius: number, cx = 0, cy = 0) =>
       ChainableNode.generator(ctx, 'polygon', { sides, radius, cx, cy }),
     star: (points: number, outer: number, inner: number, cx = 0, cy = 0) =>
       ChainableNode.generator(ctx, 'star', { points, outerRadius: outer, innerRadius: inner, cx, cy }),
-    line: (x1: number, y1: number, x2: number, y2: number) =>
-      ChainableNode.generator(ctx, 'line', { x1, y1, x2, y2 }),
+    line: (x1: number, y1: number, x2: number, y2: number) => ChainableNode.generator(ctx, 'line', { x1, y1, x2, y2 }),
     arc: (radius: number, startAngle: number, endAngle: number, cx = 0, cy = 0) =>
       ChainableNode.generator(ctx, 'arc', { radius, startAngle, endAngle, cx, cy }),
     spiral: (spirals: number, radius: number, cx = 0, cy = 0) =>
       ChainableNode.generator(ctx, 'spiral', { spirals, radius, cx, cy }),
-    arrow: (length: number, width: number) =>
-      ChainableNode.generator(ctx, 'arrow', { length, width }),
-    path: (d: string) =>
-      ChainableNode.generator(ctx, 'svgPath', { d }),
-    text: (text: string, fontSize = 48) =>
-      ChainableNode.generator(ctx, 'textToPath', { text, fontSize, fontUrl: '' }),
+    arrow: (length: number, width: number) => ChainableNode.generator(ctx, 'arrow', { length, width }),
+    path: (d: string) => ChainableNode.generator(ctx, 'svgPath', { d }),
+    text: (text: string, fontSize = 48) => ChainableNode.generator(ctx, 'textToPath', { text, fontSize, fontUrl: '' }),
     mesh: (rows: number, cols: number, w = 100, h = 100) =>
       ChainableNode.generator(ctx, 'gradientMesh', { rows, cols, width: w, height: h, x: 0, y: 0, color: '#ffffff' }),
 
@@ -565,8 +606,12 @@ export function createGlobals(ctx: EvalContext): Record<string, Function> {
     },
 
     // History
-    undo: (n = 1) => { for (let i = 0; i < n; i++) ctx.history.undo(ctx.graph); },
-    redo: (n = 1) => { for (let i = 0; i < n; i++) ctx.history.redo(ctx.graph); },
+    undo: (n = 1) => {
+      for (let i = 0; i < n; i++) ctx.history.undo(ctx.graph);
+    },
+    redo: (n = 1) => {
+      for (let i = 0; i < n; i++) ctx.history.redo(ctx.graph);
+    },
     history: (n?: number) => {
       const entries = ctx.history.getEntries();
       return n ? entries.slice(-n) : entries;
@@ -597,7 +642,7 @@ export function createGlobals(ctx: EvalContext): Record<string, Function> {
     // Inspection
     nodes: () => {
       const order = ctx.graph.topologicalOrder();
-      return order.map(id => ctx.graph.getNode(id)).filter(Boolean);
+      return order.map((id) => ctx.graph.getNode(id)).filter(Boolean);
     },
     edges: () => ctx.graph.getEdges(),
     info: (node: ChainableNode | string) => {
@@ -632,6 +677,7 @@ feat(vector-cli): global function bindings for sandbox (HYP-308)
 ### Task 4: Sandbox (eval)
 
 **Files:**
+
 - Create: `packages/vector-cli/src/sandbox.ts`
 - Create: `packages/vector-cli/test/sandbox.test.ts`
 
@@ -657,21 +703,27 @@ describe('sandbox', () => {
 
   it('should support variables', () => {
     const ctx = createContext();
-    runInSandbox(ctx, `
+    runInSandbox(
+      ctx,
+      `
       const r = rect(100, 50);
       const c = circle(30);
       union(r, c).fill("#00f");
-    `);
+    `,
+    );
     expect(ctx.graph.nodeCount).toBe(4); // rect + circle + union + fill
   });
 
   it('should support loops', () => {
     const ctx = createContext();
-    runInSandbox(ctx, `
+    runInSandbox(
+      ctx,
+      `
       for (let i = 0; i < 3; i++) {
         circle(10).translate(i * 30, 0);
       }
-    `);
+    `,
+    );
     expect(ctx.graph.nodeCount).toBe(6); // 3 circles + 3 translates
   });
 
@@ -743,6 +795,7 @@ feat(vector-cli): sandboxed eval for CLI expressions (HYP-308)
 ### Task 5: Batch Runner
 
 **Files:**
+
 - Create: `packages/vector-cli/src/batch.ts`
 - Create: `packages/vector-cli/test/batch.test.ts`
 
@@ -826,6 +879,7 @@ feat(vector-cli): batch mode runner (HYP-308)
 ### Task 6: Entry Point (bin/vecli.ts)
 
 **Files:**
+
 - Create: `packages/vector-cli/bin/vecli.ts`
 
 - [ ] **Step 1: Implement entry point**
@@ -853,9 +907,15 @@ let expression: string | undefined;
 
 for (let i = 0; i < args.length; i++) {
   switch (args[i]) {
-    case '-e': execFile = args[++i]; break;
-    case '-o': outputFile = args[++i]; break;
-    case '-i': inputFile = args[++i]; break;
+    case '-e':
+      execFile = args[++i];
+      break;
+    case '-o':
+      outputFile = args[++i];
+      break;
+    case '-i':
+      inputFile = args[++i];
+      break;
     case '--canvas': {
       const [w, h] = args[++i].split('x').map(Number);
       canvasWidth = w;
@@ -898,7 +958,7 @@ if (hasBatchArgs || !isTTY) {
 } else {
   // TUI mode (placeholder — implemented in Plan 2)
   console.log('vecli interactive mode — TUI coming in next phase');
-  console.log('Use: vecli \'expression\' for batch mode');
+  console.log("Use: vecli 'expression' for batch mode");
   console.log('Use: vecli -e script.js to execute a file');
 }
 ```
@@ -933,6 +993,7 @@ feat(vector-cli): entry point with mode detection (HYP-308)
 ### Task 7: File Commands (open/save/export)
 
 **Files:**
+
 - Create: `packages/vector-cli/src/commands/file.ts`
 - Create: `packages/vector-cli/test/commands.test.ts`
 
@@ -994,10 +1055,15 @@ describe('file commands', () => {
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import {
-  serializeGraph, deserializeGraph,
-  serializeGraphBinary, deserializeGraphBinary,
-  svgToGraph, parseFigFile, mapFigToGraph,
-  VectorGraphModel, sceneToSvg,
+  serializeGraph,
+  deserializeGraph,
+  serializeGraphBinary,
+  deserializeGraphBinary,
+  svgToGraph,
+  parseFigFile,
+  mapFigToGraph,
+  VectorGraphModel,
+  sceneToSvg,
 } from 'vector-engine';
 import type { EvalContext } from '../context';
 
@@ -1043,6 +1109,7 @@ export function saveFile(ctx: EvalContext, filepath?: string): void {
 - [ ] **Step 3: Wire file commands into globals.ts**
 
 Add `open` and `save` to globals:
+
 ```typescript
 open: (path: string) => openFile(ctx, path),
 save: (path?: string) => saveFile(ctx, path),
@@ -1061,6 +1128,7 @@ feat(vector-cli): file commands — open/save for .graph, .svg, .fig (HYP-308)
 ### Task 8: Live SVG Preview
 
 **Files:**
+
 - Create: `packages/vector-cli/src/preview.ts`
 - Modify: `packages/vector-cli/test/commands.test.ts`
 
@@ -1086,7 +1154,7 @@ describe('live preview', () => {
     preview.update('<svg>1</svg>');
     preview.update('<svg>2</svg>');
     preview.update('<svg>3</svg>');
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 100));
     const content = readFileSync(tmpFile, 'utf-8');
     expect(content).toContain('<svg>3</svg>'); // Only last write
     preview.dispose();
@@ -1163,6 +1231,7 @@ feat(vector-cli): live SVG preview with debounced file write (HYP-308)
 ### Task 9: Table & Tree Formatters
 
 **Files:**
+
 - Create: `packages/vector-cli/src/formatters/table.ts`
 - Create: `packages/vector-cli/src/formatters/tree.ts`
 - Create: `packages/vector-cli/test/formatters.test.ts`
@@ -1225,6 +1294,7 @@ feat(vector-cli): table and ASCII tree formatters (HYP-308)
 ### Task 10: Integration Tests & Polish
 
 **Files:**
+
 - Create: `packages/vector-cli/test/integration.test.ts`
 
 - [ ] **Step 1: Write end-to-end tests**
@@ -1259,11 +1329,14 @@ describe('vecli integration', () => {
 
   it('should use variables and loops', () => {
     const ctx = createContext(200, 200);
-    runInSandbox(ctx, `
+    runInSandbox(
+      ctx,
+      `
       for (let i = 0; i < 5; i++) {
         circle(8).translate(i * 25 + 20, 100).fill("#333");
       }
-    `);
+    `,
+    );
     expect(ctx.graph.nodeCount).toBe(15); // 5 × (circle + translate + fill)
   });
 });
@@ -1286,12 +1359,12 @@ test(vector-cli): integration tests (HYP-308)
 
 ## Deferred to vecli Plan 2 (TUI)
 
-| Feature | Reason |
-|---------|--------|
-| ink-based TUI panels | Separate concern, depends on core CLI being stable |
-| REPL loop | Needs ink or readline integration |
-| Hotkeys (Ctrl+Z/Y/S/Q) | TUI-specific |
-| ASCII graph visualization | TUI center panel |
-| Properties editing | TUI right panel |
-| Status bar | TUI bottom |
-| sixel/kitty SVG preview | Terminal-specific |
+| Feature                   | Reason                                             |
+| ------------------------- | -------------------------------------------------- |
+| ink-based TUI panels      | Separate concern, depends on core CLI being stable |
+| REPL loop                 | Needs ink or readline integration                  |
+| Hotkeys (Ctrl+Z/Y/S/Q)    | TUI-specific                                       |
+| ASCII graph visualization | TUI center panel                                   |
+| Properties editing        | TUI right panel                                    |
+| Status bar                | TUI bottom                                         |
+| sixel/kitty SVG preview   | Terminal-specific                                  |

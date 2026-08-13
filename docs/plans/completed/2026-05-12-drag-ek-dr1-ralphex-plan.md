@@ -10,7 +10,7 @@ Three drag-related E2E tests consistently fail in run-20260512-002106-89890 (fir
 
 ### What was NOT done
 
-These tests are **first-time runs** — they don't appear in ANY earlier Docker artifacts (run-20260511-*). They are NOT regressions from the entry-file-watcher fix (commit 7e98658a).
+These tests are **first-time runs** — they don't appear in ANY earlier Docker artifacts (run-20260511-\*). They are NOT regressions from the entry-file-watcher fix (commit 7e98658a).
 
 ### Related plan
 
@@ -42,6 +42,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- \
 ```
 
 Check:
+
 - Does `window.screenshot` show the img element visible before drag?
 - Does `ast-debug.log` show any `moveElement` RPC call during the test?
 - If NO moveElement call: the drag gesture is not reaching the extension → fix is in `dragInIframe` helper or the iframe event handler.
@@ -88,6 +89,7 @@ Update `docs/plans/2026-05-06-move-any-intermittent.md` Task 7 with findings.
 ## Task 5 — TG report
 
 Send via `cd /Users/ultra/xp/codex-tg-bot && bash scripts/send-tg-report.sh`:
+
 - Which task fixed it (img drag gesture or moveElement or resolver)
 - Files changed, commits
 - Screenshot showing PI-5-DR-EK-IMG GREEN

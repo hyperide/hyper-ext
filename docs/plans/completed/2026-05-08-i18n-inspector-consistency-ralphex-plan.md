@@ -11,6 +11,7 @@ Two user-reported bugs trace to the **same** root cause in `StyleReadService._tr
    becomes `{t("q")}`, but the inspector still shows the old key.
 
 Investigation pointer documents:
+
 - `docs/specs/2026-05-08-i18n-locale-switcher.md` (Gap A/B/C, regression history)
 - `docs/plans/2026-05-08-i18n-new-key-not-selected.md` (hypothesis matrix, Hyp A vs Hyp B)
 
@@ -48,6 +49,7 @@ Restore the locale-aware DOM-text path **and** drop the `null`-text bail-out. On
 behaviour in.
 
 Do **not** touch:
+
 - `writeI18nResource` / `writeTsLocaleValue` — covered by the merged-TS plan.
 - Browser/SaaS read path (`useElementStyleData` engine branch). `activeLocale` for SaaS is a
   separate deferred ticket (Gap D in the spec).
@@ -103,12 +105,15 @@ removed in `3bff90dd`, restore it from `git show d8874e13 -- '*StyleReadService.
 - [x] Add unit test for `resolvedText: null` returning `kind: 'i18n'` not `'unsupported'`
 
 `StyleReadService.ts:385–387` currently:
+
 ```ts
 if (!resolved || resolved.resolvedText === null) {
   return { kind: 'unsupported', reason: 'missing-source-location' };
 }
 ```
+
 Replace with:
+
 ```ts
 if (!resolved) {
   return { kind: 'unsupported', reason: 'missing-source-location' };
@@ -117,6 +122,7 @@ if (!resolved) {
 // committed to the dictionary). The inspector handles null by showing an empty input;
 // returning the binding still keeps the active locale highlight in sync.
 ```
+
 Build the binding with `resolvedText: resolved.resolvedText` (which may be `null`). Keep
 `editable` and `writable` plumbed from `resolved.writable` exactly as `c5a0c82a` set them.
 
@@ -136,7 +142,7 @@ NOT `kind: 'unsupported'`.
       spawns `pnpm run dev`, but the e2e Docker image has no `pnpm` in PATH
       (only bun + npm). Confirmed by running the existing
       `bulka-i18n-combobox.spec.ts` baseline — same `Dev server failed: Server
-      failed to start` failure. Out of scope for this plan; will go GREEN once
+failed to start` failure. Out of scope for this plan; will go GREEN once
       the Docker image gains pnpm or bulka adopts `bun.lock`.
 - [x] Capture before/after screenshots — embedded in the spec
       (`bulka-i18n-locale-switch-before-<locale>.png`,
@@ -192,6 +198,7 @@ Test must be **RED before Task 2 lands**, **GREEN after** for the key-visible po
 
 The merged-TS write fix lives in a separate plan (`2026-05-08-i18n-merged-ts-write-ralphex-plan.md`).
 While that plan is in flight:
+
 - If merged-TS write is BROKEN, the e2e in Task 4 may show the new key in the inspector with
   an EMPTY text field (Gap C fix surfaces the binding even when `resolvedText: null`). That is
   the correct intermediate behaviour for THIS plan — assert `key === 'e2e.newkey'` and accept

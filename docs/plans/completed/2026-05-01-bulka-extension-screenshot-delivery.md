@@ -148,7 +148,7 @@ EXTENSION_PATH="$EXT_ROOT/vscode-extension/hypercanvas-preview" \
 
 - [x] Create or reuse a no-send debug capture script in `ext-test-projects` that
       uses `launchVSCode()` and `setupPreviewWithDevServer(window,
-      'client/pages/Index.tsx', app)`.
+'client/pages/Index.tsx', app)`.
 - [x] Capture at least two screenshots: the full VS Code window with the Hyper
       Canvas preview visible, and a closer preview-panel screenshot that clearly
       shows Bulka content.

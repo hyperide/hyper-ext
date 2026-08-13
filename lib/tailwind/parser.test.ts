@@ -86,9 +86,7 @@ describe('parseTailwindClasses', () => {
 
   // PI-9-451 regression: real DOM className from react-vite-tw4-twitter
   it('should parse real Tailwind DOM className and skip hover modifier (PI-9-451 regression)', () => {
-    const result = parseTailwindClasses(
-      'p-2 rounded-full hover:bg-twitter-hover transition-colors text-twitter-text',
-    );
+    const result = parseTailwindClasses('p-2 rounded-full hover:bg-twitter-hover transition-colors text-twitter-text');
     expect(result.paddingTop).toBe('0.5rem');
     expect(result.paddingRight).toBe('0.5rem');
     expect(result.paddingBottom).toBe('0.5rem');

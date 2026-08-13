@@ -62,6 +62,7 @@ Tests use bulka-the-dog project (has i18n with react-i18next, locales/en.json).
 - [x] Document findings: what blocks `canCreateKey`, what guard blocks repeated writes, where `writeInProgress` fails to clear
 
 **Findings:**
+
 - Bug 1: `canCreateKeys` prop exists in I18nTextInspector (default false) but RightSidebar.tsx:1419 never passes it. Also `keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}` is false when locale is empty, blocking combobox entirely. Fix: pass `canCreateKeys={i18nText.writable}` (from `I18nTextBinding.writable`). Change `showCombobox` to show when `canCreateKeys` even with `keyEditable=false`.
 - Bug 2: Grace cache lives in iframe-interaction.ts. `invalidateSelectionGraceCacheForFile` is called for drag ops (line 1813) but NOT after i18n write. Need to send postMessage to iframe after successful write.
 - Bug 3: `writeInProgress` is NOT used in iframe-interaction.ts at all. Real issue: `restoreIfCurrent` sees transient `selectedIds=[]` (during HMR rebuild) and dispatches `selectedIds:[previousSelectedId]`, overriding user's click to element B. Need to track whether user explicitly clicked something new, separate from HMR-induced empty state.

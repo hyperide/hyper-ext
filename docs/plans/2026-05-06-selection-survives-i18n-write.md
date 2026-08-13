@@ -44,22 +44,22 @@ deselect** during a key change.
 Replace the x3-dispatch kostyl with one of these proper paths:
 
 A. **AstBridge returns new source location.** writeI18nResource response
-   includes `newElementId: 'path:newLine:newCol'`. handleI18nKeyChange
-   awaits the result and dispatches the new ID exactly once. The iframe
-   FSM either re-attaches selection on the new ID (if DOM updated by then)
-   or remembers it as "pending selection" and applies on next
-   tracing-resolver tick — without ever clearing the visible outline.
+includes `newElementId: 'path:newLine:newCol'`. handleI18nKeyChange
+awaits the result and dispatches the new ID exactly once. The iframe
+FSM either re-attaches selection on the new ID (if DOM updated by then)
+or remembers it as "pending selection" and applies on next
+tracing-resolver tick — without ever clearing the visible outline.
 
 B. **Defer selection clear during write window.** The iframe overlay
-   renderer keeps the previous bounding-rect on screen while
-   `state.writeInProgress === true` even if no DOM match — the rect
-   "freezes" instead of disappearing. When the new fiber settles, the
-   stored ID gets matched and the overlay snaps to the new bounds. No
-   blank window.
+renderer keeps the previous bounding-rect on screen while
+`state.writeInProgress === true` even if no DOM match — the rect
+"freezes" instead of disappearing. When the new fiber settles, the
+stored ID gets matched and the overlay snaps to the new bounds. No
+blank window.
 
 C. **Pre-allocate selection by JSX node identity, not by source-loc string.**
-   Use a stable JSX node id (assigned at parse time) that survives line/col
-   shifts. iframe FSM tracks JSX-id, not nodeRef.
+Use a stable JSX node id (assigned at parse time) that survives line/col
+shifts. iframe FSM tracks JSX-id, not nodeRef.
 
 Pick A as the simplest concrete win; combine with B as the safety net.
 
@@ -81,61 +81,52 @@ Pick A as the simplest concrete win; combine with B as the safety net.
       change key via combobox, capture the timeline:
       a) when does the overlay disappear?
       b) what cleared the selection — DOM gone, state cleared, or overlay
-         renderer skipped?
+      renderer skipped?
       c) when does the new ID arrive (if ever)?
       Static trace (sufficient to commit to Path A+B; an E2E run with the
-      diagnostics above will validate it before Task 2 lands the fix):
-      1. t=0: `handleI18nKeyChange` starts; calls `astOps.writeI18nResource`.
-         `state.selectedIds` in iframe still holds the OLD ref
-         `path:line:col`.
-      2. t≈10–80ms: AstBridge.\_handleWriteI18nResource writes the locale
-         JSON, then `astService.updateText(filePath, elementId, "{t('newKey')}")`
-         rewrites the JSX child expression. The host returns
-         `{success, data:{filePath}}` — **no `newElementId`** (gap that
-         Path A closes).
-      3. t≈50–200ms: Vite watcher fires HMR. React commits a re-render.
-         `hookIntoReactCommits` calls `FiberSourceIndex.invalidate()` on
-         every commit (shared/element-tracing/fiber-source-index.ts:218).
-      4. **The flicker window**: between commit-with-old-DOM-removed and
-         the rebuilt index's first lookup, two compounding effects:
-         - `findDOMElements(oldRef)` returns `[]` because the old DOM
-           nodes are no longer `document.contains`-true; the new nodes
-           may map to a different `path:line:col` (column shifts when
-           the literal length changes — most stable case is same line,
-           column-of-`<span>` unchanged, but the `t('…')` call site
-           inside it has shifted; whichever level of the JSX subtree
-           was selected determines whether the ref is invariant).
-         - Source-map resolution for the freshly-bundled module is
-           async (`resolveInSourceMap`), so for several frames the new
-           fibers' `_debugStack` resolves to `null` and the rebuilt
-           index has fewer entries than the eventual stable index.
-         - `findClosestLineDOMElements` — the only fuzzy fallback —
-           requires `fileName` *and* `line` to match exactly, only
-           the column may differ. If the rewrite stays single-line,
-           recovery happens once the new index entry on the same line
-           lands. If multi-line shift, fuzzy match misses too.
-         Outline-disappearance cause = "DOM gone + index temporarily
-         empty + exact-match required"; selection state itself was
-         **never cleared** by any code path (verified: no
-         `state.selectedIds = []` happens during the flow — the x3
-         dispatches re-set it to the same OLD value, which proves the
-         iframe state was already that value).
-      5. t≈100–600ms: `i18nDispatch({selectedIds:[previousSelectedId]})`
-         fires (immediate / 250ms / 800ms). All three set the SAME
-         OLD ref into `state.selectedIds`. They do not introduce a new
-         ID; they only ensure the iframe state didn't get clobbered by
-         a stale `state:init` from StateHub during the HMR window.
-         (StateHub broadcasts the React-store snapshot on
-         `state:init`/round-trip; if that snapshot still has the OLD
-         ref the kostyl is redundant. The kostyl exists because there
-         **is** a race where StateHub's snapshot has been cleared by
-         file-change observers and the iframe is the last source of
-         truth — re-dispatching forces consistency.)
-      6. t≈300–600ms: `FiberSourceIndex` finishes async source-map
-         resolution for the new bundle. `findClosestLineDOMElements`
-         finds the new element on the same line → overlay reappears.
-         The 800ms third dispatch is a margin-of-safety for slow HMR
-         (webpack projects can take >500ms for a recompile).
+      diagnostics above will validate it before Task 2 lands the fix): 1. t=0: `handleI18nKeyChange` starts; calls `astOps.writeI18nResource`.
+      `state.selectedIds` in iframe still holds the OLD ref
+      `path:line:col`. 2. t≈10–80ms: AstBridge.\_handleWriteI18nResource writes the locale
+      JSON, then `astService.updateText(filePath, elementId, "{t('newKey')}")`
+      rewrites the JSX child expression. The host returns
+      `{success, data:{filePath}}` — **no `newElementId`** (gap that
+      Path A closes). 3. t≈50–200ms: Vite watcher fires HMR. React commits a re-render.
+      `hookIntoReactCommits` calls `FiberSourceIndex.invalidate()` on
+      every commit (shared/element-tracing/fiber-source-index.ts:218). 4. **The flicker window**: between commit-with-old-DOM-removed and
+      the rebuilt index's first lookup, two compounding effects: - `findDOMElements(oldRef)` returns `[]` because the old DOM
+      nodes are no longer `document.contains`-true; the new nodes
+      may map to a different `path:line:col` (column shifts when
+      the literal length changes — most stable case is same line,
+      column-of-`<span>` unchanged, but the `t('…')` call site
+      inside it has shifted; whichever level of the JSX subtree
+      was selected determines whether the ref is invariant). - Source-map resolution for the freshly-bundled module is
+      async (`resolveInSourceMap`), so for several frames the new
+      fibers' `_debugStack` resolves to `null` and the rebuilt
+      index has fewer entries than the eventual stable index. - `findClosestLineDOMElements` — the only fuzzy fallback —
+      requires `fileName` _and_ `line` to match exactly, only
+      the column may differ. If the rewrite stays single-line,
+      recovery happens once the new index entry on the same line
+      lands. If multi-line shift, fuzzy match misses too.
+      Outline-disappearance cause = "DOM gone + index temporarily
+      empty + exact-match required"; selection state itself was
+      **never cleared** by any code path (verified: no
+      `state.selectedIds = []` happens during the flow — the x3
+      dispatches re-set it to the same OLD value, which proves the
+      iframe state was already that value). 5. t≈100–600ms: `i18nDispatch({selectedIds:[previousSelectedId]})`
+      fires (immediate / 250ms / 800ms). All three set the SAME
+      OLD ref into `state.selectedIds`. They do not introduce a new
+      ID; they only ensure the iframe state didn't get clobbered by
+      a stale `state:init` from StateHub during the HMR window.
+      (StateHub broadcasts the React-store snapshot on
+      `state:init`/round-trip; if that snapshot still has the OLD
+      ref the kostyl is redundant. The kostyl exists because there
+      **is** a race where StateHub's snapshot has been cleared by
+      file-change observers and the iframe is the last source of
+      truth — re-dispatching forces consistency.) 6. t≈300–600ms: `FiberSourceIndex` finishes async source-map
+      resolution for the new bundle. `findClosestLineDOMElements`
+      finds the new element on the same line → overlay reappears.
+      The 800ms third dispatch is a margin-of-safety for slow HMR
+      (webpack projects can take >500ms for a recompile).
       Conclusion: Path A closes the root cause for column-shifted
       cases (return `newElementId` so the iframe stops asking about a
       stale ref the moment the new ref is known). Path B closes the
@@ -222,7 +213,7 @@ Pick A as the simplest concrete win; combine with B as the safety net.
       `client/components/RightSidebar/RightSidebar.tsx`); the only
       `setTimeout` in the file outside this function is the unrelated
       300ms debounce inside `handleI18nResolvedTextChange`. `bun run
-      typecheck` clean. The freeze (Task 3 / Path B) covers the remaining
+typecheck` clean. The freeze (Task 3 / Path B) covers the remaining
       sub-frames between dispatch and DOM resolution.
 
 ### Task 5: Unit + E2E
@@ -271,16 +262,16 @@ Pick A as the simplest concrete win; combine with B as the safety net.
 - [x] `npm run package` from main, install, reload.
       Built `hypercanvas-preview-0.1.41-task6.vsix` from this worktree
       (`vscode-extension/hypercanvas-preview/` + `npm run build` + `npx
-      @vscode/vsce package`) and installed via `code --install-extension
-      ... --force`. The extension package is portable; the worktree-resident
+@vscode/vsce package`) and installed via `code --install-extension
+... --force`. The extension package is portable; the worktree-resident
       bundle carries the Task 2 + Task 3 changes. Reload step is a no-op for
       the docker e2e harness (it spins up its own VS Code copy with
       `EXTENSION_PATH` mounted).
 - [x] Capture the 3-frame sequence proving no flicker.
       Ran the Task 5 spec under
       `HYPER_E2E_EXTENSION_REPO=<worktree> bun run test:docker
-      --project=dep:bulka-the-dog
-      tests/project-dependent/bulka-i18n-key-change-no-flicker.spec.ts`.
+--project=dep:bulka-the-dog
+tests/project-dependent/bulka-i18n-key-change-no-flicker.spec.ts`.
       The three full-window screenshots at ~16ms / ~200ms / ~500ms were
       captured to
       `e2e/docker-artifacts/run-20260506-131758-79767/shard-1/screenshots/bulka-i18n-key-change-frame-{016,200,500}ms.png`.

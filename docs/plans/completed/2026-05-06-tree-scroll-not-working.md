@@ -59,6 +59,7 @@ PreviewPanel webview that owns the iframe. Sender (LeftPanel) silently ignores t
 broadcast — no `case 'iframe:scrollToElement'` in its switch.
 
 Changes:
+
 - `vscode-extension/hypercanvas-preview/src/StateHub.ts` — added generic `broadcast(message)` helper alongside `broadcastTracingMessage`.
 - `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — replaced `webview.postMessage(message)` with `this._stateHub.broadcast(message)` for `iframe:scrollToElement`. Updated comment, removed Task-1 instrumentation log.
 - `client/components/LeftSidebar/hooks/useElementSelection.ts` — dropped the dead `window.dispatchEvent(new CustomEvent('hypercanvas:treeSelect'))` call. SaaS takes the `engine.select` branch and never reached it; VS Code webviews are isolated iframes so the listener in the PreviewPanel never received it.

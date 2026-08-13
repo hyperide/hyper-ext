@@ -23,10 +23,12 @@ Extract the shared logic into `lib/style-write/style-write-executor.ts`:
 
 ```typescript
 export class StyleWriteExecutor {
-  constructor(private deps: {
-    fileIO: FileIO;
-    projectRoot: string;
-  }) {}
+  constructor(
+    private deps: {
+      fileIO: FileIO;
+      projectRoot: string;
+    },
+  ) {}
 
   async execute(plan: StyleWritePlan): Promise<StyleWriteResult> {
     // The shared mutation logic from both executeSharedStyleWrite functions
@@ -40,12 +42,12 @@ Then both platform endpoints become thin wrappers:
 // AstService.ts
 const executor = new StyleWriteExecutor({ fileIO: this._fileIO, projectRoot: this._workspaceRoot });
 const result = await executor.execute(plan);
-this._updateNodeMap(result);  // VS Code-specific post-mutation
+this._updateNodeMap(result); // VS Code-specific post-mutation
 
 // updateComponentStyles.ts
 const executor = new StyleWriteExecutor({ fileIO: new NodeFileIO(), projectRoot });
 const result = await executor.execute(plan);
-afterMutation(result);  // SaaS-specific post-mutation
+afterMutation(result); // SaaS-specific post-mutation
 trackEditFromContext(result);
 ```
 
@@ -65,11 +67,7 @@ In both `AstService.ts` and `updateComponentStyles.ts`, delete the old path and
 replace with planner-based routing:
 
 ```typescript
-const planner = new DefaultStyleWritePlanner([
-  tailwindV4Adapter,
-  cssModulesAdapter,
-  inlineStyleAdapter,
-]);
+const planner = new DefaultStyleWritePlanner([tailwindV4Adapter, cssModulesAdapter, inlineStyleAdapter]);
 const { adapter, writer, sourceOwner } = planner.selectTarget(writeContext);
 const plan = writer.createPlan({ context: writeContext, sourceOwner });
 const executor = new StyleWriteExecutor({ fileIO, projectRoot });
@@ -80,10 +78,10 @@ Construct `ElementStyleFacts` from what's available at the call site:
 
 ```typescript
 const elementFacts: ElementStyleFacts = {
-  elementCssSystems: detectedSystems,  // from existing detection logic
+  elementCssSystems: detectedSystems, // from existing detection logic
   elementUiKits: [],
   elementPropMappers: [],
-  sourceOwners: existingOwners,  // from existing owner lookup
+  sourceOwners: existingOwners, // from existing owner lookup
 };
 ```
 
@@ -123,7 +121,7 @@ Files:
 - `lib/tailwind/generator.test.ts` (fontSize tests)
 - `lib/tailwind/parser.ts` (fontSize mapping, conflict removal)
 - `lib/tailwind/parser.test.ts` (fontSize parse tests)
-- `client/lib/canvas-engine/utils/tailwindParser.ts` (text-* disambiguation)
+- `client/lib/canvas-engine/utils/tailwindParser.ts` (text-\* disambiguation)
 - `client/components/RightSidebar/sections/FillSection.tsx` (fontSize input)
 
 ### Commit 4: `feat(ext): add StyleReadService with source tabs pipeline`

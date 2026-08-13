@@ -7,15 +7,16 @@ visual feedback. Users see nothing while dragging — no ghost image following t
 no indicator showing the drop position. The experience feels broken.
 
 This plan implements:
+
 1. **Ghost element**: a semi-transparent clone of the dragged element follows the cursor (scale 1.03 + shadow = "floating" effect). Original becomes 35% opacity.
 2. **Drop indicator**: a blue horizontal line between elements shows where the element will land.
 
 ## Files to Change
 
-| File | Change |
-|------|--------|
-| `shared/canvas-interaction/style-injector.ts` | Add `.hyper-drag-ghost` and `.hyper-drop-indicator` CSS |
-| `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` | Extend drag state machine |
+| File                                                                              | Change                                                  |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `shared/canvas-interaction/style-injector.ts`                                     | Add `.hyper-drag-ghost` and `.hyper-drop-indicator` CSS |
+| `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` | Extend drag state machine                               |
 
 SaaS is out of scope. Do not touch `client/` or `server/`.
 
@@ -29,9 +30,11 @@ SaaS is out of scope. Do not touch `client/` or `server/`.
 - Telegram heartbeat every 15 min.
 
 This ralphex run is isolated. Use this Hyper Canvas worktree:
+
 - `/Users/ultra/work/hyper-canvas-draft-worktrees/20260505-drag-visual/hyper-canvas-draft`
 
 Create it with:
+
 ```bash
 git -C /Users/ultra/work/hyper-canvas-draft worktree add \
   /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-drag-visual/hyper-canvas-draft \
@@ -50,10 +53,14 @@ Add to `buildDesignStylesCSS()` return string:
   z-index: 2147483647 !important;
   pointer-events: none !important;
   transform: scale(1.03) !important;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.22), 0 0 0 2px rgba(59,130,246,0.5) !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.22),
+    0 0 0 2px rgba(59, 130, 246, 0.5) !important;
   opacity: 0.88 !important;
   border-radius: 4px !important;
-  transition: transform 0.12s ease, box-shadow 0.12s ease !important;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease !important;
   will-change: transform, left, top !important;
 }
 .hyper-drop-indicator {
@@ -77,13 +84,18 @@ Add to `buildDesignStylesCSS()` return string:
   border-radius: 50% !important;
   background: #3b82f6 !important;
 }
-.hyper-drop-indicator::before { left: -3px !important; }
-.hyper-drop-indicator::after  { right: -3px !important; }
+.hyper-drop-indicator::before {
+  left: -3px !important;
+}
+.hyper-drop-indicator::after {
+  right: -3px !important;
+}
 ```
 
 ### Drag State Machine (iframe-interaction.ts)
 
 New state variables (add alongside `_dragState`):
+
 ```ts
 let _dragGhostEl: HTMLElement | null = null;
 let _dragIndicatorEl: HTMLElement | null = null;
@@ -95,6 +107,7 @@ let _dragSourceEl: HTMLElement | null = null;
 In `_dragPointerDown`: save `_dragSourceEl = e.target as HTMLElement`.
 
 In `_dragPointerMove`, transition `pending → dragging`:
+
 ```ts
 const rect = _dragSourceEl!.getBoundingClientRect();
 _dragOffsetX = _dragStartX - rect.left;
@@ -120,10 +133,11 @@ _dragIndicatorEl = indicator;
 ```
 
 In `_dragPointerMove`, when `_dragState === 'dragging'`:
+
 ```ts
 if (_dragGhostEl) {
   _dragGhostEl.style.left = `${e.clientX - _dragOffsetX}px`;
-  _dragGhostEl.style.top  = `${e.clientY - _dragOffsetY}px`;
+  _dragGhostEl.style.top = `${e.clientY - _dragOffsetY}px`;
 }
 if (_dragIndicatorEl) {
   const dropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
@@ -146,10 +160,20 @@ if (_dragIndicatorEl) {
 ```
 
 In `_dragPointerUp`:
+
 ```ts
-if (_dragGhostEl) { _dragGhostEl.remove(); _dragGhostEl = null; }
-if (_dragIndicatorEl) { _dragIndicatorEl.remove(); _dragIndicatorEl = null; }
-if (_dragSourceEl) { _dragSourceEl.style.opacity = ''; _dragSourceEl = null; }
+if (_dragGhostEl) {
+  _dragGhostEl.remove();
+  _dragGhostEl = null;
+}
+if (_dragIndicatorEl) {
+  _dragIndicatorEl.remove();
+  _dragIndicatorEl = null;
+}
+if (_dragSourceEl) {
+  _dragSourceEl.style.opacity = '';
+  _dragSourceEl = null;
+}
 ```
 
 ### Task 1: Write RED e2e Test

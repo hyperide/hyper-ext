@@ -1,8 +1,8 @@
 {
   "name": "expo-app",
   "version": "1.0.0",
-  "main": "index.js",
   "private": true,
+  "main": "index.js",
   "scripts": {
     "start": "npx expo start -c",
     "android": "npx expo run:android",

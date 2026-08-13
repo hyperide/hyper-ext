@@ -32,33 +32,33 @@ changed size, plus a test proving the source update.
 
 - [ ] Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before extension E2E.
 - [ ] Run the existing resize handle E2E/debug flow and confirm handles are
-  visible.
+      visible.
 - [ ] Attempt a real drag on `[data-resize-handle="width"]` and/or
-  `[data-resize-handle="height"]`.
+      `[data-resize-handle="height"]`.
 - [ ] Confirm the current behavior: no source change or no size change.
 - [ ] Capture a failing screenshot/log proving visible handles are not enough.
 
 ### Task 2: Add A Failing Test First
 
 - [ ] Add a focused E2E test in ext-test-projects that selects the
-  `size-handle-fixture`, drags a width handle, and asserts the source file or
-  inline style/class changes.
+      `size-handle-fixture`, drags a width handle, and asserts the source file or
+      inline style/class changes.
 - [ ] Add height coverage or a second assertion if width and height are handled
-  independently.
+      independently.
 - [ ] The test must fail for the right reason before implementation: handle drag
-  does not mutate size.
+      does not mutate size.
 - [ ] Do not assert only handle visibility or no-crash behavior.
 
 ### Task 3: Implement Resize Mutation
 
 - [ ] Wire resize handle pointer events in the shared/preview overlay layer used
-  by both SaaS and VS Code where applicable.
+      by both SaaS and VS Code where applicable.
 - [ ] Convert drag delta to a concrete width/height update using existing
-  style/AST update APIs.
+      style/AST update APIs.
 - [ ] For Tailwind explicit classes, prefer the existing style write conventions
-  already used by Hyper Canvas. If exact Tailwind scale conversion is not
-  available, use the smallest existing production-supported representation and
-  document it in the test name.
+      already used by Hyper Canvas. If exact Tailwind scale conversion is not
+      available, use the smallest existing production-supported representation and
+      document it in the test name.
 - [ ] Keep iframe pointer-events handling safe during drag.
 - [ ] Preserve normal element selection and drag behavior.
 
@@ -67,7 +67,7 @@ changed size, plus a test proving the source update.
 - [ ] Capture `/tmp/hyper-resize-before.png` before dragging.
 - [ ] Capture `/tmp/hyper-resize-after.png` after dragging.
 - [ ] The screenshots must visibly show a changed element size, not just visible
-  handles.
+      handles.
 - [ ] Capture or log the source diff proving the change persisted.
 
 ### Task 5: Verification
@@ -86,5 +86,4 @@ changed size, plus a test proving the source update.
   - any remaining risk.
 - [ ] Send the before/after screenshots to Telegram.
 - [ ] Do not repeat this task in status messages after screenshots are sent and
-  tests are green.
-
+      tests are green.

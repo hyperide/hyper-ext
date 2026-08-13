@@ -29,11 +29,7 @@ export {
   type SampleGeneratorFn,
 } from './sample-ensurer';
 export { buildSamplePrompt, extractCodeFromAIResponse } from './sample-prompt';
-export {
-  buildSampleScaffold,
-  normalizeSampleComponentName,
-  type SampleScaffoldConfig,
-} from './sample-scaffold';
+export { buildSampleScaffold, normalizeSampleComponentName, type SampleScaffoldConfig } from './sample-scaffold';
 export {
   detectExportStyle,
   detectRouterShell,

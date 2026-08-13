@@ -5,7 +5,7 @@
 The i18n key combobox in the inspector shows available keys from locale files (FIXED).
 But selecting a different key does NOT update the JSX source code — `onKeyChange` is a noop.
 
-User requirement: changing the key in the inspector must rewrite `{t("old.key")}` → `{t("new.key")}` 
+User requirement: changing the key in the inspector must rewrite `{t("old.key")}` → `{t("new.key")}`
 in the source file via AstService.
 
 ## Files

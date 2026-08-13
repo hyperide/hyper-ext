@@ -81,8 +81,14 @@ interface ColorPickerContext {
   hoveredColor: HoveredColorState | null;
   copyMode: boolean;
   focusedValue: string | null;
-  handleColorHover: (tokenName: string, hex: string, el: HTMLElement,
-    sourceLabel?: string, pairedHex?: string, isTextColor?: boolean) => void;
+  handleColorHover: (
+    tokenName: string,
+    hex: string,
+    el: HTMLElement,
+    sourceLabel?: string,
+    pairedHex?: string,
+    isTextColor?: boolean,
+  ) => void;
   handleColorLeave: () => void;
   popoverContentRef: RefObject<HTMLDivElement>;
   infoPanelRef: RefObject<HTMLDivElement>;
@@ -246,6 +252,7 @@ Popover + Command wrapper. Reads from context for open/setOpen, search/setSearch
 tooltip handlers, refs.
 
 Contains:
+
 - CommandInput with parsedSearchColor preview
 - `<ColorStripBar />` (if componentColors or recentColors exist)
 - CommandList: `{isSearching ? <ColorSearchResults /> : <ColorPaletteGrid />}`

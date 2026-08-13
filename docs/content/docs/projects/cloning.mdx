@@ -14,11 +14,9 @@ git@github.com:username/repo.git
 https://github.com/username/repo.git
 ```
 
-import { Callout } from 'nextra/components'
+import { Callout } from 'nextra/components';
 
-<Callout type="info">
-  **SSH is recommended** for full Git functionality including push/pull operations.
-</Callout>
+<Callout type="info">**SSH is recommended** for full Git functionality including push/pull operations.</Callout>
 
 ## Clone Process
 
@@ -36,14 +34,14 @@ Paste your Git repository URL in the input field.
 
 HyperIDE auto-detects most settings, but you can override:
 
-| Setting | Description | Example |
-|---------|-------------|---------|
-| **Project Name** | Display name | `my-app` |
-| **Framework** | React framework | Vite, Next.js, Remix |
+| Setting             | Description        | Example              |
+| ------------------- | ------------------ | -------------------- |
+| **Project Name**    | Display name       | `my-app`             |
+| **Framework**       | React framework    | Vite, Next.js, Remix |
 | **Package Manager** | Dependency manager | npm, yarn, pnpm, bun |
-| **Install Command** | Install deps | `npm install` |
-| **Dev Command** | Start dev server | `npm run dev` |
-| **Internal Port** | Container port | 3000, 5173 |
+| **Install Command** | Install deps       | `npm install`        |
+| **Dev Command**     | Start dev server   | `npm run dev`        |
+| **Internal Port**   | Container port     | 3000, 5173           |
 
 ### Step 4: Clone
 
@@ -69,12 +67,12 @@ HyperIDE automatically detects your framework by checking `package.json`:
 Each framework has default internal ports:
 
 | Framework | Default Port |
-|-----------|--------------|
-| Vite | 5173 |
-| Next.js | 3000 |
-| Remix | 5173 |
-| CRA | 3000 |
-| Bun | 8080 |
+| --------- | ------------ |
+| Vite      | 5173         |
+| Next.js   | 3000         |
+| Remix     | 5173         |
+| CRA       | 3000         |
+| Bun       | 8080         |
 
 HyperIDE assigns a random external port (5000-6000 range) for each project.
 
@@ -92,6 +90,7 @@ For easier cloning:
 ### Clone fails with permission denied
 
 Make sure your SSH key is configured:
+
 ```bash
 ssh -T git@github.com
 ```

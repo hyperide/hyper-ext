@@ -8,7 +8,7 @@ User reports that deleting this element from the VS Code Hyper Canvas preview
 does not work in the Bulka fixture:
 
 ```tsx
-<p className="text-foreground/80">{t("habits.walks")}</p>
+<p className="text-foreground/80">{t('habits.walks')}</p>
 ```
 
 Fixture path:
@@ -94,8 +94,8 @@ export default function Index() {
   const { t } = useLanguage();
   return (
     <div>
-      <p className="text-foreground/80">{t("habits.walks")}</p>
-      <p className="text-foreground/80">{t("habits.walks")}</p>
+      <p className="text-foreground/80">{t('habits.walks')}</p>
+      <p className="text-foreground/80">{t('habits.walks')}</p>
     </div>
   );
 }
@@ -137,7 +137,7 @@ next failing test lower in the stack:
 
 ### Task 3: Implement The Smallest Proven Fix
 
-- [x] Update AstService.deleteElements to use _resolveElementInCorrectFile
+- [x] Update AstService.deleteElements to use \_resolveElementInCorrectFile
 
 After the failing test proves the failing layer, make the smallest change.
 

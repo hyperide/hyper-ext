@@ -17,6 +17,7 @@
 ### Task 1: Extract color utilities to `shared/utils/color.ts`
 
 **Files:**
+
 - Create: `shared/utils/color.ts` (directory `shared/utils/` does not exist — create with `mkdir -p shared/utils`)
 - Create: `shared/utils/color.test.ts`
 - Modify: `lib/tamagui/values.ts:282-298` (replace local `hexToRgb`, `colorDistance` with imports; keep re-exports so downstream consumers like VS Code extension don't break)
@@ -257,13 +258,28 @@ export function hslToRgb(h: number, s: number, l: number): { r: number; g: numbe
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = ln - c / 2;
 
-  let r = 0, g = 0, b = 0;
-  if (h < 60) { r = c; g = x; }
-  else if (h < 120) { r = x; g = c; }
-  else if (h < 180) { g = c; b = x; }
-  else if (h < 240) { g = x; b = c; }
-  else if (h < 300) { r = x; b = c; }
-  else { r = c; b = x; }
+  let r = 0,
+    g = 0,
+    b = 0;
+  if (h < 60) {
+    r = c;
+    g = x;
+  } else if (h < 120) {
+    r = x;
+    g = c;
+  } else if (h < 180) {
+    g = c;
+    b = x;
+  } else if (h < 240) {
+    g = x;
+    b = c;
+  } else if (h < 300) {
+    r = x;
+    b = c;
+  } else {
+    r = c;
+    b = x;
+  }
 
   return {
     r: Math.round((r + m) * 255),
@@ -318,6 +334,7 @@ Expected: ALL PASS
 - [ ] **Step 6: Replace imports in `lib/tamagui/values.ts`**
 
 At `lib/tamagui/values.ts`:
+
 - Remove local `hexToRgb` function (lines 282-291) and `colorDistance` function (lines 293-298)
 - Add import: `import { colorDistance, hexToRgb } from '@shared/utils/color';`
 - If `@shared` alias doesn't exist, use relative path: `import { colorDistance, hexToRgb } from '../../shared/utils/color';`
@@ -327,6 +344,7 @@ Check tsconfig for path alias: `grep -r "shared" tsconfig*.json` — use whateve
 - [ ] **Step 7: Replace local functions in `color-combobox.tsx`**
 
 At `client/components/ui/color-combobox.tsx`:
+
 - Remove local `hexToRgb` and `colorDistance` inside `findClosestColor` (lines 93-109)
 - Add import: `import { colorDistance } from '@shared/utils/color';` (or appropriate alias)
 - Update `findClosestColor` to call imported `colorDistance` directly
@@ -334,6 +352,7 @@ At `client/components/ui/color-combobox.tsx`:
 - [ ] **Step 8: Update `RightSidebar/utils.ts` imports**
 
 At `client/components/RightSidebar/utils.ts`:
+
 - Remove `hexWithAlpha` (lines 19-29) and `parseHexWithAlpha` (lines 35-49)
 - Re-export from shared: `export { hexWithAlpha, parseHexWithAlpha } from '@shared/utils/color';`
 - Keep `hexToRgba` local (it has different semantics, used only here)
@@ -364,6 +383,7 @@ git commit -m "refactor: extract shared color utilities to shared/utils/color.ts
 ### Task 2: Implement `parseColorInput` in `color-search-parser.ts`
 
 **Files:**
+
 - Create: `client/components/ui/color-search-parser.ts`
 - Create: `client/components/ui/color-search-parser.test.ts`
 
@@ -435,6 +455,7 @@ describe('parseColorInput', () => {
 ```
 
 Note: Canvas API is not available in bun:test. The `cssColorToHex` function uses `document.createElement('canvas')`. For tests, we need to either:
+
 - Mock `document.createElement` to return a fake canvas context
 - Or extract the canvas call behind a testable interface
 
@@ -574,12 +595,14 @@ git commit -m "feat: add multi-format color input parser (hex, rgb, hsl, named)"
 ### Task 3: Integrate color search into ColorCombobox
 
 **Files:**
+
 - Modify: `client/components/ui/color-combobox.tsx:285-307` (search filter logic)
 - Modify: `client/components/ui/color-combobox.tsx:395-423` (search results rendering)
 
 - [ ] **Step 1: Update `filteredGroups` memo to use `parseColorInput`**
 
 At `color-combobox.tsx`, add import:
+
 ```ts
 import { parseColorInput } from './color-search-parser';
 import { colorDistance } from '@shared/utils/color';
@@ -636,40 +659,35 @@ const filteredGroups = React.useMemo(() => {
 In the search results rendering (lines 395-423), update the `CommandItem` content to show hex and highlight exact matches:
 
 ```tsx
-{options.map((option) => {
-  const distance = '_distance' in option ? (option as ColorOption & { _distance: number })._distance : Infinity;
-  const isExact = parsedSearchColor && distance === 0;
+{
+  options.map((option) => {
+    const distance = '_distance' in option ? (option as ColorOption & { _distance: number })._distance : Infinity;
+    const isExact = parsedSearchColor && distance === 0;
 
-  return (
-    <CommandItem
-      key={option.value}
-      value={option.value}
-      onSelect={() => handleSelect(option.value)}
-      className={cn(
-        'flex items-center gap-2 cursor-pointer',
-        isExact && 'bg-yellow-100 dark:bg-yellow-900/30',
-      )}
-    >
-      <div
-        className="w-4 h-4 rounded border border-border shrink-0"
-        style={{ backgroundColor: option.hex }}
-      />
-      <span className="flex-1 text-xs">
-        {tokenSystem === 'tamagui' ? `$${option.label}` : option.label}
-        <span className="text-muted-foreground ml-1">{option.hex}</span>
-      </span>
-      {/* Show matched format if search was non-hex */}
-      {isExact && parsedSearchColor && parsedSearchColor.format !== 'hex' && parsedSearchColor.format !== 'hex-short' && (
-        <span className="text-xs bg-yellow-200 dark:bg-yellow-800 px-1 rounded">
-          {parsedSearchColor.original}
+    return (
+      <CommandItem
+        key={option.value}
+        value={option.value}
+        onSelect={() => handleSelect(option.value)}
+        className={cn('flex items-center gap-2 cursor-pointer', isExact && 'bg-yellow-100 dark:bg-yellow-900/30')}
+      >
+        <div className="w-4 h-4 rounded border border-border shrink-0" style={{ backgroundColor: option.hex }} />
+        <span className="flex-1 text-xs">
+          {tokenSystem === 'tamagui' ? `$${option.label}` : option.label}
+          <span className="text-muted-foreground ml-1">{option.hex}</span>
         </span>
-      )}
-      {currentToken === option.value && (
-        <IconCheck className="w-4 h-4 text-green-600 shrink-0" stroke={2} />
-      )}
-    </CommandItem>
-  );
-})}
+        {/* Show matched format if search was non-hex */}
+        {isExact &&
+          parsedSearchColor &&
+          parsedSearchColor.format !== 'hex' &&
+          parsedSearchColor.format !== 'hex-short' && (
+            <span className="text-xs bg-yellow-200 dark:bg-yellow-800 px-1 rounded">{parsedSearchColor.original}</span>
+          )}
+        {currentToken === option.value && <IconCheck className="w-4 h-4 text-green-600 shrink-0" stroke={2} />}
+      </CommandItem>
+    );
+  });
+}
 ```
 
 - [ ] **Step 3: Run lint and typecheck**
@@ -680,6 +698,7 @@ Expected: No errors
 - [ ] **Step 4: Manual test in browser**
 
 Open editor, select element, open color picker. Type:
+
 - `#ff0000` → should show red-500 area with yellow highlight
 - `rgb(59, 130, 246)` → should show blue-500 with yellow highlight + `rgb(59, 130, 246)` badge
 - `red` → should show red tokens (closest match)
@@ -699,6 +718,7 @@ git commit -m "feat: integrate multi-format color search into ColorCombobox"
 ### Task 4: Create `ColorTooltip` component
 
 **Files:**
+
 - Create: `client/components/ui/color-tooltip.tsx`
 - Create: `client/components/ui/color-tooltip.test.ts`
 
@@ -811,10 +831,7 @@ export function ColorTooltip({ tokenName, hex, children, searchFocused }: ColorT
   return (
     <Tooltip open={open} onOpenChange={setOpen} delayDuration={200}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent
-        className="p-0 w-auto max-w-none"
-        onPointerDownOutside={(e) => e.preventDefault()}
-      >
+      <TooltipContent className="p-0 w-auto max-w-none" onPointerDownOutside={(e) => e.preventDefault()}>
         <div className="flex flex-col py-1">
           {values.map((entry) => (
             <button
@@ -855,18 +872,21 @@ git commit -m "feat: add ColorTooltip with copy-to-clipboard and hotkeys"
 ### Task 5: Wrap palette swatches with `ColorTooltip`
 
 **Files:**
+
 - Modify: `client/components/ui/color-combobox.tsx:460-474` (grid palette buttons)
 - Modify: `client/components/ui/color-combobox.tsx` (add TooltipProvider wrapper)
 
 - [ ] **Step 1: Add imports and state for search focus**
 
 At top of `color-combobox.tsx`, add:
+
 ```ts
 import { ColorTooltip } from './color-tooltip';
 import { TooltipProvider } from '@/components/ui/tooltip';
 ```
 
 Add search focus tracking state inside component:
+
 ```ts
 const [searchFocused, setSearchFocused] = React.useState(false);
 ```
@@ -874,6 +894,7 @@ const [searchFocused, setSearchFocused] = React.useState(false);
 - [ ] **Step 2: Track search input focus**
 
 At the `CommandInput` (line 391), add focus tracking:
+
 ```tsx
 <CommandInput
   placeholder="Search colors..."
@@ -894,26 +915,28 @@ Wrap the `<PopoverContent>` inner content with `<TooltipProvider delayDuration={
 At lines 460-474 (grid palette buttons), wrap each button:
 
 ```tsx
-{options.map((option) => (
-  <ColorTooltip
-    key={option.value}
-    tokenName={tokenSystem === 'tamagui' ? `$${option.value}` : option.value}
-    hex={option.hex}
-    searchFocused={searchFocused}
-  >
-    <button
-      type="button"
-      onClick={() => handleSelect(option.value)}
-      className={cn(
-        'w-5 h-5 rounded border transition-all hover:scale-110 hover:z-10',
-        currentToken === option.value
-          ? 'border-foreground ring-1 ring-foreground ring-offset-1 ring-offset-background'
-          : 'border-border hover:border-muted-foreground',
-      )}
-      style={{ backgroundColor: option.hex }}
-    />
-  </ColorTooltip>
-))}
+{
+  options.map((option) => (
+    <ColorTooltip
+      key={option.value}
+      tokenName={tokenSystem === 'tamagui' ? `$${option.value}` : option.value}
+      hex={option.hex}
+      searchFocused={searchFocused}
+    >
+      <button
+        type="button"
+        onClick={() => handleSelect(option.value)}
+        className={cn(
+          'w-5 h-5 rounded border transition-all hover:scale-110 hover:z-10',
+          currentToken === option.value
+            ? 'border-foreground ring-1 ring-foreground ring-offset-1 ring-offset-background'
+            : 'border-border hover:border-muted-foreground',
+        )}
+        style={{ backgroundColor: option.hex }}
+      />
+    </ColorTooltip>
+  ));
+}
 ```
 
 - [ ] **Step 5: Run lint and typecheck**
@@ -924,6 +947,7 @@ Expected: No errors
 - [ ] **Step 6: Manual test**
 
 Open color picker, hover over a color swatch:
+
 - Tooltip should appear in ~200ms
 - Shows token name, hex, rgb, hsl
 - Click row → copies, shows toast
@@ -944,6 +968,7 @@ git commit -m "feat: integrate ColorTooltip into palette swatches"
 ### Task 6: Implement `extractComponentColors` pure function
 
 **Files:**
+
 - Create: `client/components/ui/extract-component-colors.ts`
 - Create: `client/components/ui/extract-component-colors.test.ts`
 
@@ -964,9 +989,7 @@ const makeNode = (id: string, props?: Record<string, unknown>, children?: ASTNod
 
 describe('extractComponentColors', () => {
   test('extracts backgroundColor from props.className (Tailwind)', () => {
-    const ast: ASTNode[] = [
-      makeNode('1', { className: 'bg-blue-500 text-white p-4' }),
-    ];
+    const ast: ASTNode[] = [makeNode('1', { className: 'bg-blue-500 text-white p-4' })];
     const result = extractComponentColors(ast, 'tailwind');
     expect(result.some((c) => c.value === 'blue-500')).toBe(true);
     expect(result.some((c) => c.value === 'white')).toBe(true);
@@ -983,19 +1006,13 @@ describe('extractComponentColors', () => {
   });
 
   test('sorts tokens first, then hex by count', () => {
-    const ast: ASTNode[] = [
-      makeNode('1', { className: 'bg-[#ff0000]' }),
-      makeNode('2', { className: 'bg-blue-500' }),
-    ];
+    const ast: ASTNode[] = [makeNode('1', { className: 'bg-[#ff0000]' }), makeNode('2', { className: 'bg-blue-500' })];
     const result = extractComponentColors(ast, 'tailwind');
     expect(result[0].isToken).toBe(true);
   });
 
   test('deduplicates token and hex with same resolved color', () => {
-    const ast: ASTNode[] = [
-      makeNode('1', { className: 'bg-blue-500' }),
-      makeNode('2', { className: 'bg-[#3b82f6]' }),
-    ];
+    const ast: ASTNode[] = [makeNode('1', { className: 'bg-blue-500' }), makeNode('2', { className: 'bg-[#3b82f6]' })];
     const result = extractComponentColors(ast, 'tailwind');
     const blues = result.filter((c) => c.hex === '#3b82f6');
     expect(blues).toHaveLength(1);
@@ -1011,9 +1028,7 @@ describe('extractComponentColors', () => {
   test('traverses children recursively', () => {
     const ast: ASTNode[] = [
       makeNode('1', { className: 'bg-red-500' }, [
-        makeNode('2', { className: 'text-green-500' }, [
-          makeNode('3', { className: 'border-blue-500' }),
-        ]),
+        makeNode('2', { className: 'text-green-500' }, [makeNode('3', { className: 'border-blue-500' })]),
       ]),
     ];
     const result = extractComponentColors(ast, 'tailwind');
@@ -1051,7 +1066,18 @@ export interface ColorEntry {
 }
 
 /** Tailwind color class prefixes that carry color values */
-const TW_COLOR_PREFIXES = ['bg-', 'text-', 'border-', 'shadow-', 'ring-', 'outline-', 'accent-', 'fill-', 'stroke-', 'decoration-'];
+const TW_COLOR_PREFIXES = [
+  'bg-',
+  'text-',
+  'border-',
+  'shadow-',
+  'ring-',
+  'outline-',
+  'accent-',
+  'fill-',
+  'stroke-',
+  'decoration-',
+];
 
 /** Tamagui props that carry color values */
 const TAMAGUI_COLOR_PROPS = ['backgroundColor', 'color', 'borderColor', 'shadowColor'];
@@ -1065,10 +1091,15 @@ function extractTailwindColors(className: string): Array<{ value: string; hex: s
     const base = cls.includes(':') ? cls.split(':').pop()! : cls;
 
     // Arbitrary color: bg-[#ff0000]
-    const arbMatch = /^(?:bg|text|border|shadow|ring|outline|accent|fill|stroke|decoration)-\[#([0-9a-fA-F]{3,6})\]$/.exec(base);
+    const arbMatch =
+      /^(?:bg|text|border|shadow|ring|outline|accent|fill|stroke|decoration)-\[#([0-9a-fA-F]{3,6})\]$/.exec(base);
     if (arbMatch) {
       let hex = arbMatch[1];
-      if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('');
+      if (hex.length === 3)
+        hex = hex
+          .split('')
+          .map((c) => c + c)
+          .join('');
       colors.push({ value: `#${hex}`, hex: `#${hex.toLowerCase()}`, isToken: false });
       continue;
     }
@@ -1178,6 +1209,7 @@ git commit -m "feat: add extractComponentColors for AST color extraction"
 ### Task 7: Create `useComponentColors` hook
 
 **Files:**
+
 - Create: `client/components/ui/hooks/use-component-colors.ts` (directory `client/components/ui/hooks/` does not exist — create with `mkdir -p client/components/ui/hooks`)
 
 - [ ] **Step 0: Create directory**
@@ -1221,9 +1253,7 @@ export function useComponentColors(
     if (!engine || !componentPath) return [];
 
     const root = engine.getRoot();
-    const astStructure = root?.metadata?.astStructure as
-      | import('@/lib/canvas-engine/types/ast').ASTNode[]
-      | undefined;
+    const astStructure = root?.metadata?.astStructure as import('@/lib/canvas-engine/types/ast').ASTNode[] | undefined;
     if (!astStructure) return [];
 
     return extractComponentColors(astStructure, tokenSystem);
@@ -1243,6 +1273,7 @@ git commit -m "feat: add useComponentColors hook with tree:change re-scan"
 ### Task 8: Create `ComponentColorStrip` UI and integrate into ColorCombobox
 
 **Files:**
+
 - Modify: `client/components/ui/color-combobox.tsx` (add strip above palette, pass componentPath + engine props)
 - Modify: `client/components/RightSidebar/sections/FillSection.tsx` (pass componentPath and engine)
 - Modify: `client/components/ui/fill-picker.tsx` (pass through componentPath and engine)
@@ -1250,6 +1281,7 @@ git commit -m "feat: add useComponentColors hook with tree:change re-scan"
 - [ ] **Step 1: Add props to `ColorComboboxProps`**
 
 At `color-combobox.tsx`, add to `ColorComboboxProps` interface (line 20):
+
 ```ts
 /** Canvas engine instance for extracting component colors */
 engine?: import('@/lib/canvas-engine/core/CanvasEngine').CanvasEngine | null;
@@ -1266,40 +1298,43 @@ After `CommandInput` (line 391), before `CommandList`, render the strip:
 const componentColors = useComponentColors(engine ?? null, componentPath ?? null, tokenSystem);
 
 // In the render, after CommandInput, before CommandList:
-{componentColors.length > 0 && (
-  <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-border overflow-x-auto scrollbar-hide">
-    {componentColors.map((entry) => (
-      <ColorTooltip
-        key={entry.hex}
-        tokenName={entry.isToken ? entry.value : entry.hex}
-        hex={entry.hex}
-        searchFocused={searchFocused}
-      >
-        <button
-          type="button"
-          onClick={() => {
-            if (entry.isToken) {
-              handleSelect(entry.value);
-            } else {
-              onChange(entry.hex);
-              setOpen(false);
-            }
-          }}
-          className={cn(
-            'w-5 h-5 rounded-full border shrink-0 transition-all hover:scale-110',
-            currentHex === entry.hex
-              ? 'border-foreground ring-1 ring-foreground ring-offset-1 ring-offset-background'
-              : 'border-border hover:border-muted-foreground',
-          )}
-          style={{ backgroundColor: entry.hex }}
-        />
-      </ColorTooltip>
-    ))}
-  </div>
-)}
+{
+  componentColors.length > 0 && (
+    <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-border overflow-x-auto scrollbar-hide">
+      {componentColors.map((entry) => (
+        <ColorTooltip
+          key={entry.hex}
+          tokenName={entry.isToken ? entry.value : entry.hex}
+          hex={entry.hex}
+          searchFocused={searchFocused}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (entry.isToken) {
+                handleSelect(entry.value);
+              } else {
+                onChange(entry.hex);
+                setOpen(false);
+              }
+            }}
+            className={cn(
+              'w-5 h-5 rounded-full border shrink-0 transition-all hover:scale-110',
+              currentHex === entry.hex
+                ? 'border-foreground ring-1 ring-foreground ring-offset-1 ring-offset-background'
+                : 'border-border hover:border-muted-foreground',
+            )}
+            style={{ backgroundColor: entry.hex }}
+          />
+        </ColorTooltip>
+      ))}
+    </div>
+  );
+}
 ```
 
 Add import at top:
+
 ```ts
 import { useComponentColors } from './hooks/use-component-colors';
 ```
@@ -1307,12 +1342,14 @@ import { useComponentColors } from './hooks/use-component-colors';
 - [ ] **Step 3: Thread `engine` and `componentPath` from FillSection**
 
 At `FillSection.tsx`, add props to interface:
+
 ```ts
 engine?: import('@/lib/canvas-engine/core/CanvasEngine').CanvasEngine | null;
 componentPath?: string | null;
 ```
 
 Pass through to `FillPicker` and `ColorCombobox`:
+
 ```tsx
 <FillPicker
   ...
@@ -1330,6 +1367,7 @@ Pass through to `FillPicker` and `ColorCombobox`:
 At `fill-picker.tsx`, add same props and pass through to `ColorCombobox`.
 
 At `RightSidebar.tsx`, find where `FillSection` is rendered and pass `engine` and `componentPath`:
+
 ```tsx
 <FillSection
   ...
@@ -1341,13 +1379,17 @@ At `RightSidebar.tsx`, find where `FillSection` is rendered and pass `engine` an
 - [ ] **Step 4: Add CSS for hidden scrollbar**
 
 Add to the div with `overflow-x-auto`:
+
 ```css
 /* scrollbar-hide utility — if not in Tailwind config, use inline style */
 ```
+
 If `scrollbar-hide` is not a Tailwind utility, use inline style:
+
 ```tsx
 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
 ```
+
 And add `[&::-webkit-scrollbar]:hidden` to className.
 
 - [ ] **Step 5: Run lint and typecheck**
@@ -1358,6 +1400,7 @@ Expected: No errors
 - [ ] **Step 6: Manual test**
 
 Open editor, select element in a component with colors. Open color picker:
+
 - Strip should show above palette with circles for each unique color
 - Tokens first, then hex
 - Hover shows tooltip, click selects color
@@ -1377,6 +1420,7 @@ git commit -m "feat: add component color strip above palette in ColorCombobox"
 ### Task 9: Create `OpacityInput` component
 
 **Files:**
+
 - Create: `client/components/ui/opacity-input.tsx`
 - Create: `client/components/ui/opacity-input.test.ts`
 
@@ -1491,6 +1535,7 @@ git commit -m "feat: add OpacityInput component with visibility logic"
 ### Task 10: Integrate `OpacityInput` into `ColorCombobox` and migrate from `FillSection`
 
 **Files:**
+
 - Modify: `client/components/ui/color-combobox.tsx` (add OpacityInput, new props)
 - Modify: `client/components/ui/fill-picker.tsx` (pass through opacity props)
 - Modify: `client/components/RightSidebar/sections/FillSection.tsx` (remove standalone opacity, pass opacity props)
@@ -1515,23 +1560,32 @@ onOpacityChange?: (value: string) => void;
 At the end of the component render (before the link/unlink button, line 508-509), replace the `{beforeUnlinkSlot}` with:
 
 ```tsx
-{/* Opacity input */}
-{shouldShowOpacity(isLinked, tokenSystem) && opacity !== undefined && onOpacityChange && (
-  <OpacityInput
-    value={opacity}
-    onChange={(newOpacity) => {
-      onOpacityChange(newOpacity);
-      if (currentHex?.startsWith('#')) {
-        onChange(hexWithAlpha(currentHex, newOpacity || '100'));
-      }
-    }}
-  />
-)}
-{/* Legacy slot for non-opacity content */}
-{beforeUnlinkSlot}
+{
+  /* Opacity input */
+}
+{
+  shouldShowOpacity(isLinked, tokenSystem) && opacity !== undefined && onOpacityChange && (
+    <OpacityInput
+      value={opacity}
+      onChange={(newOpacity) => {
+        onOpacityChange(newOpacity);
+        if (currentHex?.startsWith('#')) {
+          onChange(hexWithAlpha(currentHex, newOpacity || '100'));
+        }
+      }}
+    />
+  );
+}
+{
+  /* Legacy slot for non-opacity content */
+}
+{
+  beforeUnlinkSlot;
+}
 ```
 
 Add imports:
+
 ```ts
 import { OpacityInput, shouldShowOpacity } from './opacity-input';
 import { hexWithAlpha } from '@shared/utils/color';
@@ -1540,11 +1594,13 @@ import { hexWithAlpha } from '@shared/utils/color';
 - [ ] **Step 3: Add `textOpacity` state to RightSidebar**
 
 At `RightSidebar.tsx`, add state next to existing `fillOpacity` (line 347):
+
 ```ts
 const [textOpacity, setTextOpacity] = useState('');
 ```
 
 At line 741 where textColor is parsed, preserve opacity (currently discarded):
+
 ```ts
 if (ep.color) {
   const { color, opacity: parsedTextOpacity } = parseHexWithAlpha(ep.color);
@@ -1556,6 +1612,7 @@ if (ep.color) {
 - [ ] **Step 4: Update FillSection props and usage**
 
 Add to `FillSectionProps`:
+
 ```ts
 textOpacity: string;
 onTextOpacityChange: (value: string) => void;
@@ -1564,6 +1621,7 @@ componentPath?: string | null;
 ```
 
 For background color — pass opacity props to `FillPicker`:
+
 ```tsx
 <FillPicker
   ...
@@ -1576,6 +1634,7 @@ Remove the `beforeUnlinkSlot` prop (lines 120-135).
 Remove `handleFillOpacityChange` (lines 71-78) and `handleFillOpacityKeyDown` (lines 80-92).
 
 For text color — add opacity to `ColorCombobox`:
+
 ```tsx
 <ColorCombobox
   value={textColor || ''}
@@ -1600,6 +1659,7 @@ Add `opacity` and `onOpacityChange` to `FillPicker` props and pass through to `C
 - [ ] **Step 6: Pass new props from RightSidebar to FillSection**
 
 At `RightSidebar.tsx`, where `FillSection` is rendered:
+
 ```tsx
 <FillSection
   ...
@@ -1644,6 +1704,7 @@ git commit -m "feat: integrate OpacityInput into ColorCombobox, migrate from Fil
 ### Task 11: Final integration test and cleanup
 
 **Files:**
+
 - All modified files from previous tasks
 
 - [ ] **Step 1: Run full test suite**
@@ -1677,6 +1738,7 @@ Should only appear in `ColorComboboxProps` definition (kept for backward compati
 - [ ] **Step 5: Manual end-to-end test**
 
 Full flow test:
+
 1. Open editor with a Tailwind project
 2. Select a component element
 3. Open background color picker
@@ -1695,6 +1757,7 @@ Full flow test:
 - [ ] **Step 6: Commit any fixes from testing**
 
 Stage only the specific files that were fixed, then commit:
+
 ```bash
 git commit -m "fix: integration fixes from manual testing"
 ```

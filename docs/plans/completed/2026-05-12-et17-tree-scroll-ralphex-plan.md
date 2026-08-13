@@ -33,6 +33,7 @@ The fix was verified to work for ET-16 (the earlier tree scroll test added in th
 
 **H1: `data-uniq-id` not present on leaf elements**
 The `hypercanvas:goToVisual` handler finds the DOM element by its `data-uniq-id` attribute. If the leafLabel selected by the test doesn't correspond to any element that has `data-uniq-id` in the rendered preview, `scrollIntoView` is never called. This can happen if:
+
 - The leaf is a text node / icon without a wrapping element that has the attribute
 - The project doesn't render the element deeply enough for the attribute to be injected
 
@@ -48,11 +49,13 @@ If the "leaf" picked by the heuristic is near the top of the document (despite t
 ## Scope
 
 **Allowed:**
+
 - `ext-test-projects/e2e/tests/project-independent/elements-tree-selection.spec.ts` — diagnostic improvements to ET-17
 - `client/components/LeftSidebar/ElementsTree.tsx` or `useElementSelection.ts` — if bridge message not fired for leaf elements
 - `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` — if goToVisual handler misses some elements
 
 **Forbidden:**
+
 - Changes to ET-16 (different test, already green)
 
 ## Tasks
@@ -68,17 +71,21 @@ If the "leaf" picked by the heuristic is near the top of the document (despite t
 ### Task 2: Fix based on Task 1 findings
 
 **If H1 (no data-uniq-id on leaf):**
+
 - In the ET-17 test, before clicking: evaluate the iframe to find which tree items have corresponding DOM elements with `data-uniq-id`. Pick only a leaf that has one.
 - OR: in the `goToVisual` handler, if the exact element isn't found by uniq-id, fall back to finding the closest parent that has one.
 
 **If H2 (stub doesn't apply to nested frame):**
+
 - Remove the `scrollIntoView` stub from ET-17 — it's adding complexity without fixing the underlying issue
 - Instead, poll for scroll change with a longer 15s timeout, accounting for animation
 
 **If H3 (element already in viewport):**
+
 - In ET-17, pick a leaf that's guaranteed to be off-screen: instead of heuristic, pick the last tree item (deepest in tree = likely deepest in DOM = furthest from top)
 
 **If H4 (bridge message dropped):**
+
 - In `usePreviewBridge.ts`, ensure the `hypercanvas:goToVisual` listener is re-registered after iframe reloads (add to the `useEffect` cleanup/reattach cycle)
 
 - [ ] Implement fix

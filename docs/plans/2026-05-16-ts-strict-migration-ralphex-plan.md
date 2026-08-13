@@ -3,6 +3,7 @@
 ## Context
 
 Currently `tsconfig.json` has:
+
 ```json
 "strict": false,
 "noUnusedLocals": false,
@@ -15,6 +16,7 @@ Currently `tsconfig.json` has:
 Running `tsc --noEmit --strict --noImplicitAny --strictNullChecks` produces **159 errors**.
 
 Top error categories (from audit):
+
 - 24× `server/routes/docker.ts` — `string | undefined` not assignable to `string` (route params)
 - 13× `server/routes/ide.ts` — same pattern
 - 9× `server/routes/projects.ts` — same
@@ -33,11 +35,13 @@ Enable strict mode in `tsconfig.json` and fix all 159 errors.
 ### Phase 1: Enable strict in tsconfig (worktree branch)
 
 Change tsconfig.json:
+
 ```json
 "strict": true,
 "noImplicitAny": true,
 "strictNullChecks": true
 ```
+
 Keep `noUnusedLocals: false`, `noUnusedParameters: false` (too noisy, tracked by oxlint).
 
 ### Phase 2: Fix server route errors (string | undefined)
@@ -46,6 +50,7 @@ Pattern: route handlers use `c.req.param('id')` which returns `string | undefine
 Fix approach: assert non-null with `!` where the route guarantees presence, or use proper Hono typing.
 
 Example pattern:
+
 ```ts
 // Before
 const id = c.req.param('projectId'); // string | undefined
@@ -55,6 +60,7 @@ const id = c.req.param('projectId')!; // or validate at middleware level
 ```
 
 File list:
+
 - `server/routes/docker.ts`
 - `server/routes/ide.ts`
 - `server/routes/projects.ts`

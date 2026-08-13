@@ -20,6 +20,7 @@ interface.
 **Spec:** `docs/specs/2026-03-13-vector-engine-design.md`
 
 **Scope:** Plan 3 of ~4:
+
 - Plan 1 (done): Core SDK — 24 nodes, SVG export, undo/redo
 - Plan 2 (done): Advanced ops — 21 more nodes, deformations, vector networks
 - Plan 2b (done): Gradient mesh, envelope distort, splitIntersections, HarfBuzz, FIG import
@@ -90,6 +91,7 @@ packages/
 Replace control-point hull approximation with derivative root solving for cubics.
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/path/bounds.ts`
 - Modify: `packages/vector-engine/src/path/bounds.test.ts`
 
@@ -132,12 +134,14 @@ describe('tight cubic bounds', () => {
 - [ ] **Step 3: Implement tight cubic bounds**
 
 For a cubic bezier B(t) = (1-t)³P0 + 3(1-t)²tP1 + 3(1-t)t²P2 + t³P3:
+
 - B'(t) = 3[(1-t)²(P1-P0) + 2(1-t)t(P2-P1) + t²(P3-P2)]
 - This is a quadratic in t: at² + bt + c = 0
 - Solve for x and y independently: find t values where B'x(t)=0 and B'y(t)=0
 - For each real root in [0,1]: evaluate B(t) and track
 
 Replace the Cubic case in `computeBounds`:
+
 ```typescript
 case PathCmd.Cubic: {
   // Track endpoints
@@ -174,6 +178,7 @@ Helper: `cubicAt(t, p0, p1, p2, p3)` = `(1-t)³p0 + 3(1-t)²tp1 + 3(1-t)t²p2 + 
 - [ ] **Step 5: Do the same for Quad bounds**
 
 For quadratic B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2:
+
 - B'(t) = 2[(1-t)(P1-P0) + t(P2-P1)] = linear in t
 - Solve: t = (P0-P1) / (P0-2P1+P2)
 
@@ -198,6 +203,7 @@ fix(vector-engine): tight cubic and quad bounding box via derivative root solvin
 ### Task 2: Add Point & Remove Point Nodes
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/path-ops/add-point.ts`
 - Create: `packages/vector-engine/src/nodes/path-ops/remove-point.ts`
 - Create: `packages/vector-engine/src/nodes/path-ops/path-ops-plan3.test.ts`
@@ -207,12 +213,8 @@ fix(vector-engine): tight cubic and quad bounding box via derivative root solvin
 ```typescript
 describe('add point', () => {
   it('should add point on a line segment at given position', () => {
-    const path = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).build();
-    const result = addPointNode.execute(
-      { path: { type: 'path', value: path } },
-      { segmentIndex: 0, t: 0.5 },
-    );
+    const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const result = addPointNode.execute({ path: { type: 'path', value: path } }, { segmentIndex: 0, t: 0.5 });
     const cmds = decodeCommands((result.path as any).value.commands);
     expect(cmds.filter((c) => c.type === PathCmd.Line).length).toBe(2);
   });
@@ -220,12 +222,8 @@ describe('add point', () => {
 
 describe('remove point', () => {
   it('should remove a vertex and merge adjacent segments', () => {
-    const path = new PathBuilder()
-      .moveTo(0, 0).lineTo(50, 0).lineTo(100, 0).build();
-    const result = removePointNode.execute(
-      { path: { type: 'path', value: path } },
-      { pointIndex: 1 },
-    );
+    const path = new PathBuilder().moveTo(0, 0).lineTo(50, 0).lineTo(100, 0).build();
+    const result = removePointNode.execute({ path: { type: 'path', value: path } }, { pointIndex: 1 });
     const cmds = decodeCommands((result.path as any).value.commands);
     // Middle point removed → single line from (0,0) to (100,0)
     expect(cmds.filter((c) => c.type === PathCmd.Line).length).toBe(1);
@@ -253,6 +251,7 @@ feat(vector-engine): add point and remove point path operations (HYP-308)
 ### Task 3: Convert Point Type & Split Path Nodes
 
 **Files:**
+
 - Create: `packages/vector-engine/src/nodes/path-ops/convert-point.ts`
 - Create: `packages/vector-engine/src/nodes/path-ops/split-path.ts`
 - Modify: `packages/vector-engine/src/nodes/path-ops/path-ops-plan3.test.ts`
@@ -262,8 +261,7 @@ feat(vector-engine): add point and remove point path operations (HYP-308)
 ```typescript
 describe('convert point type', () => {
   it('should convert corner to smooth (add cubic handles)', () => {
-    const zigzag = new PathBuilder()
-      .moveTo(0, 0).lineTo(50, 100).lineTo(100, 0).build();
+    const zigzag = new PathBuilder().moveTo(0, 0).lineTo(50, 100).lineTo(100, 0).build();
     const result = convertPointNode.execute(
       { path: { type: 'path', value: zigzag } },
       { pointIndex: 1, pointType: 'smooth' },
@@ -274,8 +272,7 @@ describe('convert point type', () => {
   });
 
   it('should convert smooth to corner (remove handles)', () => {
-    const curve = new PathBuilder()
-      .moveTo(0, 0).cubicTo(33, 100, 66, 100, 100, 0).build();
+    const curve = new PathBuilder().moveTo(0, 0).cubicTo(33, 100, 66, 100, 100, 0).build();
     const result = convertPointNode.execute(
       { path: { type: 'path', value: curve } },
       { pointIndex: 1, pointType: 'corner' },
@@ -289,12 +286,8 @@ describe('convert point type', () => {
 
 describe('split path', () => {
   it('should split path at offset into two sub-paths', () => {
-    const path = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(200, 0).build();
-    const result = splitPathNode.execute(
-      { path: { type: 'path', value: path } },
-      { offset: 0.5 },
-    );
+    const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(200, 0).build();
+    const result = splitPathNode.execute({ path: { type: 'path', value: path } }, { offset: 0.5 });
     // Should output two paths
     expect((result.pathA as any).type).toBe('path');
     expect((result.pathB as any).type).toBe('path');
@@ -321,6 +314,7 @@ feat(vector-engine): convert point type and split path operations (HYP-308)
 ### Task 4: Point-in-Path (Winding Number)
 
 **Files:**
+
 - Create: `packages/vector-engine/src/path/hit-test.ts`
 - Create: `packages/vector-engine/src/path/hit-test.test.ts`
 
@@ -333,14 +327,12 @@ import { PathBuilder } from './builder';
 
 describe('pointInPath', () => {
   it('should return true for point inside closed rectangle', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     expect(pointInPath({ x: 50, y: 50 }, rect)).toBe(true);
   });
 
   it('should return false for point outside rectangle', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     expect(pointInPath({ x: 150, y: 50 }, rect)).toBe(false);
   });
 
@@ -352,11 +344,17 @@ describe('pointInPath', () => {
   it('should handle concave polygon', () => {
     // L-shaped polygon
     const L = new PathBuilder()
-      .moveTo(0, 0).lineTo(50, 0).lineTo(50, 50)
-      .lineTo(100, 50).lineTo(100, 100).lineTo(0, 100).close().build();
-    expect(pointInPath({ x: 25, y: 25 }, L)).toBe(true);   // inside
-    expect(pointInPath({ x: 75, y: 25 }, L)).toBe(false);  // in the notch
-    expect(pointInPath({ x: 75, y: 75 }, L)).toBe(true);   // inside
+      .moveTo(0, 0)
+      .lineTo(50, 0)
+      .lineTo(50, 50)
+      .lineTo(100, 50)
+      .lineTo(100, 100)
+      .lineTo(0, 100)
+      .close()
+      .build();
+    expect(pointInPath({ x: 25, y: 25 }, L)).toBe(true); // inside
+    expect(pointInPath({ x: 75, y: 25 }, L)).toBe(false); // in the notch
+    expect(pointInPath({ x: 75, y: 75 }, L)).toBe(true); // inside
   });
 
   it('should handle path with curves', () => {
@@ -365,11 +363,12 @@ describe('pointInPath', () => {
     const r = 50;
     const circle = new PathBuilder()
       .moveTo(r, 0)
-      .cubicTo(r, r*k, r*k, r, 0, r)
-      .cubicTo(-r*k, r, -r, r*k, -r, 0)
-      .cubicTo(-r, -r*k, -r*k, -r, 0, -r)
-      .cubicTo(r*k, -r, r, -r*k, r, 0)
-      .close().build();
+      .cubicTo(r, r * k, r * k, r, 0, r)
+      .cubicTo(-r * k, r, -r, r * k, -r, 0)
+      .cubicTo(-r, -r * k, -r * k, -r, 0, -r)
+      .cubicTo(r * k, -r, r, -r * k, r, 0)
+      .close()
+      .build();
     expect(pointInPath({ x: 0, y: 0 }, circle)).toBe(true);
     expect(pointInPath({ x: 60, y: 0 }, circle)).toBe(false);
   });
@@ -379,6 +378,7 @@ describe('pointInPath', () => {
 - [ ] **Step 2: Implement pointInPath**
 
 Algorithm: Ray casting (even-odd rule) or winding number.
+
 1. Flatten path to polyline (tolerance 0.5)
 2. Cast horizontal ray from point to +infinity
 3. Count intersections with polygon edges
@@ -407,6 +407,7 @@ feat(vector-engine): point-in-path hit testing via ray casting (HYP-308)
 ### Task 5: Point-on-Stroke & Nearest Point
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/path/hit-test.ts` (add pointOnStroke)
 - Create: `packages/vector-engine/src/path/nearest.ts`
 - Create: `packages/vector-engine/src/path/nearest.test.ts`
@@ -475,6 +476,7 @@ feat(vector-engine): point-on-stroke and nearest point on path (HYP-308)
 ### Task 6: VectorRenderer Interface + HitResult Types
 
 **Files:**
+
 - Create: `packages/vector-engine/src/render/types.ts`
 - Create: `packages/vector-engine/src/render/svg-renderer.ts`
 - Create: `packages/vector-engine/src/render/render.test.ts`
@@ -589,6 +591,7 @@ feat(vector-engine): VectorRenderer interface and SVGStringRenderer (HYP-308)
 ### Task 7: VectorGraphFile Types + Serialization
 
 **Files:**
+
 - Create: `packages/vector-engine/src/persistence/types.ts`
 - Create: `packages/vector-engine/src/persistence/serialize.ts`
 - Create: `packages/vector-engine/src/persistence/persistence.test.ts`
@@ -658,6 +661,7 @@ describe('VectorGraphFile serialization', () => {
 
 `HistoryManager.entries` is private. Persistence needs to read and replay entries.
 Add to `graph/history.ts`:
+
 ```typescript
 /** All history entries (for persistence serialization) */
 getEntries(): readonly HistoryEntry[] { return this.entries; }
@@ -693,6 +697,7 @@ feat(vector-engine): VectorGraphFile persistence format (HYP-308)
 ### Task 8: Operation Log + Log Compaction
 
 **Files:**
+
 - Create: `packages/vector-engine/src/persistence/operation-log.ts`
 - Modify: `packages/vector-engine/src/persistence/persistence.test.ts`
 
@@ -738,6 +743,7 @@ feat(vector-engine): operation log with compaction (HYP-308)
 ### Task 9: Snapshot Manager
 
 **Files:**
+
 - Create: `packages/vector-engine/src/persistence/snapshot.ts`
 - Modify: `packages/vector-engine/src/persistence/persistence.test.ts`
 
@@ -775,6 +781,7 @@ feat(vector-engine): snapshot manager for execution cache persistence (HYP-308)
 ### Task 10: Auto-Save Infrastructure
 
 **Files:**
+
 - Create: `packages/vector-engine/src/persistence/auto-save.ts`
 - Modify: `packages/vector-engine/src/persistence/persistence.test.ts`
 
@@ -805,7 +812,10 @@ export class AutoSave {
   async flush(): Promise<void> {
     if (!this.dirty) return;
     this.dirty = false;
-    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
     await this.save();
   }
 
@@ -828,6 +838,7 @@ feat(vector-engine): debounced auto-save infrastructure (HYP-308)
 ### Task 11: CanvasKit PathOps Backend
 
 **Files:**
+
 - Modify: `packages/vector-wasm/package.json` (add canvaskit-wasm)
 - Create: `packages/vector-wasm/src/canvaskit-pathops.ts`
 - Create: `packages/vector-wasm/src/canvaskit-pathops.test.ts`
@@ -854,10 +865,8 @@ describe('CanvasKitPathOps', () => {
   }, 10000);
 
   it('should compute boolean union of two rectangles', () => {
-    const a = new PathBuilder()
-      .moveTo(0, 0).lineTo(60, 0).lineTo(60, 60).lineTo(0, 60).close().build();
-    const b = new PathBuilder()
-      .moveTo(40, 40).lineTo(100, 40).lineTo(100, 100).lineTo(40, 100).close().build();
+    const a = new PathBuilder().moveTo(0, 0).lineTo(60, 0).lineTo(60, 60).lineTo(0, 60).close().build();
+    const b = new PathBuilder().moveTo(40, 40).lineTo(100, 40).lineTo(100, 100).lineTo(40, 100).close().build();
     const result = pathOps.boolean('union', a, b);
     expect(result.commands.length).toBeGreaterThan(0);
     expect(result.closed).toBe(true);
@@ -870,8 +879,7 @@ describe('CanvasKitPathOps', () => {
   });
 
   it('should remove self-intersections', () => {
-    const figure8 = new PathBuilder()
-      .moveTo(0, 50).lineTo(100, 100).lineTo(100, 0).lineTo(0, 50).close().build();
+    const figure8 = new PathBuilder().moveTo(0, 50).lineTo(100, 100).lineTo(100, 0).lineTo(0, 50).close().build();
     const result = pathOps.removeSelfIntersections(figure8);
     expect(result.commands.length).toBeGreaterThan(0);
   });
@@ -891,6 +899,7 @@ describe('CanvasKitPathOps', () => {
 ```
 
 Key implementation:
+
 - `pathValueToSkPath(ck, pathValue)` — decode Float64Array → CanvasKit Path
 - `skPathToPathValue(ck, skPath)` — iterate CanvasKit Path verbs → Float64Array
 - Each PathOpsBackend method: convert inputs, call CanvasKit API, convert result
@@ -912,6 +921,7 @@ feat(vector-wasm): CanvasKit PathOps backend (HYP-308)
 ### Task 12: Clipper2 Path Offset Backend
 
 **Files:**
+
 - Modify: `packages/vector-wasm/package.json` (add clipper2-wasm)
 - Create: `packages/vector-wasm/src/clipper-offset.ts`
 - Create: `packages/vector-wasm/src/clipper-offset.test.ts`
@@ -941,15 +951,13 @@ describe('Clipper2Offset', () => {
   }, 10000);
 
   it('should inflate a rectangle', () => {
-    const rect = new PathBuilder()
-      .moveTo(10, 10).lineTo(90, 10).lineTo(90, 90).lineTo(10, 90).close().build();
+    const rect = new PathBuilder().moveTo(10, 10).lineTo(90, 10).lineTo(90, 90).lineTo(10, 90).close().build();
     const result = clipper.offset(rect, 5);
     expect(result.commands.length).toBeGreaterThan(rect.commands.length);
   });
 
   it('should deflate a rectangle', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const result = clipper.offset(rect, -10);
     expect(result.commands.length).toBeGreaterThan(0);
   });
@@ -985,6 +993,7 @@ feat(vector-wasm): Clipper2 path offset backend (HYP-308)
 ### Task 13: Version Migration Pipeline
 
 **Files:**
+
 - Create: `packages/vector-engine/src/migration/migrate.ts`
 - Create: `packages/vector-engine/src/migration/migrate.test.ts`
 
@@ -1063,6 +1072,7 @@ feat(vector-engine): version migration pipeline (HYP-308)
 ### Task 14: Reconciliation Diff
 
 **Files:**
+
 - Create: `packages/vector-engine/src/reconcile/diff.ts`
 - Create: `packages/vector-engine/src/reconcile/reconcile.test.ts`
 
@@ -1131,6 +1141,7 @@ feat(vector-engine): graph reconciliation diff algorithm (HYP-308)
 ### Task 15: Apply Reconciliation
 
 **Files:**
+
 - Create: `packages/vector-engine/src/reconcile/apply.ts`
 - Modify: `packages/vector-engine/src/reconcile/reconcile.test.ts`
 
@@ -1162,11 +1173,7 @@ describe('apply reconciliation', () => {
 - [ ] **Step 2: Implement**
 
 ```typescript
-export function applyReconciliation(
-  graph: VectorGraphModel,
-  history: HistoryManager,
-  diff: ReconciliationDiff,
-): void {
+export function applyReconciliation(graph: VectorGraphModel, history: HistoryManager, diff: ReconciliationDiff): void {
   // Convert diff to GraphDiff[] array
   // Apply via history.applyDiffs(graph, diffs, 'Reconciled from JSON edit')
 }
@@ -1185,11 +1192,12 @@ feat(vector-engine): apply reconciliation as undoable operations (HYP-308)
 ### Task 16: Register New Nodes + Update Exports
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/nodes/register-all.ts`
 - Modify: `packages/vector-engine/src/index.ts`
 
 Add new nodes: addPointNode, removePointNode, convertPointNode, splitPathNode.
-Export all new modules: hit-test, nearest, render/*, persistence/*, reconcile/*, migration/*.
+Export all new modules: hit-test, nearest, render/_, persistence/_, reconcile/_, migration/_.
 
 Update node count test.
 
@@ -1214,6 +1222,7 @@ feat(vector-engine): register Plan 3 nodes and update public API (HYP-308)
 ### Task 17: Integration Tests + Coverage
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/integration-advanced.test.ts`
 
 - [ ] **Step 1: Add comprehensive integration tests**
@@ -1240,10 +1249,10 @@ test(vector-engine): Plan 3 integration tests and coverage (HYP-308)
 
 ## Deferred to Plan 4 (Integration)
 
-| Feature | Reason |
-|---------|--------|
-| Kiwi binary serialization | JSON works for v1. Kiwi codec adds complexity without immediate value. |
-| TSX semantic diff (reverse sync) | Needs file watcher + HyperIDE integration context. |
-| CanvasKitRenderer | Needs HTMLCanvasElement (browser/webview). SVGStringRenderer serves for headless. |
-| Graph file watcher | Environment-dependent (VS Code, SaaS, CLI all different). |
-| Toolbar integration | Plan 4 — Editor UI. |
+| Feature                          | Reason                                                                            |
+| -------------------------------- | --------------------------------------------------------------------------------- |
+| Kiwi binary serialization        | JSON works for v1. Kiwi codec adds complexity without immediate value.            |
+| TSX semantic diff (reverse sync) | Needs file watcher + HyperIDE integration context.                                |
+| CanvasKitRenderer                | Needs HTMLCanvasElement (browser/webview). SVGStringRenderer serves for headless. |
+| Graph file watcher               | Environment-dependent (VS Code, SaaS, CLI all different).                         |
+| Toolbar integration              | Plan 4 — Editor UI.                                                               |

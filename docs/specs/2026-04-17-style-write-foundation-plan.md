@@ -86,17 +86,30 @@ import type {
 describe('style-read types', () => {
   it('CssSystemId covers all supported systems', () => {
     const systems: CssSystemId[] = [
-      'tailwind-v3', 'tailwind-v4', 'css-modules', 'plain-css',
-      'inline-style', 'emotion', 'styled-components', 'vanilla-extract',
-      'mui-system', 'chakra-ui', 'mantine', 'tamagui',
+      'tailwind-v3',
+      'tailwind-v4',
+      'css-modules',
+      'plain-css',
+      'inline-style',
+      'emotion',
+      'styled-components',
+      'vanilla-extract',
+      'mui-system',
+      'chakra-ui',
+      'mantine',
+      'tamagui',
     ];
     expect(systems).toHaveLength(12);
   });
 
   it('SourceForm covers all write surfaces', () => {
     const forms: SourceForm[] = [
-      'elementClass', 'cssStyleRule', 'scriptReactStyleRule',
-      'scriptNativeStyleRule', 'adapterKnownElementProp', 'arbitraryElementProp',
+      'elementClass',
+      'cssStyleRule',
+      'scriptReactStyleRule',
+      'scriptNativeStyleRule',
+      'adapterKnownElementProp',
+      'arbitraryElementProp',
     ];
     expect(forms).toHaveLength(6);
   });
@@ -131,12 +144,14 @@ describe('style-read types', () => {
         minWidthPx: 768,
         source: 'tailwind-screens',
       },
-      theme: [{
-        axis: 'color-scheme',
-        value: 'dark',
-        source: 'tailwind-dark-selector',
-        selector: '.dark &',
-      }],
+      theme: [
+        {
+          axis: 'color-scheme',
+          value: 'dark',
+          source: 'tailwind-dark-selector',
+          selector: '.dark &',
+        },
+      ],
     };
     expect(condition.state).toBe('hover');
     expect(condition.viewport?.key).toBe('md');
@@ -283,22 +298,9 @@ export type SourceConfidence = 'exact' | 'probable' | 'computed-only';
 
 // --- Conditions ---
 
-export type StylePseudoState =
-  | 'base'
-  | 'hover'
-  | 'focus'
-  | 'active'
-  | 'focus-visible'
-  | 'disabled';
+export type StylePseudoState = 'base' | 'hover' | 'focus' | 'active' | 'focus-visible' | 'disabled';
 
-export type StyleBreakpointKey =
-  | 'base'
-  | 'xs'
-  | 'sm'
-  | 'md'
-  | 'lg'
-  | 'xl'
-  | (string & {});
+export type StyleBreakpointKey = 'base' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | (string & {});
 
 export type ResponsiveConditionSource =
   | 'tailwind-screens'
@@ -336,13 +338,7 @@ export interface MediaCondition {
 
 // --- Theme ---
 
-export type ThemeAxisId =
-  | 'color-scheme'
-  | 'brand'
-  | 'density'
-  | 'contrast'
-  | 'platform'
-  | (string & {});
+export type ThemeAxisId = 'color-scheme' | 'brand' | 'density' | 'contrast' | 'platform' | (string & {});
 
 export type ThemeConditionSource =
   | 'prefers-color-scheme'
@@ -386,13 +382,7 @@ export interface SelectorCondition {
   kind: SelectorConditionKind;
   selector: string;
   label?: string;
-  source:
-    | 'css-selector'
-    | 'tailwind-variant'
-    | 'mui-slot'
-    | 'chakra-pseudo-prop'
-    | 'mantine-slot'
-    | 'custom';
+  source: 'css-selector' | 'tailwind-variant' | 'mui-slot' | 'chakra-pseudo-prop' | 'mantine-slot' | 'custom';
 }
 
 export interface StyleCondition {
@@ -453,12 +443,7 @@ export interface StyleSourceTab {
 
 export type IdeThemePreference = 'light' | 'dark' | 'system';
 export type ResolvedColorScheme = 'light' | 'dark';
-export type RuntimeThemeSource =
-  | 'hyperide'
-  | 'vscode'
-  | 'browser-system'
-  | 'app-runtime'
-  | 'test-fixture';
+export type RuntimeThemeSource = 'hyperide' | 'vscode' | 'browser-system' | 'app-runtime' | 'test-fixture';
 
 export interface RuntimeThemeContext {
   ideThemePreference: IdeThemePreference;
@@ -1116,13 +1101,7 @@ export type CssFilePlan = CssModulesFilePlan | PlainCssFilePlan;
 
 export interface ScriptObjectStylePlan extends StyleWritePlanBase {
   sourceForm: 'scriptReactStyleRule';
-  cssSystem:
-    | 'inline-style'
-    | 'emotion'
-    | 'styled-components'
-    | 'vanilla-extract'
-    | 'mui-system'
-    | 'mantine';
+  cssSystem: 'inline-style' | 'emotion' | 'styled-components' | 'vanilla-extract' | 'mui-system' | 'mantine';
   target: {
     filePath: string;
     elementRef?: string;
@@ -1204,17 +1183,11 @@ export type StyleWriteResult =
 // --- Framework Adapter Interfaces ---
 
 export interface FrameworkStyleReader {
-  read(input: {
-    elementFacts: ElementStyleFacts;
-    condition: StyleCondition;
-  }): StyleSourceOwner[];
+  read(input: { elementFacts: ElementStyleFacts; condition: StyleCondition }): StyleSourceOwner[];
 }
 
 export interface FrameworkStyleWriter {
-  createPlan(input: {
-    context: StyleWriteContext;
-    sourceOwner: StyleSourceOwner;
-  }): StyleWritePlan;
+  createPlan(input: { context: StyleWriteContext; sourceOwner: StyleSourceOwner }): StyleWritePlan;
 }
 
 export interface FrameworkSourceResolver {
@@ -1226,25 +1199,15 @@ export interface FrameworkSourceResolver {
 }
 
 export interface FrameworkTokenResolver {
-  resolveToken(input: {
-    tokenId: string;
-    property: string;
-  }): string | undefined;
+  resolveToken(input: { tokenId: string; property: string }): string | undefined;
 }
 
 export interface FrameworkThemeResolver {
-  resolveThemeValue(input: {
-    property: string;
-    themeCondition: StyleCondition;
-  }): StyleSourceOwner | undefined;
+  resolveThemeValue(input: { property: string; themeCondition: StyleCondition }): StyleSourceOwner | undefined;
 }
 
 export interface LayoutMutationStrategy {
-  changeLayout(input: {
-    elementRef: string;
-    filePath: string;
-    layoutType: string;
-  }): StyleWritePlan;
+  changeLayout(input: { elementRef: string; filePath: string; layoutType: string }): StyleWritePlan;
 }
 
 export interface FrameworkStyleAdapter {
@@ -1507,35 +1470,63 @@ interface FormatInput {
 const OPACITY_KEYS = new Set(['opacity']);
 
 const SIZE_KEYWORDS = new Set([
-  'auto', 'inherit', 'initial', 'unset', 'revert',
-  'min-content', 'max-content', 'fit-content',
+  'auto',
+  'inherit',
+  'initial',
+  'unset',
+  'revert',
+  'min-content',
+  'max-content',
+  'fit-content',
   'none',
 ]);
 
 const COLOR_KEYS = new Set([
-  'color', 'backgroundColor', 'borderColor',
-  'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-  'outlineColor', 'textDecorationColor', 'caretColor',
-  'shadowColor', 'fill', 'stroke',
+  'color',
+  'backgroundColor',
+  'borderColor',
+  'borderTopColor',
+  'borderRightColor',
+  'borderBottomColor',
+  'borderLeftColor',
+  'outlineColor',
+  'textDecorationColor',
+  'caretColor',
+  'shadowColor',
+  'fill',
+  'stroke',
 ]);
 
 function isLengthProperty(key: string): boolean {
   return (
     key.startsWith('padding') ||
     key.startsWith('margin') ||
-    key.startsWith('border') && key.endsWith('Width') ||
-    key.startsWith('border') && key.endsWith('Radius') ||
-    key === 'width' || key === 'height' ||
-    key === 'minWidth' || key === 'minHeight' ||
-    key === 'maxWidth' || key === 'maxHeight' ||
-    key === 'top' || key === 'right' || key === 'bottom' || key === 'left' ||
-    key === 'gap' || key === 'rowGap' || key === 'columnGap' ||
-    key === 'fontSize' || key === 'lineHeight' ||
-    key === 'letterSpacing' || key === 'wordSpacing' ||
+    (key.startsWith('border') && key.endsWith('Width')) ||
+    (key.startsWith('border') && key.endsWith('Radius')) ||
+    key === 'width' ||
+    key === 'height' ||
+    key === 'minWidth' ||
+    key === 'minHeight' ||
+    key === 'maxWidth' ||
+    key === 'maxHeight' ||
+    key === 'top' ||
+    key === 'right' ||
+    key === 'bottom' ||
+    key === 'left' ||
+    key === 'gap' ||
+    key === 'rowGap' ||
+    key === 'columnGap' ||
+    key === 'fontSize' ||
+    key === 'lineHeight' ||
+    key === 'letterSpacing' ||
+    key === 'wordSpacing' ||
     key === 'textIndent' ||
-    key === 'outlineWidth' || key === 'outlineOffset' ||
-    key === 'borderRadius' || key === 'borderRadiusTopLeft' ||
-    key === 'borderRadiusTopRight' || key === 'borderRadiusBottomLeft' ||
+    key === 'outlineWidth' ||
+    key === 'outlineOffset' ||
+    key === 'borderRadius' ||
+    key === 'borderRadiusTopLeft' ||
+    key === 'borderRadiusTopRight' ||
+    key === 'borderRadiusBottomLeft' ||
     key === 'borderRadiusBottomRight'
   );
 }
@@ -1821,8 +1812,20 @@ function staticFallbackSupports(property: string, value: string): boolean {
 
   // Display/position enum values
   if (property === 'display') {
-    return ['block', 'inline', 'flex', 'grid', 'inline-flex', 'inline-grid',
-      'inline-block', 'none', 'contents', 'table', 'list-item', 'flow-root'].includes(value);
+    return [
+      'block',
+      'inline',
+      'flex',
+      'grid',
+      'inline-flex',
+      'inline-grid',
+      'inline-block',
+      'none',
+      'contents',
+      'table',
+      'list-item',
+      'flow-root',
+    ].includes(value);
   }
   if (property === 'position') {
     return ['static', 'relative', 'absolute', 'fixed', 'sticky'].includes(value);
@@ -1832,9 +1835,33 @@ function staticFallbackSupports(property: string, value: string): boolean {
   if (property.includes('color') || property === 'background-color') {
     if (/^#([0-9a-fA-F]{3,8})$/.test(value)) return true;
     if (/^(rgb|rgba|hsl|hsla|oklch|lch|lab|oklab)\(/.test(value)) return true;
-    if (['transparent', 'currentColor', 'red', 'blue', 'green', 'black', 'white',
-      'gray', 'grey', 'orange', 'yellow', 'purple', 'pink', 'brown', 'cyan',
-      'magenta', 'navy', 'teal', 'lime', 'aqua', 'silver', 'gold'].includes(value)) return true;
+    if (
+      [
+        'transparent',
+        'currentColor',
+        'red',
+        'blue',
+        'green',
+        'black',
+        'white',
+        'gray',
+        'grey',
+        'orange',
+        'yellow',
+        'purple',
+        'pink',
+        'brown',
+        'cyan',
+        'magenta',
+        'navy',
+        'teal',
+        'lime',
+        'aqua',
+        'silver',
+        'gold',
+      ].includes(value)
+    )
+      return true;
   }
 
   // Length values with units
@@ -1844,11 +1871,32 @@ function staticFallbackSupports(property: string, value: string): boolean {
   if (['auto', 'none', 'min-content', 'max-content', 'fit-content'].includes(value)) return true;
 
   // Flex direction, flex-wrap, align, justify, etc.
-  if (['row', 'column', 'row-reverse', 'column-reverse',
-    'wrap', 'nowrap', 'wrap-reverse',
-    'flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly',
-    'start', 'end', 'stretch', 'baseline',
-    'hidden', 'visible', 'scroll', 'clip'].includes(value)) return true;
+  if (
+    [
+      'row',
+      'column',
+      'row-reverse',
+      'column-reverse',
+      'wrap',
+      'nowrap',
+      'wrap-reverse',
+      'flex-start',
+      'flex-end',
+      'center',
+      'space-between',
+      'space-around',
+      'space-evenly',
+      'start',
+      'end',
+      'stretch',
+      'baseline',
+      'hidden',
+      'visible',
+      'scroll',
+      'clip',
+    ].includes(value)
+  )
+    return true;
 
   return false;
 }
@@ -1920,11 +1968,11 @@ Expected: no warnings or errors
 
 After completing all tasks, the codebase will have:
 
-|Module|Files|Purpose|
-|---|---|---|
-|`lib/style-read/types.ts`|1 source + 1 test|CssSystemId, SourceForm, StyleCondition, StyleSourceOwner, ProjectStyleCapabilities, ElementStyleFacts, ComponentPropMapper|
-|`lib/style-write/types.ts`|1 source + 1 test|StyleWritePlan union (6 variants), StyleWriteContext, StyleWriteResult, FrameworkStyleAdapter, StyleWriteManager|
-|`lib/style-values/inspector-value-codec.ts`|1 source + 1 test|Normalize/format inspector values (opacity 0-100, lengths, colors)|
-|`lib/style-values/css-runtime-normalizer.ts`|1 source + 1 test|Browser CSS.supports validation, px unit appending, static Node.js fallback|
+| Module                                       | Files             | Purpose                                                                                                                     |
+| -------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `lib/style-read/types.ts`                    | 1 source + 1 test | CssSystemId, SourceForm, StyleCondition, StyleSourceOwner, ProjectStyleCapabilities, ElementStyleFacts, ComponentPropMapper |
+| `lib/style-write/types.ts`                   | 1 source + 1 test | StyleWritePlan union (6 variants), StyleWriteContext, StyleWriteResult, FrameworkStyleAdapter, StyleWriteManager            |
+| `lib/style-values/inspector-value-codec.ts`  | 1 source + 1 test | Normalize/format inspector values (opacity 0-100, lengths, colors)                                                          |
+| `lib/style-values/css-runtime-normalizer.ts` | 1 source + 1 test | Browser CSS.supports validation, px unit appending, static Node.js fallback                                                 |
 
 This is the foundation for all subsequent phases. Next phases will build framework adapters, read/write managers, and platform integration on top of these types and modules.

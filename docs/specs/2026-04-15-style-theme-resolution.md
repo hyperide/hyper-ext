@@ -79,21 +79,11 @@ VS Code and SaaS must pass the same runtime theme context into the shared read
 and write managers.
 
 ```typescript
-type IdeThemePreference =
-  | 'light'
-  | 'dark'
-  | 'system';
+type IdeThemePreference = 'light' | 'dark' | 'system';
 
-type ResolvedColorScheme =
-  | 'light'
-  | 'dark';
+type ResolvedColorScheme = 'light' | 'dark';
 
-type RuntimeThemeSource =
-  | 'hyperide'
-  | 'vscode'
-  | 'browser-system'
-  | 'app-runtime'
-  | 'test-fixture';
+type RuntimeThemeSource = 'hyperide' | 'vscode' | 'browser-system' | 'app-runtime' | 'test-fixture';
 
 interface RuntimeThemeContext {
   ideThemePreference: IdeThemePreference;
@@ -128,13 +118,7 @@ tests:
 The parent spec's `StyleCondition.theme` field uses this shape:
 
 ```typescript
-type ThemeAxisId =
-  | 'color-scheme'
-  | 'brand'
-  | 'density'
-  | 'contrast'
-  | 'platform'
-  | (string & {});
+type ThemeAxisId = 'color-scheme' | 'brand' | 'density' | 'contrast' | 'platform' | (string & {});
 
 type ThemeConditionSource =
   | 'prefers-color-scheme'
@@ -350,9 +334,7 @@ system selected:
 or:
 
 ```tsx
-const cardStyle = isDark
-  ? { color: '#ffffff' }
-  : { color: '#111827' };
+const cardStyle = isDark ? { color: '#ffffff' } : { color: '#111827' };
 ```
 
 Read model:

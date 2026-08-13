@@ -4,6 +4,7 @@
 
 User-reported bugs (text input disabled, Create-key hidden in bulka) are
 NOT fixed by this branch. Branch contributes:
+
 - root-cause diagnosis (Task 1) — `writable: false` for merged-TS layouts
   in `shared/i18n-text/resolve-i18n-resource.ts` gates `editable`
 - regression tests pinning current adapter behavior + empty-string carve-out
@@ -17,6 +18,7 @@ bindings — is **out of scope** of this plan. See "Follow-up" at end.
 ## User report (2026-05-06 14:30, Index.tsx in bulka-the-dog)
 
 After merging i18n-text-edit-disabled branch into main:
+
 1. ❌ Text input в i18n inspector НЕ редактируется (disabled state).
 2. ❌ Создание новых i18n ключей опять пропало (no Create key affordance).
 
@@ -25,16 +27,16 @@ E2E coverage for these cases passed in Docker, but real preview shows the bug.
 ## Hypotheses
 
 A. **`I18nTextBinding.editable` computation in real bulka StyleReadService is
-   different from the path the e2e exercises.** The bulka-the-dog component
-   probably uses a translations.ts merged-format adapter (TsMergedAdapter)
-   while the e2e covered react-i18next or custom JSON.
+different from the path the e2e exercises.** The bulka-the-dog component
+probably uses a translations.ts merged-format adapter (TsMergedAdapter)
+while the e2e covered react-i18next or custom JSON.
 B. **`availableI18nKeys` is empty in this case** — without keys, combobox
-   trigger renders with no suggestions, and the "Create key" affordance
-   only appears inside the popover.
+trigger renders with no suggestions, and the "Create key" affordance
+only appears inside the popover.
 C. **`StyleReadService.getAvailableKeys` is failing for translations.ts merged
-   format**, returning empty list. The combobox falls back to plain input
-   (no Create key UI), and editable depends on `resolvedText !== null`
-   which may also fail for merged format.
+format**, returning empty list. The combobox falls back to plain input
+(no Create key UI), and editable depends on `resolvedText !== null`
+which may also fail for merged format.
 
 ## Files
 
@@ -81,7 +83,7 @@ Code path through StyleReadService for an element like
 
 3. `StyleReadService._tryDetectI18n` builds the binding with
    `editable: resolved.writable && (...)` → `false && X` → **`editable:
-   false`**. Text input is rendered with `disabled` (`I18nTextInspector.tsx:295`).
+false`**. Text input is rendered with `disabled` (`I18nTextInspector.tsx:295`).
 
 4. `getAvailableKeys`: `AdapterFactory.forBinding` sees
    `layout.mergedData` and returns `TsMergedAdapter`, which extracts dot-path
@@ -140,7 +142,7 @@ translations). Task 4's empty-string carve-out is a non-fix: with
       find why. The translations.ts file shape: `{ ru: {...}, en: {...} }`.
       → It does NOT return `[]`. Hypothesis C is wrong. Tests confirm
       `getAvailableKeys('en')` for bulka returns `['hero.question',
-      'faq.title', 'brand.name', 'nav.appearance', ...]`. Parallel keysets
+'faq.title', 'brand.name', 'nav.appearance', ...]`. Parallel keysets
       across `ru`/`rs`/`en`. Falls back to first available locale when
       requested locale is missing. Combobox is populated.
 - [x] Same for `resolveText` — confirm a value is returned for hero.question.
@@ -164,7 +166,7 @@ writes), not on adapter behavior.
       shape.
       → No path bug. Task 2 already ruled out hypothesis C. TsMergedAdapter
       handles nested objects correctly (recursively walks into `{ ru: {...},
-      rs: {...}, en: {...} }`, emits dot-path leaf keys like `hero.question`,
+rs: {...}, en: {...} }`, emits dot-path leaf keys like `hero.question`,
       `faq.title`, `brand.name`, `nav.appearance`). `resolveText` returns the
       correct value for `hero.question` in every locale. Unit tests against
       the bulka shape already exist
@@ -201,7 +203,7 @@ writes), not on adapter behavior.
 ### Task 5: E2E for bulka layout
 
 - [x] Add `PI-7-I18N-9: bulka translations.ts adapter — text editable + key
-      combobox shows keys + Create key affordance works`. Use bulka project,
+combobox shows keys + Create key affordance works`. Use bulka project,
       not the synthetic test fixture.
       → Added `e2e/tests/project-dependent/bulka-i18n-pi7-9.spec.ts` in the
       sibling `ext-test-projects` repo. Two tests pin the contract:
@@ -221,18 +223,18 @@ writes), not on adapter behavior.
 ### Task 6: Build, install, screenshot, TG
 
 - [~] `npm run package`, install, reload. Manual reproduction: open Index.tsx,
-      select hero.question, verify text editable + Create key visible.
-      (skipped — out of scope, blocked on follow-up fix: per Task 1 diagnosis
-      the bulka regression's root cause is `writable: false` for merged-TS
-      layouts, and Tasks 4/5 defer the actual fix. Manual reproduction would
-      fail until that separate change lands.)
+  select hero.question, verify text editable + Create key visible.
+  (skipped — out of scope, blocked on follow-up fix: per Task 1 diagnosis
+  the bulka regression's root cause is `writable: false` for merged-TS
+  layouts, and Tasks 4/5 defer the actual fix. Manual reproduction would
+  fail until that separate change lands.)
 - [~] E2E run. Open each screenshot via Read; send only when frames show
-      the editable input + visible Create key button.
-      (skipped — `bulka-i18n-pi7-9.spec.ts` added in Task 5 is RED by
-      design until the merged-TS write fix is implemented; running it now
-      would only re-confirm the known failure. Defer e2e + TG screenshot
-      to the follow-up plan that lands the writeI18nResource TS-merged
-      mutation or decouples `editable` from `writable`.)
+  the editable input + visible Create key button.
+  (skipped — `bulka-i18n-pi7-9.spec.ts` added in Task 5 is RED by
+  design until the merged-TS write fix is implemented; running it now
+  would only re-confirm the known failure. Defer e2e + TG screenshot
+  to the follow-up plan that lands the writeI18nResource TS-merged
+  mutation or decouples `editable` from `writable`.)
 
 ## Follow-up
 

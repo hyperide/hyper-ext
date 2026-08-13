@@ -19,22 +19,22 @@ Each feature is an independent module. ColorCombobox composes them. Each module 
 
 ### New Files
 
-| File | Purpose |
-|------|---------|
-| `shared/utils/color.ts` | `hexToRgb`, `hexToHsl`, `rgbToHex`, `hslToHex`, `colorDistance` — extracted from `lib/tamagui/values.ts` and deduplicated |
-| `client/components/ui/color-search-parser.ts` | `parseColorInput()` — multi-format parsing via canvas API |
-| `client/components/ui/color-tooltip.tsx` | `ColorTooltip` — interactive tooltip with copy and hotkeys |
-| `client/components/ui/opacity-input.tsx` | `OpacityInput` — compact percentage field |
-| `client/components/ui/hooks/use-component-colors.ts` | `useComponentColors()` — extracts colors from client-side AST, re-scans on tree changes |
+| File                                                 | Purpose                                                                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `shared/utils/color.ts`                              | `hexToRgb`, `hexToHsl`, `rgbToHex`, `hslToHex`, `colorDistance` — extracted from `lib/tamagui/values.ts` and deduplicated |
+| `client/components/ui/color-search-parser.ts`        | `parseColorInput()` — multi-format parsing via canvas API                                                                 |
+| `client/components/ui/color-tooltip.tsx`             | `ColorTooltip` — interactive tooltip with copy and hotkeys                                                                |
+| `client/components/ui/opacity-input.tsx`             | `OpacityInput` — compact percentage field                                                                                 |
+| `client/components/ui/hooks/use-component-colors.ts` | `useComponentColors()` — extracts colors from client-side AST, re-scans on tree changes                                   |
 
 ### Modified Files
 
-| File | Changes |
-|------|---------|
-| `client/components/ui/color-combobox.tsx` | Integrate all 4 modules, wrap swatches with ColorTooltip, render ComponentColorStrip and OpacityInput. Replace local `hexToRgb`/`colorDistance` with imports from `shared/utils/color.ts` |
-| `client/components/RightSidebar/sections/FillSection.tsx` | Remove standalone opacity field, pass opacity props into ColorCombobox |
-| `client/components/RightSidebar/utils.ts` | Move `hexWithAlpha`, `parseHexWithAlpha` to `shared/utils/color.ts` if reusable |
-| `lib/tamagui/values.ts` | Replace local `colorDistance`, `hexToRgb` with imports from `shared/utils/color.ts` |
+| File                                                      | Changes                                                                                                                                                                                   |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client/components/ui/color-combobox.tsx`                 | Integrate all 4 modules, wrap swatches with ColorTooltip, render ComponentColorStrip and OpacityInput. Replace local `hexToRgb`/`colorDistance` with imports from `shared/utils/color.ts` |
+| `client/components/RightSidebar/sections/FillSection.tsx` | Remove standalone opacity field, pass opacity props into ColorCombobox                                                                                                                    |
+| `client/components/RightSidebar/utils.ts`                 | Move `hexWithAlpha`, `parseHexWithAlpha` to `shared/utils/color.ts` if reusable                                                                                                           |
+| `lib/tamagui/values.ts`                                   | Replace local `colorDistance`, `hexToRgb` with imports from `shared/utils/color.ts`                                                                                                       |
 
 ---
 
@@ -46,10 +46,10 @@ Each feature is an independent module. ColorCombobox composes them. Each module 
 
 ```ts
 type ParsedColorInput = {
-  hex: string       // normalized 6-digit hex (#rrggbb)
-  original: string  // raw user input
-  format: 'hex' | 'hex-short' | 'rgb' | 'hsl' | 'named'
-}
+  hex: string; // normalized 6-digit hex (#rrggbb)
+  original: string; // raw user input
+  format: 'hex' | 'hex-short' | 'rgb' | 'hsl' | 'named';
+};
 ```
 
 **Supported formats:**
@@ -64,25 +64,25 @@ type ParsedColorInput = {
 
 ```ts
 // Lazy-initialized singleton — avoids import-time `document` access (breaks tests/SSR)
-let ctx: CanvasRenderingContext2D | null = null
+let ctx: CanvasRenderingContext2D | null = null;
 function getCtx(): CanvasRenderingContext2D {
-  if (!ctx) ctx = document.createElement('canvas').getContext('2d')!
-  return ctx
+  if (!ctx) ctx = document.createElement('canvas').getContext('2d')!;
+  return ctx;
 }
 
 function cssColorToHex(input: string): string | null {
-  const c = getCtx()
+  const c = getCtx();
   // Two-sentinel approach to avoid collision with real colors
-  c.fillStyle = '#010101'
-  c.fillStyle = input
-  if (c.fillStyle !== '#010101') return c.fillStyle
+  c.fillStyle = '#010101';
+  c.fillStyle = input;
+  if (c.fillStyle !== '#010101') return c.fillStyle;
 
   // Input resolved to #010101 — verify it's intentional, not a failed parse
-  c.fillStyle = '#020202'
-  c.fillStyle = input
-  if (c.fillStyle !== '#020202') return c.fillStyle
+  c.fillStyle = '#020202';
+  c.fillStyle = input;
+  if (c.fillStyle !== '#020202') return c.fillStyle;
 
-  return null // canvas did not recognize the input
+  return null; // canvas did not recognize the input
 }
 ```
 
@@ -167,11 +167,11 @@ borderColor, boxShadow, etc.), resolves tokens to hex, deduplicates, counts occu
 
 ```ts
 type ColorEntry = {
-  value: string    // token ($blue9, bg-blue-500) or hex (#3b82f6)
-  hex: string      // always resolved hex for rendering
-  isToken: boolean
-  count: number    // usage count in component
-}
+  value: string; // token ($blue9, bg-blue-500) or hex (#3b82f6)
+  hex: string; // always resolved hex for rendering
+  isToken: boolean;
+  count: number; // usage count in component
+};
 ```
 
 If the same color appears both as a token and as a raw hex literal, they are deduplicated by
@@ -219,8 +219,8 @@ Positioned inline: `[color-input] [link/unlink button] [opacity-input]` — sing
 
 ```ts
 const showOpacity =
-  !isLinked ||                           // hex mode — always show
-  (isLinked && tokenSystemSupportsAlpha)  // linked + system supports opacity (Tailwind)
+  !isLinked || // hex mode — always show
+  (isLinked && tokenSystemSupportsAlpha); // linked + system supports opacity (Tailwind)
 ```
 
 `tokenSystemSupportsAlpha`: Tailwind → `true`, Tamagui → `false`. Passed as prop from ColorCombobox.
@@ -232,6 +232,7 @@ The downstream Tailwind generator is responsible for converting to class syntax 
 ColorCombobox does NOT emit class names — it works with hex values only.
 
 For both backgroundColor and textColor, the flow is:
+
 1. User changes opacity in `OpacityInput`
 2. ColorCombobox calls `onChange(hexWithAlpha(currentHex, opacity))`
 3. `syncStyleChange` receives the `#rrggbbaa` value

@@ -1,19 +1,25 @@
 {
   "name": "hypercanvas-code-server",
   "displayName": "HyperIDE Code Server",
-  "description": "Live preview panel for HyperIDE projects in code-server",
   "version": "0.1.0",
-  "publisher": "hyperide",
-  "engines": {
-    "vscode": "^1.74.0"
-  },
+  "description": "Live preview panel for HyperIDE projects in code-server",
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
+  "publisher": "hyperide",
   "main": "./out/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.74.0",
+    "@vscode/vsce": "^2.22.0",
+    "typescript": "^5.0.0"
+  },
   "contributes": {
     "viewsContainers": {
       "panel": [
@@ -74,16 +80,10 @@
       ]
     }
   },
-  "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "npx @vscode/vsce package --no-dependencies"
-  },
-  "devDependencies": {
-    "@types/vscode": "^1.74.0",
-    "@types/node": "^18.0.0",
-    "typescript": "^5.0.0",
-    "@vscode/vsce": "^2.22.0"
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "engines": {
+    "vscode": "^1.74.0"
   }
 }

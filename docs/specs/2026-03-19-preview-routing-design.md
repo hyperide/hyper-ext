@@ -89,12 +89,14 @@ Instead of script swap, patch the entry file via AST (`recast`, preserves format
 ```tsx
 // src/index.tsx — after patch
 import React from 'react';
-import './index.css';   // static imports stay, always execute
+import './index.css'; // static imports stay, always execute
 import { queryClient } from './lib/query';
 
-if (new URLSearchParams(location.search).get('__preview')) { /* @hyperide-managed */
+if (new URLSearchParams(location.search).get('__preview')) {
+  /* @hyperide-managed */
   import('./__canvas_preview__');
-} else { /* @hyperide-managed */
+} else {
+  /* @hyperide-managed */
   ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
 } /* @hyperide-managed */
 ```
@@ -114,9 +116,7 @@ import { ThemeProvider } from './src/theme';
 export function PreviewWrapper({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        {children}
-      </ThemeProvider>
+      <ThemeProvider>{children}</ThemeProvider>
     </QueryClientProvider>
   );
 }
@@ -161,7 +161,7 @@ function PreviewRoot() {
 createRoot(document.getElementById('root')!).render(
   <PreviewWrapper>
     <PreviewRoot />
-  </PreviewWrapper>
+  </PreviewWrapper>,
 );
 ```
 
@@ -169,15 +169,15 @@ createRoot(document.getElementById('root')!).render(
 
 ## Framework Routing Table
 
-| Bundler / Framework | Without config (App Shell) | With `.hyperide/preview.tsx` (Isolated) |
-|---------------------|----------------------------|-----------------------------------------|
-| Vite + Remix v2 | Route file: `app/routes/test-preview.tsx` | Tier 1: proxy script swap |
-| Vite + react-router v7 / TanStack | Route file in routing directory | Tier 1: proxy script swap |
-| Vite + react-router v6 (JSX) | Route file + AST router patch | Tier 1: proxy script swap |
-| Parcel | Route file + AST router patch | Tier 1: proxy script swap |
-| Webpack / CRA | Route file + AST router patch | Tier 2: AST entry patch |
-| Next.js App Router | `app/test-preview/page.tsx` + blank `layout.tsx` | Tier 3: same, wrapper imported in route |
-| Next.js Pages Router | `pages/test-preview.tsx` | Tier 3: same, wrapper imported in route |
+| Bundler / Framework               | Without config (App Shell)                       | With `.hyperide/preview.tsx` (Isolated) |
+| --------------------------------- | ------------------------------------------------ | --------------------------------------- |
+| Vite + Remix v2                   | Route file: `app/routes/test-preview.tsx`        | Tier 1: proxy script swap               |
+| Vite + react-router v7 / TanStack | Route file in routing directory                  | Tier 1: proxy script swap               |
+| Vite + react-router v6 (JSX)      | Route file + AST router patch                    | Tier 1: proxy script swap               |
+| Parcel                            | Route file + AST router patch                    | Tier 1: proxy script swap               |
+| Webpack / CRA                     | Route file + AST router patch                    | Tier 2: AST entry patch                 |
+| Next.js App Router                | `app/test-preview/page.tsx` + blank `layout.tsx` | Tier 3: same, wrapper imported in route |
+| Next.js Pages Router              | `pages/test-preview.tsx`                         | Tier 3: same, wrapper imported in route |
 
 Next.js is always App Shell mode — it doesn't serve arbitrary `.tsx` files, and
 file-based routing solves the problem more cleanly than any proxy magic.
@@ -207,7 +207,7 @@ configure the preview route manually.
 Root `layout.tsx` (App Router) and `root.tsx` (Remix) wrap every page — navbar, sidebar,
 and footer end up inside the preview.
 
-*Solution*: generate a blank `app/test-preview/layout.tsx` alongside `page.tsx`:
+_Solution_: generate a blank `app/test-preview/layout.tsx` alongside `page.tsx`:
 
 ```tsx
 // app/test-preview/layout.tsx — @hyperide-managed
@@ -232,11 +232,12 @@ changing app logic, only adding one route. AST via recast, tagged `@hyperide-man
 auto-rollback on deactivation.
 
 Problems:
+
 - Router config can live in `App.tsx`, `main.tsx`, `router.tsx`, or a separate file
 - `<Routes>` may be nested inside a layout route with its own providers
 - ESLint may complain about the modified file
 
-*Solution*: if wrapper config exists — skip router patching entirely and go Tier 1.
+_Solution_: if wrapper config exists — skip router patching entirely and go Tier 1.
 Tier 1 makes the SPA router irrelevant — `__canvas_preview__.tsx` becomes its own entry.
 AST router patch is only done in App Shell mode without wrapper.
 
@@ -252,7 +253,7 @@ Common pattern: `<AuthProvider>` or `<ThemeProvider>` wraps only `/dashboard/**`
 not `/login` or `/test-preview`. Our route is added at the top level — without those
 providers. Components using `useTheme()`, `useAuth()` crash.
 
-*Solution*: wrapper config only. There is no way to automatically determine which
+_Solution_: wrapper config only. There is no way to automatically determine which
 providers a given component needs. AI generates the wrapper by analyzing the component
 tree and its provider dependencies — a bounded task. Without wrapper — show a clear
 error ("component crashed — may need providers, configure wrapper").
@@ -262,7 +263,8 @@ error ("component crashed — may need providers, configure wrapper").
 Entry file is modified — `git status` shows changes the user didn't make.
 ESLint / Prettier / pre-commit hooks may fail.
 
-*Partial solution*:
+_Partial solution_:
+
 - Add `/* eslint-disable-next-line */` on injected lines only
 - Document that the file will be dirty while HyperIDE is active
 - Auto-revert on deactivation
@@ -276,7 +278,7 @@ If the user creates `.hyperide/preview.tsx` after App Shell mode is already acti
 route files must be deleted and the switch to Tier 1/2 must happen. If the wrapper is
 deleted — switch back to App Shell and recreate route files.
 
-*Solution*: FSWatch on `.hyperide/preview.tsx`. On change — reconfigure preview mode,
+_Solution_: FSWatch on `.hyperide/preview.tsx`. On change — reconfigure preview mode,
 clean up old files, generate new ones.
 
 ---
@@ -288,7 +290,7 @@ clean up old files, generate new ones.
 `base: '/app/'` in `vite.config.ts` — all script src attributes have a prefix:
 `<script src="/app/src/main.tsx">`. A regex without the base will match nothing.
 
-*Solution*: read `vite.config.ts` at PreviewProxy startup (static analysis or sandboxed
+_Solution_: read `vite.config.ts` at PreviewProxy startup (static analysis or sandboxed
 eval). Use the detected base when searching and replacing script src.
 
 **[P2-2] Multiple `<script type="module">` in HTML**
@@ -296,7 +298,7 @@ eval). Use the detected base when searching and replacing script src.
 Vite injects `/@vite/client`, `@react-refresh` — also module scripts. Can't blindly
 replace the first one found.
 
-*Solution*: filter out scripts whose src starts with `/@`, `/@id/`, or `https://`.
+_Solution_: filter out scripts whose src starts with `/@`, `/@id/`, or `https://`.
 The remaining one is the user's entry. If 0 or 2+ remain after filtering — log a
 warning and fall back to App Shell mode.
 
@@ -305,7 +307,7 @@ warning and fall back to App Shell mode.
 `vite-plugin-html` and similar plugins may transform the script tag before the proxy
 sees it.
 
-*Solution*: the regex is flexible enough (match `type="module"` + `src="` pattern,
+_Solution_: the regex is flexible enough (match `type="module"` + `src="` pattern,
 don't require exact attribute ordering). On script swap failure — detect, log, fall
 back to App Shell mode.
 
@@ -313,7 +315,7 @@ back to App Shell mode.
 
 `window.location.search` is unavailable during SSR pre-rendering, even with `'use client'`.
 
-*Solution*: in the generated Next.js `page.tsx`, use `useSearchParams()` from
+_Solution_: in the generated Next.js `page.tsx`, use `useSearchParams()` from
 `next/navigation` (SSR-safe). Requires `<Suspense>` wrapper in App Router:
 
 ```tsx
@@ -328,7 +330,11 @@ function PreviewContent() {
 }
 
 export default function TestPreviewPage() {
-  return <Suspense><PreviewContent /></Suspense>;
+  return (
+    <Suspense>
+      <PreviewContent />
+    </Suspense>
+  );
 }
 ```
 
@@ -337,7 +343,7 @@ export default function TestPreviewPage() {
 PreviewFileManager writes the route file → dev server FSWatch picks it up → small gap
 (50–200ms) → if iframe already opened → 404.
 
-*Solution*: proxy retries on 404 for `/test-preview` with backoff (5 attempts, 200ms
+_Solution_: proxy retries on 404 for `/test-preview` with backoff (5 attempts, 200ms
 interval). Shows "starting preview..." while waiting.
 
 **[P2-6] Reactive URL params in PreviewRoot**
@@ -350,7 +356,7 @@ Problem only arises if we want instant switch without reload (component already 
 registry, only URL param changes). In that case a `popstate` listener or postMessage is
 needed.
 
-*Solution for instant switch*: `PreviewRoot` listens to
+_Solution for instant switch_: `PreviewRoot` listens to
 `window.addEventListener('message')` from the parent frame with
 `{ type: 'switchComponent', path: '...' }` and updates state without navigation.
 Extension sends postMessage instead of changing `iframe.src`.
@@ -363,7 +369,7 @@ Extension sends postMessage instead of changing `iframe.src`.
 
 User adds a new provider to the app — it's not in the wrapper — components crash again.
 
-*Solution*: on preview crash — offer "Regenerate wrapper". AI reads the current
+_Solution_: on preview crash — offer "Regenerate wrapper". AI reads the current
 `main.tsx` and updates `.hyperide/preview.tsx`.
 
 **[P3-2] TypeScript strict mode in generated files**
@@ -371,21 +377,21 @@ User adds a new provider to the app — it's not in the wrapper — components c
 Generated `__canvas_preview__.tsx` with a dynamic component registry may fail strict
 typechecking.
 
-*Solution*: add `// @ts-nocheck` at the top of generated files. They are tooling
+_Solution_: add `// @ts-nocheck` at the top of generated files. They are tooling
 artifacts, not user code — they should not be typechecked.
 
 **[P3-3] `/test-preview` route already exists in the user's project**
 
 Unlikely, but if the route exists we would overwrite it.
 
-*Solution*: check before writing. If the file exists and does not contain
+_Solution_: check before writing. If the file exists and does not contain
 `@hyperide-managed` — warn the user and do not overwrite.
 
 **[P3-4] Monorepo root detection**
 
 In Turborepo / Nx, the right package (`apps/web/`) must be found, not the repo root.
 
-*Solution*: walk up the directory tree from the current file looking for a `package.json`
+_Solution_: walk up the directory tree from the current file looking for a `package.json`
 with a `dev` script.
 
 ---
@@ -414,12 +420,14 @@ declared, and Tier 1/2 work correctly.
 ### Extension (`hypercanvas-preview`)
 
 **`PreviewProxy`**:
+
 - App Shell mode: pass-through + inject scripts. No HTML modification.
 - Isolated mode: replace `<script type="module" src="...">` in HTML response.
 - Reads `vite.config.ts` on startup to detect `base`.
 - FSWatch on `.hyperide/preview.tsx` — switches mode on change.
 
 **`PreviewFileManager`**:
+
 - `ensurePreviewFiles()` — determines mode (App Shell vs Isolated) based on wrapper
   presence, generates the appropriate files.
 - `generateRouteFile()` — framework-specific route file.
@@ -432,6 +440,7 @@ declared, and Tier 1/2 work correctly.
   (App Shell mode).
 
 **`extension.ts`** — on `currentComponent` change:
+
 1. `ensureSample()` — AI-generates `SampleDefault`
 2. `previewFileManager.ensurePreviewFiles()` — idempotent, generates required files
 3. URL update or postMessage — no `refresh()` hard reload
@@ -450,13 +459,13 @@ declared, and Tier 1/2 work correctly.
 
 ## Discarded Approaches
 
-| Approach | Idea | Why rejected |
-|----------|------|--------------|
-| Worktree + rsync | Mirror project with swapped entry, run separate dev server | 100–500ms latency per change, two dev servers, symlink issues |
-| Vite plugin | Intercept Vite module resolution | Vite-only, requires user config change, high complexity |
-| App Shell only (no Isolated mode) | Route file always, no wrapper | Chrome leaks, JSX router patch unavoidable for SPA |
-| Isolated only (no App Shell) | Script swap / entry patch always | No CSS, no providers without wrapper — crash |
-| **App Shell default + Isolated opt-in** | **Hybrid** | **Adopted** |
+| Approach                                | Idea                                                       | Why rejected                                                  |
+| --------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------- |
+| Worktree + rsync                        | Mirror project with swapped entry, run separate dev server | 100–500ms latency per change, two dev servers, symlink issues |
+| Vite plugin                             | Intercept Vite module resolution                           | Vite-only, requires user config change, high complexity       |
+| App Shell only (no Isolated mode)       | Route file always, no wrapper                              | Chrome leaks, JSX router patch unavoidable for SPA            |
+| Isolated only (no App Shell)            | Script swap / entry patch always                           | No CSS, no providers without wrapper — crash                  |
+| **App Shell default + Isolated opt-in** | **Hybrid**                                                 | **Adopted**                                                   |
 
 ---
 

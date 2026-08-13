@@ -7,6 +7,7 @@ a repeated parent (e.g. a Section component rendered once per item in a `.map()`
 of only the parent of the currently selected item.
 
 From MEMORY deferred ticket (2026-05-08):
+
 > When the parent is a repeated-instance host (e.g. bulka `Section` wrapper rendered once
 > per Section invocation), all instances share one source ref. After Shift+Enter,
 > `onSelectElement(parentRef)` in `keyboard-handler.ts:181` emits id-only with
@@ -18,10 +19,11 @@ From MEMORY deferred ticket (2026-05-08):
 ## Root cause
 
 In `keyboard-handler.ts:179-181`:
+
 ```ts
 const parentRef = findParentNodeRef(freshId, nodeMapLookup);
 if (parentRef) {
-  callbacks.onSelectElement(parentRef);  // ← no itemIndex
+  callbacks.onSelectElement(parentRef); // ← no itemIndex
 }
 ```
 
@@ -31,6 +33,7 @@ without `selectedItemIndices`, so `findElements(ref, null)` returns ALL DOM elem
 with that source → highlights every instance of the repeated component.
 
 Fix:
+
 1. `findParentNodeRef` needs to also return the parent's itemIndex — the selected child
    has `selectedItemIndices[childRef]` = N, so the parent's itemIndex is also N (same
    `.map()` row).

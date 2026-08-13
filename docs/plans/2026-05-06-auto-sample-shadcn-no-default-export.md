@@ -142,13 +142,10 @@ wrapping CarouselContent + CarouselItem + Prev/Next).
 ### Task 2: Add fallback sample generation in the preview entry path
 
 - [x] When `SampleDefaultMap[componentPath]` is undefined, do NOT render the
-      "Component not found" error. Instead:
-      - Inspect the module's named exports (parse the source file or load
-        the module dynamically) to find the canonical "root" component.
-      - For a single-default-export module: render `<RootComponent />`
-        with empty props.
-      - For a compound shadcn-style module (e.g. Carousel with subparts):
-        invoke sample-scaffold with the parsed exports and use the result.
+      "Component not found" error. Instead: - Inspect the module's named exports (parse the source file or load
+      the module dynamically) to find the canonical "root" component. - For a single-default-export module: render `<RootComponent />`
+      with empty props. - For a compound shadcn-style module (e.g. Carousel with subparts):
+      invoke sample-scaffold with the parsed exports and use the result.
 
       Implementation:
       - `lib/preview-generator/sample-scaffold.ts`: added
@@ -267,8 +264,7 @@ wrapping CarouselContent + CarouselItem + Prev/Next).
 
 - [x] `bun test lib/preview-generator/sample-scaffold.test.ts` → assert that
       given the carousel exports, the scaffold produces a renderable JSX
-      tree containing Carousel + CarouselContent + at least one CarouselItem
-      + CarouselPrevious + CarouselNext.
+      tree containing Carousel + CarouselContent + at least one CarouselItem + CarouselPrevious + CarouselNext.
 
       Three new tests under `describe('compound shadcn carousel scaffold', …)`:
       1. `buildSampleScaffold` produces a full `SampleDefault` arrow
@@ -360,8 +356,7 @@ wrapping CarouselContent + CarouselItem + Prev/Next).
 ### Task 6: Build, install, screenshot, TG
 
 - [x] `npm run package`, install, reload. (skipped — not automatable in
-      ralphex loop: requires interactive VS Code reload after VSIX install
-      + `npm install` of ext dependencies in the worktree. Verified that
+      ralphex loop: requires interactive VS Code reload after VSIX install + `npm install` of ext dependencies in the worktree. Verified that
       the esbuild step itself succeeds: `node esbuild.js --production`
       finishes in ~400ms with no errors. The vsce packaging post-step
       fails only on the deps-presence check (`npm list --production`),

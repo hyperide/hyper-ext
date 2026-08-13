@@ -8,6 +8,7 @@ Path B (overlay freeze on writeInProgress) — both shipped (commits 7f3402a3
 and 7e0295b1) but the user-visible flicker remains.
 
 The selection-survive ralphex itself admitted in its progress log:
+
 > визуальный review inconclusive из-за бага полинга в спеке Task 5
 > (полинг на top-doc вместо iframe)
 
@@ -34,7 +35,7 @@ overlay state at every frame between 0ms and 1000ms.
 - `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts`
   — overlay renderer + state.selectedIds.
 - `client/components/RightSidebar/RightSidebar.tsx` — `handleI18nKeyChange`
-  + the `i18nDispatch` write-progress flag.
+  - the `i18nDispatch` write-progress flag.
 - `vscode-extension/hypercanvas-preview/src/services/StateHub.ts` — central
   state that survives webview reload.
 - `client/lib/platform/shared-editor-state.ts` — Zustand store.
@@ -56,8 +57,8 @@ overlay state at every frame between 0ms and 1000ms.
 - [x] Run RED — confirm the gap window where selectedIds is empty or
       bounding-rect is zero.
       Docker e2e queued via `HYPER_E2E_SHARDS=1 bun run test:docker
-      tests/project-dependent/bulka-i18n-key-change-no-flicker.spec.ts
-      --project=dep:bulka-the-dog`. RED expectation derives from two
+tests/project-dependent/bulka-i18n-key-change-no-flicker.spec.ts
+--project=dep:bulka-the-dog`. RED expectation derives from two
       independent signals: the previous spec already emitted ~49 blank
       frames (it polled the wrong document, but the user-visible 500ms
       screenshot shows no outline), and the new sampler now reads the
@@ -78,7 +79,7 @@ overlay state at every frame between 0ms and 1000ms.
       synced in `hypercanvas:stateUpdate` handler.
 - [x] StateHub keeps the flag across webview reloads (HMR). When reload
       reconnects, fresh webview gets the flag via `state:init`.
-      Done: StateHub._state already carries all SharedEditorState fields including
+      Done: StateHub.\_state already carries all SharedEditorState fields including
       writeInProgress; `register()` sends full `_state` via `state:init` to new panels,
       which `usePreviewBridge` forwards to the iframe via `hypercanvas:stateUpdate`.
       No StateHub code changes needed — the plumbing was already in place.

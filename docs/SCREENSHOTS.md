@@ -43,11 +43,11 @@ Screenshots should be placed in `docs/public/screenshots/` folder.
 
 ### Dimensions
 
-| Location | Recommended Size |
-|----------|------------------|
-| Hero | 1920x1080 or 16:9 aspect |
-| Feature cards | 800x600 or 4:3 aspect |
-| Documentation | 1200x800 (flexible) |
+| Location      | Recommended Size         |
+| ------------- | ------------------------ |
+| Hero          | 1920x1080 or 16:9 aspect |
+| Feature cards | 800x600 or 4:3 aspect    |
+| Documentation | 1200x800 (flexible)      |
 
 ### Quality
 

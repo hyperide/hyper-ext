@@ -37,10 +37,10 @@ If no sibling with a source is found all the way to body, fall back to the initi
 
 ## Files to Change
 
-| File | Change |
-|------|--------|
-| `shared/canvas-interaction/drag-source-resolver.ts` | Add "sibling check walk-up" pass after initial source resolution |
-| `shared/canvas-interaction/__tests__/drag-source-resolver.test.ts` | Add test for nested-wrapper scenario |
+| File                                                               | Change                                                           |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `shared/canvas-interaction/drag-source-resolver.ts`                | Add "sibling check walk-up" pass after initial source resolution |
+| `shared/canvas-interaction/__tests__/drag-source-resolver.test.ts` | Add test for nested-wrapper scenario                             |
 
 Do NOT modify `AstService.ts` — its same-parent constraint is correct and intentional.
 
@@ -53,11 +53,13 @@ Do NOT modify `AstService.ts` — its same-parent constraint is correct and inte
 - Telegram heartbeat every 15 min.
 
 This ralphex run is isolated. Use this worktree:
+
 ```
 /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b1-drag-level/hyper-canvas-draft
 ```
 
 Create it with:
+
 ```bash
 git -C /Users/ultra/work/hyper-canvas-draft worktree add \
   /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b1-drag-level/hyper-canvas-draft \
@@ -100,9 +102,7 @@ function walkToMeaningfulDraggable(
   let cur: HTMLElement = el;
   while (cur.parentElement && cur.parentElement !== document.body) {
     const siblings = Array.from(cur.parentElement.children) as HTMLElement[];
-    const hasMeaningfulSibling = siblings.some(
-      (s) => s !== cur && getSourceLocation(s) !== null,
-    );
+    const hasMeaningfulSibling = siblings.some((s) => s !== cur && getSourceLocation(s) !== null);
     if (hasMeaningfulSibling) {
       return cur;
     }
@@ -120,12 +120,14 @@ function walkToMeaningfulDraggable(
 File: `shared/canvas-interaction/__tests__/drag-source-resolver.test.ts`
 
 Test scenario: nested card structure:
+
 - outer-card has `getSourceLocation` → returns `{fileName:'Index.tsx', line:10, column:2}`
 - inner-div has `getSourceLocation` → returns `{fileName:'Index.tsx', line:15, column:4}`
 - emoji-span has `getSourceLocation` → returns null (aria-hidden, no source)
 - other-card (sibling of outer-card) has `getSourceLocation` → returns `{fileName:'Index.tsx', line:20, column:2}`
 
 When drag target = emoji-span:
+
 1. step1 skipped (decorative)
 2. step2 finds inner-div (first ancestor with source)
 3. step3 fallback not needed (already found)
@@ -137,9 +139,11 @@ When drag target = emoji-span:
 Assertion: `result.el === outer-card`.
 
 When drag target = text-div inside inner-div:
+
 - Similar result: should resolve to outer-card.
 
 When drag target = card in a flat list (no nesting):
+
 - card has siblings with sources → should resolve to card immediately (no extra walk-up).
 
 ### Task 1: Write RED unit test

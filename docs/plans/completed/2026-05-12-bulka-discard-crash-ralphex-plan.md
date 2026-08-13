@@ -34,6 +34,7 @@ produced:
   `previewPanel.refresh()`.
 
 For bulka specifically:
+
 - `index.html` has `<script src="/client/main.tsx">` → `_detectFrontendRoot()` returns
   `'client'`.
 - `detectRouterFile()` checks `client/App.tsx` first → contains `BrowserRouter` →
@@ -52,6 +53,7 @@ bulka's package.json (present), finds `client/pages/Index.tsx` — so it should 
 return the correct path.
 
 **However**, this is unconfirmed. The actual failure mode in Docker may be different:
+
 - The canvas loads the wrong component (explicit path would fix it).
 - Or the entry-file-watcher does not re-patch after discard (watcher or repatch logic bug).
 - Or the unhandled rejection from Tasks 2/3 is still firing on bulka-specific code path.
@@ -77,11 +79,13 @@ Main worktree: `/Users/ultra/work/hyper-canvas-draft`
 **File**: `/Users/ultra/work/ext-test-projects/e2e/tests/project-dependent/bulka-canvas-discard-no-crash.spec.ts`
 
 Line 95:
+
 ```ts
 const { canvas } = await setupPreviewWithDevServer(window);
 ```
 
 Change to:
+
 ```ts
 const { canvas } = await setupPreviewWithDevServer(window, 'client/pages/Index.tsx');
 ```
@@ -93,10 +97,11 @@ make the test's intent explicit — the canvas must open on bulka's Index.tsx, n
 whatever auto-detect produces if the detection logic changes.
 
 Steps:
+
 - [x] Edit the spec file, change line 95. (already done in ext-test-projects commit 9df5800)
 - [x] Rebuild and install the extension (needed if extension.ts changed since last
-  Docker build — check `git log --oneline -5 vscode-extension/`; if any recent commits,
-  run `/ext` skill to rebuild). (no rebuild needed — no ext changes since v0.1.46 release)
+      Docker build — check `git log --oneline -5 vscode-extension/`; if any recent commits,
+      run `/ext` skill to rebuild). (no rebuild needed — no ext changes since v0.1.46 release)
 - [x] Run test in Docker:
   ```bash
   cd /Users/ultra/work/ext-test-projects/e2e
@@ -107,6 +112,7 @@ Steps:
 - [x] Capture output with `tail -80`.
 
 Additional fixes applied (not in original checklist):
+
 - Added `expected-runtime-errors` annotation: transient 404 on /test-preview during HMR
   repatch window is expected; Steps 5-9 cover all critical checks.
 - Step 8: replaced direct `getAppFrame()` + `toBeVisible` with `expect.poll` that calls
@@ -118,11 +124,12 @@ Additional fixes applied (not in original checklist):
 ### If test still FAILS → proceed to Task 2 (diagnose).
 
 Note which assertion failed:
+
 - Step 5 ("no unhandled rejection during discard"): crash still happening → fix from
   Tasks 2/3 of the original plan is missing or broken.
 - Step 6 ("preview iframe alive after discard"): canvas dead → watcher didn't repatch.
-- Step 7 ("__canvas_preview__.tsx exists"): file was deleted by discard path → not
-  the current test scenario (test only discards tracked files, not __canvas_preview__).
+- Step 7 ("**canvas_preview**.tsx exists"): file was deleted by discard path → not
+  the current test scenario (test only discards tracked files, not **canvas_preview**).
 - Step 8 ("h1#hero-title clickable"): element not found → either canvas shows wrong
   page, or canvas is dead.
 
@@ -140,10 +147,12 @@ something from another project).
 
 In `extension.ts`, `setupEntryFileWatcher` resolves both router and entry files via
 `detectRouterFile()` and `getEntryFilePath()`. Add temporary debug logging:
+
 ```ts
 console.log('[HyperIDE] setupEntryFileWatcher routerFile:', routerFile);
 console.log('[HyperIDE] setupEntryFileWatcher entryFile:', entryFile);
 ```
+
 These appear in the extension host output and are captured by Playwright's console sink
 in `base.fixture`. After adding: rebuild extension, re-run test, grep output for
 `setupEntryFileWatcher`.
@@ -154,9 +163,11 @@ with `bulka-the-dog/client/main.tsx`.
 ### 2c: Check if onComponentSelected fires after discard
 
 Add logging at the start of `scheduleRepatch` callback in `setupEntryFileWatcher`:
+
 ```ts
 console.log('[HyperIDE] entry-file-watcher: scheduleRepatch triggered');
 ```
+
 If this log does NOT appear in the test output after the `execSync('git checkout -- ...')`
 step, the watcher event is not firing.
 
@@ -170,6 +181,7 @@ fixed it, but bulka may hit a different code path than the static audit covered)
 ### Fix based on diagnosis
 
 Based on findings:
+
 - Wrong component: check if `vite-react-ssg` detection worked; fix `resolveDefaultComponentFile` if not.
 - Watcher not firing: check `RelativePattern` uses correct workspace root vs. absolute
   path. `entryWatcherDisposables` may be getting disposed before the test runs
@@ -184,6 +196,7 @@ After fix: rebuild + re-run.
 ### Task 3: Verify GREEN in Docker
 
 Run one final clean Docker run with `HYPER_E2E_SHARDS=1`:
+
 ```bash
 cd /Users/ultra/work/ext-test-projects/e2e
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
@@ -198,6 +211,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- \
 ### Task 4: TG report
 
 Send to Telegram via `send-tg-report.sh`:
+
 - What failed (test infrastructure / watcher / rejection).
 - What was fixed (explicit path and/or watcher fix).
 - Before screenshot (Docker run showing RED) if available from run-20260512-002106-89890.

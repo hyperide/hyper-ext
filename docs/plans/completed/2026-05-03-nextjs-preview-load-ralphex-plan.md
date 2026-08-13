@@ -147,7 +147,7 @@ Add focused coverage before implementing the fix:
 5. Inspect failure or success screenshots manually; verify Hyper Canvas shows
    rendered Next page content, not a blank editor area.
 6. Grep output for `[test-errors]`, `404 Error: User attempted to access
-   non-existent route: /test-preview`, and Next error overlays.
+non-existent route: /test-preview`, and Next error overlays.
 
 ### Task 1: Diagnose Next.js Preview Load ✅
 
@@ -162,6 +162,7 @@ and generated-file evidence in the final notes.
 **The VS Code webview JavaScript (PreviewPanelApp React app) never executes.**
 
 Evidence from Docker artifacts:
+
 - Worker 22 (first run): 12 frames at failure — frame-11 =
   `<html><head></head><body></body></html>` (VS Code placeholder). No frame
   with nonce-based CSP — `_getHtmlForWebview()` output was never rendered.
@@ -231,6 +232,7 @@ Inspect screenshots and logs for a rendered Next page, no blank Hyper Canvas
 editor, no unexpected `[test-errors]`, and no `/test-preview` 404 overlay.
 
 **Result** (run-20260503-160150-27020, shard-1):
+
 - `1 passed (5.1m)` — clean, no flaky retries
 - `[test-done] "click on h1 — no runtime crash" 300446ms — passed`
 - `preview:poll-loaded:done` after 298s (cold Next.js/Turbopack compile in Docker)

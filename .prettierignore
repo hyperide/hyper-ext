@@ -1,0 +1,14 @@
+# oxfmt reads this file — list paths to skip formatting
+# Keep code dirs (client/, lib/, server/, shared/, vscode-extension/) formatted
+# Skip generated, config, and ops files where formatting creates noise
+
+k8s/
+.serena/
+.haft/
+.superpowers/
+.claude/
+node_modules/
+dist/
+build/
+.worktrees/
+coverage/

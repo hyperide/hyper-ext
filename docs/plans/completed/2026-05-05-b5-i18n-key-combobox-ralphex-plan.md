@@ -11,6 +11,7 @@ Root cause: there is no RPC path to fetch the list of keys from the active local
 `StyleReadService` resolves the translation of a single key, but does not expose all keys.
 
 Current state (branch `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`):
+
 - `I18nTextInspector` has `availableKeys?: string[]` and `keyEditable?: boolean` props
 - The combobox JSX fires when `availableKeys && keyEditable`
 - `RightSidebar.tsx` passes `availableKeys={undefined}` and `keyEditable={false}` (hardcoded)
@@ -19,6 +20,7 @@ Current state (branch `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-
 ## Scope
 
 Add the smallest working path:
+
 1. `StyleReadService.getAvailableKeys(componentPath, syntheticRef): Promise<string[]>`  
    — reads locale file discovered by `discoverLayout`, returns all leaf-level keys.
 2. New message type `styles:fetchI18nKeys` → PanelRouter → StyleReadService → response.
@@ -41,9 +43,11 @@ Do not modify `client/components/ui/color-combobox.*`.
 - Write progress to `.ralphex/progress/progress-2026-05-05-b5-i18n-key-combobox.txt`.
 
 This ralphex run is isolated. Use this Hyper Canvas worktree:
+
 - `/Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b5-i18n-keys/hyper-canvas-draft`
 
 Create it with:
+
 ```bash
 git -C /Users/ultra/work/hyper-canvas-draft worktree add \
   /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b5-i18n-keys/hyper-canvas-draft \

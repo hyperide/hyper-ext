@@ -8,6 +8,7 @@ ended TASK_FAILED because the crash does **not** reproduce in headless Linux Doc
 It reproduces only on macOS with bulka-the-dog after Source Control "Discard All Changes".
 
 `canvas-crash-capture-infra-ralphex-plan` shipped the missing observability:
+
 - `process.on('unhandledRejection' | 'uncaughtException')` handlers in `activate()`
 - NDJSON sink at `HYPERIDE_DIAGNOSTIC_ERROR_SINK` path
 - Commands `hypercanvas.startDiagnosticCapture` / `hypercanvas.stopDiagnosticCapture`
@@ -72,12 +73,12 @@ This task runs after the log file is attached. Ralphex reads the log and:
     the esbuild-bundled call site.
   - Map the bundled frame back to source using the `.map` file alongside `out/extension.js`.
     Command: `node --eval "
-      const sm = require('source-map');
-      const map = require('fs').readFileSync('out/extension.js.map', 'utf8');
-      const sc = new sm.SourceMapConsumer(JSON.parse(map));
-      const pos = sc.originalPositionFor({ line: <LINE>, column: <COL> });
-      console.log(pos);
-    "`
+  const sm = require('source-map');
+  const map = require('fs').readFileSync('out/extension.js.map', 'utf8');
+  const sc = new sm.SourceMapConsumer(JSON.parse(map));
+  const pos = sc.originalPositionFor({ line: <LINE>, column: <COL> });
+  console.log(pos);
+"`
     where `<LINE>` / `<COL>` come from the bundled frame.
 - [ ] Identify the source file + line with the offending `.push(` or
       `Object.keys/entries/values/assign(` call.

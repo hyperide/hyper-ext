@@ -3,12 +3,14 @@
 ## Context
 
 Extension 0.1.41 shipped fixes for B2 and B3:
+
 - **B2**: `hypercanvas.rightPanelInputFocused` context variable prevents Delete/Backspace
   from firing the canvas `deleteElement` keybinding when an i18n text input is focused.
 - **B3**: `isFocusedRef` pattern (onFocus/onBlur) prevents server re-read value from
   overwriting the input while user is typing.
 
 E2E regression tests were already written:
+
 - `PI-7-I18N-3` in `ext-test-projects/e2e/tests/project-independent/i18n-inspector.spec.ts`
 - `PI-7-I18N-4` in the same file
 
@@ -23,6 +25,7 @@ E2E regression tests were already written:
 - Telegram heartbeat every 15 min.
 
 This ralphex run works in the main worktree (no separate worktree needed — read-only run + possible fix):
+
 - Main worktree: `/Users/ultra/work/hyper-canvas-draft`
 
 ## Task 1: Confirm extension version
@@ -50,6 +53,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "PI-7-I18N-3" 2>&1 | tail -60
 The `hypercanvas.rightPanelInputFocused` context var is not being set.
 
 Diagnose:
+
 - [ ] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — look for `panel:inputFocus` message handler.
 - [ ] Read `client/components/RightSidebar/index.tsx` or similar — look for where `panel:inputFocus` is sent.
 - [ ] Verify the `when` clause in `package.json` keybindings uses `hypercanvas.rightPanelInputFocused`.
@@ -73,6 +77,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "PI-7-I18N-4" 2>&1 | tail -60
 The `isFocusedRef` fix is not working in the real WebviewView context.
 
 Diagnose:
+
 - [ ] Read `vscode-extension/hypercanvas-preview/src/components/sections/I18nSection.tsx` (or similar).
 - [ ] Look for `isFocusedRef` and `onFocus`/`onBlur` handlers on the text input.
 - [ ] Check: does the WebviewView sidebar fire `focus` events on inputs? (VS Code known issue: `document.activeElement` unreliable but `onFocus` event should still fire.)
@@ -87,5 +92,6 @@ Diagnose:
 ## Task 5: Telegram report
 
 Send to TG:
+
 - Test results for both
 - Screenshots of passing tests or (if still failing) root cause + fix applied

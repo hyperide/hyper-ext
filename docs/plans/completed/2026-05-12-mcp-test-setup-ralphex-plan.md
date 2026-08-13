@@ -13,8 +13,9 @@
 **`hyper_get_element_styles — Tailwind classes parsed` (~25–28s)**
 
 Test calls:
+
 ```typescript
-await callMcpTool(port!, 'hyper_get_element_styles', { elementId: selectedIds[0] })
+await callMcpTool(port!, 'hyper_get_element_styles', { elementId: selectedIds[0] });
 ```
 
 Tool schema requires `{ className: string }` OR `{ styleProps: Record<...> }` (union type).
@@ -23,8 +24,9 @@ Error from server: `"Unrecognized key: 'elementId'"`.
 **`hyper_suggest_color_token — nearest Tailwind token` (1242ms, fast fail)**
 
 Test calls:
+
 ```typescript
-await callMcpTool(port!, 'hyper_suggest_color_token', { hex: '#3b82f6' })
+await callMcpTool(port!, 'hyper_suggest_color_token', { hex: '#3b82f6' });
 ```
 
 Tool schema requires `{ color: string }`.
@@ -42,15 +44,18 @@ Both tests call `setupPreviewWithDevServer` + `canvas.clickElement(ids[...])` + 
 Actual error: `TimeoutError: frame.waitForFunction: Timeout 25000ms exceeded` inside `PreviewCanvas.waitForAnySelection` (line 279–281 of PreviewCanvas.ts).
 
 The canvas click at line 316/751 (`canvas.clickElement(ids[ids.length - 1])`) does not result in a canvas selection signal within 25s on the `[independent]` project. This is likely because:
+
 - On the reference project (react-vite-tw4-twitter), clicking via CDP takes >25s under 3-shard Docker CPU pressure to propagate the selection through bridge → StateHub → canvas state
 - OR the last clickable element has an attribute that prevents selection (e.g., it's a container without a fiber node)
 
 ## Scope
 
 **Allowed:**
+
 - `ext-test-projects/e2e/tests/project-independent/mcp-tools.spec.ts` — fix parameter names and increase selection timeout
 
 **Forbidden:**
+
 - Changes to MCP tool implementations
 - Changes to `setup-preview.ts` for these tests
 
@@ -59,10 +64,12 @@ The canvas click at line 316/751 (`canvas.clickElement(ids[ids.length - 1])`) do
 ### Task 1: Fix root cause A — wrong parameter names
 
 **`hyper_suggest_color_token` (line 1239–1264):**
+
 - [ ] Change `{ hex: '#3b82f6' }` → `{ color: '#3b82f6' }` in the tool call
 - [ ] Run in isolation to confirm fix
 
 **`hyper_get_element_styles` (line 1183–1220):**
+
 - [ ] Read the MCP tool definition for `hyper_get_element_styles` to confirm current schema
 - [ ] The test currently sends `{ elementId: selectedIds[0] }`. The tool expects `{ className }` or `{ styleProps }`. Get the element's CSS class from inspector or canvas state, pass it as `className`. If the tool description says it accepts an element nodeRef too (schema may have changed since the test was written), use the correct key.
 - [ ] Update the test call to match the actual tool schema
@@ -82,7 +89,7 @@ const selectedIds = await canvas.getSelectedIds();
 expect(selectedIds.length).toBeGreaterThan(0);
 
 // With:
-await openExplorerAndSelect(window, cmd, 0);  // tree item 0, waits for inspector
+await openExplorerAndSelect(window, cmd, 0); // tree item 0, waits for inspector
 const selectedIds = await canvas.getSelectedIds();
 expect(selectedIds.length).toBeGreaterThan(0);
 ```

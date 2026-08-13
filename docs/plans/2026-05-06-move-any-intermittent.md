@@ -3,6 +3,7 @@
 ## User report (2026-05-06 14:30)
 
 After move-any-to-any merge:
+
 - Drag of `<span className="text-4xl" aria-hidden="true">🌀</span>` → works.
 - Drag of "any element" → не для любых элементов, **иногда начинает работать**.
 
@@ -18,15 +19,15 @@ twice.
 ## Hypotheses
 
 A. **`liftToCommonJsxParent` async race** — the AST is loaded lazily and
-   sometimes the source/target lookup hits a stale snapshot.
+sometimes the source/target lookup hits a stale snapshot.
 B. **moveElement RPC silently rejects** when the source node has no
-   resolvable parent in the current AST (e.g. the file was just rewritten
-   by a previous mutation and AstService's cache is stale). Need cache
-   invalidation on every JSX mutation.
+resolvable parent in the current AST (e.g. the file was just rewritten
+by a previous mutation and AstService's cache is stale). Need cache
+invalidation on every JSX mutation.
 C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
-   level** for inline elements — the resolver walks up for aria-hidden but
-   for normal `<p>`/`<h3>` returns the element itself, then lift can't find
-   a useful common ancestor.
+level** for inline elements — the resolver walks up for aria-hidden but
+for normal `<p>`/`<h3>` returns the element itself, then lift can't find
+a useful common ancestor.
 
 ## Tasks
 
@@ -35,7 +36,6 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
 - [x] `bun run test:docker --grep "cross-level drag reorders outer cards"` — already reproduced in run-20260506-140935-61342 (test-done 15233ms — failed; retry 17855ms — failed).
 - [x] `bun run test:docker --grep "drop on self-closing leaf"` — already reproduced in run-20260506-140935-61342 (test-done 25130ms — failed; retry 25332ms — failed).
 - [x] Captured: assertion that fails on PI-5-DR-17 = `expect.poll(... not.toBe(sourceBefore)).timeout(8_000)` — the fixture file was never written. Same for PI-5-DR-T6 (`leaf-target drop did not write the file`). Source-of-failure analysis (in AstService.moveElement, lines 730-859):
-
   - PI-5-DR-17: source = inner `<div>Alpha</div>` deep in card-1, target = inner `<div>Beta</div>` deep in card-2. They have different JSX parents (each card's wrapper). moveElement enters the different-parent branch (lines 831-848) and either (a) succeeds writing Alpha-div into card-2 (does NOT swap outer cards — assertion `betaIdx < alphaIdx` would fail), or (b) throws `source disappeared after re-parse` due to parser cache / file-watcher race when the AST was parsed before HMR-triggered rewrite settled (8s poll times out — what we see in this run). No `liftToCommonJsxParent` helper is implemented in moveElement; the test name "via server-side JSX lift" describes a feature that doesn't exist yet.
 
   - PI-5-DR-T6: drop source onto self-closing `<img />` leaf. moveElement re-parses, but `_resolveElement` likely returns null for the leaf because the resolver does not have a "leaf → sibling fallback" path. Throws `target disappeared after re-parse` or `target has no JSX parent` and the file stays untouched.
@@ -68,7 +68,7 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
 - [x] After each successful write, drop the cached AST so the next
       lookup re-parses. If "иногда работает" is stale-AST, this fixes it.
       Confirmed via parser.ts:writeAST (delete + re-fetch through
-      readAndParseFile) and AstService._updateNodeMap which re-syncs
+      readAndParseFile) and AstService.\_updateNodeMap which re-syncs
       NodeMapService after every successful write. Added explicit
       `invalidate(filePath)` / `invalidateAll()` methods on the file
       parser as a belt-and-suspenders API for callers that want
@@ -91,7 +91,7 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
       deterministically; an explicit watcher hook is an optimization
       for non-mutation paths (style read / inspector lookup) and can
       land in a follow-up plan if profiling shows it's needed.
-      Tests in src/__tests__/AstServiceCacheInvalidation.test.ts
+      Tests in src/**tests**/AstServiceCacheInvalidation.test.ts
       cover: invalidateFile() refreshes NodeMapService after external
       rewrite (line shift +1); moveElement defensively freshens stale
       NodeMapService before resolving; parser invalidate() forces a
@@ -102,18 +102,18 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
 - [x] For sources like `<p>` / `<h3>` / `<span>` that ARE the source-bearing
       node, lift computes through the JSX hierarchy correctly. Implemented
       `liftToCommonJsxParent` helper in `vscode-extension/hypercanvas-preview/
-      src/services/AstService.ts` (above `describeJsxName`). Walks both
+src/services/AstService.ts` (above `describeJsxName`). Walks both
       source and target NodePath ancestor chains, finds the deepest shared
       JSX node, and returns the source/target ancestors that are direct
       children of the common parent. Three cases:
       A) common === source — caller throws via existing `jsxContains` cycle
-         guard; lift returns null defensively.
+      guard; lift returns null defensively.
       B) common === target — source is descendant of target; lift extracts
-         sourceNode (no inner-lift) so it becomes a sibling of target inside
-         target's parent.
+      sourceNode (no inner-lift) so it becomes a sibling of target inside
+      target's parent.
       C) common is a strict ancestor of both — Task 4 main case: lifted
-         source = source's chain entry directly under common; lifted target
-         = target's chain entry directly under common.
+      source = source's chain entry directly under common; lifted target
+      = target's chain entry directly under common.
       `moveElement` (same-file branch) consumes the lift result, choosing
       `(movingNode, movingParent)` and `(pivotNode, pivotParent)` accordingly,
       then performs a single cut+splice. When lift returns null
@@ -121,7 +121,7 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
       same file), falls back to the original cross-parent splice so
       cross-component moves keep working.
       Unit tests in `vscode-extension/hypercanvas-preview/src/__tests__/
-      AstServiceMove.test.ts` cover the Task 4 fixture exactly: a grid
+AstServiceMove.test.ts` cover the Task 4 fixture exactly: a grid
       container with two cards, source `<p className="b1">` inside card1,
       target `<h3 className="t2">` inside card2 → cards swap. Plus updated
       the three pre-existing different-parent tests (sibling→cousin,
@@ -174,14 +174,12 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
 - [x] Run E2E. Open each passed screenshot via Read; verify visible move.
       Built ext v0.1.41 from worktree via build-and-install.sh,
       ran in docker (run-20260507-120925-33311) with
-      HYPER_E2E_EXTENSION_REPO pointed at the worktree. Results:
-      - PI-5-DR-EK chain test: steps 1-6 PASS (span, p, h3,
-        div-with-children, div-with-t, button — every kind has its
-        EK-step-NN-*.png screenshot and the file rewrote on each).
-        Step 7 (img → ul) FAIL with "file is unchanged" 8s timeout.
-        Step 8 never ran because chain stopped at step 7.
-      - PI-5-DR-EK-IMG fresh-state test: FAIL with the same
-        "file is unchanged" 8s timeout. Both retries failed.
+      HYPER_E2E_EXTENSION_REPO pointed at the worktree. Results: - PI-5-DR-EK chain test: steps 1-6 PASS (span, p, h3,
+      div-with-children, div-with-t, button — every kind has its
+      EK-step-NN-\*.png screenshot and the file rewrote on each).
+      Step 7 (img → ul) FAIL with "file is unchanged" 8s timeout.
+      Step 8 never ran because chain stopped at step 7. - PI-5-DR-EK-IMG fresh-state test: FAIL with the same
+      "file is unchanged" 8s timeout. Both retries failed.
       `ast-debug.log` from the run shows only 6 calls to
       `AstBridge.handleMessage type=ast:moveElement` for the chain
       test (not 8) and zero calls during PI-5-DR-EK-IMG. Conclusion:
@@ -200,7 +198,7 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
 - [x] Reproduce the failure deterministically. PI-5-DR-EK-IMG
       reproduces 100% in docker (run-20260507-124612, 125009, 125308,
       125548, 130145 all failed both retries with `file unchanged 8s
-      timeout`). `ast-debug.log` shows zero `moveElement` RPC calls
+timeout`). `ast-debug.log` shows zero `moveElement` RPC calls
       during this test — confirms iframe never dispatches the move
       message.
 - [x] Trace the iframe drag handler for img-source mouse-down.
@@ -208,7 +206,7 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
       `draggable=true`) was swallowing pointer events. Added
       `_nativeDragSuppressor` (dragstart preventDefault in design
       mode) to `vscode-extension/hypercanvas-preview/src/services/
-      scripts/iframe-interaction.ts:1483-1493`. Defensible hygiene —
+scripts/iframe-interaction.ts:1483-1493`. Defensible hygiene —
       browsers DO default img/a draggable=true and stopping native
       drag in design mode is correct — but verified empirically that
       it does NOT fix the img-source bug.
@@ -219,7 +217,7 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
       hook that does the same for nodes added after initial render
       (iframe-interaction.ts `_disableNativeDraggableIn`). Theory
       from advisor consult: Chromium establishes a native drag
-      candidate at pointerdown for draggable elements *before* the
+      candidate at pointerdown for draggable elements _before_ the
       `dragstart` listener runs — `dragstart preventDefault` is
       too late, but `el.draggable = false` blocks the candidate
       from being established at all. Verified empirically in
@@ -231,14 +229,14 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
       NOT native HTML5 drag interception — that hypothesis is now
       empirically refuted twice. Remaining hypotheses (advisor
       explicitly told us to STOP iterating instrumentation here):
-        (a) The 8 `[drag-up]` events from prior iteration may be
-            setup/teardown clicks, not the test's mouse.up. The
-            actual drag's pointerdown/up may never reach the
-            iframe at all because of a coordinate-targeting issue
-            (16x16 img through 3 iframe levels, position drift).
-        (b) Some other CDP-over-nested-iframes pathology specific
-            to img elements (none of the 7 other element kinds
-            fail in the chain test from a fresh state — only img).
+      (a) The 8 `[drag-up]` events from prior iteration may be
+      setup/teardown clicks, not the test's mouse.up. The
+      actual drag's pointerdown/up may never reach the
+      iframe at all because of a coordinate-targeting issue
+      (16x16 img through 3 iframe levels, position drift).
+      (b) Some other CDP-over-nested-iframes pathology specific
+      to img elements (none of the 7 other element kinds
+      fail in the chain test from a fresh state — only img).
       Next attempt MUST be: convert PI-5-DR-EK-IMG into a unit test
       that synthesizes `PointerEvent('pointerdown')` directly on the
       `<img>` in jsdom (or on the iframe's document via Playwright
@@ -251,7 +249,7 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
 - [ ] Add a unit test (if the iframe drag manager has unit tests) +
       keep PI-5-DR-EK-IMG as the E2E acceptance gate.
 - [ ] Re-run drag-every-kind E2E. Expect 8/8 chain steps and
-      PI-5-DR-EK-IMG green. Open EK-step-07-*.png + EK-IMG-after.png
+      PI-5-DR-EK-IMG green. Open EK-step-07-\*.png + EK-IMG-after.png
       via Read, verify a real move (the img DOM moved relative to
       sibling DOM in the screenshot). Send TG with both proof shots.
 - [ ] Only after PI-5-DR-EK-IMG and the chain step 7 are deterministic

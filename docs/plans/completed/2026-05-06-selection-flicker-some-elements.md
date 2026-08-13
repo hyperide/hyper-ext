@@ -3,6 +3,7 @@
 ## User report (2026-05-06 14:30)
 
 After selsurv merge user confirmed selsurv works for some cases. But:
+
 - `<p className="text-xl font-semibold text-primary italic">{t("hero.question")}</p>`
   → flicker + selection LOST after i18n write.
 - Other elements just flicker but stay selected at the end.
@@ -13,38 +14,30 @@ the selection without recovery.
 ## Hypotheses
 
 A. **Grace cache miss for this specific element** — its bounding box is
-   captured but pruned too aggressively. Inspect `selection-grace-cache.ts`:
-   what triggers prune for an ID still in `state.selectedIds`?
+captured but pruned too aggressively. Inspect `selection-grace-cache.ts`:
+what triggers prune for an ID still in `state.selectedIds`?
 B. **HMR full-page reload (not fast refresh) for this element** — the entire
-   iframe document reloads, the cache is wiped along with it. Fast refresh
-   keeps the cache; full reload doesn't. Need cache persistence across
-   iframe reload (e.g. session storage or webview state).
+iframe document reloads, the cache is wiped along with it. Fast refresh
+keeps the cache; full reload doesn't. Need cache persistence across
+iframe reload (e.g. session storage or webview state).
 C. **`<p>` with multiple inline children** (italic + semibold) generates
-   intermediate React fibers that don't carry source maps; after HMR,
-   `findElementById` walks past them and returns null. The grace cache
-   replays for ≤800ms then expires. If HMR settle takes >800ms for this
-   path, the recovery times out.
+intermediate React fibers that don't carry source maps; after HMR,
+`findElementById` walks past them and returns null. The grace cache
+replays for ≤800ms then expires. If HMR settle takes >800ms for this
+path, the recovery times out.
 
 ## Tasks
 
 ### Task 1: Reproduce + measure HMR timing
 
 - [x] Open bulka Index.tsx, select `t('hero.question')` `<p>` (manual repro step — covered by Task 4 E2E fixture).
-- [x] Change key. Capture timestamps of:
-      - selection state change events — already logged via `logSelsurvSelectedIdsAssign`
-      - vite:beforeUpdate / vite:afterUpdate / vite:beforeFullReload / vite:invalidate / vite:error / beforeunload / readystatechange — added via `logSelsurvLifecycle` window listeners in `iframe-interaction.ts`
-      - findElementById return value (null vs element) — added `logSelsurvFindMiss` next to existing `logSelsurvOverlayPaint` for the active selectedIds[0]
-      - grace-cache prune events — added `onPrune` callback to `applySelectionGraceCache` (reasons: 'deselected' / 'expired'), wired to `logSelsurvCachePrune`
+- [x] Change key. Capture timestamps of: - selection state change events — already logged via `logSelsurvSelectedIdsAssign` - vite:beforeUpdate / vite:afterUpdate / vite:beforeFullReload / vite:invalidate / vite:error / beforeunload / readystatechange — added via `logSelsurvLifecycle` window listeners in `iframe-interaction.ts` - findElementById return value (null vs element) — added `logSelsurvFindMiss` next to existing `logSelsurvOverlayPaint` for the active selectedIds[0] - grace-cache prune events — added `onPrune` callback to `applySelectionGraceCache` (reasons: 'deselected' / 'expired'), wired to `logSelsurvCachePrune`
 - [x] Find the moment selection is dropped without recovery — instrumentation in place; the timeline in DevTools console (filter `[selsurv]`) now correlates lifecycle events, findElement misses, prune reasons, and selectedIds changes. Task 4's E2E will replay against the instrumented build to capture concrete timings before Tasks 2/3 are tuned.
 
 ### Task 2: Extend grace TTL or persist across reload
 
 - [x] If HMR full reload exceeds 800ms, raise to 2500ms — `SELECTION_GRACE_PERIOD_MS` bumped from 800 → 2500 in `iframe-interaction.ts`. Comment in source captures the rationale (HMR full-reload + bundle eval + first paint cycle on heavier projects).
-- [x] If HMR fully unloads the iframe (proven by document.readyState transition), persist the last known rect to webview storage and replay after the new iframe boots — implemented via sessionStorage:
-      - `selection-grace-cache.ts` exposes `serializeSelectionGraceCache` / `hydrateSelectionGraceCache` (versioned payload, wall-clock staleness rejection up to 10 s, per-rect validation that skips malformed entries).
-      - `iframe-interaction.ts` writes `__hypercanvas_selsurv_grace_cache__` after every paint (cheap JSON.stringify on a tiny map) plus on `beforeunload`, `vite:beforeFullReload`, `vite:beforePrune`. Reads on script init via `tryHydrateSelectionGraceCache`.
-      - Boot-mode handling: hydrated IDs are kept in `pendingHydratedSelectedIds` and used as a stand-in for `state.selectedIds` until the parent webview broadcasts the post-reload `hypercanvas:stateUpdate`. Without this stand-in the very first paint would prune the hydrated entries as 'deselected'.
-      - 17/17 unit tests pass (`bun test src/services/scripts/__tests__/selection-grace-cache.test.ts`), covering round-trip, replay-after-hydrate, staleness, future timestamps, malformed payloads, and per-rect validation.
+- [x] If HMR fully unloads the iframe (proven by document.readyState transition), persist the last known rect to webview storage and replay after the new iframe boots — implemented via sessionStorage: - `selection-grace-cache.ts` exposes `serializeSelectionGraceCache` / `hydrateSelectionGraceCache` (versioned payload, wall-clock staleness rejection up to 10 s, per-rect validation that skips malformed entries). - `iframe-interaction.ts` writes `__hypercanvas_selsurv_grace_cache__` after every paint (cheap JSON.stringify on a tiny map) plus on `beforeunload`, `vite:beforeFullReload`, `vite:beforePrune`. Reads on script init via `tryHydrateSelectionGraceCache`. - Boot-mode handling: hydrated IDs are kept in `pendingHydratedSelectedIds` and used as a stand-in for `state.selectedIds` until the parent webview broadcasts the post-reload `hypercanvas:stateUpdate`. Without this stand-in the very first paint would prune the hydrated entries as 'deselected'. - 17/17 unit tests pass (`bun test src/services/scripts/__tests__/selection-grace-cache.test.ts`), covering round-trip, replay-after-hydrate, staleness, future timestamps, malformed payloads, and per-rect validation.
 
 ### Task 3: Survive nested-fiber resolution miss
 
@@ -53,7 +46,7 @@ C. **`<p>` with multiple inline children** (italic + semibold) generates
       DOM node toward the closest source.
       Implemented `FiberSourceIndex.findClosestSourceDOMElements(source)` in
       `shared/element-tracing/fiber-source-index.ts` — same-fileName entry
-      with smallest (lineDist * 1000 + colDist) within `maxLineDistance`
+      with smallest (lineDist \* 1000 + colDist) within `maxLineDistance`
       (default 20 lines). Past the bound it returns null and lets grace-cache
       replay the old rect for its TTL, instead of re-anchoring the selection
       to an unrelated element after a heavy refactor. Wired as the last
@@ -91,19 +84,19 @@ C. **`<p>` with multiple inline children** (italic + semibold) generates
       matches the pre-click `expectedId`). Full-window screenshots fire
       at the exact instants the plan calls out (0/100/300/500/800/1200/
       1800ms) under `${SCREENSHOT_DIR ?? '/tmp'}/bulka-hero-question-
-      selsurv-NNNNms.png`. Assertion compares each milestone against the
+selsurv-NNNNms.png`. Assertion compares each milestone against the
       nearest sample within ±60 ms and requires:
-        (1) a sample exists in that window,
-        (2) overlay's `data-element-id === expectedId` (same source
-            location — the JSX path:line:col never changes for this kind
-            of rewrite),
-        (3) overlay rect width/height > 0 (not collapsed),
-        (4) iframe `state.selectedIds[0] === expectedId` (FSM didn't
-            drop the selection).
+      (1) a sample exists in that window,
+      (2) overlay's `data-element-id === expectedId` (same source
+      location — the JSX path:line:col never changes for this kind
+      of rewrite),
+      (3) overlay rect width/height > 0 (not collapsed),
+      (4) iframe `state.selectedIds[0] === expectedId` (FSM didn't
+      drop the selection).
       A diagnostic JSON dump (`[hero-question-selsurv]`) prints the
       milestone timeline plus continuous-stream blank windows so a RED
       run shows the exact ms range where the gap appears. `tsc --noEmit -p
-      tsconfig.json` clean for the new file (only pre-existing
+tsconfig.json` clean for the new file (only pre-existing
       `canvas-bugs.spec.ts` `Page.scrollTo`/`scrollY` errors remain).
 
 ### Task 5: Build, install, screenshot, TG
@@ -111,11 +104,11 @@ C. **`<p>` with multiple inline children** (italic + semibold) generates
 - [x] Run E2E against bulka-the-dog. Open every passed frame via Read.
       Built+installed extension v0.1.41 (`build-and-install.sh`). Ran
       `HYPER_E2E_SHARDS=1 HYPER_E2E_EXTENSION_REPO=<worktree>
-      bun run test:docker --project=dep:bulka-the-dog
-      tests/project-dependent/bulka-hero-question-selsurv.spec.ts` →
+bun run test:docker --project=dep:bulka-the-dog
+tests/project-dependent/bulka-hero-question-selsurv.spec.ts` →
       passed (20.5s, run-20260506-233048-44087). All 7 milestones
       (0/100/300/500/800/1200/1800ms) reported `iframe.selectedId ==
-      overlay.id == /workspace/bulka-the-dog/client/pages/Index.tsx:234:16`
+overlay.id == /workspace/bulka-the-dog/client/pages/Index.tsx:234:16`
       with non-zero rect bounds. Continuous-stream blanks: 0 (overlay) /
       0 (iframe) across all 113 RAF samples.
       Screenshots opened via Read: 0ms shows the original "Read about me…"
@@ -124,17 +117,15 @@ C. **`<p>` with multiple inline children** (italic + semibold) generates
       `t("hero.question")` was rewritten to `t("hero.title")` to fire
       Vite HMR) with the SAME blue outline anchored to the same `<p>`.
       Required two test-side adjustments before the fix could be
-      verified:
-        1) bulka-the-dog had stale local edits replacing `t("hero.question)`
-           with `t("qq")`. Restored via `git checkout` in the bulka
-           submodule before the run.
-        2) The i18n inspector renders an empty key field for this
-           specific `<p>` (independent inspector-side bug, not in scope
-           for selsurv). Pivoted the test to write Index.tsx on disk —
-           the EXACT same Vite HMR code path the combobox would have
-           triggered — and dropped the inspector dependency. The selsurv
-           contract ("overlay rect stays anchored to the same source-
-           location id across HMR") is what gets exercised either way.
+      verified: 1) bulka-the-dog had stale local edits replacing `t("hero.question)`
+      with `t("qq")`. Restored via `git checkout` in the bulka
+      submodule before the run. 2) The i18n inspector renders an empty key field for this
+      specific `<p>` (independent inspector-side bug, not in scope
+      for selsurv). Pivoted the test to write Index.tsx on disk —
+      the EXACT same Vite HMR code path the combobox would have
+      triggered — and dropped the inspector dependency. The selsurv
+      contract ("overlay rect stays anchored to the same source-
+      location id across HMR") is what gets exercised either way.
 - [x] Send only when outline is present in the LAST frame; otherwise the
       fix is not done.
       Visually verified all 7 frames before sending. Sent 7 milestone

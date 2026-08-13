@@ -16,12 +16,12 @@
 
 Non-core commits on `HYP-283-generic-mcp-styling-tools` that belong on main:
 
-| Commit | Description | Files |
-|--------|-------------|-------|
-| `903bafe` | simplify markdownlint-cli permission | `.claude/settings.local.json` |
-| `1087623` | absolute paths in render-state.py | `.claude/commands/what.md`, worktree submodule |
-| `3b1ff8e` | Open VSX publishing | `.github/workflows/publish-extension.yml`, `publish.sh` |
-| `ecb6c4c` | serena line_ending config | `.serena/project.yml` |
+| Commit    | Description                          | Files                                                   |
+| --------- | ------------------------------------ | ------------------------------------------------------- |
+| `903bafe` | simplify markdownlint-cli permission | `.claude/settings.local.json`                           |
+| `1087623` | absolute paths in render-state.py    | `.claude/commands/what.md`, worktree submodule          |
+| `3b1ff8e` | Open VSX publishing                  | `.github/workflows/publish-extension.yml`, `publish.sh` |
+| `ecb6c4c` | serena line_ending config            | `.serena/project.yml`                                   |
 
 Playwright plan commit `a1635ef` → move to worktree.
 
@@ -69,6 +69,7 @@ git push --force-with-lease
 ### Task 2: Create `VALID_TAMAGUI_STYLE_PROPS`
 
 **Files:**
+
 - Create: `lib/tamagui/style-props.ts`
 - Test: `lib/tamagui/__tests__/style-props.test.ts`
 
@@ -149,48 +150,111 @@ Expected: FAIL — module not found
 
 export const VALID_TAMAGUI_STYLE_PROPS: ReadonlySet<string> = new Set([
   // Layout
-  'display', 'flex', 'flexDirection', 'flexWrap', 'flexGrow', 'flexShrink',
-  'flexBasis', 'alignItems', 'alignSelf', 'alignContent', 'justifyContent',
-  'position', 'top', 'right', 'bottom', 'left', 'zIndex', 'overflow',
-  'overflowX', 'overflowY',
+  'display',
+  'flex',
+  'flexDirection',
+  'flexWrap',
+  'flexGrow',
+  'flexShrink',
+  'flexBasis',
+  'alignItems',
+  'alignSelf',
+  'alignContent',
+  'justifyContent',
+  'position',
+  'top',
+  'right',
+  'bottom',
+  'left',
+  'zIndex',
+  'overflow',
+  'overflowX',
+  'overflowY',
 
   // Spacing
-  'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-  'paddingHorizontal', 'paddingVertical',
-  'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
-  'marginHorizontal', 'marginVertical',
-  'gap', 'rowGap', 'columnGap',
+  'padding',
+  'paddingTop',
+  'paddingRight',
+  'paddingBottom',
+  'paddingLeft',
+  'paddingHorizontal',
+  'paddingVertical',
+  'margin',
+  'marginTop',
+  'marginRight',
+  'marginBottom',
+  'marginLeft',
+  'marginHorizontal',
+  'marginVertical',
+  'gap',
+  'rowGap',
+  'columnGap',
 
   // Sizing
-  'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+  'width',
+  'height',
+  'minWidth',
+  'maxWidth',
+  'minHeight',
+  'maxHeight',
   'aspectRatio',
 
   // Colors
-  'backgroundColor', 'color', 'borderColor',
-  'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-  'shadowColor', 'outlineColor', 'textDecorationColor',
+  'backgroundColor',
+  'color',
+  'borderColor',
+  'borderTopColor',
+  'borderRightColor',
+  'borderBottomColor',
+  'borderLeftColor',
+  'shadowColor',
+  'outlineColor',
+  'textDecorationColor',
 
   // Borders
-  'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth',
-  'borderLeftWidth', 'borderRadius', 'borderTopLeftRadius',
-  'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius',
+  'borderWidth',
+  'borderTopWidth',
+  'borderRightWidth',
+  'borderBottomWidth',
+  'borderLeftWidth',
+  'borderRadius',
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomLeftRadius',
+  'borderBottomRightRadius',
   'borderStyle',
 
   // Text
-  'fontSize', 'fontWeight', 'fontFamily', 'fontStyle', 'lineHeight',
-  'letterSpacing', 'textAlign', 'textTransform', 'textDecorationLine',
-  'textDecorationStyle', 'textShadowColor', 'textShadowOffset',
+  'fontSize',
+  'fontWeight',
+  'fontFamily',
+  'fontStyle',
+  'lineHeight',
+  'letterSpacing',
+  'textAlign',
+  'textTransform',
+  'textDecorationLine',
+  'textDecorationStyle',
+  'textShadowColor',
+  'textShadowOffset',
   'textShadowRadius',
 
   // Effects
-  'opacity', 'elevation',
-  'shadowOffset', 'shadowOpacity', 'shadowRadius',
+  'opacity',
+  'elevation',
+  'shadowOffset',
+  'shadowOpacity',
+  'shadowRadius',
 
   // Transform
-  'transform', 'transformOrigin',
+  'transform',
+  'transformOrigin',
 
   // Tamagui extras (web-compatible)
-  'cursor', 'pointerEvents', 'userSelect', 'animation',
+  'cursor',
+  'pointerEvents',
+  'userSelect',
+  'animation',
 ]);
 
 export function isValidTamaguiStyleProp(key: string): boolean {
@@ -214,6 +278,7 @@ feat(lib): add VALID_TAMAGUI_STYLE_PROPS curated property set (HYP-283)
 ### Task 3: Add `transparent`/`current`/`inherit` to Tailwind palette
 
 **Files:**
+
 - Modify: `vscode-extension/hypercanvas-preview/src/mcp/tools/color-token-provider.ts:101-117`
 - Modify: `vscode-extension/hypercanvas-preview/src/mcp/tools/__tests__/color-token-provider.test.ts`
 
@@ -287,6 +352,7 @@ fix(mcp): add transparent/current/inherit to Tailwind color palette (HYP-283)
 ### Task 4: Derive TW prefix regex from map keys
 
 **Files:**
+
 - Modify: `vscode-extension/hypercanvas-preview/src/mcp/tools/color-token-provider.ts:197-224`
 
 - [ ] **Step 1: Run existing tests — confirm green baseline**
@@ -360,6 +426,7 @@ refactor(mcp): derive TW prefix regex from map keys — single source of truth (
 ### Task 5: Add `resolveStyles` to `StyleAdapter` — TDD
 
 **Files:**
+
 - Modify: `vscode-extension/hypercanvas-preview/src/mcp/tools/color-token-provider.ts`
 - Modify: `vscode-extension/hypercanvas-preview/src/mcp/tools/__tests__/color-token-provider.test.ts`
 
@@ -584,6 +651,7 @@ feat(mcp): add resolveStyles to StyleAdapter with strict validation (HYP-283)
 ### Task 6: Switch `hyper_get_element_styles` to `registerTool` + `z.union()`
 
 **Files:**
+
 - Modify: `vscode-extension/hypercanvas-preview/src/mcp/tools/styling-tools.ts`
 - Modify: `vscode-extension/hypercanvas-preview/src/mcp/tools/__tests__/styling-tools.test.ts`
 
@@ -625,6 +693,7 @@ function captureToolHandlers(stateHub: StateHub): (name: string) => ToolHandler 
 - [ ] **Step 2: Update tests for new validation behavior**
 
 Replace the existing `hyper_get_element_styles` tests. **Explicitly removed tests and why:**
+
 - `'should return error when neither className nor styleProps provided'` → replaced by adapter-level validation tests in Task 5
 - `'should pass through styleProps for non-Tamagui project'` → this was the silent echo bug. New test `'should reject styleProps for Tailwind project'` replaces it — passing styleProps to Tailwind is now a validation error, not a pass-through.
 
@@ -704,39 +773,45 @@ import { z } from 'zod';
 import { getStyleAdapter } from './color-token-provider';
 
 // hyper_get_element_styles — uses registerTool for z.union() schema
-server.registerTool('hyper_get_element_styles', {
-  description:
-    'Parse element styles into resolved CSS properties.\n' +
-    "- Tailwind projects: pass className (e.g. {className: 'flex gap-4 bg-blue-500'})\n" +
-    '- Tamagui projects: pass styleProps (e.g. {styleProps: {backgroundColor: "$blue9"}})\n' +
-    'Use hyper_get_state to check the active framework if unsure.',
-  inputSchema: z.union([
-    z.object({ className: z.string().describe('Tailwind className string to parse') }).strict(),
-    z.object({
-      styleProps: z.record(z.string(), z.string()).describe('Tamagui style props as key-value pairs'),
-    }).strict(),
-  ]),
-}, async (args: Record<string, unknown>) => {
-  // z.union() produces { className: string } | { styleProps: Record<string, string> }
-  // TypeScript can't destructure across union branches — use runtime narrowing
-  const className = 'className' in args ? (args.className as string) : undefined;
-  const styleProps = 'styleProps' in args ? (args.styleProps as Record<string, string>) : undefined;
+server.registerTool(
+  'hyper_get_element_styles',
+  {
+    description:
+      'Parse element styles into resolved CSS properties.\n' +
+      "- Tailwind projects: pass className (e.g. {className: 'flex gap-4 bg-blue-500'})\n" +
+      '- Tamagui projects: pass styleProps (e.g. {styleProps: {backgroundColor: "$blue9"}})\n' +
+      'Use hyper_get_state to check the active framework if unsure.',
+    inputSchema: z.union([
+      z.object({ className: z.string().describe('Tailwind className string to parse') }).strict(),
+      z
+        .object({
+          styleProps: z.record(z.string(), z.string()).describe('Tamagui style props as key-value pairs'),
+        })
+        .strict(),
+    ]),
+  },
+  async (args: Record<string, unknown>) => {
+    // z.union() produces { className: string } | { styleProps: Record<string, string> }
+    // TypeScript can't destructure across union branches — use runtime narrowing
+    const className = 'className' in args ? (args.className as string) : undefined;
+    const styleProps = 'styleProps' in args ? (args.styleProps as Record<string, string>) : undefined;
 
-  const adapter = getStyleAdapter(stateHub.state.projectUIKit);
-  const result = adapter.resolveStyles({ className, styleProps });
+    const adapter = getStyleAdapter(stateHub.state.projectUIKit);
+    const result = adapter.resolveStyles({ className, styleProps });
 
-  if (!result.success) {
-    return { content: [{ type: 'text' as const, text: result.error }], isError: true };
-  }
+    if (!result.success) {
+      return { content: [{ type: 'text' as const, text: result.error }], isError: true };
+    }
 
-  const content: Array<{ type: 'text'; text: string }> = [
-    { type: 'text' as const, text: JSON.stringify(result.styles, null, 2) },
-  ];
-  if (result.warning) {
-    content.push({ type: 'text' as const, text: `Warning: ${result.warning}` });
-  }
-  return { content };
-});
+    const content: Array<{ type: 'text'; text: string }> = [
+      { type: 'text' as const, text: JSON.stringify(result.styles, null, 2) },
+    ];
+    if (result.warning) {
+      content.push({ type: 'text' as const, text: `Warning: ${result.warning}` });
+    }
+    return { content };
+  },
+);
 ```
 
 Remove the `parseTailwindClasses` and `getTamaguiColorHex` imports from `styling-tools.ts` if they are no longer used there (they moved to the adapter).
@@ -761,16 +836,15 @@ describe('registerStylingTools', () => {
     const originalRegisterTool = server.registerTool.bind(server);
     server.registerTool = ((name: string, ...rest: unknown[]) => {
       toolNames.push(name);
-      return originalRegisterTool(name, ...(rest as [Parameters<typeof originalRegisterTool>[1], Parameters<typeof originalRegisterTool>[2]]));
+      return originalRegisterTool(
+        name,
+        ...(rest as [Parameters<typeof originalRegisterTool>[1], Parameters<typeof originalRegisterTool>[2]]),
+      );
     }) as typeof server.registerTool;
 
     registerStylingTools(server, stateHub);
 
-    expect(toolNames).toEqual([
-      'hyper_get_element_styles',
-      'hyper_suggest_color_token',
-      'hyper_list_color_tokens',
-    ]);
+    expect(toolNames).toEqual(['hyper_get_element_styles', 'hyper_suggest_color_token', 'hyper_list_color_tokens']);
   });
 });
 ```
@@ -798,6 +872,7 @@ feat(mcp): switch hyper_get_element_styles to registerTool + z.union() schema (H
 ### Task 7: Add `[rgb(300, 0, 0)]` integration test
 
 **Files:**
+
 - Modify: `vscode-extension/hypercanvas-preview/src/mcp/tools/__tests__/styling-tools.test.ts`
 
 - [ ] **Step 1: Add test in `hyper_suggest_color_token` describe**
@@ -834,6 +909,7 @@ test(mcp): add integration test for bracket+clamp color parsing (HYP-283)
 
 Title: `feat(mcp): load Tamagui color palette from project config`
 Description:
+
 ```
 Currently TAMAGUI_COLORS in lib/tamagui/values.ts is hardcoded Radix colors.
 Projects with custom tamagui.config.ts get wrong color suggestions.
@@ -848,6 +924,7 @@ Needed:
 Adapter architecture from HYP-283 is ready for this — TamaguiColorTokenProvider
 just needs a dynamic data source instead of the static TAMAGUI_COLORS constant.
 ```
+
 Labels: enhancement
 Priority: normal
 

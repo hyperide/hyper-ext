@@ -16,6 +16,7 @@ The test was GREEN in commit 48770c80 (isolated run on i18n-create-key-display b
 
 File: `ext-test-projects/e2e/tests/project-independent/bulka-i18n-key-bugs.spec.ts`
 Lines 452-458 (the `toBeDisabled` block to remove):
+
 ```ts
 // The button becoming disabled briefly confirms handleI18nKeyChange ran (keyBusy=true).
 // This assertion is flaky — disabled state lasts <50ms, Playwright misses it.

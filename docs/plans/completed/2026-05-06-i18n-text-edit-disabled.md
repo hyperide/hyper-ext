@@ -29,6 +29,7 @@ existing keys. Also after picking "Create key" for a new key, nothing happens.
 Findings:
 
 Three places set `editable` in StyleReadService:
+
 - `StyleReadService.ts:228` — stub binding inside `getAvailableKeys()`. Used only to drive
   `AdapterFactory.forBinding()`, never returned to the inspector. Not the bug.
 - `StyleReadService.ts:351` — `domTextContent` fallback path (after `resolveI18nByDomText`
@@ -105,7 +106,7 @@ Suspected runtime causes (to confirm via the new logs in Task 5):
   lazily). If `undefined`, `isNewKey = !(undefined ?? []).includes(newKey)` is `true`,
   which is correct — but the combobox itself is hidden in that state because
   `showCombobox = keyEditable && availableKeys && availableKeys.length > 0`. So
-  the user actually sees the *plain* key input, not a combobox with a Create button.
+  the user actually sees the _plain_ key input, not a combobox with a Create button.
   In that branch the "Create key" affordance does not exist; the user just types
   and presses Enter. Still wired through `onKeyChange?.(v)` on Enter/Blur, so the
   call still fires.
@@ -137,14 +138,13 @@ delay too. **Polling masks a real race; do NOT add polling, fix the race.**
 
 ### Task 4: Add E2E coverage
 
-- [x] Extend `../ext-test-projects/e2e/tests/project-independent/i18n-inspector.spec.ts`:
-      - PI-7-I18N-7: type into text input on existing key, value persists after blur + 2s.
-      - PI-7-I18N-8: open combobox, type new key, click Create key, assert JSX rewritten and JSON has new entry, assert text input becomes editable for typing the translation.
+- [x] Extend `../ext-test-projects/e2e/tests/project-independent/i18n-inspector.spec.ts`: - PI-7-I18N-7: type into text input on existing key, value persists after blur + 2s. - PI-7-I18N-8: open combobox, type new key, click Create key, assert JSX rewritten and JSON has new entry, assert text input becomes editable for typing the translation.
 
 Resolution: added two describe blocks to
 `../ext-test-projects/e2e/tests/project-independent/i18n-inspector.spec.ts`.
 
 PI-7-I18N-7 ("text edit on existing key persists to locale file"):
+
 - Snapshots both `locales/en.json` and `locales/ru.json` in `beforeEach`,
   restores them in `afterEach` so test isolation holds.
 - Selects the `i18n-t-fixture` (`{t('test.greeting')}`), asserts the text
@@ -156,6 +156,7 @@ PI-7-I18N-7 ("text edit on existing key persists to locale file"):
   guessing which file the binding considers active.
 
 PI-7-I18N-8 ("Create key flow rewrites JSX and creates locale entry"):
+
 - Snapshots `TestElements.tsx`, `en.json`, `ru.json` in `beforeEach`;
   restores all three in `afterEach`.
 - Opens the key combobox (asserts not disabled — `availableKeys` arrived),

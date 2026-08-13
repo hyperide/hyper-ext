@@ -25,11 +25,13 @@ This plan covers three tightly coupled sub-phases that cannot ship independently
 They are ordered as a pipeline: 2a changes what the client sends, 2b changes what the server accepts, 2c cleans up dead code. Within each sub-phase, tasks are independent enough for parallel agent execution.
 
 **Prerequisites (must land before Phase 2):**
+
 - CF-1: 3-tier stability cascade in `stability.ts` (spec Critical Findings)
 - CF-3: `FiberSourceIndex` reverse index for O(1) `findDOMElement()` (spec CF-3)
 - CF-5: `getItemIndex` WeakMap cache (spec CF-5)
 
 **NOT in scope (separate tickets):**
+
 - React 19 / Next.js source location resolution (spec "Next.js / React 19 Support Constraints" — separate ticket after Phase 2 is stable; requires source map VLQ decoding or `_debugOwner.stack` parsing; `data-uniq-id` is NOT a fallback option)
 - `data-comment-id` persistent comment anchoring (spec Phase 2e — separate ticket)
 - Vue/Svelte/Solid adapters
@@ -65,12 +67,13 @@ New: `elementTracer.findDOMElement(source, itemIndex)` — walks fiber tree, ret
 ### D4: Mutation routes use `findElementByNodeRef()` instead of `findElementByUuid()`
 
 New helper `findElementByPosition()` in `lib/ast/position-finder.ts`:
+
 - Takes `SourceLocation` (from `NodeMapEntry.loc`)
 - Traverses AST, finds the JSXElement whose opening tag `loc.start` **exactly** matches (not "contains")
 - Returns same `{ element, path }` as `findElementByUuid()`
 - **Note:** `lib/ast/traverser.ts` already has `findElementAtPosition()` which finds the innermost element
-  *containing* a position — different semantics. Both are needed: the existing one for cursor-based lookup
-  (user cursor is *inside* an element), the new one for nodeRef-based lookup (server knows the *exact* start).
+  _containing_ a position — different semantics. Both are needed: the existing one for cursor-based lookup
+  (user cursor is _inside_ an element), the new one for nodeRef-based lookup (server knows the _exact_ start).
 
 Routes receive `nodeRef` → `NodeMapService.resolveNodeRef()` → `NodeMapEntry.loc` → `findElementByPosition()`.
 
@@ -105,6 +108,7 @@ export interface TracingResolver {
 
 `data-canvas-instance-id` stays on DOM elements (it's about canvas layout/routing, not element identity).
 For fiber-based queries scoped to an instance, the approach:
+
 1. Find the instance container: `doc.querySelector('[data-canvas-instance-id="${id}"]')`
 2. Get its fiber root: `getFiberFromDOM(instanceContainer)`
 3. Walk only that fiber subtree (pass `instanceRoot` to `findDOMElement()`)
@@ -137,6 +141,7 @@ with UUID-based `element_id` will lose their anchor until the migration runs.
 ### D11: Initial NodeMap population
 
 When does the server first parse project files? On first tracing WS client connect:
+
 1. `onTracingClientConnect` sends existing maps (empty on first connect)
 2. The server needs to scan project source files and call `parseAndBuild()` for each
 
@@ -164,6 +169,7 @@ shared/canvas-interaction/fiber-element-query.test.ts
 ### Modified files (by task)
 
 **Phase 2a — Client wiring:**
+
 ```
 shared/canvas-interaction/click-handler.ts          # Replace closest('[data-uniq-id]') with TracingResolver
 shared/canvas-interaction/types.ts                  # TracingResolver interface, updated callbacks
@@ -179,6 +185,7 @@ client/lib/element-tracing/element-tracer.ts       # Add resolveClickLocal(), pu
 ```
 
 **Phase 2b — Server mutation routes:**
+
 ```
 lib/ast/position-finder.ts                          # NEW: findElementByPosition()
 server/lib/mutation-tracing.ts                      # NEW: post-mutation re-parse + broadcast
@@ -203,6 +210,7 @@ server/services/element-tracing-channel.ts          # Add populateNodeMaps() for
 ```
 
 **Phase 2b — Extension:**
+
 ```
 vscode-extension/hypercanvas-preview/src/services/AstService.ts  # SourceLocation params
 vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts  # Fiber-based clicks
@@ -212,6 +220,7 @@ vscode-extension/hypercanvas-preview/src/PanelRouter.ts            # Route eleme
 ```
 
 **Phase 2c — Removal:**
+
 ```
 lib/ast/inject-unique-ids.ts              # DELETE
 lib/ast/inject-unique-ids.test.ts         # DELETE
@@ -232,6 +241,7 @@ client/lib/canvas-engine/react/CanvasRenderer.tsx  # Remove addDataUniqIds()
 Enhance `ElementTracer` with client-side resolution from cached node maps, eliminating the server round-trip for the common case.
 
 **Files:**
+
 - Modify: `client/lib/element-tracing/element-tracer.ts`
 - Modify: `client/lib/element-tracing/element-tracer.test.ts`
 
@@ -411,6 +421,7 @@ feat(element-tracing): add resolveClickLocal for client-side cached resolution (
 Replace `mapElementQuery.ts` functions with fiber-based equivalents.
 
 **Files:**
+
 - Create: `shared/canvas-interaction/fiber-element-query.ts`
 - Create: `shared/canvas-interaction/fiber-element-query.test.ts`
 
@@ -420,11 +431,7 @@ Replace `mapElementQuery.ts` functions with fiber-based equivalents.
 // fiber-element-query.test.ts
 import { describe, expect, it } from 'bun:test';
 import type { FrameworkAdapter, SourceLocation } from '../../shared/element-tracing/types';
-import {
-  findDOMElementsBySource,
-  computeFiberItemIndex,
-  buildSourceKey,
-} from './fiber-element-query';
+import { findDOMElementsBySource, computeFiberItemIndex, buildSourceKey } from './fiber-element-query';
 
 describe('buildSourceKey', () => {
   it('should create deterministic key from source location', () => {
@@ -523,10 +530,7 @@ export function findDOMElementsBySource(
  * Compute the item index of an element among fiber siblings with the same source.
  * Wraps adapter.getItemIndex() for consistent API.
  */
-export function computeFiberItemIndex(
-  adapter: Pick<FrameworkAdapter, 'getItemIndex'>,
-  element: HTMLElement,
-): number {
+export function computeFiberItemIndex(adapter: Pick<FrameworkAdapter, 'getItemIndex'>, element: HTMLElement): number {
   return adapter.getItemIndex(element);
 }
 ```
@@ -549,6 +553,7 @@ feat(element-tracing): add fiber-based element query utilities (HYP-268)
 Replace `closest('[data-uniq-id]')` with `ElementTracer`-based resolution.
 
 **Files:**
+
 - Modify: `shared/canvas-interaction/types.ts`
 - Modify: `shared/canvas-interaction/click-handler.ts`
 - Modify: `shared/canvas-interaction/click-handler.test.ts` (if exists)
@@ -723,6 +728,7 @@ export function attachClickHandler(
 - [ ] **Step 3: Update all `attachClickHandler` call sites**
 
 Search for `attachClickHandler(` in the codebase. Each call site needs to pass the `tracer: ElementTracer` argument. Major sites:
+
 - `client/components/IframeCanvas.tsx`
 - `vscode-extension/.../iframe-interaction.ts`
 
@@ -746,6 +752,7 @@ feat(element-tracing): rewrite click-handler to use fiber instead of data-uniq-i
 Replace `element.dataset.uniqId` with nodeRef from click handler.
 
 **Files:**
+
 - Modify: `client/pages/Editor/components/hooks/useElementInteraction.ts`
 
 - [ ] **Step 1: Update hook interface**
@@ -809,12 +816,7 @@ const handleElementClick = useCallback(
 
 ```typescript
 const handleElementHover = useCallback(
-  (
-    nodeRef: string | null,
-    element: HTMLElement | null,
-    itemIndex?: number | null,
-    source?: SourceLocation | null,
-  ) => {
+  (nodeRef: string | null, element: HTMLElement | null, itemIndex?: number | null, source?: SourceLocation | null) => {
     if (nodeRef) {
       engine.setHoveredWithItemIndex(nodeRef, itemIndex ?? null);
     } else {
@@ -842,6 +844,7 @@ feat(element-tracing): update useElementInteraction to use nodeRef (HYP-268)
 Replace `querySelectorAll('[data-uniq-id="..."]')` in `computeOverlayRects()` with fiber-based lookup.
 
 **Files:**
+
 - Modify: `shared/canvas-interaction/overlay-renderer.ts`
 - Modify: `shared/canvas-interaction/types.ts` — add `ElementTracer` to `OverlayState`
 
@@ -853,8 +856,8 @@ In `shared/canvas-interaction/types.ts`:
 import type { SourceLocation } from '../element-tracing/types';
 
 export interface OverlayState {
-  selectedIds: string[];       // nodeRefs
-  hoveredId: string | null;    // nodeRef
+  selectedIds: string[]; // nodeRefs
+  hoveredId: string | null; // nodeRef
   hoveredItemIndex?: number | null;
   selectedItemIndices?: Map<string, number | null>;
   activeInstanceId?: string | null;
@@ -938,12 +941,14 @@ feat(element-tracing): rewrite overlay rendering to use fiber-based DOM lookup (
 Replace DOM-based `findParentWithUniqId`, `findDirectChildIds`, `findSiblingId` with fiber-based equivalents.
 
 **Files:**
+
 - Modify: `shared/canvas-interaction/keyboard-handler.ts`
 - Modify: `shared/canvas-interaction/keyboard-handler.test.ts`
 
 - [ ] **Step 1: Update helper functions**
 
 The keyboard handler needs fiber-aware navigation. The approach:
+
 - `findParentWithUniqId` → use `ElementTracer` node map parent chain (from `NodeMapEntry.parentRef`)
 - `findDirectChildIds` → use `NodeMapEntry.children`
 - `findSiblingId` → use parent's `children` array from node map
@@ -975,11 +980,7 @@ function findDirectChildNodeRefs(nodeRef: string, lookup: NodeMapLookup): string
 }
 
 /** Find next/prev sibling nodeRef from parent's children. */
-function findSiblingNodeRef(
-  nodeRef: string,
-  direction: 'next' | 'prev',
-  lookup: NodeMapLookup,
-): string | null {
+function findSiblingNodeRef(nodeRef: string, direction: 'next' | 'prev', lookup: NodeMapLookup): string | null {
   const entry = lookup.getEntry(nodeRef);
   if (!entry?.parentRef) return null;
 
@@ -1019,6 +1020,7 @@ feat(element-tracing): update keyboard handler to use node map navigation (HYP-2
 Replace `querySelectorAll('[data-uniq-id]')` with fiber tree walk.
 
 **Files:**
+
 - Modify: `shared/canvas-interaction/empty-container-placeholders.ts`
 - Modify: `shared/canvas-interaction/empty-container-placeholders.test.ts`
 
@@ -1101,6 +1103,7 @@ feat(element-tracing): update empty container detection to use fiber tree (HYP-2
 Initialize `ElementTracer` + `ReactAdapter` + `WSTracingTransport` when iframe loads.
 
 **Files:**
+
 - Modify: `client/components/IframeCanvas.tsx`
 - Create: `client/hooks/useElementTracer.ts` (lifecycle hook)
 
@@ -1185,6 +1188,7 @@ feat(element-tracing): wire ElementTracer into IframeCanvas lifecycle (HYP-268)
 When `resolveClickLocal` returns null (cache miss), the click handler fires with `nodeRef = null`. When the server responds, update the selection.
 
 **Files:**
+
 - Modify: `client/components/IframeCanvas.tsx` (or the wiring code from Task 8)
 
 - [ ] **Step 1: Subscribe to `onSelectionResolved`**
@@ -1197,7 +1201,7 @@ useEffect(() => {
   const unsub = tracer.onSelectionResolved((response) => {
     if (response.nodeRef && response.entry) {
       // Server confirmed the selection — update engine
-      engine.selectWithItemIndex(response.nodeRef, /* itemIndex from pending state */);
+      engine.selectWithItemIndex(response.nodeRef /* itemIndex from pending state */);
     }
   });
 
@@ -1222,11 +1226,13 @@ feat(element-tracing): handle async resolution with server-confirmed selection (
 The 767-line hotkey handler has 4 occurrences of `dataset.uniqId` parent-walking logic for re-selection after delete/cut. These must switch to nodeRef-based navigation via NodeMap.
 
 **Files:**
+
 - Modify: `client/pages/Editor/components/hooks/useHotkeysSetup.ts`
 
 - [ ] **Step 1: Replace DOM parent walk with NodeMap lookup**
 
 Current pattern (4 occurrences):
+
 ```typescript
 // OLD:
 const selector = buildElementSelector(selectedIds[0], activeDesignInstanceId);
@@ -1237,6 +1243,7 @@ const foundParentId = parent?.dataset.uniqId;
 ```
 
 New pattern using NodeMap entry:
+
 ```typescript
 // NEW:
 const parentRef = nodeMapLookup.getEntry(selectedIds[0])?.parentRef;
@@ -1268,17 +1275,20 @@ feat(element-tracing): update useHotkeysSetup parent navigation to use NodeMap (
 This hook groups map-rendered elements by instance and renders boundary overlays. It uses `querySelectorAll('[data-uniq-id="..."]')` to find elements.
 
 **Files:**
+
 - Modify: `client/pages/Editor/components/hooks/useOverlayMapCondHighlightComponents.ts`
 
 - [ ] **Step 1: Replace querySelectorAll patterns**
 
 Current pattern:
+
 ```typescript
 // OLD:
 const mapElements = doc.querySelectorAll(`[data-uniq-id="${id}"]`);
 ```
 
 New pattern using TracingResolver:
+
 ```typescript
 // NEW:
 const source = sourceMap.get(id);
@@ -1305,6 +1315,7 @@ feat(element-tracing): update map/cond overlay highlighting to use fiber (HYP-26
 Connect `PostMessageTracingTransport` to PanelRouter + StateHub so element tracing messages flow between the iframe preview and extension host.
 
 **Files:**
+
 - Modify: `vscode-extension/hypercanvas-preview/src/StateHub.ts`
 - Modify: `vscode-extension/hypercanvas-preview/src/PanelRouter.ts`
 
@@ -1341,6 +1352,7 @@ feat(element-tracing): wire PostMessageTracingTransport through PanelRouter + St
 When `NodeMapUpdate` arrives with `refMapping`, remap current engine selection from old nodeRefs to new ones. This handles undo/redo, external edits, and position shifts after sibling mutations.
 
 **Files:**
+
 - Modify: `client/hooks/useElementTracer.ts` (from Task 8)
 
 - [ ] **Step 1: Subscribe to node-map-update and remap selection**
@@ -1385,6 +1397,7 @@ feat(element-tracing): remap selection on NodeMapUpdate refMapping (HYP-268)
 New function that finds a JSX element by its source location, equivalent to `findElementByUuid` but position-based.
 
 **Files:**
+
 - Create: `lib/ast/position-finder.ts`
 - Create: `lib/ast/position-finder.test.ts`
 
@@ -1497,6 +1510,7 @@ feat(element-tracing): add findElementByPosition AST helper (HYP-268)
 After every mutation route writes the AST, re-parse the file and broadcast the updated NodeMap to all connected clients.
 
 **Files:**
+
 - Create: `server/lib/mutation-tracing.ts`
 - Create: `server/lib/mutation-tracing.test.ts`
 
@@ -1584,6 +1598,7 @@ feat(element-tracing): add post-mutation re-parse + broadcast helper (HYP-268)
 These routes follow the same pattern: receive `nodeRef` → resolve to AST position → mutate → write → re-parse.
 
 **Files to modify:**
+
 - `server/routes/updateComponentStyles.ts`
 - `server/routes/updateComponentProps.ts`
 - `server/routes/updateComponentPropsBatch.ts`
@@ -1647,6 +1662,7 @@ return c.json({
 - [ ] **Step 4: Repeat for all 11 routes**
 
 Each follows the same pattern. The differences:
+
 - `deleteElement.ts`: input field is `elementId` → `nodeRef`
 - `deleteElements.ts`: input field is `elementIds[]` → `nodeRefs[]`; loop resolves each
 - `copyElementTsx.ts`: read-only, no writeAST, no broadcast
@@ -1672,6 +1688,7 @@ feat(element-tracing): migrate 8 mutation routes from UUID to nodeRef (HYP-268)
 Routes with expression walking, new element creation, or parent targeting.
 
 **Files:**
+
 - `server/routes/duplicateElement.ts`
 - `server/routes/insertElement.ts`
 - `server/routes/pasteElement.ts`
@@ -1682,6 +1699,7 @@ Routes with expression walking, new element creation, or parent targeting.
 - [ ] **Step 1: Migrate duplicateElement.ts**
 
 Changes:
+
 - Input: `elementId` → `nodeRef`
 - Lookup: `findElementByUuid` → `findElementByPosition` (via nodeRef → entry → loc)
 - Remove: `updateAllChildUuids()` call — duplicated elements no longer need UUID assignment
@@ -1691,15 +1709,14 @@ Changes:
 // After duplication and writeAST:
 const update = await afterMutation({ filePath: absolutePath, projectId });
 // Find the new element's nodeRef — it's the one at the insertion position
-const newEntry = update?.nodes.find(n =>
-  n.loc.line === insertedAtLine && n.loc.column === insertedAtColumn
-);
+const newEntry = update?.nodes.find((n) => n.loc.line === insertedAtLine && n.loc.column === insertedAtColumn);
 return c.json({ success: true, newNodeRef: newEntry?.nodeRef ?? null });
 ```
 
 - [ ] **Step 2: Migrate insertElement.ts**
 
 Changes:
+
 - Input: `parentId` → `parentNodeRef`
 - Lookup: resolve parentNodeRef → position → find parent element
 - Remove: UUID generation for new element (`ensureUuid()`)
@@ -1708,6 +1725,7 @@ Changes:
 - [ ] **Step 3: Migrate pasteElement.ts**
 
 Changes:
+
 - Input: `parentId` → `parentNodeRef`
 - Remove: UUID assignment for pasted elements
 - Return: new nodeRef(s)
@@ -1715,6 +1733,7 @@ Changes:
 - [ ] **Step 4: Migrate wrapElement.ts**
 
 Changes:
+
 - Input: `elementId` → `nodeRef`
 - Uses manual traverse with `data-uniq-id` attr check → switch to `findElementByPosition`
 - Remove: `wrapperId` generation (UUID for wrapper)
@@ -1723,6 +1742,7 @@ Changes:
 - [ ] **Step 5: Migrate editMap.ts**
 
 Changes:
+
 - Input: `elementId` → `nodeRef`
 - Manual traverse → `findElementByPosition` for the element
 - Then walk up parent chain to find `.map()` — this logic stays (it walks AST parents, not DOM)
@@ -1730,6 +1750,7 @@ Changes:
 - [ ] **Step 6: Migrate editCondition.ts**
 
 Changes:
+
 - Input: `elementId` → `nodeRef`
 - Manual traverse → `findElementByPosition`
 - Walk up to find ternary/logical — stays
@@ -1751,6 +1772,7 @@ feat(element-tracing): migrate complex mutation routes from UUID to nodeRef (HYP
 When source files change (via mutation or fs watcher), re-parse and broadcast.
 
 **Files:**
+
 - Modify: `server/services/element-tracing-channel.ts` — add `onFileChanged` export
 - Modify: server file-watching infrastructure (if exists)
 
@@ -1786,6 +1808,7 @@ feat(element-tracing): wire file change detection into NodeMap broadcast (HYP-26
 When the first tracing WS client connects to a project, the NodeMapService has zero files tracked. The server needs to scan project source files and parse them to populate the initial maps.
 
 **Files:**
+
 - Modify: `server/services/element-tracing-channel.ts`
 
 - [ ] **Step 1: Add `populateNodeMaps` function**
@@ -1850,6 +1873,7 @@ feat(element-tracing): populate NodeMap on first WS client connect (HYP-268)
 Switch extension's `AstService` from UUID-based methods to position-based.
 
 **Files:**
+
 - Modify: `vscode-extension/hypercanvas-preview/src/services/AstService.ts`
 - Modify: `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts`
 - Modify: `vscode-extension/hypercanvas-preview/src/services/SyncPositionService.ts`
@@ -1943,11 +1967,13 @@ feat(element-tracing): migrate extension AstService + iframe-interaction to fibe
 ### Task 16: Remove UUID injection code
 
 **Files to delete:**
+
 - `lib/ast/inject-unique-ids.ts`
 - `lib/ast/inject-unique-ids.test.ts`
 - `server/routes/injectUniqueIds.ts`
 
 **Files to modify:**
+
 - `lib/ast/operations.ts` — remove `injectUniqueIdsIntoAST()`, `findParentElementId()`, `getDirectChildIds()`
 - `lib/ast/operations.test.ts` — remove related tests
 - `lib/ast/uuid.ts` — remove `updateAllChildUuids()`, `ensureUuid()`, `hasUuid()`, `removeUuid()`. Keep `generateUuid()` only if used elsewhere (check with `grep`)
@@ -1993,6 +2019,7 @@ refactor(element-tracing): remove UUID injection pipeline (HYP-268)
 ### Task 17: Remove data-uniq-id from client code
 
 **Files to modify:**
+
 - `client/lib/canvas-engine/react/CanvasRenderer.tsx` — remove `addDataUniqIds()`
 - `client/lib/dom-utils.ts` — remove `buildElementSelector` and all `[data-uniq-id]` queries
 - `client/pages/Editor/utils/mapElementQuery.ts` — delete entire file (replaced by fiber-element-query.ts)
@@ -2026,6 +2053,7 @@ refactor(element-tracing): remove data-uniq-id from client code (HYP-268)
 ### Task 18: Remove data-uniq-id from extension code
 
 **Files:**
+
 - Modify: `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` — remove all `data-uniq-id` selectors
 - Modify: `vscode-extension/hypercanvas-preview/src/services/AstService.ts` — remove UUID-based methods
 - Modify: `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` — update element queries
@@ -2061,6 +2089,7 @@ refactor(element-tracing): remove data-uniq-id from extension code (HYP-268)
 ### Task 19: Remove data-uniq-id from shared code
 
 **Files:**
+
 - Modify: `shared/canvas-interaction/types.ts` — clean up docs referencing data-uniq-id
 - Modify: `shared/ai-agent.ts` — update if uses UUID
 - Modify: `server/services/ai-agent.ts` — update if uses UUID
@@ -2092,6 +2121,7 @@ refactor(element-tracing): final data-uniq-id sweep — remove all remaining ref
 Create a one-time migration script for existing projects that have `data-uniq-id` in their source files.
 
 **Files:**
+
 - Create: `scripts/strip-data-uniq-ids.ts`
 
 - [ ] **Step 1: Write script**
@@ -2126,10 +2156,7 @@ async function processFile(filePath: string): Promise<boolean> {
 
   traverse(ast, {
     JSXAttribute(path) {
-      if (
-        t.isJSXIdentifier(path.node.name) &&
-        path.node.name.name === 'data-uniq-id'
-      ) {
+      if (t.isJSXIdentifier(path.node.name) && path.node.name.name === 'data-uniq-id') {
         path.remove();
         modified = true;
       }
@@ -2240,6 +2267,7 @@ Phase 2c (Removal):
 ```
 
 **Parallel execution opportunities:**
+
 - Tasks 1, 2, 5, 6, 7 can run in parallel (independent client utilities)
 - Tasks 9b, 9c, 9d, 9e can run in parallel (independent client updates after Task 8)
 - Tasks 10, 14, 14b can run in parallel with Phase 2a

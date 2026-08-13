@@ -116,72 +116,72 @@ The secondary suspect is generated preview fallback props:
 ### Task 1: Reproduce And Classify The Timeout
 
 - [x] Read `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/CLAUDE.md` before running any
-  VS Code extension debugging.
+      VS Code extension debugging.
 - [x] Reproduce the Bulka `multiple components — switch between them, each
-  renders` timeout with the narrow command from this plan.
+renders` timeout with the narrow command from this plan.
 - [x] Capture the failing candidate/component name, current webview frame list,
-  and whether the hang is Explorer reacquisition, component probing, or preview
-  runtime crash handling.
+      and whether the hang is Explorer reacquisition, component probing, or preview
+      runtime crash handling.
 - [x] Record the exact failing evidence in the progress log before changing
-  production code.
+      production code.
 
 ### Task 2: Add The Failing Test First
 
 - [x] If the root cause is generator fallback props, add or update a focused
-  `lib/preview-generator` test that fails on event-like fallback props leaking
-  into DOM-like components.
-  Added two tests in `generator.test.ts` under "generatePreviewContent — ui-primitive
-  filtering": (1) asserts components from `components/ui/` are excluded from
-  componentRegistry; (2) asserts similarly-named but non-ui/ paths are kept.
+      `lib/preview-generator` test that fails on event-like fallback props leaking
+      into DOM-like components.
+      Added two tests in `generator.test.ts` under "generatePreviewContent — ui-primitive
+      filtering": (1) asserts components from `components/ui/` are excluded from
+      componentRegistry; (2) asserts similarly-named but non-ui/ paths are kept.
 - [x] If the root cause is Explorer/webview discovery, add an E2E helper or
-  page-object regression that fails quickly instead of timing out for 360s.
-  Not applicable — Task 1 confirmed root cause is generator/component-probing, not
-  Explorer acquisition.
+      page-object regression that fails quickly instead of timing out for 360s.
+      Not applicable — Task 1 confirmed root cause is generator/component-probing, not
+      Explorer acquisition.
 - [x] If the root cause is component probing, add a regression that proves
-  per-candidate failures are bounded and diagnostic.
-  Covered by the ui-primitive filtering test: proves 46 UI primitives are currently
-  in the registry (causing probing to exhaust the budget). Fix in Task 3 will filter
-  them, reducing probing candidates from 54 to ~8.
+      per-candidate failures are bounded and diagnostic.
+      Covered by the ui-primitive filtering test: proves 46 UI primitives are currently
+      in the registry (causing probing to exhaust the budget). Fix in Task 3 will filter
+      them, reducing probing candidates from 54 to ~8.
 - [x] Run the new failing test and confirm it fails for the right reason.
-  `bun test lib/preview-generator/__tests__/generator.test.ts`: 41 pass, 2 fail.
-  Failure: `expect(received).not.toContain("'client/components/ui/badge.tsx'")` —
-  correct: Badge is currently in the registry and should not be.
+      `bun test lib/preview-generator/__tests__/generator.test.ts`: 41 pass, 2 fail.
+      Failure: `expect(received).not.toContain("'client/components/ui/badge.tsx'")` —
+      correct: Badge is currently in the registry and should not be.
 
 ### Task 3: Implement The Smallest Proven Fix
 
 - [x] Fix the production root cause identified by Task 1 and covered by Task 2.
-  Added `isUiPrimitive()` filter in `generatePreviewContent` — entries whose
-  `componentPath` matches `/(\/|^)components\/ui\//` are excluded from
-  componentRegistry, sampleRenderMap, sampleRenderersMap, and imports.
+      Added `isUiPrimitive()` filter in `generatePreviewContent` — entries whose
+      `componentPath` matches `/(\/|^)components\/ui\//` are excluded from
+      componentRegistry, sampleRenderMap, sampleRenderersMap, and imports.
 - [x] Keep the fix at the generator/source or shared page-object layer, not in
-  Bulka's generated `__canvas_preview__.tsx`.
+      Bulka's generated `__canvas_preview__.tsx`.
 - [x] Do not increase timeouts as the fix.
 - [x] Preserve unrelated dirty files and other ralphex lanes.
 
 ### Task 4: Verify Focused Behavior
 
 - [x] Run the focused unit/helper test added or updated in Task 2.
-  `bun test lib/preview-generator/__tests__/generator.test.ts`: all pass.
+      `bun test lib/preview-generator/__tests__/generator.test.ts`: all pass.
 - [x] Run the Bulka preview-render narrow E2E command from this plan.
-  Ran `bun run test -- --grep "dep:bulka-the-dog" --project="dep:bulka-the-dog"`, exit code 0.
+      Ran `bun run test -- --grep "dep:bulka-the-dog" --project="dep:bulka-the-dog"`, exit code 0.
 - [x] Confirm the result no longer consumes the full 360-second test timeout.
-  Both bulka tests passed (HMR in 8.1s; "multiple components" completed without timeout).
+      Both bulka tests passed (HMR in 8.1s; "multiple components" completed without timeout).
 - [x] Check diagnostics for repeated fallback-prop DOM handler warnings and
-  preview runtime crashes.
-  Root fix in extension.ts (isUiPrimitive guard) prevents shadcn components from entering
-  the probing loop entirely — no HMR churn, no handler warnings from shadcn probing.
+      preview runtime crashes.
+      Root fix in extension.ts (isUiPrimitive guard) prevents shadcn components from entering
+      the probing loop entirely — no HMR churn, no handler warnings from shadcn probing.
 
 ### Task 5: Final Review And Report
 
 - [x] Run lint/typecheck or the narrow equivalent required by touched files.
-  `npx tsc --noEmit` (0 errors); `biome check` on 3 changed files (0 issues).
+      `npx tsc --noEmit` (0 errors); `biome check` on 3 changed files (0 issues).
 - [x] Self-review changed files for fake assertions, broad allowlists, and
-  fixture-only fixes.
-  Fix is in production code (extension.ts + preview-file-manager.ts), not fixture-only.
-  isUiPrimitive guard is the same predicate used by the generator, no allowlist expansion.
+      fixture-only fixes.
+      Fix is in production code (extension.ts + preview-file-manager.ts), not fixture-only.
+      isUiPrimitive guard is the same predicate used by the generator, no allowlist expansion.
 - [x] Commit the fix and any ext-test-projects changes separately as needed.
 - [x] Send a concise Telegram-ready summary with whether the Bulka timeout is
-  fixed, what tests ran, and any remaining risk.
+      fixed, what tests ran, and any remaining risk.
 
 ## Smallest Fix
 

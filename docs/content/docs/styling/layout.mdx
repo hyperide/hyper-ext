@@ -6,32 +6,31 @@ Control element dimensions, flexbox, grid, and spacing.
 
 Select the layout type for an element:
 
-| Type | Description | CSS |
-|------|-------------|-----|
-| **Default** | Block layout | `display: block` |
-| **Row** | Horizontal flex | `display: flex; flex-direction: row` |
-| **Column** | Vertical flex | `display: flex; flex-direction: column` |
-| **Grid** | CSS Grid | `display: grid` |
+| Type        | Description     | CSS                                     |
+| ----------- | --------------- | --------------------------------------- |
+| **Default** | Block layout    | `display: block`                        |
+| **Row**     | Horizontal flex | `display: flex; flex-direction: row`    |
+| **Column**  | Vertical flex   | `display: flex; flex-direction: column` |
+| **Grid**    | CSS Grid        | `display: grid`                         |
 
-import { Callout } from 'nextra/components'
+import { Callout } from 'nextra/components';
 
-<Callout type="info">
-  Grid layout is only available with Tailwind CSS. Tamagui projects don't support grid.
-</Callout>
+<Callout type="info">Grid layout is only available with Tailwind CSS. Tamagui projects don't support grid.</Callout>
 
 ## Dimensions
 
 Control width and height:
 
-| Property | Description |
-|----------|-------------|
-| **Width** | Element width in px or `auto` |
-| **Height** | Element height in px or `auto` |
-| **Aspect Ratio** | Lock width/height ratio |
+| Property         | Description                    |
+| ---------------- | ------------------------------ |
+| **Width**        | Element width in px or `auto`  |
+| **Height**       | Element height in px or `auto` |
+| **Aspect Ratio** | Lock width/height ratio        |
 
 ### Auto Sizing
 
 Set width or height to `Auto` for content-hugging behavior:
+
 - Width auto: Element shrinks to fit content
 - Height auto: Element grows with content
 
@@ -66,13 +65,14 @@ Click a position to set both `justify-content` and `align-items`.
 
 Inner spacing (space between element border and content):
 
-| Control | Description |
-|---------|-------------|
-| **Unified** | Same padding all sides |
-| **Individual** | Top, Right, Bottom, Left |
+| Control                 | Description                 |
+| ----------------------- | --------------------------- |
+| **Unified**             | Same padding all sides      |
+| **Individual**          | Top, Right, Bottom, Left    |
 | **Horizontal/Vertical** | X-axis and Y-axis shortcuts |
 
 Enter values in pixels. Use arrow keys for fine-tuning:
+
 - Arrow Up/Down: ±1px
 - Shift + Arrow: ±10px
 
@@ -80,10 +80,10 @@ Enter values in pixels. Use arrow keys for fine-tuning:
 
 Toggle whether content overflows or is clipped:
 
-| Setting | CSS | Effect |
-|---------|-----|--------|
-| On | `overflow: hidden` | Content clipped |
-| Off | `overflow: visible` | Content can overflow |
+| Setting | CSS                 | Effect               |
+| ------- | ------------------- | -------------------- |
+| On      | `overflow: hidden`  | Content clipped      |
+| Off     | `overflow: visible` | Content can overflow |
 
 ![Layout section](/screenshots/layout-section.png)
 
@@ -91,9 +91,9 @@ Toggle whether content overflows or is clipped:
 
 External spacing. See the dedicated Margin section in the right sidebar.
 
-| Control | Description |
-|---------|-------------|
-| **Linked** | Same margin all sides |
+| Control      | Description                          |
+| ------------ | ------------------------------------ |
+| **Linked**   | Same margin all sides                |
 | **Unlinked** | Independent Top, Right, Bottom, Left |
 
 ## Tips

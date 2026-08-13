@@ -2,7 +2,7 @@
 
 Add shadows, blur, and other visual effects.
 
-import { Callout } from 'nextra/components'
+import { Callout } from 'nextra/components';
 
 <Callout type="warning">
   Effects are only available with Tailwind CSS projects. Tamagui projects don't support these features.
@@ -12,42 +12,43 @@ import { Callout } from 'nextra/components'
 
 Add a shadow behind the element:
 
-| Property | Description |
-|----------|-------------|
+| Property     | Description                |
+| ------------ | -------------------------- |
 | **X Offset** | Horizontal shadow position |
-| **Y Offset** | Vertical shadow position |
-| **Blur** | Shadow blur radius |
-| **Spread** | Shadow size expansion |
-| **Color** | Shadow color |
-| **Opacity** | Shadow transparency |
+| **Y Offset** | Vertical shadow position   |
+| **Blur**     | Shadow blur radius         |
+| **Spread**   | Shadow size expansion      |
+| **Color**    | Shadow color               |
+| **Opacity**  | Shadow transparency        |
 
 ### Shadow Presets
 
 Quick-apply common shadow sizes:
 
-| Preset | Effect |
-|--------|--------|
-| **sm** | Subtle shadow |
-| **default** | Standard shadow |
-| **md** | Medium shadow |
-| **lg** | Large shadow |
-| **xl** | Extra large shadow |
-| **2xl** | Dramatic shadow |
+| Preset      | Effect             |
+| ----------- | ------------------ |
+| **sm**      | Subtle shadow      |
+| **default** | Standard shadow    |
+| **md**      | Medium shadow      |
+| **lg**      | Large shadow       |
+| **xl**      | Extra large shadow |
+| **2xl**     | Dramatic shadow    |
 
 ## Inner Shadow
 
 Create an inset shadow for depth effects:
 
-| Property | Description |
-|----------|-------------|
+| Property     | Description       |
+| ------------ | ----------------- |
 | **X Offset** | Horizontal offset |
-| **Y Offset** | Vertical offset |
-| **Blur** | Blur radius |
-| **Spread** | Shadow size |
-| **Color** | Shadow color |
-| **Opacity** | Transparency |
+| **Y Offset** | Vertical offset   |
+| **Blur**     | Blur radius       |
+| **Spread**   | Shadow size       |
+| **Color**    | Shadow color      |
+| **Opacity**  | Transparency      |
 
 Inner shadows are useful for:
+
 - Input fields (pressed look)
 - Containers (recessed appearance)
 - Buttons (when pressed)
@@ -56,15 +57,16 @@ Inner shadows are useful for:
 
 Apply blur effect to the element:
 
-| Value | Effect |
-|-------|--------|
-| 0 | No blur |
-| 4 | Subtle blur |
-| 8 | Medium blur |
-| 16+ | Heavy blur |
+| Value | Effect      |
+| ----- | ----------- |
+| 0     | No blur     |
+| 4     | Subtle blur |
+| 8     | Medium blur |
+| 16+   | Heavy blur  |
 
 <Callout type="info">
-  Blur affects the entire element including its content. For background blur only, use CSS `backdrop-filter` in code mode.
+  Blur affects the entire element including its content. For background blur only, use CSS `backdrop-filter` in code
+  mode.
 </Callout>
 
 ## Adding Effects
@@ -83,11 +85,10 @@ Click the trash icon next to an effect to remove it.
 
 ## Performance Considerations
 
-<Callout type="warning">
-  Heavy use of shadows and blur can impact performance, especially on mobile devices.
-</Callout>
+<Callout type="warning">Heavy use of shadows and blur can impact performance, especially on mobile devices.</Callout>
 
 Tips:
+
 - Use shadow presets instead of custom shadows when possible
 - Avoid blur on frequently-rerendered elements
 - Test on lower-powered devices
@@ -96,10 +97,10 @@ Tips:
 
 Effects map to Tailwind utility classes:
 
-| Effect | Example Class |
-|--------|---------------|
-| Drop shadow | `shadow-lg` |
+| Effect        | Example Class                        |
+| ------------- | ------------------------------------ |
+| Drop shadow   | `shadow-lg`                          |
 | Custom shadow | `shadow-[0_4px_6px_rgba(0,0,0,0.1)]` |
-| Blur | `blur-sm` |
+| Blur          | `blur-sm`                            |
 
 Custom values use Tailwind's arbitrary value syntax.

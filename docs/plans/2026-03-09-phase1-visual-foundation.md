@@ -14,30 +14,30 @@
 
 ## Key Files Reference
 
-| Area | File |
-|------|------|
-| CanvasEngine | `client/lib/canvas-engine/core/CanvasEngine.ts` |
-| Operations base | `client/lib/canvas-engine/operations/Operation.ts` |
-| Batch operation | `client/lib/canvas-engine/operations/BatchOperation.ts` |
-| ASTStyle operation | `client/lib/canvas-engine/operations/ASTStyleOperation.ts` |
-| AST API service | `client/lib/canvas-engine/services/ASTApiService.ts` (interface) |
-| AST API impl | `client/lib/canvas-engine/services/ASTApiServiceImpl.ts` |
-| Selection hooks | `client/pages/Editor/components/hooks/useElementInteraction.ts` |
-| Element tree selection | `client/components/LeftSidebar/hooks/useElementSelection.ts` |
-| Overlay renderer | `shared/canvas-interaction/overlay-renderer.ts` |
-| Style injector | `shared/canvas-interaction/style-injector.ts` |
-| DOM utils | `client/lib/dom-utils.ts` |
-| Style sync hook | `client/components/RightSidebar/hooks/useStyleSync.ts` |
-| RightSidebar | `client/components/RightSidebar/RightSidebar.tsx` |
-| CanvasEditor | `client/pages/Editor/CanvasEditor.tsx` |
-| AST mutator | `lib/ast/mutator.ts` |
-| AST traverser | `lib/ast/traverser.ts` |
-| AST operations | `lib/ast/operations.ts` |
-| AST parser | `lib/ast/parser.ts` |
-| Server routes index | `server/index.ts` |
-| Insert element route | `server/routes/insertElement.ts` |
-| Mock AST API | `client/lib/canvas-engine/__tests__/mocks/MockASTApiService.ts` |
-| Test setup | `test/setup.ts` |
+| Area                   | File                                                             |
+| ---------------------- | ---------------------------------------------------------------- |
+| CanvasEngine           | `client/lib/canvas-engine/core/CanvasEngine.ts`                  |
+| Operations base        | `client/lib/canvas-engine/operations/Operation.ts`               |
+| Batch operation        | `client/lib/canvas-engine/operations/BatchOperation.ts`          |
+| ASTStyle operation     | `client/lib/canvas-engine/operations/ASTStyleOperation.ts`       |
+| AST API service        | `client/lib/canvas-engine/services/ASTApiService.ts` (interface) |
+| AST API impl           | `client/lib/canvas-engine/services/ASTApiServiceImpl.ts`         |
+| Selection hooks        | `client/pages/Editor/components/hooks/useElementInteraction.ts`  |
+| Element tree selection | `client/components/LeftSidebar/hooks/useElementSelection.ts`     |
+| Overlay renderer       | `shared/canvas-interaction/overlay-renderer.ts`                  |
+| Style injector         | `shared/canvas-interaction/style-injector.ts`                    |
+| DOM utils              | `client/lib/dom-utils.ts`                                        |
+| Style sync hook        | `client/components/RightSidebar/hooks/useStyleSync.ts`           |
+| RightSidebar           | `client/components/RightSidebar/RightSidebar.tsx`                |
+| CanvasEditor           | `client/pages/Editor/CanvasEditor.tsx`                           |
+| AST mutator            | `lib/ast/mutator.ts`                                             |
+| AST traverser          | `lib/ast/traverser.ts`                                           |
+| AST operations         | `lib/ast/operations.ts`                                          |
+| AST parser             | `lib/ast/parser.ts`                                              |
+| Server routes index    | `server/index.ts`                                                |
+| Insert element route   | `server/routes/insertElement.ts`                                 |
+| Mock AST API           | `client/lib/canvas-engine/__tests__/mocks/MockASTApiService.ts`  |
+| Test setup             | `test/setup.ts`                                                  |
 
 ---
 
@@ -69,10 +69,7 @@ let mockIframeDoc: {
 } | null = null;
 
 mock.module('@/lib/dom-utils', () => ({
-  getPreviewIframe: () =>
-    mockIframeDoc
-      ? { contentDocument: mockIframeDoc, contentWindow: {} }
-      : null,
+  getPreviewIframe: () => (mockIframeDoc ? { contentDocument: mockIframeDoc, contentWindow: {} } : null),
 }));
 
 import { FastPatchService } from '../fast-patch-service';
@@ -103,9 +100,7 @@ describe('FastPatchService', () => {
     it('scopes to instance when instanceId provided', () => {
       service.applyPatch('elem-1', { color: 'blue' }, 'instance-1');
 
-      expect(mockStyleEl.textContent).toContain(
-        '[data-canvas-instance-id="instance-1"] [data-uniq-id="elem-1"]',
-      );
+      expect(mockStyleEl.textContent).toContain('[data-canvas-instance-id="instance-1"] [data-uniq-id="elem-1"]');
     });
 
     it('replaces previous patch for same element', () => {
@@ -182,11 +177,7 @@ function toKebab(prop: string): string {
 export class FastPatchService {
   private patches = new Map<string, { styles: Record<string, string>; instanceId?: string }>();
 
-  applyPatch(
-    elementId: string,
-    styles: Record<string, string>,
-    instanceId?: string,
-  ): void {
+  applyPatch(elementId: string, styles: Record<string, string>, instanceId?: string): void {
     this.patches.set(elementId, { styles, instanceId });
     this.flush();
   }
@@ -375,9 +366,7 @@ import type { ParsedStyles } from '@/lib/canvas-engine/adapters/StyleAdapter';
 
 describe('mergeStyleData', () => {
   it('returns single element styles unchanged', () => {
-    const styles: Partial<ParsedStyles>[] = [
-      { backgroundColor: 'red', padding: '16px' },
-    ];
+    const styles: Partial<ParsedStyles>[] = [{ backgroundColor: 'red', padding: '16px' }];
     const result = mergeStyleData(styles);
     expect(result.backgroundColor).toBe('red');
     expect(result.padding).toBe('16px');
@@ -683,10 +672,7 @@ export function App() {
     // child should be inside parent2 now
     expect(output).toContain('data-uniq-id="parent2"');
     // parent1 should be empty
-    const parent1Section = output.slice(
-      output.indexOf('parent1'),
-      output.indexOf('parent2'),
-    );
+    const parent1Section = output.slice(output.indexOf('parent1'), output.indexOf('parent2'));
     expect(parent1Section).not.toContain('child');
   });
 
@@ -728,10 +714,7 @@ interface MoveResult {
   error?: string;
 }
 
-export function moveElementInAST(
-  ast: t.File,
-  params: MoveElementParams,
-): MoveResult {
+export function moveElementInAST(ast: t.File, params: MoveElementParams): MoveResult {
   const { elementId, targetParentId, targetIndex } = params;
 
   // Find the element to move
@@ -762,10 +745,7 @@ export function moveElementInAST(
   elementResult.path.remove();
 
   // Make target parent non-self-closing if needed
-  if (
-    targetParent.openingElement.selfClosing ||
-    !targetParent.closingElement
-  ) {
+  if (targetParent.openingElement.selfClosing || !targetParent.closingElement) {
     targetParent.openingElement.selfClosing = false;
     targetParent.closingElement = {
       type: 'JSXClosingElement',
@@ -798,9 +778,7 @@ export async function moveElement(c: Context): Promise<Response> {
   }
 
   const projectPath = c.get('checkedProject').path;
-  const { ast, absolutePath } = await readAndParseFile(
-    `${projectPath}/${filePath}`,
-  );
+  const { ast, absolutePath } = await readAndParseFile(`${projectPath}/${filePath}`);
 
   const result = moveElementInAST(ast, {
     elementId,
@@ -1053,7 +1031,7 @@ git commit -m "feat: add useElementDrag hook for drag reorder and element swap"
 
 **Context:** When children are rendered via `.map()`, they share the same `data-uniq-id`.
 Reordering means sorting the source array. This requires detecting map context and
-modifying the array in source code or in Sample* data.
+modifying the array in source code or in Sample\* data.
 
 **Files:**
 
@@ -1184,12 +1162,12 @@ handle.style.zIndex = '20';
 
 **Step 2: Add cursor styles per handle position**
 
-| Handle | Cursor |
-|--------|--------|
+| Handle                 | Cursor        |
+| ---------------------- | ------------- |
 | top-left, bottom-right | `nwse-resize` |
 | top-right, bottom-left | `nesw-resize` |
-| left, right | `ew-resize` |
-| top, bottom | `ns-resize` |
+| left, right            | `ew-resize`   |
+| top, bottom            | `ns-resize`   |
 
 **Step 3: Emit handle mousedown events**
 

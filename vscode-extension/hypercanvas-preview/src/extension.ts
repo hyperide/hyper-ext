@@ -2470,12 +2470,7 @@ function registerCopilotMcp(context: vscode.ExtensionContext, port: number): voi
 
   try {
     const McpHttpServerDefinition = (vscode as Record<string, unknown>).McpHttpServerDefinition as
-      | (new (
-          label: string,
-          uri: vscode.Uri,
-          headers?: Record<string, string>,
-          version?: string,
-        ) => unknown)
+      | (new (label: string, uri: vscode.Uri, headers?: Record<string, string>, version?: string) => unknown)
       | undefined;
 
     if (!McpHttpServerDefinition) {

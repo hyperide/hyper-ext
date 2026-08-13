@@ -1,17 +1,16 @@
 {
   "name": "@my/ui",
   "version": "0.0.1",
-  "sideEffects": [
-    "*.css"
-  ],
   "private": true,
-  "types": "./src",
-  "main": "src/index.tsx",
-  "module:jsx": "src",
   "files": [
     "types",
     "dist"
   ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "main": "src/index.tsx",
+  "types": "./src",
   "scripts": {
     "build": "tamagui-build --skip-types",
     "watch": "tamagui-build --skip-types --watch"
@@ -23,5 +22,6 @@
   },
   "devDependencies": {
     "@tamagui/build": "^1.144.1"
-  }
+  },
+  "module:jsx": "src"
 }

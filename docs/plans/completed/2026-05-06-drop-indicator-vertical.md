@@ -21,7 +21,7 @@ Screenshot reference: `/Users/ultra/Documents/Screenshots/Screenshot 2026-05-06 
 ## Goal
 
 When dragging an element whose parent layout is horizontal (flex-row /
-grid-cols-* / inline-flex row), the drop indicator must render as a vertical
+grid-cols-\* / inline-flex row), the drop indicator must render as a vertical
 2px line at the LEFT edge (drop before) or RIGHT edge (drop after) of the
 target element. Currently the indicator class is fixed for a horizontal
 line — vertical drops still get a horizontal indicator that visually
@@ -38,11 +38,8 @@ disappears (or overlaps the wrong axis).
 
 ### Task 2: Switch indicator orientation in `_dragPointerMove`
 
-- [ ] In `iframe-interaction.ts`, when `_isHorizontalLayout(dropEl)` is true:
-      - Toggle `_dragIndicatorEl.classList.add('vertical')`
-      - Position with `left = isBefore ? rect.left - 1 : rect.right - 1`
-      - Clear `top` and use `top: rect.top, height: rect.height` overrides via
-        inline style
+- [ ] In `iframe-interaction.ts`, when `_isHorizontalLayout(dropEl)` is true: - Toggle `_dragIndicatorEl.classList.add('vertical')` - Position with `left = isBefore ? rect.left - 1 : rect.right - 1` - Clear `top` and use `top: rect.top, height: rect.height` overrides via
+      inline style
 - [ ] When vertical (default flow): keep existing top/bottom logic, ensure
       `vertical` class is removed
 
@@ -52,11 +49,7 @@ disappears (or overlaps the wrong axis).
       with `chooseIndicatorOrientation(layout, mouseX, mouseY, rect)` returning
       `{ axis: 'h' | 'v', edge: 'start' | 'end' }`. Extract that pure function
       from `_dragPointerMove` to make it testable
-- [ ] Cases:
-      - vertical layout (block / flex-col), mouse above midpoint → h, start
-      - vertical layout, below midpoint → h, end
-      - horizontal layout, mouse left of midpoint → v, start
-      - horizontal layout, right of midpoint → v, end
+- [ ] Cases: - vertical layout (block / flex-col), mouse above midpoint → h, start - vertical layout, below midpoint → h, end - horizontal layout, mouse left of midpoint → v, start - horizontal layout, right of midpoint → v, end
 
 ### Task 4: Verify in real preview
 

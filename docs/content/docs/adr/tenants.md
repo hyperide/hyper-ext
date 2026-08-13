@@ -18,16 +18,16 @@ HyperCanvas needs to evolve from a local development tool to a SaaS platform wit
 
 ### Technology Stack
 
-| Component | Technology | Rationale |
-|-----------|------------|-----------|
-| Runtime | Bun | Already in use, excellent performance |
-| Framework | Hono | Already in use, lightweight, fast |
-| ORM | Drizzle | Type-safe, lightweight, works great with Bun |
-| Database | PostgreSQL | Required for k8s (SQLite has single-node limitations) |
-| Auth | OAuth (Google + GitHub) | No password management, better UX |
-| Email | Resend | Best DX for TypeScript/React, React Email support |
-| Rate Limiting | Redis | Required for horizontal scaling |
-| Session | JWT (access) + httpOnly cookies (refresh) | Stateless, secure |
+| Component     | Technology                                | Rationale                                             |
+| ------------- | ----------------------------------------- | ----------------------------------------------------- |
+| Runtime       | Bun                                       | Already in use, excellent performance                 |
+| Framework     | Hono                                      | Already in use, lightweight, fast                     |
+| ORM           | Drizzle                                   | Type-safe, lightweight, works great with Bun          |
+| Database      | PostgreSQL                                | Required for k8s (SQLite has single-node limitations) |
+| Auth          | OAuth (Google + GitHub)                   | No password management, better UX                     |
+| Email         | Resend                                    | Best DX for TypeScript/React, React Email support     |
+| Rate Limiting | Redis                                     | Required for horizontal scaling                       |
+| Session       | JWT (access) + httpOnly cookies (refresh) | Stateless, secure                                     |
 
 ### Architecture Overview
 
@@ -155,7 +155,9 @@ export const users = pgTable('users', {
 
 export const oauthAccounts = pgTable('oauth_accounts', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   provider: oauthProviderEnum('provider').notNull(),
   providerId: varchar('provider_id', { length: 255 }).notNull(),
   accessToken: text('access_token').notNull(),
@@ -166,7 +168,9 @@ export const oauthAccounts = pgTable('oauth_accounts', {
 
 export const refreshTokens = pgTable('refresh_tokens', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   tokenHash: varchar('token_hash', { length: 64 }).notNull(), // SHA-256
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
@@ -183,30 +187,44 @@ export const workspaces = pgTable('workspaces', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   slug: varchar('slug', { length: 100 }).notNull().unique(),
-  ownerId: uuid('owner_id').notNull().references(() => users.id),
+  ownerId: uuid('owner_id')
+    .notNull()
+    .references(() => users.id),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const workspaceMembers = pgTable('workspace_members', {
-  workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  role: workspaceRoleEnum('role').notNull().default('member'),
-  invitedBy: uuid('invited_by').references(() => users.id),
-  invitedAt: timestamp('invited_at', { withTimezone: true }),
-  joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({
-  pk: primaryKey({ columns: [table.workspaceId, table.userId] }),
-}));
+export const workspaceMembers = pgTable(
+  'workspace_members',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: workspaceRoleEnum('role').notNull().default('member'),
+    invitedBy: uuid('invited_by').references(() => users.id),
+    invitedAt: timestamp('invited_at', { withTimezone: true }),
+    joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.workspaceId, table.userId] }),
+  }),
+);
 
 export const workspaceInvites = pgTable('workspace_invites', {
   id: uuid('id').defaultRandom().primaryKey(),
-  workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
   email: varchar('email', { length: 255 }).notNull(),
   role: workspaceRoleEnum('role').notNull().default('member'),
   token: varchar('token', { length: 64 }).notNull().unique(), // nanoid
-  invitedBy: uuid('invited_by').notNull().references(() => users.id),
+  invitedBy: uuid('invited_by')
+    .notNull()
+    .references(() => users.id),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   acceptedAt: timestamp('accepted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -312,41 +330,41 @@ server/
 
 ### Authentication
 
-| Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| GET | `/api/auth/google` | Initiate Google OAuth | No |
-| GET | `/api/auth/google/callback` | Google OAuth callback | No |
-| GET | `/api/auth/github` | Initiate GitHub OAuth | No |
-| GET | `/api/auth/github/callback` | GitHub OAuth callback | No |
-| POST | `/api/auth/refresh` | Refresh access token | Cookie |
-| POST | `/api/auth/logout` | Revoke refresh token | Cookie |
-| GET | `/api/auth/me` | Get current user | JWT |
+| Method | Path                        | Description           | Auth   |
+| ------ | --------------------------- | --------------------- | ------ |
+| GET    | `/api/auth/google`          | Initiate Google OAuth | No     |
+| GET    | `/api/auth/google/callback` | Google OAuth callback | No     |
+| GET    | `/api/auth/github`          | Initiate GitHub OAuth | No     |
+| GET    | `/api/auth/github/callback` | GitHub OAuth callback | No     |
+| POST   | `/api/auth/refresh`         | Refresh access token  | Cookie |
+| POST   | `/api/auth/logout`          | Revoke refresh token  | Cookie |
+| GET    | `/api/auth/me`              | Get current user      | JWT    |
 
 ### Users
 
-| Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| GET | `/api/users/me` | Get current user profile | JWT |
-| PATCH | `/api/users/me` | Update profile | JWT |
-| DELETE | `/api/users/me` | Soft delete account | JWT |
+| Method | Path            | Description              | Auth |
+| ------ | --------------- | ------------------------ | ---- |
+| GET    | `/api/users/me` | Get current user profile | JWT  |
+| PATCH  | `/api/users/me` | Update profile           | JWT  |
+| DELETE | `/api/users/me` | Soft delete account      | JWT  |
 
 ### Workspaces
 
-| Method | Path | Description | Auth | Roles |
-|--------|------|-------------|------|-------|
-| GET | `/api/workspaces` | List user's workspaces | JWT | any |
-| POST | `/api/workspaces` | Create workspace | JWT | - |
-| GET | `/api/workspaces/:id` | Get workspace | JWT | any |
-| PATCH | `/api/workspaces/:id` | Update workspace | JWT | owner, admin |
-| DELETE | `/api/workspaces/:id` | Delete workspace | JWT | owner |
-| GET | `/api/workspaces/:id/members` | List members | JWT | any |
-| POST | `/api/workspaces/:id/members` | Add member (direct) | JWT | owner, admin |
-| PATCH | `/api/workspaces/:id/members/:userId` | Update role | JWT | owner, admin |
-| DELETE | `/api/workspaces/:id/members/:userId` | Remove member | JWT | owner, admin |
-| POST | `/api/workspaces/:id/invites` | Send invite | JWT | owner, admin |
-| GET | `/api/workspaces/:id/invites` | List pending invites | JWT | owner, admin |
-| DELETE | `/api/workspaces/:id/invites/:inviteId` | Cancel invite | JWT | owner, admin |
-| POST | `/api/invites/:token/accept` | Accept invite | JWT | - |
+| Method | Path                                    | Description            | Auth | Roles        |
+| ------ | --------------------------------------- | ---------------------- | ---- | ------------ |
+| GET    | `/api/workspaces`                       | List user's workspaces | JWT  | any          |
+| POST   | `/api/workspaces`                       | Create workspace       | JWT  | -            |
+| GET    | `/api/workspaces/:id`                   | Get workspace          | JWT  | any          |
+| PATCH  | `/api/workspaces/:id`                   | Update workspace       | JWT  | owner, admin |
+| DELETE | `/api/workspaces/:id`                   | Delete workspace       | JWT  | owner        |
+| GET    | `/api/workspaces/:id/members`           | List members           | JWT  | any          |
+| POST   | `/api/workspaces/:id/members`           | Add member (direct)    | JWT  | owner, admin |
+| PATCH  | `/api/workspaces/:id/members/:userId`   | Update role            | JWT  | owner, admin |
+| DELETE | `/api/workspaces/:id/members/:userId`   | Remove member          | JWT  | owner, admin |
+| POST   | `/api/workspaces/:id/invites`           | Send invite            | JWT  | owner, admin |
+| GET    | `/api/workspaces/:id/invites`           | List pending invites   | JWT  | owner, admin |
+| DELETE | `/api/workspaces/:id/invites/:inviteId` | Cancel invite          | JWT  | owner, admin |
+| POST   | `/api/invites/:token/accept`            | Accept invite          | JWT  | -            |
 
 ## Authentication Flow
 
@@ -419,18 +437,18 @@ server/
 ```typescript
 // Request flow through middleware
 
-app.use('*', errorHandler);           // Catch all errors
-app.use('*', requestId);              // Add X-Request-ID
-app.use('/api/*', rateLimiter);       // Rate limit all API calls
+app.use('*', errorHandler); // Catch all errors
+app.use('*', requestId); // Add X-Request-ID
+app.use('/api/*', rateLimiter); // Rate limit all API calls
 
 // Auth routes (no auth required)
 app.route('/api/auth', authRoutes);
 
 // Protected routes
-app.use('/api/*', authMiddleware);    // Validate JWT, set c.user
+app.use('/api/*', authMiddleware); // Validate JWT, set c.user
 
 // Workspace-scoped routes
-app.use('/api/workspaces/:id/*', workspaceMiddleware);  // Check membership, set c.workspace, setup RLS
+app.use('/api/workspaces/:id/*', workspaceMiddleware); // Check membership, set c.workspace, setup RLS
 ```
 
 ## Security Considerations
@@ -465,22 +483,22 @@ app.use('/api/workspaces/:id/*', workspaceMiddleware);  // Check membership, set
 
 ```typescript
 const refreshCookieOptions = {
-  httpOnly: true,         // No JS access
-  secure: true,           // HTTPS only
-  sameSite: 'strict',     // CSRF protection
-  path: '/api/auth',      // Only sent to auth endpoints
+  httpOnly: true, // No JS access
+  secure: true, // HTTPS only
+  sameSite: 'strict', // CSRF protection
+  path: '/api/auth', // Only sent to auth endpoints
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 ```
 
 ### Rate Limiting
 
-| Endpoint | Limit | Window |
-|----------|-------|--------|
-| `/api/auth/*` | 10 req | 1 min |
-| `/api/auth/refresh` | 5 req | 1 min |
-| `/api/workspaces/*/invites` | 20 req | 1 hour |
-| General API | 100 req | 1 min |
+| Endpoint                    | Limit   | Window |
+| --------------------------- | ------- | ------ |
+| `/api/auth/*`               | 10 req  | 1 min  |
+| `/api/auth/refresh`         | 5 req   | 1 min  |
+| `/api/workspaces/*/invites` | 20 req  | 1 hour |
+| General API                 | 100 req | 1 min  |
 
 ## Kubernetes Deployment
 

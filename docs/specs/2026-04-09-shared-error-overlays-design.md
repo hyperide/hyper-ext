@@ -44,22 +44,22 @@ styling approaches (Tailwind vs inline + VS Code CSS vars), inconsistent behavio
 When multiple overlay conditions are true simultaneously, show the highest-priority overlay.
 Both platforms must follow this order:
 
-| Priority | Overlay | Rationale |
-|----------|---------|-----------|
-| 1 | `ConnectionErrorOverlay` | If iframe doesn't load, nothing else matters |
-| 2 | `PreviewSetupOverlay` | Framework unsupported / needs patching — must fix first |
-| 3 | `RuntimeErrorOverlay` | Build-level error from bundler — component can't render |
-| 4 | `ParseErrorOverlay` | File-level error — component can't be parsed |
-| 5 | `ComponentErrorOverlay` | Render-level error — component parsed but throws |
-| 6 | `LoadingOverlay` | Waiting for iframe / component to mount |
-| 7 | `NoComponentOverlay` | No component selected — lowest priority informational state |
+| Priority | Overlay                  | Rationale                                                   |
+| -------- | ------------------------ | ----------------------------------------------------------- |
+| 1        | `ConnectionErrorOverlay` | If iframe doesn't load, nothing else matters                |
+| 2        | `PreviewSetupOverlay`    | Framework unsupported / needs patching — must fix first     |
+| 3        | `RuntimeErrorOverlay`    | Build-level error from bundler — component can't render     |
+| 4        | `ParseErrorOverlay`      | File-level error — component can't be parsed                |
+| 5        | `ComponentErrorOverlay`  | Render-level error — component parsed but throws            |
+| 6        | `LoadingOverlay`         | Waiting for iframe / component to mount                     |
+| 7        | `NoComponentOverlay`     | No component selected — lowest priority informational state |
 
 Extension-only precedence (inserted above the shared table):
 
-| Priority | Overlay | Rationale |
-|----------|---------|-----------|
-| 0a | `PreviewSetupOverlay` (unsupported) | Must show fix CTA even when dev server is off |
-| 0b | `StartDevServerScreen` | No server = no iframe, but only if project is supported |
+| Priority | Overlay                             | Rationale                                               |
+| -------- | ----------------------------------- | ------------------------------------------------------- |
+| 0a       | `PreviewSetupOverlay` (unsupported) | Must show fix CTA even when dev server is off           |
+| 0b       | `StartDevServerScreen`              | No server = no iframe, but only if project is supported |
 
 If the project is unsupported (React Native / Tamagui), showing "Start Dev Server" is
 misleading — the server won't help. `UnsupportedProjectScreen` must win.
@@ -77,20 +77,20 @@ Define a shared set of CSS custom properties with platform-specific fallbacks:
 
 ```css
 /* Injected via a <style> block or defined in shared/components/overlays/theme.ts */
---overlay-bg:          var(--vscode-editor-background, hsl(var(--background)));
---overlay-fg:          var(--vscode-editor-foreground, hsl(var(--foreground)));
---overlay-muted:       var(--vscode-descriptionForeground, hsl(var(--muted-foreground)));
---overlay-border:      var(--vscode-widget-border, hsl(var(--border)));
---overlay-accent:      var(--vscode-button-background, hsl(var(--primary)));
---overlay-accent-fg:   var(--vscode-button-foreground, hsl(var(--primary-foreground)));
+--overlay-bg: var(--vscode-editor-background, hsl(var(--background)));
+--overlay-fg: var(--vscode-editor-foreground, hsl(var(--foreground)));
+--overlay-muted: var(--vscode-descriptionForeground, hsl(var(--muted-foreground)));
+--overlay-border: var(--vscode-widget-border, hsl(var(--border)));
+--overlay-accent: var(--vscode-button-background, hsl(var(--primary)));
+--overlay-accent-fg: var(--vscode-button-foreground, hsl(var(--primary-foreground)));
 --overlay-destructive: var(--vscode-errorForeground, hsl(var(--destructive)));
---overlay-link:        var(--vscode-textLink-foreground, hsl(var(--primary)));
---overlay-input-bg:    var(--vscode-input-background, hsl(var(--input)));
---overlay-input-fg:    var(--vscode-input-foreground, hsl(var(--foreground)));
---overlay-input-border:var(--vscode-input-border, hsl(var(--border)));
---overlay-warning:     var(--vscode-editorWarning-foreground, hsl(var(--chart-4)));
---overlay-font:        var(--vscode-font-family, system-ui, -apple-system, sans-serif);
---overlay-font-mono:   var(--vscode-editor-font-family, ui-monospace, monospace);
+--overlay-link: var(--vscode-textLink-foreground, hsl(var(--primary)));
+--overlay-input-bg: var(--vscode-input-background, hsl(var(--input)));
+--overlay-input-fg: var(--vscode-input-foreground, hsl(var(--foreground)));
+--overlay-input-border: var(--vscode-input-border, hsl(var(--border)));
+--overlay-warning: var(--vscode-editorWarning-foreground, hsl(var(--chart-4)));
+--overlay-font: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
+--overlay-font-mono: var(--vscode-editor-font-family, ui-monospace, monospace);
 ```
 
 Export as a `React.CSSProperties` object from `shared/components/overlays/theme.ts` that can be
@@ -334,10 +334,8 @@ window.addEventListener('message', (e) => {
 // Usage — key change forces ErrorBoundary remount, clearing error state:
 <ComponentErrorBoundary key={`${componentPath}-${retryCount}`} componentPath={componentPath}>
   <RenderSuccessBeacon componentPath={componentPath} />
-  <div style={{ padding: 20 }}>
-    {SampleDefault ? <SampleDefault /> : <Component />}
-  </div>
-</ComponentErrorBoundary>
+  <div style={{ padding: 20 }}>{SampleDefault ? <SampleDefault /> : <Component />}</div>
+</ComponentErrorBoundary>;
 ```
 
 The **host** (extension's `usePreviewBridge` or SaaS `IframeCanvas`) sends
@@ -357,10 +355,13 @@ A tiny component inside ErrorBoundary children that fires on mount:
 ```tsx
 function RenderSuccessBeacon({ componentPath }: { componentPath: string }) {
   React.useEffect(() => {
-    window.parent.postMessage({
-      type: 'hypercanvas:componentOk',
-      componentPath,
-    }, '*');
+    window.parent.postMessage(
+      {
+        type: 'hypercanvas:componentOk',
+        componentPath,
+      },
+      '*',
+    );
   }, [componentPath]);
   return null;
 }
@@ -388,9 +389,7 @@ Add handler for `hypercanvas:componentOk`:
 
 ```tsx
 if (msg.type === 'hypercanvas:componentOk') {
-  setComponentError((prev) =>
-    prev && prev.componentPath === msg.componentPath ? null : prev
-  );
+  setComponentError((prev) => (prev && prev.componentPath === msg.componentPath ? null : prev));
 }
 ```
 

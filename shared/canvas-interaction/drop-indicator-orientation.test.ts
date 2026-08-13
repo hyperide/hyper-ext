@@ -229,10 +229,7 @@ describe('chooseIndicatorOrientation', () => {
   });
 
   it('el itself is flex-col but parent is flex-row → el wins (vertical)', () => {
-    const drop = makeChain(
-      { display: 'flex', flexDirection: 'column' },
-      { display: 'flex', flexDirection: 'row' },
-    );
+    const drop = makeChain({ display: 'flex', flexDirection: 'column' }, { display: 'flex', flexDirection: 'row' });
     expect(chooseIndicatorOrientation(drop, { getComputedStyle: styleOf })).toBe('vertical');
   });
 

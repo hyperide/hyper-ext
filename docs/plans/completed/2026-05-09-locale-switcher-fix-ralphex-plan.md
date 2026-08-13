@@ -7,6 +7,7 @@ RightSidebar inspector are visible but clicking them does nothing — `onLocaleC
 is a noop.
 
 From MEMORY deferred ticket (2026-05-03):
+
 > i18n locale switcher in RightSidebar — `onLocaleChange` is a noop; requires
 > `activeLocale` state threaded through `useElementStyleData` hook param and
 > server-side read route
@@ -63,7 +64,7 @@ doesn't exist). To change locale we need to:
 - [x] In `PanelRouter.ts` `styles:read` handler: extract `activeLocale` from message body — already done: extracted at PanelRouter.ts:264 in styles:readClassName handler (commit 20fe6ed6)
 - [x] Pass `activeLocale` to `StyleReadService.detectElementStyle(...)` call — already done: passed as 4th arg to readElementClassName at PanelRouter.ts:279 (commit 20fe6ed6)
 
-### Task 5: Thread activeLocale into StyleReadService._tryDetectI18n
+### Task 5: Thread activeLocale into StyleReadService.\_tryDetectI18n
 
 - [x] In `StyleReadService.ts`: update `detectElementStyle` signature to accept optional `activeLocale: string` — already done: `readElementClassName` accepts `activeLocale?: string` at :85 (commit 20fe6ed6)
 - [x] In `_tryDetectI18n` (or wherever locale is resolved): use `activeLocale` if provided, otherwise default to `'en'` or project default — already done: `_tryDetectI18n` accepts `activeLocale?: string` at :252; uses `const requestedLocale = activeLocale ?? 'en'` at :357 (custom) and `activeLocale ?? DEFAULT_LOCALE` at :433 (non-custom)

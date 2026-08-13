@@ -5,6 +5,7 @@
 User-reported (2026-05-08): on bulka, with `<GalleryImage src={images.ps_portrait} … />`
 selected (or any other JSX element nested inside an i18n / props-driven parent), pressing
 **Shift+Enter** to step into the child:
+
 - The inspector right-pane updates correctly — it shows the inner `div` (or whatever
   `GalleryImage` renders).
 - But the **canvas selection rectangle vanishes** instead of moving to the new element.
@@ -35,6 +36,7 @@ the selection rect overlay?
 
 The current crash mode (inspector says div, rect gone) means the **selection state diverges
 between two consumers**:
+
 - inspector reads `selectedId` (or `nodeRef`) and resolves it correctly to a DOM element.
 - selection-rect overlay reads the same id but lookup returns no DOM match → renders
   nothing (or stale rect off-screen).
@@ -52,6 +54,7 @@ the inspector in sync, for both plain JSX descendants and component-rendered des
 (GalleryImage, etc.).
 
 Out of scope:
+
 - Refactoring the keyboard shortcut state machine.
 - Renaming/restructuring nodeRef formats.
 - Anything in i18n / canvas-discard / other parallel ralphex plans.
@@ -73,7 +76,7 @@ Add `ext-test-projects/e2e/tests/project-dependent/bulka-shift-enter-rect-surviv
       webview's iframe, NOT VS Code keyboard — see existing `bulka-shift-enter-*` tests for
       the canonical pattern). [No prior `bulka-shift-enter-*` tests existed — followed
       keyboard.press pattern from `keybindings.spec.ts:308`/`text-editing.spec.ts:340`.]
-- [x] Assert the inspector now shows the *inner* element (read the right-pane element type).
+- [x] Assert the inspector now shows the _inner_ element (read the right-pane element type).
       [Asserted via `getSelectedIds()[0]` change — same source-of-truth the inspector reads.
       Inspector text-read is fragile across projects; selectedId-change is a stronger
       contract for the bug class.]
@@ -168,7 +171,7 @@ You'll likely find that the rect path uses one of the old/non-uniform key deriva
       Confirm GREEN.
       [BLOCKED — see "Blocked on" section at the end. Run-id
       `20260508-012655-73119` failed with `setupPreviewWithDevServer
-      [HyperIDE] Dev server failed: Server failed to start` on the
+[HyperIDE] Dev server failed: Server failed to start` on the
       window-reload-recovery branch — never reached the Shift+Enter
       assertion. Pre-existing bulka Docker dev-server bring-up regression
       (MEMORY.md `bulka Docker dev-server bring-up regression 2026-05-08`),
@@ -222,7 +225,7 @@ You'll likely find that the rect path uses one of the old/non-uniform key deriva
 ## Blocked on
 
 - bulka Docker dev-server bring-up regression (MEMORY.md, `bulka Docker dev-server
-  bring-up regression 2026-05-08`) — `setupPreviewWithDevServer` fails on retry,
+bring-up regression 2026-05-08`) — `setupPreviewWithDevServer` fails on retry,
   test never reaches Shift+Enter. Until the harness is fixed OR this e2e is
   retargeted at a non-bulka project with a comparable nested-component pattern,
   the fix on this branch lacks the representative AFTER screenshot CLAUDE.md

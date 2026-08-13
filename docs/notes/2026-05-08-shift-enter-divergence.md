@@ -74,11 +74,12 @@ FiberSourceIndex.findDOMElements(source)   → MUST find ≥1 HTMLElement
 ### 1. `getSourceKey(el)` — used by `findTraceableParent`
 
 `iframe-interaction.ts:1081`
+
 ```ts
 function getSourceKey(el: HTMLElement): string | null {
   const fiber = getFiberFromDOM(el);
   if (!fiber) return null;
-  let loc = resolveSourceIndexFiberSource(fiber);          // ── A
+  let loc = resolveSourceIndexFiberSource(fiber); // ── A
   if (!loc) return null;
   if (renderedComponentPath) {
     loc = resolveCallSiteSource(loc, fiber, renderedComponentPath); // ── B
@@ -98,6 +99,7 @@ key K from this function.
 ### 2. `FiberSourceIndex.ensureBuilt` — used by `findElementsByRef`
 
 `shared/element-tracing/fiber-source-index.ts:248`
+
 ```ts
 walkFibers(rootFiber, (fiber) => {
   const source = this.resolveFiberSource(fiber);            // == A above
@@ -123,11 +125,11 @@ So `findTraceableParent` may walk DOM and pick an intermediate ancestor whose
 mappedSource collides with the GalleryImage callsite K already occupied by
 the outermost button host. Three failure modes:
 
-| Mode | Result for rect overlay |
-|------|-------------------------|
-| (a) Outermost host fiber for K is alive and is a different element than the walk-up landed on | Rect renders on the outermost host (may overlap the wrapper, may scroll out of view → user reads as "rect on something other than the new selection"). Test asserts `dist > 2px` — would catch this only if the rect doesn't move. |
-| (b) Outermost host for K has been unmounted (HMR / re-render between Shift+Enter dispatch and rect repaint) | `findDOMElements(K)` returns `[]` → `findElementsByRef` falls through closest-line / closest-source paths; if those also miss → **rect vanishes** (matches user report). |
-| (c) `parentRef` is well-formed but FiberSourceIndex was rebuilt with a different `mapSource` outcome (sourcemap async warm-up race — Vite client sourcemap not yet cached when index built, but resolved by the time `getSourceKey` runs) | parentRef contains the source-mapped path; index keys contain the unmapped fallback path. Exact lookup misses; cross-format closest-source fallback may rescue OR may pick a sibling. |
+| Mode                                                                                                                                                                                                                                      | Result for rect overlay                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (a) Outermost host fiber for K is alive and is a different element than the walk-up landed on                                                                                                                                             | Rect renders on the outermost host (may overlap the wrapper, may scroll out of view → user reads as "rect on something other than the new selection"). Test asserts `dist > 2px` — would catch this only if the rect doesn't move. |
+| (b) Outermost host for K has been unmounted (HMR / re-render between Shift+Enter dispatch and rect repaint)                                                                                                                               | `findDOMElements(K)` returns `[]` → `findElementsByRef` falls through closest-line / closest-source paths; if those also miss → **rect vanishes** (matches user report).                                                           |
+| (c) `parentRef` is well-formed but FiberSourceIndex was rebuilt with a different `mapSource` outcome (sourcemap async warm-up race — Vite client sourcemap not yet cached when index built, but resolved by the time `getSourceKey` runs) | parentRef contains the source-mapped path; index keys contain the unmapped fallback path. Exact lookup misses; cross-format closest-source fallback may rescue OR may pick a sibling.                                              |
 
 ### React 19 wrinkle (cross-ref `project_ext_click_debug.md`)
 
@@ -190,21 +192,21 @@ acceptable for shipped code while we close the regression.
 Make the two paths use the same dedup-aware key derivation. Either:
 
 A. **Index-aware `getSourceKey`**: when walking up the DOM, don't return the
-   per-element `mappedSource` — instead resolve to `findElementsByRef`-able
-   key by querying the FiberSourceIndex directly (give me the indexed key
-   for THIS DOM element if any). Walk-up returns the first ancestor that the
-   index actually has an entry for.
+per-element `mappedSource` — instead resolve to `findElementsByRef`-able
+key by querying the FiberSourceIndex directly (give me the indexed key
+for THIS DOM element if any). Walk-up returns the first ancestor that the
+index actually has an entry for.
 
 B. **Don't dedup in FiberSourceIndex**: register every host under its
-   mappedSource (multi-value index). Rect picks the first DOM-contained
-   element. Risk: explodes the index for `.map()` rows; may break itemIndex
-   semantics.
+mappedSource (multi-value index). Rect picks the first DOM-contained
+element. Risk: explodes the index for `.map()` rows; may break itemIndex
+semantics.
 
 (A) is smaller, scoped to extension iframe, doesn't touch shared
-   FiberSourceIndex tests, mirrors the alignment `355321c5 / 06913a91`
-   already did for click resolution.
+FiberSourceIndex tests, mirrors the alignment `355321c5 / 06913a91`
+already did for click resolution.
 
-If the *cause* turns out to be the React 19 `_debugStack` gap (Task 3 last
+If the _cause_ turns out to be the React 19 `_debugStack` gap (Task 3 last
 checkbox in the plan), the same fix shape applies: extend `resolveCallSite-
 Source` to consult `_debugStack` as a fallback for missing `_debugSource`,
 and ensure both `mapSource` and `getSourceKey` use the same chain.
@@ -214,13 +216,13 @@ and ensure both `mapSource` and `getSourceKey` use the same chain.
 In the rendered preview iframe DevTools console:
 
 1. Filter: `[shiftparent]` OR `[selsurv]`
-2. Click the GalleryImage hero `<img>`  → `[selsurv] selectedIds change` +
+2. Click the GalleryImage hero `<img>` → `[selsurv] selectedIds change` +
    `[selsurv] overlay paint domElementFound:true`
 3. Press Shift+Enter → expect exactly one `[shiftparent] parent-walk` entry,
    immediately followed by `[selsurv] selectedIds change` (the round-trip
    from extension host) and either `overlay paint domElementFound:true` (rect
    visible — bug is mode (a)) or `findElements miss` + `overlay paint
-   domElementFound:false` (rect invisible — bug is mode (b)/(c)).
+domElementFound:false` (rect invisible — bug is mode (b)/(c)).
 4. Cross-check: take `parentRef` from the parent-walk log and compare against
    the `findElements miss` selectedId from the rect path — they MUST match
    exactly (same string). Any divergence (path format, line/col difference)

@@ -11,7 +11,7 @@
 ```typescript
 test('logs panel opens after dev server stop', async ({ window }) => {
   test.setTimeout(400_000); // devServer.stop() leaves extension in cleanup state; teardown takes ~3min
-  
+
   const { cmd } = await setupPreviewWithDevServer(window);
   const devServer = new DevServerControls(window);
   await devServer.stop();
@@ -33,6 +33,7 @@ After this test, 5 subsequent tests in the same shard failed with cascade timeou
 ### Root cause analysis
 
 `DevServerManager.stop()` implementation (`src/services/DevServerManager.ts:349-391`):
+
 - Sends SIGTERM → waits up to 5s → SIGKILL fallback → resolves
 - Sets `_status = 'stopped'`
 - Stops the preview proxy (`_stopProxy()`)
@@ -40,16 +41,19 @@ After this test, 5 subsequent tests in the same shard failed with cascade timeou
 The stop itself is bounded (5s max). The problem is **what happens after stop in the shared VS Code worker**.
 
 After `devServer.stop()`:
+
 1. The preview panel is still open (tab is visible)
 2. The preview iframe is trying to load `/test-preview` which is now served by a dead proxy
 3. The extension host may still have async callbacks or watchers registered against the dead process
 
 When the test ends and fixture teardown begins:
+
 - **"Close Preview"** step tries to close the Hyper Canvas webview tab
 - The webview may be frozen (iframe showing a connection error, no response to close)
 - If `closePreview` implementation awaits a bridge ACK from the webview, it will hang until Playwright's fixture timeout
 
 After the fixture teardown times out, the shared VS Code worker is left with:
+
 - Hyper Canvas tab still open (or in an unknown state)
 - Dev server stopped but extension state not reset
 - Possible dangling file watchers from entry-file-watcher (commit f898bcdd)
@@ -59,11 +63,13 @@ The next test then starts in this broken state and fails at its own 83s timeout.
 ## Scope
 
 **Allowed:**
+
 - `ext-test-projects/e2e/tests/project-dependent/dev-server.spec.ts` — fix test teardown so it doesn't corrupt shared worker
 - `vscode-extension/hypercanvas-preview/src/services/DevServerManager.ts` — if cleanup logic is missing
 - `ext-test-projects/e2e/helpers/setup-preview.ts` — if closePreview helper hangs after devServer.stop()
 
 **Forbidden:**
+
 - Increasing timeouts without fixing root cause
 - Changes to other test files
 
@@ -85,28 +91,32 @@ Based on Task 1 findings, most likely fix:
 ```typescript
 test('logs panel opens after dev server stop', async ({ window }) => {
   test.setTimeout(400_000);
-  
+
   const { cmd } = await setupPreviewWithDevServer(window);
   const devServer = new DevServerControls(window);
   await devServer.stop();
-  
+
   await cmd.runCommand('Hyper: Open Logs');
   const logs = new LogsPanel(window);
   const logCount = await logs.getLogCount();
   expect(logCount).toBeGreaterThanOrEqual(0);
-  
+
   // Explicit cleanup: close the preview panel before teardown runs.
   // Without this, the fixture teardown hangs trying to close a frozen webview.
-  await cmd.runCommand('Hyper: Close Preview').catch(() => {/* already closed */});
-  await window.waitForTimeout(500);  // brief settle
+  await cmd.runCommand('Hyper: Close Preview').catch(() => {
+    /* already closed */
+  });
+  await window.waitForTimeout(500); // brief settle
 });
 ```
 
 **If DevServerManager has dangling handles:**
+
 - In `DevServerManager.stop()`, after killing the process: call `this._fileWatchers?.forEach(w => w.dispose())` (or equivalent) to release any watcher references
 - Ensure `_previewProxy.stop()` is idempotent (can be called multiple times without hanging)
 
 **If entry-file-watcher causes teardown hang:**
+
 - In `setupEntryFileWatcher()`, return a disposable; dispose it inside `DevServerManager.stop()` or `DevServerManager.dispose()`
 
 - [ ] Implement the cleanup fix

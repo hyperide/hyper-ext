@@ -153,24 +153,10 @@ export {
 // ============================================
 // Store
 // ============================================
-export {
-  type CanvasStore,
-  type CanvasStoreApi,
-  createCanvasStore,
-} from './store/createCanvasStore';
+export { type CanvasStore, type CanvasStoreApi, createCanvasStore } from './store/createCanvasStore';
 // ============================================
 // Utilities
 // ============================================
 export { generateId, generateIds } from './utils/id';
-export {
-  deserialize,
-  exportToFile,
-  importFromFile,
-  type SerializedData,
-  serialize,
-} from './utils/serialization';
-export {
-  getClassNameFromNode,
-  type ParsedTailwindStyles,
-  parseTailwindClasses,
-} from './utils/tailwindParser';
+export { deserialize, exportToFile, importFromFile, type SerializedData, serialize } from './utils/serialization';
+export { getClassNameFromNode, type ParsedTailwindStyles, parseTailwindClasses } from './utils/tailwindParser';

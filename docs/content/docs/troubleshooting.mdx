@@ -9,6 +9,7 @@ Solutions for common issues in HyperIDE.
 **Symptom**: "Docker is not running" error on startup.
 
 **Solution**:
+
 1. Open Docker Desktop
 2. Wait for it to fully start (whale icon in menu bar should be stable)
 3. Restart HyperIDE
@@ -20,11 +21,13 @@ Solutions for common issues in HyperIDE.
 **Solutions**:
 
 1. Check Docker logs:
+
 ```bash
 docker logs canvas-project-{projectId}
 ```
 
 2. Verify port availability:
+
 ```bash
 lsof -i :5173  # or whatever port your project uses
 ```
@@ -39,6 +42,7 @@ lsof -i :5173  # or whatever port your project uses
 **Symptom**: Docker build fails with disk space error.
 
 **Solution**:
+
 ```bash
 # Clean up Docker resources
 docker system prune -a
@@ -65,6 +69,7 @@ docker system prune -a
 
 1. Check WebSocket connection in browser console
 2. Verify Vite config wasn't corrupted:
+
 ```bash
 # Check if backup exists
 ls cloned-projects/{project}/*.original
@@ -72,10 +77,11 @@ ls cloned-projects/{project}/*.original
 
 3. Re-clone the project if config is broken
 
-import { Callout } from 'nextra/components'
+import { Callout } from 'nextra/components';
 
 <Callout type="info">
-  HyperIDE modifies vite.config.ts to add base path support. If your original config is important, it's saved as `.original`.
+  HyperIDE modifies vite.config.ts to add base path support. If your original config is important, it's saved as
+  `.original`.
 </Callout>
 
 ### Component doesn't render
@@ -98,11 +104,13 @@ import { Callout } from 'nextra/components'
 **Solutions**:
 
 1. Use SSH URL and verify SSH key:
+
 ```bash
 ssh -T git@github.com
 ```
 
 2. For HTTPS, configure credentials:
+
 ```bash
 git config --global credential.helper store
 ```

@@ -47,6 +47,7 @@ packages/vector-engine/src/
 Define the `.kiwi` schema that mirrors our TypeScript types.
 
 **Files:**
+
 - Modify: `packages/vector-engine/package.json` (add kiwi-schema)
 - Create: `packages/vector-engine/src/persistence/kiwi-schema.kiwi`
 
@@ -59,6 +60,7 @@ cd packages/vector-engine && bun add kiwi-schema
 - [ ] **Step 2: Create schema file**
 
 Kiwi schema syntax (from kiwi-schema docs):
+
 ```kiwi
 // packages/vector-engine/src/persistence/kiwi-schema.kiwi
 
@@ -161,6 +163,7 @@ feat(vector-engine): Kiwi schema definition for graph file format (HYP-308)
 ### Task 2: Kiwi Codec (Encode/Decode)
 
 **Files:**
+
 - Create: `packages/vector-engine/src/persistence/kiwi-codec.ts`
 - Create: `packages/vector-engine/src/persistence/kiwi-codec.test.ts`
 
@@ -283,10 +286,12 @@ describe('Kiwi codec', () => {
 Implementation approach:
 
 If `kiwi-schema` package works with bun and provides a compiler:
+
 - Compile `.kiwi` schema → JS encoder/decoder at build time (or runtime)
 - Use generated `encode`/`decode` functions
 
 If `kiwi-schema` doesn't work well, implement a **manual Kiwi-compatible binary codec**:
+
 - Varint encoding for integers
 - Length-prefixed strings (UTF-8)
 - Nested messages as length-prefixed blobs
@@ -294,12 +299,14 @@ If `kiwi-schema` doesn't work well, implement a **manual Kiwi-compatible binary 
 - The format matches Kiwi wire format for forward compatibility
 
 Either way, the public API is:
+
 ```typescript
-export function encodeGraphFile(file: VectorGraphFile): Uint8Array
-export function decodeGraphFile(data: Uint8Array): VectorGraphFile
+export function encodeGraphFile(file: VectorGraphFile): Uint8Array;
+export function decodeGraphFile(data: Uint8Array): VectorGraphFile;
 ```
 
 Key serialization decisions:
+
 - `nodes: Record<string, GraphNode>` → serialize as array of GraphNode (id is inside each node)
 - `params: Record<string, unknown>` → serialize as JSON string (`paramsJson`)
 - `GraphDiff` union → serialize as `GraphDiffEntry` message with `kind` field discriminating which fields are populated
@@ -310,6 +317,7 @@ Key serialization decisions:
 - [ ] **Step 5: Update serialize.ts — add binary option**
 
 Add to `serialize.ts`:
+
 ```typescript
 import { encodeGraphFile, decodeGraphFile } from './kiwi-codec';
 
@@ -348,6 +356,7 @@ Match shapes from an incoming SVG against existing graph terminal outputs
 by geometry hash (path data), bounding box, and style.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/sync/semantic-diff.ts`
 - Create: `packages/vector-engine/src/sync/sync.test.ts`
 
@@ -370,8 +379,7 @@ const makeItem = (id: string, path: ReturnType<PathBuilder['build']>, fill?: str
 
 describe('computeSemanticDiff', () => {
   it('should detect no changes when scenes match', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const current = [makeItem('n1', rect, '#ff0000')];
     const incoming = [makeItem('x', rect, '#ff0000')];
     const diff = computeSemanticDiff(current, incoming);
@@ -381,10 +389,8 @@ describe('computeSemanticDiff', () => {
   });
 
   it('should detect added shape', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const circle = new PathBuilder()
-      .moveTo(50, 0).arcTo(50, 50, 0, 1, 1, 50, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const circle = new PathBuilder().moveTo(50, 0).arcTo(50, 50, 0, 1, 1, 50, 100).close().build();
     const current = [makeItem('n1', rect)];
     const incoming = [makeItem('x1', rect), makeItem('x2', circle)];
     const diff = computeSemanticDiff(current, incoming);
@@ -392,10 +398,8 @@ describe('computeSemanticDiff', () => {
   });
 
   it('should detect removed shape', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const circle = new PathBuilder()
-      .moveTo(50, 0).arcTo(50, 50, 0, 1, 1, 50, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const circle = new PathBuilder().moveTo(50, 0).arcTo(50, 50, 0, 1, 1, 50, 100).close().build();
     const current = [makeItem('n1', rect), makeItem('n2', circle)];
     const incoming = [makeItem('x1', rect)];
     const diff = computeSemanticDiff(current, incoming);
@@ -404,8 +408,7 @@ describe('computeSemanticDiff', () => {
   });
 
   it('should detect modified style (color change)', () => {
-    const rect = new PathBuilder()
-      .moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const current = [makeItem('n1', rect, '#ff0000')];
     const incoming = [makeItem('x', rect, '#00ff00')]; // color changed
     const diff = computeSemanticDiff(current, incoming);
@@ -461,6 +464,7 @@ export function computeSemanticDiff(
 ```
 
 Matching algorithm:
+
 1. Compute path hash for each shape (FNV-1a of commands Float64Array — reuse fingerprint from executor)
 2. First pass: exact path hash match → paired
 3. Second pass: for unmatched, try bounding box overlap + area similarity
@@ -483,6 +487,7 @@ feat(vector-engine): semantic shape matching for TSX reverse sync (HYP-308)
 Convert semantic diff into graph operations and apply.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/sync/reverse-sync.ts`
 - Modify: `packages/vector-engine/src/sync/sync.test.ts`
 
@@ -590,6 +595,7 @@ feat(vector-engine): reverse sync pipeline for TSX → graph updates (HYP-308)
 Decode Figma's `vectorNetworkBlob` binary format into our `VectorNetwork` type.
 
 **Files:**
+
 - Create: `packages/vector-engine/src/import/fig-blob-decode.ts`
 - Create: `packages/vector-engine/src/import/fig-blob-decode.test.ts`
 
@@ -639,34 +645,59 @@ function buildTriangleBlob(): Uint8Array {
 
   // Magic/version (if any) — we'll define based on OpenPencil research
   // Vertex count
-  view.setUint32(offset, 3, true); offset += 4;
+  view.setUint32(offset, 3, true);
+  offset += 4;
   // Vertices: (x, y) as float32
-  const verts = [[0, 0], [100, 0], [50, 86.6]];
+  const verts = [
+    [0, 0],
+    [100, 0],
+    [50, 86.6],
+  ];
   for (const [x, y] of verts) {
-    view.setFloat32(offset, x, true); offset += 4;
-    view.setFloat32(offset, y, true); offset += 4;
+    view.setFloat32(offset, x, true);
+    offset += 4;
+    view.setFloat32(offset, y, true);
+    offset += 4;
   }
   // Segment count
-  view.setUint32(offset, 3, true); offset += 4;
+  view.setUint32(offset, 3, true);
+  offset += 4;
   // Segments: (startIdx, endIdx, tangentStartX, tangentStartY, tangentEndX, tangentEndY)
-  const segs = [[0, 1], [1, 2], [2, 0]];
+  const segs = [
+    [0, 1],
+    [1, 2],
+    [2, 0],
+  ];
   for (const [s, e] of segs) {
-    view.setUint32(offset, s, true); offset += 4;
-    view.setUint32(offset, e, true); offset += 4;
-    view.setFloat32(offset, 0, true); offset += 4; // tangentStart.x
-    view.setFloat32(offset, 0, true); offset += 4; // tangentStart.y
-    view.setFloat32(offset, 0, true); offset += 4; // tangentEnd.x
-    view.setFloat32(offset, 0, true); offset += 4; // tangentEnd.y
+    view.setUint32(offset, s, true);
+    offset += 4;
+    view.setUint32(offset, e, true);
+    offset += 4;
+    view.setFloat32(offset, 0, true);
+    offset += 4; // tangentStart.x
+    view.setFloat32(offset, 0, true);
+    offset += 4; // tangentStart.y
+    view.setFloat32(offset, 0, true);
+    offset += 4; // tangentEnd.x
+    view.setFloat32(offset, 0, true);
+    offset += 4; // tangentEnd.y
   }
   // Region count
-  view.setUint32(offset, 1, true); offset += 4;
+  view.setUint32(offset, 1, true);
+  offset += 4;
   // Region: windingRule(u8), loopCount(u32), loop0Length(u32), loop0 indices
-  view.setUint8(offset, 1); offset += 1; // nonZero = 1
-  view.setUint32(offset, 1, true); offset += 4; // 1 loop
-  view.setUint32(offset, 3, true); offset += 4; // 3 segments in loop
-  view.setUint32(offset, 0, true); offset += 4;
-  view.setUint32(offset, 1, true); offset += 4;
-  view.setUint32(offset, 2, true); offset += 4;
+  view.setUint8(offset, 1);
+  offset += 1; // nonZero = 1
+  view.setUint32(offset, 1, true);
+  offset += 4; // 1 loop
+  view.setUint32(offset, 3, true);
+  offset += 4; // 3 segments in loop
+  view.setUint32(offset, 0, true);
+  offset += 4;
+  view.setUint32(offset, 1, true);
+  offset += 4;
+  view.setUint32(offset, 2, true);
+  offset += 4;
 
   return new Uint8Array(buf, 0, offset);
 }
@@ -699,27 +730,38 @@ export function decodeVectorNetworkBlob(data: Uint8Array): VectorNetwork {
     let offset = 0;
 
     // Read vertex count
-    const vertexCount = view.getUint32(offset, true); offset += 4;
+    const vertexCount = view.getUint32(offset, true);
+    offset += 4;
     const vertices: VectorVertex[] = [];
     for (let i = 0; i < vertexCount && offset + 8 <= data.length; i++) {
-      const x = view.getFloat32(offset, true); offset += 4;
-      const y = view.getFloat32(offset, true); offset += 4;
+      const x = view.getFloat32(offset, true);
+      offset += 4;
+      const y = view.getFloat32(offset, true);
+      offset += 4;
       vertices.push({ x, y });
     }
 
     // Read segment count
     if (offset + 4 > data.length) return { vertices, segments: [], regions: [] };
-    const segmentCount = view.getUint32(offset, true); offset += 4;
+    const segmentCount = view.getUint32(offset, true);
+    offset += 4;
     const segments: VectorSegment[] = [];
     for (let i = 0; i < segmentCount && offset + 24 <= data.length; i++) {
-      const start = view.getUint32(offset, true); offset += 4;
-      const end = view.getUint32(offset, true); offset += 4;
-      const tsx = view.getFloat32(offset, true); offset += 4;
-      const tsy = view.getFloat32(offset, true); offset += 4;
-      const tex = view.getFloat32(offset, true); offset += 4;
-      const tey = view.getFloat32(offset, true); offset += 4;
+      const start = view.getUint32(offset, true);
+      offset += 4;
+      const end = view.getUint32(offset, true);
+      offset += 4;
+      const tsx = view.getFloat32(offset, true);
+      offset += 4;
+      const tsy = view.getFloat32(offset, true);
+      offset += 4;
+      const tex = view.getFloat32(offset, true);
+      offset += 4;
+      const tey = view.getFloat32(offset, true);
+      offset += 4;
       segments.push({
-        start, end,
+        start,
+        end,
         tangentStart: { x: tsx, y: tsy },
         tangentEnd: { x: tex, y: tey },
       });
@@ -727,19 +769,24 @@ export function decodeVectorNetworkBlob(data: Uint8Array): VectorNetwork {
 
     // Read region count
     if (offset + 4 > data.length) return { vertices, segments, regions: [] };
-    const regionCount = view.getUint32(offset, true); offset += 4;
+    const regionCount = view.getUint32(offset, true);
+    offset += 4;
     const regions: VectorRegion[] = [];
     for (let i = 0; i < regionCount && offset < data.length; i++) {
-      const windingByte = view.getUint8(offset); offset += 1;
-      const windingRule = windingByte === 0 ? 'evenOdd' as const : 'nonZero' as const;
+      const windingByte = view.getUint8(offset);
+      offset += 1;
+      const windingRule = windingByte === 0 ? ('evenOdd' as const) : ('nonZero' as const);
       if (offset + 4 > data.length) break;
-      const loopCount = view.getUint32(offset, true); offset += 4;
+      const loopCount = view.getUint32(offset, true);
+      offset += 4;
       const loops: number[][] = [];
       for (let j = 0; j < loopCount && offset + 4 <= data.length; j++) {
-        const segCount = view.getUint32(offset, true); offset += 4;
+        const segCount = view.getUint32(offset, true);
+        offset += 4;
         const loop: number[] = [];
         for (let k = 0; k < segCount && offset + 4 <= data.length; k++) {
-          loop.push(view.getUint32(offset, true)); offset += 4;
+          loop.push(view.getUint32(offset, true));
+          offset += 4;
         }
         loops.push(loop);
       }
@@ -766,6 +813,7 @@ feat(vector-engine): FIG vectorNetworkBlob binary decoder (HYP-308)
 ### Task 6: Integrate Blob Decoder into FIG Mapper
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/import/fig-mapper.ts`
 - Modify: `packages/vector-engine/src/import/fig-import.test.ts`
 
@@ -775,15 +823,17 @@ feat(vector-engine): FIG vectorNetworkBlob binary decoder (HYP-308)
 describe('FIG mapper with vectorNetworkBlob', () => {
   it('should decode VECTOR node with binary blob', () => {
     const blob = buildTriangleBlob(); // reuse from blob test
-    const figNodes: FigNode[] = [{
-      type: 'VECTOR',
-      name: 'Triangle',
-      id: 'v1',
-      children: [],
-      properties: {
-        vectorNetworkBlob: Array.from(blob), // Uint8Array as number[]
+    const figNodes: FigNode[] = [
+      {
+        type: 'VECTOR',
+        name: 'Triangle',
+        id: 'v1',
+        children: [],
+        properties: {
+          vectorNetworkBlob: Array.from(blob), // Uint8Array as number[]
+        },
       },
-    }];
+    ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
     const pathNode = result.nodes.find((n) => n.type === 'svgPath');
     expect(pathNode).toBeDefined();
@@ -792,13 +842,15 @@ describe('FIG mapper with vectorNetworkBlob', () => {
   });
 
   it('should fallback to fillGeometry when no blob', () => {
-    const figNodes: FigNode[] = [{
-      type: 'VECTOR',
-      name: 'Path',
-      id: 'v2',
-      children: [],
-      properties: { fillGeometry: 'M 0 0 L 100 0 Z' },
-    }];
+    const figNodes: FigNode[] = [
+      {
+        type: 'VECTOR',
+        name: 'Path',
+        id: 'v2',
+        children: [],
+        properties: { fillGeometry: 'M 0 0 L 100 0 Z' },
+      },
+    ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
     expect(result.nodes.find((n) => n.type === 'svgPath')).toBeDefined();
   });
@@ -851,6 +903,7 @@ feat(vector-engine): integrate vectorNetworkBlob decoder in FIG import (HYP-308)
 ### Task 7: Update Exports + Integration Tests
 
 **Files:**
+
 - Modify: `packages/vector-engine/src/index.ts`
 - Modify: `packages/vector-engine/src/integration-advanced.test.ts`
 
@@ -904,8 +957,8 @@ feat(vector-engine): export deferred SDK features and integration tests (HYP-308
 
 ## Deferred to Plan 4 (Integration)
 
-| Feature | Reason |
-|---------|--------|
-| .graph file watcher | Needs environment-specific API (VS Code, SaaS, CLI) |
-| Merge UI for ambiguous changes | UI component — Plan 4 |
-| Auto-delete removed shapes | Safety concern — needs user confirmation UI |
+| Feature                        | Reason                                              |
+| ------------------------------ | --------------------------------------------------- |
+| .graph file watcher            | Needs environment-specific API (VS Code, SaaS, CLI) |
+| Merge UI for ambiguous changes | UI component — Plan 4                               |
+| Auto-delete removed shapes     | Safety concern — needs user confirmation UI         |

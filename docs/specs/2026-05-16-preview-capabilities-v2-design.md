@@ -50,12 +50,12 @@ When auto-start fires in `extension.ts`, send `status: 'starting'` immediately b
 
 ### Webview screens by status
 
-| status | screen |
-|---|---|
-| `stopped` | `StartDevServerScreen` — button + auto-start checkbox |
+| status     | screen                                                       |
+| ---------- | ------------------------------------------------------------ |
+| `stopped`  | `StartDevServerScreen` — button + auto-start checkbox        |
 | `starting` | `StartingDevServerScreen` — spinner + "Starting dev server…" |
-| `running` | preview + readonly overlay if `isReadonly` |
-| `error` | `DevServerErrorScreen` — error message + retry button |
+| `running`  | preview + readonly overlay if `isReadonly`                   |
+| `error`    | `DevServerErrorScreen` — error message + retry button        |
 
 `StartingDevServerScreen` replaces the button when `autoStart: true` — no button shown while server is starting.
 
@@ -85,11 +85,11 @@ type CssFramework =
 
 **Support map:**
 
-| CSS Framework | Support |
-|---|---|
-| tailwind, cssmodules, styled-components, emotion, sass | `full` |
-| vanilla-extract, pandacss, unocss, stylex | `readonly` |
-| unknown | `readonly` |
+| CSS Framework                                          | Support    |
+| ------------------------------------------------------ | ---------- |
+| tailwind, cssmodules, styled-components, emotion, sass | `full`     |
+| vanilla-extract, pandacss, unocss, stylex              | `readonly` |
+| unknown                                                | `readonly` |
 
 Detection: same logic as current `detectCssSystem()` minus the design-system entries (mui, antd, chakra, mantine, fluent, nextui, shadcn, daisyui all move out).
 
@@ -113,18 +113,18 @@ type DesignSystem =
 
 **Support map:**
 
-| Design System | Support |
-|---|---|
-| shadcn, daisyui, nextui | `full` (all Tailwind-based) |
-| tamagui | `full` (special adapter) |
-| mui, antd, chakra, mantine, fluent | `readonly` |
-| none | `n/a` |
+| Design System                      | Support                     |
+| ---------------------------------- | --------------------------- |
+| shadcn, daisyui, nextui            | `full` (all Tailwind-based) |
+| tamagui                            | `full` (special adapter)    |
+| mui, antd, chakra, mantine, fluent | `readonly`                  |
+| none                               | `n/a`                       |
 
 **shadcn detection:** presence of any `@radix-ui/*` package in deps. Radix UI is the exclusive foundation of shadcn components and is not commonly used without shadcn in the React ecosystem. `class-variance-authority` alone is NOT a shadcn signal.
 
 ```typescript
 function detectDesignSystem(deps: Record<string, string>): DesignSystem {
-  if (Object.keys(deps).some(k => k.startsWith('@radix-ui/'))) return 'shadcn';
+  if (Object.keys(deps).some((k) => k.startsWith('@radix-ui/'))) return 'shadcn';
   if ('daisyui' in deps) return 'daisyui';
   if ('@nextui-org/react' in deps) return 'nextui';
   if ('tamagui' in deps || '@tamagui/core' in deps) return 'tamagui';
@@ -141,10 +141,10 @@ function detectDesignSystem(deps: Record<string, string>): DesignSystem {
 
 ```typescript
 type JsFramework =
-  | 'react-vanilla'   // React, no meta-framework
-  | 'react-nextjs'    // Next.js
-  | 'react-remix'     // Remix
-  | 'react-unknown'   // React + unrecognized meta-framework
+  | 'react-vanilla' // React, no meta-framework
+  | 'react-nextjs' // Next.js
+  | 'react-remix' // Remix
+  | 'react-unknown' // React + unrecognized meta-framework
   | 'vue'
   | 'svelte'
   | 'solidjs'
@@ -153,12 +153,13 @@ type JsFramework =
 
 **Support map:**
 
-| JS Framework | Support |
-|---|---|
-| react-vanilla, react-nextjs, react-remix, react-unknown | `full` |
-| vue, svelte, solidjs, unknown | `unsupported` |
+| JS Framework                                            | Support       |
+| ------------------------------------------------------- | ------------- |
+| react-vanilla, react-nextjs, react-remix, react-unknown | `full`        |
+| vue, svelte, solidjs, unknown                           | `unsupported` |
 
 Detection:
+
 ```typescript
 function detectJsFramework(deps): JsFramework {
   if ('next' in deps) return 'react-nextjs';
@@ -177,26 +178,26 @@ Derived from `FrameworkType` (already detected in `framework-routing.ts`). Expos
 
 ```typescript
 type RouterType =
-  | 'nextjs-app'          // Next.js App Router
-  | 'nextjs-pages'        // Next.js Pages Router
-  | 'remix'               // Remix
-  | 'react-router-jsx'    // BrowserRouter / createBrowserRouter in JSX
-  | 'react-router-file'   // file-based React Router v6+
-  | 'none'                // no router
+  | 'nextjs-app' // Next.js App Router
+  | 'nextjs-pages' // Next.js Pages Router
+  | 'remix' // Remix
+  | 'react-router-jsx' // BrowserRouter / createBrowserRouter in JSX
+  | 'react-router-file' // file-based React Router v6+
+  | 'none' // no router
   | 'unknown';
 ```
 
 Mapping from `FrameworkType`:
 
-| FrameworkType | RouterType |
-|---|---|
-| `nextjs-app-router` | `nextjs-app` |
-| `nextjs-pages-router` | `nextjs-pages` |
-| `remix` | `remix` |
-| `vite-spa-jsx-router` | `react-router-jsx` |
-| `vite-spa-file-based` | `react-router-file` |
-| `bun`, `webpack`, `parcel` | `none` |
-| `unknown` | `unknown` |
+| FrameworkType              | RouterType          |
+| -------------------------- | ------------------- |
+| `nextjs-app-router`        | `nextjs-app`        |
+| `nextjs-pages-router`      | `nextjs-pages`      |
+| `remix`                    | `remix`             |
+| `vite-spa-jsx-router`      | `react-router-jsx`  |
+| `vite-spa-file-based`      | `react-router-file` |
+| `bun`, `webpack`, `parcel` | `none`              |
+| `unknown`                  | `unknown`           |
 
 Router does not independently gate editing — it is informational and used by `PreviewModeManager` for routing strategy. Not included in `SupportLevel` gating.
 
@@ -208,14 +209,15 @@ type Bundler = 'vite' | 'webpack' | 'cra' | 'bun' | 'parcel' | 'unknown';
 
 **Support map:**
 
-| Bundler | Support |
-|---|---|
-| vite, webpack, cra | `full` |
-| bun | `full` — entry-patch + HMR wait already implemented in `PreviewModeManager` (`case 'bun': return this._patchEntryFile({waitForPreviewRouteUpdate: true})`) |
-| parcel | `readonly` |
-| unknown | `unsupported` |
+| Bundler            | Support                                                                                                                                                    |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| vite, webpack, cra | `full`                                                                                                                                                     |
+| bun                | `full` — entry-patch + HMR wait already implemented in `PreviewModeManager` (`case 'bun': return this._patchEntryFile({waitForPreviewRouteUpdate: true})`) |
+| parcel             | `readonly`                                                                                                                                                 |
+| unknown            | `unsupported`                                                                                                                                              |
 
 **Detection — bun as bundler** (not package manager):
+
 - `bun-plugin-*` in deps (any bun bundler plugin, e.g. `bun-plugin-tailwind`) — primary signal
 - `bun-types` in deps AND no vite/webpack/next/cra — secondary signal
 - Scripts contain `bun build` or `bun ./scripts/` — tertiary signal
@@ -228,15 +230,15 @@ Also: add `'bun'` to `ProjectType` in `types.ts` and to `FULL_EDIT_BUNDLERS` in 
 
 Derived from `detectFramework()` result (already reliable for preview pipeline) via the same mapping:
 
-| FrameworkType | Bundler |
-|---|---|
+| FrameworkType                              | Bundler                     |
+| ------------------------------------------ | --------------------------- |
 | `nextjs-app-router`, `nextjs-pages-router` | `webpack` (Next.js default) |
-| `remix`, `vite-spa-*` | `vite` |
-| `webpack` | `webpack` |
-| `bun` | `bun` |
-| `parcel` | `parcel` |
-| `cra` (react-scripts) | `cra` |
-| `unknown` | `unknown` |
+| `remix`, `vite-spa-*`                      | `vite`                      |
+| `webpack`                                  | `webpack`                   |
+| `bun`                                      | `bun`                       |
+| `parcel`                                   | `parcel`                    |
+| `cra` (react-scripts)                      | `cra`                       |
+| `unknown`                                  | `unknown`                   |
 
 ### 2f. Package Manager
 
@@ -257,23 +259,23 @@ type SupportLevel = 'full' | 'readonly' | 'unsupported';
 
 interface ProjectCapabilities {
   // Detected stack
-  cssFramework:   CssFramework;
-  designSystem:   DesignSystem;   // replaces uiKit
-  jsFramework:    JsFramework;
-  router:         RouterType;
-  bundler:        Bundler;
+  cssFramework: CssFramework;
+  designSystem: DesignSystem; // replaces uiKit
+  jsFramework: JsFramework;
+  router: RouterType;
+  bundler: Bundler;
   packageManager: PackageManager;
 
   // Per-dimension support
-  cssSupport:     SupportLevel;
-  dsSupport:      SupportLevel | 'n/a';
-  jsSupport:      SupportLevel;
+  cssSupport: SupportLevel;
+  dsSupport: SupportLevel | 'n/a';
+  jsSupport: SupportLevel;
   bundlerSupport: SupportLevel;
 
   // Derived — backward compat
-  canRender:      boolean;   // jsSupport !== 'unsupported'
-  canWriteStyles: boolean;   // cssSupport === 'full' && bundlerSupport === 'full'
-  readonly:       boolean;   // canRender && !canWriteStyles
+  canRender: boolean; // jsSupport !== 'unsupported'
+  canWriteStyles: boolean; // cssSupport === 'full' && bundlerSupport === 'full'
+  readonly: boolean; // canRender && !canWriteStyles
 }
 ```
 
@@ -319,6 +321,7 @@ Visual editing is limited for this project.
 Rows for dimensions with `'none'` or `'n/a'` are omitted. Package manager row always shown (info only, no support column value).
 
 **Reason sentence** derived from first `readonly` or `unsupported` dimension:
+
 - bundlerSupport `unsupported` → "Bundler not detected — dev server cannot be managed automatically."
 - bundlerSupport `readonly` → "Bundler ({name}) has partial support — preview renders but style writes are not guaranteed."
 - cssSupport `readonly` → "CSS system ({name}) does not support AST-based style writes."
@@ -339,18 +342,19 @@ Static `SUPPORTED_CSS_TABLE` array removed.
 
 ## 5. HyperIDE Example (After Fixes)
 
-| Dimension | Detected | Support |
-|---|---|---|
-| JS Framework | react-vanilla | ✅ full |
-| Router | none | — |
-| CSS Framework | tailwind | ✅ full |
-| Design System | none | — |
-| Bundler | bun | ✅ full |
-| Package Manager | bun | ℹ️ |
+| Dimension       | Detected      | Support |
+| --------------- | ------------- | ------- |
+| JS Framework    | react-vanilla | ✅ full |
+| Router          | none          | —       |
+| CSS Framework   | tailwind      | ✅ full |
+| Design System   | none          | —       |
+| Bundler         | bun           | ✅ full |
+| Package Manager | bun           | ℹ️      |
 
 **Overall: full editing** — readonly mode not shown.
 
 Detection path:
+
 - `@radix-ui/*` absent → `designSystem: none`
 - `tailwindcss` present, `@radix-ui/*` absent → `cssFramework: tailwind`
 - `react` present, no next/remix → `jsFramework: react-vanilla`
@@ -362,14 +366,14 @@ Detection path:
 
 ## 6. Files Changed
 
-| File | Change |
-|---|---|
-| `types.ts` | Add `CssFramework`, `DesignSystem`, `JsFramework`, `RouterType`, `Bundler`, `PackageManager`, `SupportLevel`; update `ProjectCapabilities`; add `'bun'` to `ProjectType` |
-| `ProjectDetector.ts` | `detectCssSystem()` → remove DS entries; add `detectDesignSystem()`, `detectJsFramework()`, `detectBundler()`; update `computeCapabilities()`; fix `FULL_EDIT_BUNDLERS` |
-| `framework-routing.ts` | Remove `hasBunLock` as bundler trigger; add bun-plugin-based detection |
-| `extension.ts` | Update `runProjectDetection` calls; rename `projectUIKit` → `projectDesignSystem` in StateHub; send `status: 'starting'` on auto-start; wire `onStatusChange` for all states |
-| `PreviewPanel.ts` | Add `notifyDevServerStatus(status, url?, error?)`; update `_pushFullStateToWebview` |
-| `usePreviewBridge.ts` | Handle new `devserver:statusChanged` shape with `status` field |
-| `PreviewPanelApp.tsx` | Add `StartingDevServerScreen`, `DevServerErrorScreen`; replace `SUPPORTED_CSS_TABLE` with per-capabilities table in `ReadonlyStubScreen` |
-| `AIBridge.ts`, `styling-tools.ts`, `color-token-provider.ts` | Rename `projectUIKit` → `projectDesignSystem` |
-| `StateHub` (shared) | Rename `projectUIKit` → `projectDesignSystem` — lives in `shared/`, verify SaaS consumers before merging |
+| File                                                         | Change                                                                                                                                                                       |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types.ts`                                                   | Add `CssFramework`, `DesignSystem`, `JsFramework`, `RouterType`, `Bundler`, `PackageManager`, `SupportLevel`; update `ProjectCapabilities`; add `'bun'` to `ProjectType`     |
+| `ProjectDetector.ts`                                         | `detectCssSystem()` → remove DS entries; add `detectDesignSystem()`, `detectJsFramework()`, `detectBundler()`; update `computeCapabilities()`; fix `FULL_EDIT_BUNDLERS`      |
+| `framework-routing.ts`                                       | Remove `hasBunLock` as bundler trigger; add bun-plugin-based detection                                                                                                       |
+| `extension.ts`                                               | Update `runProjectDetection` calls; rename `projectUIKit` → `projectDesignSystem` in StateHub; send `status: 'starting'` on auto-start; wire `onStatusChange` for all states |
+| `PreviewPanel.ts`                                            | Add `notifyDevServerStatus(status, url?, error?)`; update `_pushFullStateToWebview`                                                                                          |
+| `usePreviewBridge.ts`                                        | Handle new `devserver:statusChanged` shape with `status` field                                                                                                               |
+| `PreviewPanelApp.tsx`                                        | Add `StartingDevServerScreen`, `DevServerErrorScreen`; replace `SUPPORTED_CSS_TABLE` with per-capabilities table in `ReadonlyStubScreen`                                     |
+| `AIBridge.ts`, `styling-tools.ts`, `color-token-provider.ts` | Rename `projectUIKit` → `projectDesignSystem`                                                                                                                                |
+| `StateHub` (shared)                                          | Rename `projectUIKit` → `projectDesignSystem` — lives in `shared/`, verify SaaS consumers before merging                                                                     |

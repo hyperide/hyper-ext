@@ -9,6 +9,7 @@
 ## User report (2026-05-06 14:30)
 
 После merge'а 6 веток:
+
 1. ✅ tree → canvas scroll работает
 2. ✅ drag `<div className="font-semibold text-foreground">{t("ui.appearance.tail")}</div>` работает
 3. ❌ drag `<span className="text-4xl" aria-hidden="true">🌀</span>` вставляется ВЕРТИКАЛЬНО, а не горизонтально
@@ -18,17 +19,17 @@
 ## Hypotheses
 
 A. **Flex-direction inferred from wrong element.** `_isHorizontalLayout(dropEl)` checks
-   `dropEl.parentElement` for `display: flex` + `flex-direction: row`. But after the
-   move-any merge `dropEl` is the resolved drop element, which may not be the actual
-   sibling-level drop target. The detection sees a non-flex parent → falls back to
-   vertical insertion regardless of the actual layout.
+`dropEl.parentElement` for `display: flex` + `flex-direction: row`. But after the
+move-any merge `dropEl` is the resolved drop element, which may not be the actual
+sibling-level drop target. The detection sees a non-flex parent → falls back to
+vertical insertion regardless of the actual layout.
 B. **Source not draggable from `<p>` / `<h3>`.** drag-source-resolver only walks up for
-   aria-hidden decoratives. For `<p>` / `<h3>` with own source, it returns them
-   immediately. But the iframe-interaction `_dragPointerDown` may bail out before
-   pending state if the element doesn't pass some other gate (link, button, anchor).
+aria-hidden decoratives. For `<p>` / `<h3>` with own source, it returns them
+immediately. But the iframe-interaction `_dragPointerDown` may bail out before
+pending state if the element doesn't pass some other gate (link, button, anchor).
 C. **moveElement RPC rejects certain element types** server-side because the
-   `liftToCommonJsxParent` lookup walks the wrong way for inline elements (`<span>`)
-   when the node is a child of a flex row.
+`liftToCommonJsxParent` lookup walks the wrong way for inline elements (`<span>`)
+when the node is a child of a flex row.
 
 ## Files
 
@@ -163,7 +164,7 @@ C. **moveElement RPC rejects certain element types** server-side because the
       `vscode-extension/hypercanvas-preview/build-and-install.sh`.
 - [x] Run new E2E. Open EACH passed screenshot via Read; verify visual.
       Ran `HYPER_E2E_SHARDS=1 HYPER_E2E_EXTENSION_REPO=<this-worktree> bun
-      run test:docker -- e2e/tests/project-independent/drag-text-containers.spec.ts`.
+run test:docker -- e2e/tests/project-independent/drag-text-containers.spec.ts`.
       All 3 passed (1.2m). Artifacts at
       `e2e/docker-artifacts/run-20260506-232042-30829/shard-1/screenshots/`.
       Read each mid-drag PNG: NN-1 shows two cards in horizontal grid layout

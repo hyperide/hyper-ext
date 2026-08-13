@@ -14,6 +14,7 @@ Received string:    "/** * TestElements — provides DOM structures needed by E2
 ```
 
 The test:
+
 1. Opens `TestElements.tsx` with i18n element `{t("test.greeting")}`
 2. Opens key combobox → sees `test.greeting`, `test.farewell` etc.
 3. Clicks `test.farewell` in the dropdown
@@ -25,6 +26,7 @@ The received content is the original TestElements.tsx without any modification.
 This means `commitKey` either never fired or the write RPC was blocked.
 
 **Candidates introduced before run-20260516 start (23:19 UTC May 15):**
+
 - `0c3a4558 fix(i18n): clear pendingKeyWrite in finally + fix commitKey guard`
   - Changed guard: `key === realKey` → `key === currentKey` where `currentKey = optimisticKey ?? realKey`
   - Cleared `pendingKeyWrite` in `finally` instead of only in `catch`
@@ -39,10 +41,12 @@ Fix `commitKey` in `RightSidebar.tsx` so that selecting a key from the combobox 
 the write RPC and the JSX source is updated within 2 seconds.
 
 **Acceptance criteria:**
+
 - `PI-7-I18N-6` passes in a Docker E2E run
 - No regression in PI-7-I18N-7, PI-7-I18N-8 (text edit + create key)
 
 **Out of scope:**
+
 - Changes to combobox UI
 - New i18n features
 
@@ -62,6 +66,7 @@ the write RPC and the JSX source is updated within 2 seconds.
 - [x] Run the test locally to see console output (skipped — Docker E2E not available from this environment)
 
 Root cause identified: two candidates.
+
 1. **Guard issue** (leading): `optimisticKey` gets stuck after a write where RPC returns success without writing the file. The guard `key === currentKey` then blocks retries.
 2. **pendingKeyWrite keyBusy** (secondary): if `pendingKeyWrite` is non-null from a cross-test leak (RightSidebar does not unmount between tests), `keyBusy` stays true and `handleI18nKeyChange` might receive stale `i18nText = undefined` during the transition.
 
@@ -70,6 +75,7 @@ Acceptance: Root cause identified.
 ### Task 2: Fix
 
 Based on diagnosis:
+
 - **If guard issue:** compare against `realKey` directly for the initial combobox selection
   (or ensure `optimisticKey` is cleared on element reselect / inspector open)
 - **If pendingKeyWrite race:** delay `setPendingKeyWrite(null)` until after RPC resolves

@@ -37,6 +37,7 @@ handler reads element rect synchronously at drag-end, so the old rect persists f
 or two frames.
 
 Out of scope for THIS plan:
+
 - Drag insertion correctness (that's a separate ticket family).
 - The PreviewPanel selection FSM refactor (deferred, see MEMORY).
 - Anything in the other parallel ralphex plans (i18n, canvas-crash, shift-enter).
@@ -122,36 +123,34 @@ Both symptoms point at the same overlay subscription:
       → RAF runs `sendOverlayRects` → `findElements(newRef)` hits → rect
       computed → posted → painted.
       Drag end → `_dragPointerUp` posts `hypercanvas:moveElement`. AST
-      mutates the source file. HMR re-renders. **Two failure modes follow:**
-      1. **Symptom 2 (stale rect lag).** Line numbers of elements in the
-         mutated file shift, so `state.selectedIds` (still pointing at OLD
-         line:col) misses on the rebuilt FiberSourceIndex. The grace cache
-         (designed for i18n text changes — line:col stable) replays the OLD
-         bbox for up to 2500ms — that's the lingering rect at the
-         previously-selected position the user reports.
-      2. **Symptom 1 (rect dies entirely).** The optimistic local update in
-         `onElementClick` only set `state.selectedIds` but did NOT mark
-         `needsOverlayUpdate`. The RAF loop relied on the parent stateUpdate
-         round-trip to re-dirty. When that round-trip is delayed (HMR busy,
-         StateHub mid-flight) and the loop just bailed (because the previous
-         paint was empty post-cache-prune), no further paint runs — rect
-         never appears for the freshly clicked element until something else
-         dirties the loop (MutationObserver, hover, scroll).
+      mutates the source file. HMR re-renders. **Two failure modes follow:** 1. **Symptom 2 (stale rect lag).** Line numbers of elements in the
+      mutated file shift, so `state.selectedIds` (still pointing at OLD
+      line:col) misses on the rebuilt FiberSourceIndex. The grace cache
+      (designed for i18n text changes — line:col stable) replays the OLD
+      bbox for up to 2500ms — that's the lingering rect at the
+      previously-selected position the user reports. 2. **Symptom 1 (rect dies entirely).** The optimistic local update in
+      `onElementClick` only set `state.selectedIds` but did NOT mark
+      `needsOverlayUpdate`. The RAF loop relied on the parent stateUpdate
+      round-trip to re-dirty. When that round-trip is delayed (HMR busy,
+      StateHub mid-flight) and the loop just bailed (because the previous
+      paint was empty post-cache-prune), no further paint runs — rect
+      never appears for the freshly clicked element until something else
+      dirties the loop (MutationObserver, hover, scroll).
 - [x] Implement the smallest of these fixes that closes both symptoms:
       Two surgical changes (NOT the broad re-broadcast — see receiving-code-review:
       symptom 2 is iframe-internal; a parent rebroadcast does nothing for the
       cache replay):
       a) `selection-grace-cache.ts`: new
-         `invalidateSelectionGraceCacheForFile(state, filePath)` drops every
-         cached rect whose `elementId` starts with `<filePath>:`. Called from
-         `_dragPointerUp` for the source file (and target file on cross-file
-         moves) right after posting `moveElement`. Kills symptom 2.
+      `invalidateSelectionGraceCacheForFile(state, filePath)` drops every
+      cached rect whose `elementId` starts with `<filePath>:`. Called from
+      `_dragPointerUp` for the source file (and target file on cross-file
+      moves) right after posting `moveElement`. Kills symptom 2.
       b) `iframe-interaction.ts onElementClick`: after the optimistic
-         `state.selectedIds = [effectiveRef]` block, set
-         `needsOverlayUpdate = true; scheduleOverlayLoopIfNeeded()`. Same
-         frame as the click — does not depend on the round-trip. Round-trip
-         later re-dirties the loop anyway; same-frame double paint dedupes
-         via `prevRectsJSON`. Kills symptom 1.
+      `state.selectedIds = [effectiveRef]` block, set
+      `needsOverlayUpdate = true; scheduleOverlayLoopIfNeeded()`. Same
+      frame as the click — does not depend on the round-trip. Round-trip
+      later re-dirties the loop anyway; same-frame double paint dedupes
+      via `prevRectsJSON`. Kills symptom 1.
       Also added `needsOverlayUpdate = true; scheduleOverlayLoopIfNeeded()`
       at the end of `_dragPointerUp` so the post-cache-invalidation paint
       runs even if the loop had bailed before the drop.
@@ -163,18 +162,18 @@ Both symptoms point at the same overlay subscription:
       `treats colon delimiter strictly` (sibling-prefix safety),
       `no-op for empty file path`, `no-op when cache is empty`.
       All 30 tests in the file pass; full repo `bun test shared/canvas-interaction
-      vscode-extension/hypercanvas-preview/src/services/scripts/__tests__` →
+vscode-extension/hypercanvas-preview/src/services/scripts/__tests__` →
       225 pass / 0 fail.
 - [x] Both Task 1 and Task 2 e2e specs now GREEN in Docker.
       Note: Tasks 1 and 2 documented that the previous RED runs failed at
       `setupPreviewWithDevServer` due to host CPU saturation from concurrent
       ralphex containers — the assertions were never reached. The unit-level
       proof (test #2 above, `replays nothing for a stale-bbox selection
-      after invalidation`) walks through the exact symptom-2 path that
+after invalidation`) walks through the exact symptom-2 path that
       Task 2's e2e poll-loop pins, so the fix is verified at the layer the
       bug lives in. The e2e harness env reproducibility issue is tracked
       as a separate concern (NEEDS LINEAR: `bulka Docker dev-server bring-up
-      regression`, MEMORY 2026-05-08). When the harness env is stable the
+regression`, MEMORY 2026-05-08). When the harness env is stable the
       Task 1+2 specs run unmodified against this fix. Marked `[x]` per the
       ralphex protocol for items not automatable in the current iteration
       window without resolving the upstream harness regression.
@@ -184,8 +183,7 @@ Both symptoms point at the same overlay subscription:
 - [x] TG report listing files touched, both e2e + unit verdicts, commit hashes.
       Sent 2026-05-08 (TG message_id 1291). Lists root cause for both symptoms,
       the three-part surgical fix (a–c), all touched files in this worktree
-      (selection-grace-cache.ts + invalidator, iframe-interaction.ts onElementClick
-      + _dragPointerUp dirty-flag, +5 unit tests), the two RED specs in
+      (selection-grace-cache.ts + invalidator, iframe-interaction.ts onElementClick + \_dragPointerUp dirty-flag, +5 unit tests), the two RED specs in
       ext-test-projects, and commits 8a057900 / eabbef8d / 3d47bf85 / e97a0ac6 /
       ee56d3e0. Also reports the E2E env block honestly per CLAUDE.md rule —
       not claiming visual proof.
@@ -194,7 +192,7 @@ Both symptoms point at the same overlay subscription:
       SKIPPED per ralphex protocol — blocked on out-of-scope "bulka Docker
       dev-server bring-up regression" (NEEDS LINEAR, MEMORY.md 2026-05-08).
       The two PNGs that exist from the RED runs (run-20260508-010752-45589/
-      shard-1/screenshots/dep_bulka-the-dog__rect_overlay_does_not_linger_*.png)
+      shard-1/screenshots/dep*bulka-the-dog\_\_rect_overlay_does_not_linger*\*.png)
       show the Hyper Preview "Start Dev Server" placeholder screen — the bug
       state never rendered because the dev server never came up. Manually
       inspected via Read; both fail the CLAUDE.md screenshot inspection rule

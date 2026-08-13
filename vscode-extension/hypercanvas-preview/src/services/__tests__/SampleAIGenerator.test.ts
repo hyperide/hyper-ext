@@ -12,9 +12,8 @@ mock.module('@lib/ai-client', () => ({
 
 // Import shared functions directly — they're pure, no mocking needed.
 // buildSamplePrompt and extractCodeFromAIResponse moved from SampleAIGenerator to lib/preview-generator.
-const { buildSamplePrompt, extractCodeFromAIResponse } = await import(
-  '../../../../../lib/preview-generator/sample-prompt'
-);
+const { buildSamplePrompt, extractCodeFromAIResponse } =
+  await import('../../../../../lib/preview-generator/sample-prompt');
 
 describe('extractCodeFromAIResponse', () => {
   it('should return code starting with export', () => {

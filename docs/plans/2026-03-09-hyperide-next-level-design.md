@@ -13,6 +13,7 @@ in real codebases across all popular CSS frameworks.
 **Target audience:** Designers (Figma users) and managers. Developers as secondary beneficiaries.
 
 **Positioning (unique, nobody else does this):**
+
 > Real React components + visual direct manipulation + AI + lives in IDE + works with real project
 
 **Key competitors analyzed:**
@@ -45,16 +46,16 @@ Applies to: inspector, scrubbers, drag/reorder, resize, AI-applied changes.
 
 Deterministic adapter per framework, composable for hybrid projects.
 
-| Adapter | Write Mode | Read | Write |
-|---|---|---|---|
-| `TailwindV3Adapter` | className | Parse className string | Replace/add TW classes |
-| `TailwindV4Adapter` | className | Same + v4 arbitrary, `@theme` | Same + v4 syntax |
-| `EmotionAdapter` | styled/sx | Parse JS style object | Mutate object properties |
-| `StyledComponentsAdapter` | styled | Parse tagged template literal | Mutate CSS in template |
-| `CSSModulesAdapter` | className | Read `.module.css` by binding | Mutate properties in CSS file |
-| `PlainCSSAdapter` | className | Computed styles + source maps | Mutate CSS file, AI distributes across cascade |
-| `InlineStyleAdapter` | style prop | Parse `style={{ }}` | Mutate style object |
-| `TamaguiAdapter` | props | Parse style props | Already exists, enhance |
+| Adapter                   | Write Mode | Read                          | Write                                          |
+| ------------------------- | ---------- | ----------------------------- | ---------------------------------------------- |
+| `TailwindV3Adapter`       | className  | Parse className string        | Replace/add TW classes                         |
+| `TailwindV4Adapter`       | className  | Same + v4 arbitrary, `@theme` | Same + v4 syntax                               |
+| `EmotionAdapter`          | styled/sx  | Parse JS style object         | Mutate object properties                       |
+| `StyledComponentsAdapter` | styled     | Parse tagged template literal | Mutate CSS in template                         |
+| `CSSModulesAdapter`       | className  | Read `.module.css` by binding | Mutate properties in CSS file                  |
+| `PlainCSSAdapter`         | className  | Computed styles + source maps | Mutate CSS file, AI distributes across cascade |
+| `InlineStyleAdapter`      | style prop | Parse `style={{ }}`           | Mutate style object                            |
+| `TamaguiAdapter`          | props      | Parse style props             | Already exists, enhance                        |
 
 **Auto-detection:** scan `package.json` + import patterns -> select adapter(s).
 **Preference:** always prefer TW for writing new styles (fallback and hybrid).
@@ -109,7 +110,7 @@ direct editing (no AI needed there — cascade is explicit).
 ### 2. Drag Reorder + Swap
 
 - Drag children within flex/grid containers — visual drop indicator line
-- For `.map()` children — sort in source array (Sample* data or source)
+- For `.map()` children — sort in source array (Sample\* data or source)
 - **Swap any 2+ elements:** select multiple -> pink circles at center of each ->
   drag one onto another -> swap positions in AST
 - Works for siblings and elements across containers (within same component)

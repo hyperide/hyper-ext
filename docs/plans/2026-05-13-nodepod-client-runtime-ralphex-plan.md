@@ -9,6 +9,7 @@ flag (set directly in DB, no UI). Initial scope: Vite-only projects.
 Spec: `docs/specs/2026-05-13-nodepod-client-runtime-design.md`
 
 Architecture:
+
 - `ProjectRuntime` TS interface unifies Docker and NodePod paths — no mode branching in CanvasEditor
 - `useDockerRuntime` wraps existing `useProjectControl` + `useProjectSSE` into the interface
 - `useNodePodRuntime` boots NodePod, reads files from `client-file-store` (OPFS), runs npm install + vite dev
@@ -45,11 +46,12 @@ handler for non-Vite servers — used to expose `/__sw__.js` from the Hono app.
 ## Task 1: DB — add client_side_runtime column
 
 **Files:**
+
 - Create: `server/database/migrations/0009_add-client-side-runtime.sql`
 - Modify: `server/database/schema/auth.ts`
 
 - [ ] Add the column to the Drizzle schema in `server/database/schema/auth.ts`.
-  After `theme: varchar('theme', { length: 10 }).default('system'),` add:
+      After `theme: varchar('theme', { length: 10 }).default('system'),` add:
 
 ```typescript
 clientSideRuntime: boolean('client_side_runtime').notNull().default(false),
@@ -106,6 +108,7 @@ a Fetch-API handler designed exactly for this, with a first-class Hono example i
 `app.get('/__sw__.js', () => serveSW())`.
 
 **Files:**
+
 - Modify: `package.json` — add `@scelar/nodepod` dependency
 - Modify: `server/index.ts` — add `/__sw__.js` Hono route
 
@@ -155,6 +158,7 @@ git commit -m "feat(server): serve NodePod SW via @scelar/nodepod/server serveSW
 ### 3a — Expose clientSideRuntime in GET /api/user
 
 **Files:**
+
 - Modify: `server/routes/user-settings.ts`
 
 - [ ] In the `GET /` handler (line ~34), add `clientSideRuntime: true` to the `columns` object:
@@ -173,7 +177,7 @@ columns: {
 ```
 
 - [ ] Manual verification: call `GET /api/user` (logged in), confirm `clientSideRuntime`
-  appears in the response JSON with value `false`.
+      appears in the response JSON with value `false`.
 
 - [ ] Commit:
 
@@ -187,6 +191,7 @@ git commit -m "feat(server): expose clientSideRuntime in GET /api/user"
 NodePod reads files from OPFS, not from the server. This module is the single I/O point.
 
 **Files:**
+
 - Create: `client/lib/client-file-store/opfs.ts`
 - Create: `client/lib/client-file-store/index.ts`
 - Create: `test/client-file-store.test.ts`
@@ -201,7 +206,9 @@ import { expect, test, beforeEach } from 'bun:test';
 import { makeStore } from '../client/lib/client-file-store/opfs';
 
 let store: ReturnType<typeof makeStore>;
-beforeEach(() => { store = makeStore(); });
+beforeEach(() => {
+  store = makeStore();
+});
 
 test('writeFile and readFiles round-trip', async () => {
   await store.writeFile('proj1', 'src/App.tsx', 'export default function App() {}');
@@ -254,10 +261,10 @@ Expected: module not found error.
 // useNodePodRuntime uses opfsStore at runtime; tests use makeStore.
 
 export interface FileStore {
-  readFiles(projectId: string): Promise<Record<string, string>>
-  writeFile(projectId: string, path: string, content: string): Promise<void>
-  seedFiles(projectId: string, files: Record<string, string>): Promise<void>
-  clearProject(projectId: string): Promise<void>
+  readFiles(projectId: string): Promise<Record<string, string>>;
+  writeFile(projectId: string, path: string, content: string): Promise<void>;
+  seedFiles(projectId: string, files: Record<string, string>): Promise<void>;
+  clearProject(projectId: string): Promise<void>;
 }
 
 /** In-memory implementation — for unit tests and SSR environments without OPFS. */
@@ -330,11 +337,7 @@ function makeOpfsStore(): FileStore {
       await writable.close();
     },
     async seedFiles(projectId, files) {
-      await Promise.all(
-        Object.entries(files).map(([path, content]) =>
-          this.writeFile(projectId, path, content)
-        )
-      );
+      await Promise.all(Object.entries(files).map(([path, content]) => this.writeFile(projectId, path, content)));
     },
     async clearProject(projectId) {
       try {
@@ -346,9 +349,8 @@ function makeOpfsStore(): FileStore {
   };
 }
 
-export const opfsStore: FileStore = typeof navigator !== 'undefined' && 'storage' in navigator
-  ? makeOpfsStore()
-  : makeStore();
+export const opfsStore: FileStore =
+  typeof navigator !== 'undefined' && 'storage' in navigator ? makeOpfsStore() : makeStore();
 ```
 
 - [ ] Create `client/lib/client-file-store/index.ts`:
@@ -397,12 +399,13 @@ git commit -m "feat(client): client-file-store — OPFS-backed per-project file 
 ## Task 4: Client types — User + ProjectRuntime interface + isViteProject
 
 **Files:**
+
 - Modify: `client/stores/authStore.ts`
 - Create: `client/lib/project-runtime/types.ts`
 - Create: `client/lib/project-runtime/isViteProject.ts`
 
 - [ ] Add `clientSideRuntime: boolean` to the `User` interface in `client/stores/authStore.ts`
-  after `emailVerifiedAt: string | null`:
+      after `emailVerifiedAt: string | null`:
 
 ```typescript
 export interface User {
@@ -412,7 +415,7 @@ export interface User {
   avatarUrl: string | null;
   theme: 'light' | 'dark' | 'system' | null;
   emailVerifiedAt: string | null;
-  clientSideRuntime: boolean;  // ← add this
+  clientSideRuntime: boolean; // ← add this
 }
 ```
 
@@ -421,8 +424,8 @@ export interface User {
 ```typescript
 import type { ContainerPhase, ProjectStatus } from '@shared/types/statuses';
 
-export type RuntimeStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'error'
-export type RuntimeMode = 'docker' | 'nodepod'
+export type RuntimeStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'error';
+export type RuntimeMode = 'docker' | 'nodepod';
 
 // Matches ProjectStartOverlay's expected shape; uses the same types as useProjectSSE
 export interface PollStatus {
@@ -438,22 +441,22 @@ export const INERT_POLL_STATUS: PollStatus = {
 };
 
 export interface ProjectRuntime {
-  mode: RuntimeMode
-  status: RuntimeStatus
+  mode: RuntimeMode;
+  status: RuntimeStatus;
   /** true once runtime has reached 'running' since last stop — used to keep iframe alive during reconnects */
-  hasBeenRunning: boolean
+  hasBeenRunning: boolean;
   /** Null in Docker mode (IframeCanvas builds its own proxy URL). Set in NodePod mode to SW proxy URL. */
-  previewUrl: string | null
-  logs: string[]
-  error: string | null
+  previewUrl: string | null;
+  logs: string[];
+  error: string | null;
   /**
    * Always non-null — NodePod mode returns INERT_POLL_STATUS so ProjectStartOverlay never crashes.
    * Docker mode fills with real poll data.
    */
-  pollStatus: PollStatus
-  start(): Promise<void>
-  stop(): Promise<void>
-  restart(): Promise<void>
+  pollStatus: PollStatus;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  restart(): Promise<void>;
 }
 ```
 
@@ -462,10 +465,7 @@ export interface ProjectRuntime {
 ```typescript
 import type { ProjectData } from '@/pages/Editor/components/hooks/useProjectControl';
 
-const VITE_FRAMEWORKS = new Set([
-  'Vite SPA (file-based routing)',
-  'Vite SPA (JSX router)',
-]);
+const VITE_FRAMEWORKS = new Set(['Vite SPA (file-based routing)', 'Vite SPA (JSX router)']);
 
 export function isViteProject(project: ProjectData): boolean {
   return project.framework != null && VITE_FRAMEWORKS.has(project.framework);
@@ -488,6 +488,7 @@ git commit -m "feat(client): ProjectRuntime types, isViteProject utility, User.c
 ## Task 5: useDockerRuntime
 
 **Files:**
+
 - Create: `client/lib/project-runtime/useDockerRuntime.ts`
 
 Wraps `useProjectControl` + `useProjectSSE` into the `ProjectRuntime` interface.
@@ -523,21 +524,13 @@ const INERT: ProjectRuntime = {
   restart: async () => {},
 };
 
-export function useDockerRuntime(
-  project: ProjectData | null,
-  opts: UseDockerRuntimeOptions,
-): ProjectRuntime {
+export function useDockerRuntime(project: ProjectData | null, opts: UseDockerRuntimeOptions): ProjectRuntime {
   const { enabled, accessToken, setActiveProject, setIsStarting, setProjectRole, reloadComposition } = opts;
 
   const hasBeenRunningRef = useRef(false);
   const [hasBeenRunning, setHasBeenRunning] = useState(false);
 
-  const {
-    handleStartProject,
-    handleStopProject,
-    handleRestartProject,
-    handleProjectUpdate,
-  } = useProjectControl({
+  const { handleStartProject, handleStopProject, handleRestartProject, handleProjectUpdate } = useProjectControl({
     activeProject: enabled ? project : null,
     setActiveProject,
     setIsStarting,
@@ -572,10 +565,14 @@ export function useDockerRuntime(
 
   const status: RuntimeStatus = (() => {
     switch (project?.status) {
-      case 'running':  return 'running';
-      case 'building': return 'starting';
-      case 'error':    return 'error';
-      default:         return 'idle';
+      case 'running':
+        return 'running';
+      case 'building':
+        return 'starting';
+      case 'error':
+        return 'error';
+      default:
+        return 'idle';
     }
   })();
 
@@ -609,6 +606,7 @@ git commit -m "feat(client): useDockerRuntime — wrap Docker control+SSE into P
 ## Task 6: useNodePodRuntime
 
 **Files:**
+
 - Create: `client/lib/project-runtime/useNodePodRuntime.ts`
 
 NodePod implementation of `ProjectRuntime`. Boots NodePod, reads files from `client-file-store`
@@ -633,13 +631,13 @@ interface UseNodePodRuntimeOptions {
 // Nodepod is dynamically imported inside start() — this avoids bundling the ~3MB package
 // for Docker-only users who never trigger NodePod mode.
 interface PodInstance {
-  fs: { writeFile(path: string, content: string): Promise<void> }
-  spawn(cmd: string, args: string[], opts?: { cwd?: string }): Promise<SpawnHandle>
-  teardown(): Promise<void>
+  fs: { writeFile(path: string, content: string): Promise<void> };
+  spawn(cmd: string, args: string[], opts?: { cwd?: string }): Promise<SpawnHandle>;
+  teardown(): Promise<void>;
 }
 interface SpawnHandle {
-  on(event: 'output' | 'error', handler: (t: string) => void): void
-  completion: Promise<{ exitCode: number }>
+  on(event: 'output' | 'error', handler: (t: string) => void): void;
+  completion: Promise<{ exitCode: number }>;
 }
 
 const INERT: ProjectRuntime = {
@@ -655,10 +653,7 @@ const INERT: ProjectRuntime = {
   restart: async () => {},
 };
 
-export function useNodePodRuntime(
-  project: ProjectData | null,
-  opts: UseNodePodRuntimeOptions,
-): ProjectRuntime {
+export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodRuntimeOptions): ProjectRuntime {
   const { enabled } = opts;
 
   const podRef = useRef<PodInstance | null>(null);
@@ -696,7 +691,9 @@ export function useNodePodRuntime(
       appendLog('[nodepod] booting...');
       // Non-null assertion: resolveServer is always called before the Promise resolves
       let resolveServer!: (url: string) => void;
-      const serverReady = new Promise<string>((r) => { resolveServer = r; });
+      const serverReady = new Promise<string>((r) => {
+        resolveServer = r;
+      });
 
       const pod = await Nodepod.boot({
         watermark: false,
@@ -708,7 +705,10 @@ export function useNodePodRuntime(
           }
         },
       });
-      if (isStale()) { pod.teardown().catch(() => {}); return; }
+      if (isStale()) {
+        pod.teardown().catch(() => {});
+        return;
+      }
       podRef.current = pod;
       appendLog('[nodepod] runtime booted');
 
@@ -719,7 +719,7 @@ export function useNodePodRuntime(
         appendLog('[files] OPFS empty — bootstrapping from server...');
         const res = await authFetch(`/api/projects/${project.id}/files`);
         if (!res.ok) throw new Error(`Failed to bootstrap files: ${res.status}`);
-        const { files: serverFiles } = await res.json() as { files: Record<string, string> };
+        const { files: serverFiles } = (await res.json()) as { files: Record<string, string> };
         await clientFileStore.seedFiles(project.id, serverFiles);
         files = serverFiles;
         appendLog(`[files] seeded ${Object.keys(files).length} files into OPFS`);
@@ -749,11 +749,7 @@ export function useNodePodRuntime(
         }
       }
 
-      await Promise.all(
-        Object.entries(patchedFiles).map(([rel, content]) =>
-          pod.fs.writeFile(`/app/${rel}`, content)
-        )
-      );
+      await Promise.all(Object.entries(patchedFiles).map(([rel, content]) => pod.fs.writeFile(`/app/${rel}`, content)));
       appendLog(`[files] ${Object.keys(files).length} files mounted`);
 
       // npm install
@@ -783,12 +779,8 @@ export function useNodePodRuntime(
 
       const url = await Promise.race([
         serverReady,
-        dev.completion.then(({ exitCode }) =>
-          Promise.reject(new Error('vite exited early: ' + exitCode))
-        ),
-        new Promise<never>((_, rej) =>
-          setTimeout(() => rej(new Error('timeout 120s waiting for vite')), 120_000)
-        ),
+        dev.completion.then(({ exitCode }) => Promise.reject(new Error('vite exited early: ' + exitCode))),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout 120s waiting for vite')), 120_000)),
       ]);
       if (isStale()) return;
 
@@ -868,6 +860,7 @@ git commit -m "feat(client): useNodePodRuntime — NodePod ProjectRuntime implem
 ## Task 7: useProjectRuntime factory
 
 **Files:**
+
 - Create: `client/lib/project-runtime/useProjectRuntime.ts`
 - Create: `client/lib/project-runtime/index.ts`
 
@@ -937,6 +930,7 @@ git commit -m "feat(client): useProjectRuntime factory — selects Docker or Nod
 ## Task 8: IframeCanvas — add overrideSrc prop
 
 **Files:**
+
 - Modify: `client/components/IframeCanvas.tsx`
 
 When `overrideSrc` is provided, the iframe uses it instead of building the proxy URL.
@@ -960,7 +954,7 @@ export default function IframeCanvas({
 ```
 
 - [ ] Modify the `src` attribute of the `<iframe>` (around line 1158). Replace the inner
-  `const baseUrl = ...` block with:
+      `const baseUrl = ...` block with:
 
 ```typescript
 src={
@@ -976,8 +970,8 @@ src={
         // ... rest of existing params assembly unchanged ...
 ```
 
-  That is: only add the `if (overrideSrc) return overrideSrc;` guard at the top of the IIFE.
-  Everything else in the existing `src={...}` block stays identical.
+That is: only add the `if (overrideSrc) return overrideSrc;` guard at the top of the IIFE.
+Everything else in the existing `src={...}` block stays identical.
 
 - [ ] Verify tsc: `bun tsc --noEmit` — no new errors.
 
@@ -995,6 +989,7 @@ git commit -m "feat(IframeCanvas): add optional overrideSrc prop for NodePod pre
 ## Task 9: CanvasEditor refactor
 
 **Files:**
+
 - Modify: `client/pages/Editor/CanvasEditor.tsx`
 
 Replace separate `useProjectControl` + `useProjectSSE` calls with `useProjectRuntime`.
@@ -1037,23 +1032,23 @@ const runtime = useProjectRuntime(activeProject, user, {
 });
 ```
 
-  `reloadComposition` is already defined in CanvasEditor and was being passed to `useProjectSSE`.
-  It stays as-is — `useDockerRuntime` accepts it and forwards to `useProjectSSE` internally.
+`reloadComposition` is already defined in CanvasEditor and was being passed to `useProjectSSE`.
+It stays as-is — `useDockerRuntime` accepts it and forwards to `useProjectSSE` internally.
 
 - [ ] Update the iframe visibility check (line ~1074). Replace:
 
 ```typescript
-activeProject && (activeProject.status === 'running' || wasRunningRef.current)
+activeProject && (activeProject.status === 'running' || wasRunningRef.current);
 ```
 
 with:
 
 ```typescript
-activeProject && (runtime.status === 'running' || runtime.hasBeenRunning)
+activeProject && (runtime.status === 'running' || runtime.hasBeenRunning);
 ```
 
 - [ ] Derive `isStarting` from `runtime.status` so the overlay shows loading in NodePod mode too.
-  Find where `isStarting` is currently set and add a synchronization effect after the runtime call:
+      Find where `isStarting` is currently set and add a synchronization effect after the runtime call:
 
 ```typescript
 // Keep isStarting in sync with runtime status (NodePod sets status, not isStarting directly)
@@ -1065,13 +1060,13 @@ useEffect(() => {
 ```
 
 - [ ] Handle NodePod error state for canvas visibility. Find the `activeProject.status === 'error'`
-  branch in the render (if any) and also check `runtime.error`:
+      branch in the render (if any) and also check `runtime.error`:
 
 ```typescript
 const hasError = activeProject?.status === 'error' || runtime.status === 'error';
 ```
 
-  Update the relevant conditional rendering to use `hasError`.
+Update the relevant conditional rendering to use `hasError`.
 
 - [ ] Update `IframeCanvas` usage (line ~1137). Add `overrideSrc={runtime.previewUrl ?? undefined}`:
 
@@ -1151,15 +1146,15 @@ Expected: `client_side_runtime = true`.
 - [ ] Open browser DevTools → Application → Service Workers. Confirm `/__sw__.js` is registered.
 
 - [ ] Open browser DevTools console. Confirm no errors during NodePod boot. Watch logs panel
-  for `[npm] install started...` → `[vite] starting dev server...` → `[vite] server ready`.
+      for `[npm] install started...` → `[vite] starting dev server...` → `[vite] server ready`.
 
 - [ ] Confirm the preview iframe loads the Vite project after ~15-20s.
 
 - [ ] Confirm Docker project (non-Vite framework) still uses Docker path — switch to a
-  Next.js project, confirm the Docker container starts normally, no NodePod activity.
+      Next.js project, confirm the Docker container starts normally, no NodePod activity.
 
 - [ ] If smoke test passes, commit any outstanding changes. If it fails, debug the failure
-  before committing — add a `[nodepod] error:` log or read the browser console carefully.
+      before committing — add a `[nodepod] error:` log or read the browser console carefully.
 
 - [ ] Final Codex review of the full diff:
 

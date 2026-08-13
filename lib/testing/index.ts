@@ -35,14 +35,8 @@ export {
   getDemoE2ETestPath,
   getDemoPath,
 } from './generators/demo-generator';
-export type {
-  DocsFormat,
-  DocsGeneratorOptions,
-} from './generators/docs-generator';
-export {
-  generateComponentDocs,
-  getDocsPath,
-} from './generators/docs-generator';
+export type { DocsFormat, DocsGeneratorOptions } from './generators/docs-generator';
+export { generateComponentDocs, getDocsPath } from './generators/docs-generator';
 export type { E2ETestGeneratorOptions } from './generators/e2e-test-generator';
 export {
   generateE2ETestContent,
@@ -50,11 +44,7 @@ export {
   getE2ETestPath,
 } from './generators/e2e-test-generator';
 export type { UnitTestGeneratorOptions } from './generators/unit-test-generator';
-export {
-  generateUnitTestContent,
-  getUnitTestPath,
-  isBun,
-} from './generators/unit-test-generator';
+export { generateUnitTestContent, getUnitTestPath, isBun } from './generators/unit-test-generator';
 // Types
 export type {
   ComponentAnalysis,
@@ -72,10 +62,7 @@ export type {
   TestRunner,
   TestVariant,
 } from './types';
-export {
-  detectTestRunner,
-  getTestImportForRunner,
-} from './utils/detect-test-runner';
+export { detectTestRunner, getTestImportForRunner } from './utils/detect-test-runner';
 // Utils
 export {
   cleanTextForId,

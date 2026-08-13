@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-15  
 **Run evidence:** run-20260515-215913-53825, S1+S2  
-**Reported by:** E2E loop monitor  
+**Reported by:** E2E loop monitor
 
 ## Symptom
 
@@ -69,6 +69,7 @@ and rerun. If it passes, H4 is confirmed.
 ### Task 1 — Instrument and isolate
 
 Add targeted console.log to identify which hypothesis is correct:
+
 1. In `openExplorerAndSelect`, before `treeItems.nth(idx).click()`, log `treeCount` and `idx`.
 2. After the click, log every 1s what `__hyperCanvasState.selectedIds` is in the iframe:
    ```typescript
@@ -91,6 +92,7 @@ Add targeted console.log to identify which hypothesis is correct:
 ### Task 2 — Fix based on H1/H4 (timing): increase waitForAnySelection timeout for tree clicks
 
 In `setup-preview.ts`, `openExplorerAndSelect`:
+
 ```typescript
 // Before: hardcoded 8s
 await canvas.waitForAnySelection(8_000);
@@ -105,6 +107,7 @@ projects in the test.
 
 In the extension's dev server proxy (look for `injectBridge` or similar), ensure it handles
 SSR chunked HTML responses from Remix:
+
 - Use `concat-stream` or buffer the full response before inject
 - Match on `Content-Type: text/html` regardless of chunked/gzip encoding
 - Add a fallback: if no `</head>` tag found in first chunk, try `</body>`

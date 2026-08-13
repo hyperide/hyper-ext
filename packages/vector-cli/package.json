@@ -2,10 +2,10 @@
   "name": "vector-cli",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
   "bin": {
     "vecli": "bin/vecli.ts"
   },
+  "type": "module",
   "main": "src/context.ts",
   "dependencies": {
     "vector-engine": "workspace:*",

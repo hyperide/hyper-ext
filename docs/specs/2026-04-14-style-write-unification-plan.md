@@ -4,6 +4,7 @@
 **Status:** Draft
 **Scope:** Inspector style reads/writes for VS Code extension and SaaS
 **Related specs:**
+
 - `docs/specs/2026-03-10-universal-styling-adapters.md` — earlier adapter
   direction; retained where it argues for shared framework-aware style
   infrastructure, superseded where it implies one broad adapter surface.
@@ -52,23 +53,23 @@ Changed:
 document for style-write architecture. The old technical scope is carried
 forward as follows:
 
-| March 11 section | Status in this spec |
-|---|---|
-| Vision: any CSS framework | Kept as canonical goal for unified style writes. |
-| DS Core integration | Kept as dependency direction: DS Core consumes read/write services through DI; style-write does not depend on DS Core. |
-| Subphase 2a foundation + InlineStyleAdapter | Replaced by Phases 1, 2, 4, and 6: value codec, write plans, permanent InlineStyleAdapter, shared manager wiring. |
-| Subphase 2b CSS-in-JS | Kept in adapter taxonomy, CSS-in-JS scope, migration Phase 8, and test matrix. |
-| Subphase 2c CSS Modules + plain CSS | Kept and expanded with source tabs, AI source routing, PostCSS utilities, and permanent inline fallback policy. |
-| Subphase 2d Tailwind v4 + hybrid routing | Kept and refined as `TailwindV3Adapter` / `TailwindV4Adapter` umbrellas with internal static/dynamic writer facets and token/theme resolvers; the old composite-adapter idea becomes planner-level routing. |
-| Single `StyleAdapter` interface | Intentionally replaced by framework adapter umbrellas such as `TailwindV3Adapter`, `TailwindV4Adapter`, `CssModulesAdapter`, each with reader/writer/resolver facets, plus orthogonal read/write managers and MCP resolver boundaries. |
-| `writeMode` dispatch | Intentionally replaced by serializable `StyleWritePlan` kinds. |
-| Per-property priority chain | Replaced by property owner, element owner, project policy, source tabs, and AI route decision where applicable. |
-| Element-level detection | Kept and made mandatory input to planner context. |
-| FastPatchService | Retained, not replaced: it is an optimistic DOM preview layer and must not hide source-write failures in tests. |
-| Adapter registry / project frameworks | Kept as `ProjectStyleCapabilities`; client-sent framework lists are not authoritative. |
-| PostCSS CSS file mutation | Kept as baseline CSS file infrastructure. |
-| Backward compatibility | Kept as migration requirement: old extension/SaaS endpoints may remain during migration, but must delegate to shared `StyleWriteManager`; `projectUIKit` may exist only as a compatibility view over richer capabilities. |
-| MCP tools | Kept as separate `McpStyleResolver`/thin platform wrappers, not as write-routing authority. |
+| March 11 section                            | Status in this spec                                                                                                                                                                                                                    |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vision: any CSS framework                   | Kept as canonical goal for unified style writes.                                                                                                                                                                                       |
+| DS Core integration                         | Kept as dependency direction: DS Core consumes read/write services through DI; style-write does not depend on DS Core.                                                                                                                 |
+| Subphase 2a foundation + InlineStyleAdapter | Replaced by Phases 1, 2, 4, and 6: value codec, write plans, permanent InlineStyleAdapter, shared manager wiring.                                                                                                                      |
+| Subphase 2b CSS-in-JS                       | Kept in adapter taxonomy, CSS-in-JS scope, migration Phase 8, and test matrix.                                                                                                                                                         |
+| Subphase 2c CSS Modules + plain CSS         | Kept and expanded with source tabs, AI source routing, PostCSS utilities, and permanent inline fallback policy.                                                                                                                        |
+| Subphase 2d Tailwind v4 + hybrid routing    | Kept and refined as `TailwindV3Adapter` / `TailwindV4Adapter` umbrellas with internal static/dynamic writer facets and token/theme resolvers; the old composite-adapter idea becomes planner-level routing.                            |
+| Single `StyleAdapter` interface             | Intentionally replaced by framework adapter umbrellas such as `TailwindV3Adapter`, `TailwindV4Adapter`, `CssModulesAdapter`, each with reader/writer/resolver facets, plus orthogonal read/write managers and MCP resolver boundaries. |
+| `writeMode` dispatch                        | Intentionally replaced by serializable `StyleWritePlan` kinds.                                                                                                                                                                         |
+| Per-property priority chain                 | Replaced by property owner, element owner, project policy, source tabs, and AI route decision where applicable.                                                                                                                        |
+| Element-level detection                     | Kept and made mandatory input to planner context.                                                                                                                                                                                      |
+| FastPatchService                            | Retained, not replaced: it is an optimistic DOM preview layer and must not hide source-write failures in tests.                                                                                                                        |
+| Adapter registry / project frameworks       | Kept as `ProjectStyleCapabilities`; client-sent framework lists are not authoritative.                                                                                                                                                 |
+| PostCSS CSS file mutation                   | Kept as baseline CSS file infrastructure.                                                                                                                                                                                              |
+| Backward compatibility                      | Kept as migration requirement: old extension/SaaS endpoints may remain during migration, but must delegate to shared `StyleWriteManager`; `projectUIKit` may exist only as a compatibility view over richer capabilities.              |
+| MCP tools                                   | Kept as separate `McpStyleResolver`/thin platform wrappers, not as write-routing authority.                                                                                                                                            |
 
 Non-architectural process details from the March 11 document, such as exact
 branch names, PR slicing, and old Linear placeholders, are not normative here.
@@ -461,10 +462,18 @@ element:
 ```
 
 ```css
-.card { padding: 12px; }
-.featured { background: gold; }
-.globalCard { border: 1px solid red; }
-.card:hover { background: blue; }
+.card {
+  padding: 12px;
+}
+.featured {
+  background: gold;
+}
+.globalCard {
+  border: 1px solid red;
+}
+.card:hover {
+  background: blue;
+}
 ```
 
 Computed style alone does not tell the product where the user intends to write.
@@ -745,21 +754,11 @@ interface ComponentPropSurfaceFacts {
   semanticProps: string[];
 }
 
-type IdeThemePreference =
-  | 'light'
-  | 'dark'
-  | 'system';
+type IdeThemePreference = 'light' | 'dark' | 'system';
 
-type ResolvedColorScheme =
-  | 'light'
-  | 'dark';
+type ResolvedColorScheme = 'light' | 'dark';
 
-type RuntimeThemeSource =
-  | 'hyperide'
-  | 'vscode'
-  | 'browser-system'
-  | 'app-runtime'
-  | 'test-fixture';
+type RuntimeThemeSource = 'hyperide' | 'vscode' | 'browser-system' | 'app-runtime' | 'test-fixture';
 
 interface RuntimeThemeContext {
   ideThemePreference: IdeThemePreference;
@@ -768,13 +767,7 @@ interface RuntimeThemeContext {
   selectedTheme?: ThemeCondition[];
 }
 
-type ThemeAxisId =
-  | 'color-scheme'
-  | 'brand'
-  | 'density'
-  | 'contrast'
-  | 'platform'
-  | (string & {});
+type ThemeAxisId = 'color-scheme' | 'brand' | 'density' | 'contrast' | 'platform' | (string & {});
 
 interface ProjectThemeCapabilities {
   axes: ThemeAxisCapability[];
@@ -837,22 +830,9 @@ interface ThemeTokenUsage {
   owners: StyleSourceOwner[];
 }
 
-type StylePseudoState =
-  | 'base'
-  | 'hover'
-  | 'focus'
-  | 'active'
-  | 'focus-visible'
-  | 'disabled';
+type StylePseudoState = 'base' | 'hover' | 'focus' | 'active' | 'focus-visible' | 'disabled';
 
-type StyleBreakpointKey =
-  | 'base'
-  | 'xs'
-  | 'sm'
-  | 'md'
-  | 'lg'
-  | 'xl'
-  | (string & {});
+type StyleBreakpointKey = 'base' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | (string & {});
 
 type ResponsiveConditionSource =
   | 'tailwind-screens'
@@ -930,13 +910,7 @@ interface SelectorCondition {
   kind: SelectorConditionKind;
   selector: string;
   label?: string;
-  source:
-    | 'css-selector'
-    | 'tailwind-variant'
-    | 'mui-slot'
-    | 'chakra-pseudo-prop'
-    | 'mantine-slot'
-    | 'custom';
+  source: 'css-selector' | 'tailwind-variant' | 'mui-slot' | 'chakra-pseudo-prop' | 'mantine-slot' | 'custom';
 }
 
 interface CascadeContext {
@@ -965,10 +939,7 @@ interface StyleCondition {
   }>;
 }
 
-type SourceConfidence =
-  | 'exact'
-  | 'probable'
-  | 'computed-only';
+type SourceConfidence = 'exact' | 'probable' | 'computed-only';
 
 type SourceForm =
   // Class/className token on the selected element, e.g. Tailwind utility.
@@ -1001,9 +972,7 @@ type CssSystemId =
   | 'mantine'
   | 'tamagui';
 
-type CssSystemTopology =
-  | 'flat'
-  | 'cascade';
+type CssSystemTopology = 'flat' | 'cascade';
 
 interface CssSystemDescriptor {
   id: CssSystemId;
@@ -1011,12 +980,7 @@ interface CssSystemDescriptor {
   defaultSourceForm: SourceForm;
 }
 
-type CssSyntaxId =
-  | 'css'
-  | 'scss'
-  | 'sass'
-  | 'less'
-  | 'stylus';
+type CssSyntaxId = 'css' | 'scss' | 'sass' | 'less' | 'stylus';
 
 type UiKitId =
   | 'shadcn-ui'
@@ -1530,7 +1494,7 @@ For a non-Tailwind CSS Modules project:
 this is invalid:
 
 ```tsx
-<div className={(styles.app) + " px-[16px]"} />
+<div className={styles.app + ' px-[16px]'} />
 ```
 
 It assumes Tailwind exists and that adding a runtime class string is the correct
@@ -2178,11 +2142,17 @@ It is not Tailwind-specific. It must parse and explain class expressions before
 framework adapters decide what those classes mean:
 
 ```tsx
-styles[style]                                      // CSS Modules key expression
-cn('foo', { bar: isBar, [styles.baz]: isBaz })      // plain CSS + CSS Modules
-`block_${mod}`                                     // probable plain CSS selector
-cn('p-4', active && 'bg-blue-500')                 // Tailwind tokens
-`p-${p}`                                           // Tailwind-unsafe partial utility
+styles[style]; // CSS Modules key expression
+cn('foo', {
+  bar: isBar,
+  [styles.baz]: isBaz,
+}) // plain CSS + CSS Modules
+`block_${mod}`; // probable plain CSS selector
+cn(
+  'p-4',
+  active && 'bg-blue-500',
+) // Tailwind tokens
+`p-${p}`; // Tailwind-unsafe partial utility
 ```
 
 The analyzer output should include static class candidates, dynamic branches,
@@ -2331,18 +2301,12 @@ interface InspectorValueCodec {
   // Normalize raw user input to the inspector's canonical form for the property.
   // Examples: "50%" / "50" / 50 / "50.0" -> "50" for opacity; "16px" / "16" -> "16" for length.
   // Throws on values that cannot be canonicalized (e.g. opacity "foo").
-  normalize(input: {
-    key: string;
-    value: unknown;
-  }): NormalizedInspectorValue;
+  normalize(input: { key: string; value: unknown }): NormalizedInspectorValue;
 
   // Format a source/runtime value back into inspector canonical form for display.
   // Adapter readers convert source value to canonical first; codec then ensures
   // display formatting (e.g. preserve trailing zeros, locale-aware decimals).
-  format(input: {
-    key: string;
-    value: NormalizedInspectorValue;
-  }): string;
+  format(input: { key: string; value: NormalizedInspectorValue }): string;
 }
 ```
 
@@ -2714,7 +2678,6 @@ adapters.
 
 Static class writer handles:
 
-
 ```tsx
 <div className="p-4 flex" />
 ```
@@ -2739,7 +2702,6 @@ set className string literal
 This writer must be deterministic and must not call AI.
 
 Dynamic class writer handles:
-
 
 ```tsx
 <div className={cn("p-4", active && "bg-blue-500")} />
@@ -2872,9 +2834,11 @@ GitHub: [emotion-js/emotion](https://github.com/emotion-js/emotion)
 Handles, incrementally:
 
 ```tsx
-<div css={{ paddingLeft: 4 }} />
-const block = css`padding-left: 4px;`
-const Component = styled.div({ paddingLeft: 4 })
+<div css={{ paddingLeft: 4 }} />;
+const block = css`
+  padding-left: 4px;
+`;
+const Component = styled.div({ paddingLeft: 4 });
 ```
 
 Fallback:
@@ -3066,7 +3030,7 @@ export const cardHover = style({
 
 ```tsx
 import { card } from './Card.css';
-<div className={card} />
+<div className={card} />;
 ```
 
 Source identity:
@@ -3904,9 +3868,7 @@ interface PlainCssFilePlanBase extends CssFilePlanBase {
 }
 
 // `target.mode` discriminates: edit an existing owner, or create a new rule.
-type PlainCssFilePlan =
-  | PlainCssExistingOwnerPlan
-  | PlainCssCreateRulePlan;
+type PlainCssFilePlan = PlainCssExistingOwnerPlan | PlainCssCreateRulePlan;
 
 interface PlainCssExistingOwnerPlan extends PlainCssFilePlanBase {
   target: {
@@ -3941,13 +3903,7 @@ interface ScriptObjectStylePlan extends StyleWritePlanBase {
   //   vanilla-extract style({ }), Emotion object, MUI sx,
   //   Mantine style/styles object targets.
   sourceForm: 'scriptReactStyleRule';
-  cssSystem:
-    | 'inline-style'
-    | 'emotion'
-    | 'styled-components'
-    | 'vanilla-extract'
-    | 'mui-system'
-    | 'mantine';
+  cssSystem: 'inline-style' | 'emotion' | 'styled-components' | 'vanilla-extract' | 'mui-system' | 'mantine';
   target: {
     filePath: string;
     elementRef?: string;
@@ -4278,22 +4234,22 @@ outcome certainty.
 Verification should cover the write pipeline at three levels:
 
 Planner-level verification:
-  confirms that an inspector edit becomes the expected `StyleWritePlan`.
+confirms that an inspector edit becomes the expected `StyleWritePlan`.
 
 ```text
 Input fixture -> expected StyleWritePlan
 ```
 
 Executor-level verification:
-  confirms that a `StyleWritePlan` produces the expected source mutation.
+confirms that a `StyleWritePlan` produces the expected source mutation.
 
 ```text
 StyleWritePlan + source fixture -> expected file diff
 ```
 
 E2E verification:
-  confirms that the UI action produces the expected source mutation and does
-  not render a runtime error in the preview.
+confirms that the UI action produces the expected source mutation and does
+not render a runtime error in the preview.
 
 ```text
 UI action -> expected plan (sourceForm, cssSystem) logged/diagnosed -> expected source mutation -> no DOM runtime error

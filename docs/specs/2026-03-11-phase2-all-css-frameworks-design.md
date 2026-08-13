@@ -22,12 +22,12 @@ Phase 2 does not depend on DS Core — the dependency is one-directional.
 
 ## Subphases
 
-| Subphase | Scope | Deliverable |
-|----------|-------|-------------|
-| **2a** | Foundation + InlineStyleAdapter | Adapter infra in `lib/`, route refactor, inline-style works e2e |
-| **2b** | CSS-in-JS | EmotionAdapter (styled/css/sx), StyledComponentsAdapter |
-| **2c** | CSS files | CSSModulesAdapter, PlainCSSAdapter (+ AI cascade) |
-| **2d** | TW4 + CompositeAdapter | TailwindV4Adapter, per-property routing, auto-detection |
+| Subphase | Scope                           | Deliverable                                                     |
+| -------- | ------------------------------- | --------------------------------------------------------------- |
+| **2a**   | Foundation + InlineStyleAdapter | Adapter infra in `lib/`, route refactor, inline-style works e2e |
+| **2b**   | CSS-in-JS                       | EmotionAdapter (styled/css/sx), StyledComponentsAdapter         |
+| **2c**   | CSS files                       | CSSModulesAdapter, PlainCSSAdapter (+ AI cascade)               |
+| **2d**   | TW4 + CompositeAdapter          | TailwindV4Adapter, per-property routing, auto-detection         |
 
 Each subphase = separate branch, separate PR, independently releasable.
 
@@ -97,22 +97,25 @@ interface StyleAdapter {
 }
 
 type FrameworkId =
-  | 'tailwind-v3' | 'tailwind-v4'
+  | 'tailwind-v3'
+  | 'tailwind-v4'
   | 'tamagui'
-  | 'emotion' | 'styled-components'
-  | 'css-modules' | 'plain-css'
+  | 'emotion'
+  | 'styled-components'
+  | 'css-modules'
+  | 'plain-css'
   | 'inline-style';
 ```
 
 **writeMode routing in `useStyleSync`:**
 
-| writeMode | Engine method | What happens |
-|---|---|---|
-| `'className'` | `engine.updateASTStyles()` | Tailwind: generates classes, mutates className attr |
-| `'props'` | `engine.updateASTProps()` | Tamagui: converts to RN props, mutates JSX attrs |
-| `'style-prop'` | `engine.updateASTProps()` | InlineStyle: mutates `style={{}}` object expression |
-| `'styled'` | `engine.updateASTStyledDef()` | Emotion/SC: mutates styled() definition or css/sx prop |
-| `'css-file'` | `engine.updateCSSFile()` | CSS Modules/Plain: mutates external `.css` file via PostCSS |
+| writeMode      | Engine method                 | What happens                                                |
+| -------------- | ----------------------------- | ----------------------------------------------------------- |
+| `'className'`  | `engine.updateASTStyles()`    | Tailwind: generates classes, mutates className attr         |
+| `'props'`      | `engine.updateASTProps()`     | Tamagui: converts to RN props, mutates JSX attrs            |
+| `'style-prop'` | `engine.updateASTProps()`     | InlineStyle: mutates `style={{}}` object expression         |
+| `'styled'`     | `engine.updateASTStyledDef()` | Emotion/SC: mutates styled() definition or css/sx prop      |
+| `'css-file'`   | `engine.updateCSSFile()`      | CSS Modules/Plain: mutates external `.css` file via PostCSS |
 
 `'styled'` and `'css-file'` require new engine methods added in 2b and 2c respectively.
 
@@ -144,15 +147,15 @@ For each CSS property when writing:
 
 For each selected element, analyze AST node:
 
-| AST pattern | Adapter |
-|---|---|
-| `style={{ }}` prop | InlineStyleAdapter |
-| `className={styles.foo}` + object CSS import | CSSModulesAdapter |
-| `className="flex gap-4 ..."` (TW pattern) | TailwindAdapter |
-| `styled(X)` / `css={}` / `sx={}` | Emotion or StyledComponents |
-| Tamagui style props as JSX props | TamaguiAdapter |
-| `className="some-class"` + side-effect CSS import | PlainCSSAdapter |
-| `className="some-class"` without CSS import | PlainCSSAdapter (fallback, class in global styles) |
+| AST pattern                                       | Adapter                                            |
+| ------------------------------------------------- | -------------------------------------------------- |
+| `style={{ }}` prop                                | InlineStyleAdapter                                 |
+| `className={styles.foo}` + object CSS import      | CSSModulesAdapter                                  |
+| `className="flex gap-4 ..."` (TW pattern)         | TailwindAdapter                                    |
+| `styled(X)` / `css={}` / `sx={}`                  | Emotion or StyledComponents                        |
+| Tamagui style props as JSX props                  | TamaguiAdapter                                     |
+| `className="some-class"` + side-effect CSS import | PlainCSSAdapter                                    |
+| `className="some-class"` without CSS import       | PlainCSSAdapter (fallback, class in global styles) |
 
 CSS Modules vs Plain CSS is distinguished by **import pattern**, not file extension:
 
@@ -450,7 +453,7 @@ Styles live in **separate CSS files**, not in JSX. Requires:
 
 ```tsx
 import styles from './Component.module.css';
-<div className={styles.card} />
+<div className={styles.card} />;
 ```
 
 1. AST: `styles.card` -> find import `./Component.module.css` -> resolve path
@@ -503,7 +506,7 @@ class CSSModulesAdapter implements StyleAdapter {
 
 ```tsx
 import './styles.css';
-<div className="card hero-card" />
+<div className="card hero-card" />;
 ```
 
 1. AST: `className="card hero-card"` -> side-effect import `./styles.css`
@@ -579,14 +582,14 @@ Reused by both adapters. `CSSModulesAdapter` calls finder + mutator directly (no
 
 ### TW4 vs TW3 Differences
 
-| | TW3 | TW4 |
-|---|---|---|
-| Config | `tailwind.config.js` | `@theme` in CSS (`app.css`) |
-| Custom values | `theme.extend.colors` | `@theme { --color-brand: #xx }` |
-| Arbitrary values | `bg-[#ff0000]` | `bg-[#ff0000]` (same) |
-| New syntax | -- | `bg-red-500/50` (opacity modifier) |
-| Default border color | `border-gray-200` | `currentColor` |
-| Container queries | plugin | built-in `@container` |
+|                      | TW3                   | TW4                                |
+| -------------------- | --------------------- | ---------------------------------- |
+| Config               | `tailwind.config.js`  | `@theme` in CSS (`app.css`)        |
+| Custom values        | `theme.extend.colors` | `@theme { --color-brand: #xx }`    |
+| Arbitrary values     | `bg-[#ff0000]`        | `bg-[#ff0000]` (same)              |
+| New syntax           | --                    | `bg-red-500/50` (opacity modifier) |
+| Default border color | `border-gray-200`     | `currentColor`                     |
+| Container queries    | plugin                | built-in `@container`              |
 
 ### TailwindV4Adapter
 
@@ -680,10 +683,7 @@ class CompositeAdapter implements Omit<StyleAdapter, 'framework'> & { framework:
 ### When CompositeAdapter is Created
 
 ```typescript
-function getAdapterForElement(
-  node: ASTNode,
-  projectFrameworks: FrameworkId[],
-): StyleAdapter {
+function getAdapterForElement(node: ASTNode, projectFrameworks: FrameworkId[]): StyleAdapter {
   const elementAdapters = detectElementAdapters(node);
 
   if (elementAdapters.length === 0) {

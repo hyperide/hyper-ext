@@ -7,6 +7,7 @@
 ## Failing Tests Breakdown
 
 ### Category A: AstService — element insertion, wrap, style write (5 fails)
+
 - `AstService.insertElement > inserts a native HTML element as child of parent`
 - `wrapElementInAST > should add wrapper props`
 - `StyleWriteExecutor > executes static Tailwind plans by replacing conflicting classes`
@@ -15,26 +16,32 @@
 - `StyleWriteExecutor > routes computed writes to inline styles when no class source exists`
 
 ### Category B: AstService — moveElement, cache invalidation (7 fails)
+
 - `AstService.moveElement — text-container & inline-emoji moves (Task 4)` — 3 sub-tests
 - `AstService cache invalidation (Task 3)` — 2 sub-tests
 - `AstService wrap element > resolves a source-location nodeRef passed as elementId`
 - `AstService shared style-write routing > updateProps writes to the element source file when filePath is a different shell component`
 
 ### Category C: AstService — cross-component moves (3 fails)
+
 - `AstService.moveElement — cross-component cross-file moves (Task 5)` — 3 sub-tests
 
 ### Category D: I18n (5 fails)
+
 - `Bulka project — real client/lib/translations.ts` — 4 sub-tests
 - `AstService updateI18nKey > replaces only the selected i18n key literal and preserves the helper expression`
 
 ### Category E: Inspector (2 fails)
+
 - `I18nTextInspector > fires onKeyChange on retry when optimisticKey is set but realKey differs`
 
 ### Category F: UI Components (2 fails)
+
 - `StrokeSection > syncs stroke width, style, and color edits`
 - `StrokeSection > keeps native color input valid for non-hex computed colors`
 
 ### Category G: AstBridge (1 fail)
+
 - `AstBridge > ast:writeI18nResource newElementId > returns data.newElementId equal to elementId when previousKey changes`
 
 ## Scope

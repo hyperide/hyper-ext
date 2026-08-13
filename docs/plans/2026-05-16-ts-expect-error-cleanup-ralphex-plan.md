@@ -58,10 +58,10 @@ For babel interop: instead of `const generate = _generate.default || _generate` 
 ### Task 4: Handle non-babel suppressions
 
 - [ ] `client/components/IframeCanvas.tsx:1191` — `allowtransparency`. This is a non-standard React attribute. Options:
-  a) Add it to a JSX interface augmentation in a .d.ts file
-  b) Use `// @ts-ignore` with justification (if ts-expect-error is too strict)
-  c) Cast the element props to `Record<string, unknown>`
-  Choose the safest option and document why.
+      a) Add it to a JSX interface augmentation in a .d.ts file
+      b) Use `// @ts-ignore` with justification (if ts-expect-error is too strict)
+      c) Cast the element props to `Record<string, unknown>`
+      Choose the safest option and document why.
 - [ ] `server/main.ts:261` — Bun WebSocket headers. Bun types may already include this. Check if `@types/bun` or `bun-types` covers it. If yes, remove suppression. If no, add to a `bun-extensions.d.ts`.
 - [ ] Run `tsgo --noEmit` — must be 0 errors.
 

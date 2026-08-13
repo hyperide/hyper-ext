@@ -62,6 +62,7 @@ vscode-extension/hypercanvas-preview/src/StateHub.ts  # Add element-tracing mess
 ## Task 1: Shared Types
 
 **Files:**
+
 - Create: `shared/element-tracing/types.ts`
 
 - [ ] **Step 1: Create types file**
@@ -218,6 +219,7 @@ git commit -m "feat(element-tracing): add shared types for fiber-based tracing (
 Pure function: Babel AST → `NodeMapEntry[]`. No I/O, no state.
 
 **Files:**
+
 - Create: `lib/element-tracing/node-map-builder.ts`
 - Create: `lib/element-tracing/node-map-builder.test.ts`
 
@@ -262,8 +264,8 @@ describe('buildNodeMap', () => {
     const ast = parseJSX(`const Page = () => <div><Card title="x" /><Button /></div>;`);
     const entries = buildNodeMap(ast, 'src/Page.tsx');
 
-    const card = entries.find(e => e.tag === 'Card');
-    const button = entries.find(e => e.tag === 'Button');
+    const card = entries.find((e) => e.tag === 'Card');
+    const button = entries.find((e) => e.tag === 'Button');
 
     expect(card).toBeDefined();
     expect(card!.isComponent).toBe(true);
@@ -286,8 +288,8 @@ describe('buildNodeMap', () => {
     `);
     const entries = buildNodeMap(ast, 'src/App.tsx');
 
-    const layout = entries.find(e => e.tag === 'Layout');
-    const main = entries.find(e => e.tag === 'main');
+    const layout = entries.find((e) => e.tag === 'Layout');
+    const main = entries.find((e) => e.tag === 'main');
 
     expect(layout).toBeDefined();
     expect(layout!.children.length).toBe(2); // Header + main
@@ -326,7 +328,7 @@ describe('buildNodeMap', () => {
     const ast = parseJSX(`const A = () => <><div /><span /></>;`);
     const entries = buildNodeMap(ast, 'src/A.tsx');
 
-    const fragment = entries.find(e => e.tag === 'Fragment');
+    const fragment = entries.find((e) => e.tag === 'Fragment');
     expect(fragment).toBeDefined();
     expect(fragment!.children.length).toBe(2);
   });
@@ -343,8 +345,8 @@ describe('buildNodeMap', () => {
     const entries = buildNodeMap(ast, 'src/A.tsx');
 
     // Both branches should be in the map
-    expect(entries.find(e => e.tag === 'div')).toBeDefined();
-    expect(entries.find(e => e.tag === 'span')).toBeDefined();
+    expect(entries.find((e) => e.tag === 'div')).toBeDefined();
+    expect(entries.find((e) => e.tag === 'span')).toBeDefined();
   });
 
   it('should handle .map() JSX', () => {
@@ -357,8 +359,8 @@ describe('buildNodeMap', () => {
     `);
     const entries = buildNodeMap(ast, 'src/A.tsx');
 
-    const ul = entries.find(e => e.tag === 'ul');
-    const li = entries.find(e => e.tag === 'li');
+    const ul = entries.find((e) => e.tag === 'ul');
+    const li = entries.find((e) => e.tag === 'li');
 
     expect(ul).toBeDefined();
     expect(li).toBeDefined();
@@ -427,9 +429,10 @@ export function buildNodeMap(ast: t.File, filePath: string): NodeMapEntry[] {
       const { node } = path;
       if (!node.loc) return;
 
-      const tag = node.openingElement.name.type === 'JSXFragment'
-        ? 'Fragment'
-        : buildTagName(node.openingElement.name as t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName);
+      const tag =
+        node.openingElement.name.type === 'JSXFragment'
+          ? 'Fragment'
+          : buildTagName(node.openingElement.name as t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName);
 
       const nodeRef: NodeRef = `${filePath}:${traversalIndex}`;
       traversalIndex++;
@@ -496,7 +499,7 @@ export function buildNodeMap(ast: t.File, filePath: string): NodeMapEntry[] {
   });
 
   // Second pass: populate children arrays
-  const refToEntry = new Map(entries.map(e => [e.nodeRef, e]));
+  const refToEntry = new Map(entries.map((e) => [e.nodeRef, e]));
   for (const entry of entries) {
     if (entry.parentRef) {
       const parent = refToEntry.get(entry.parentRef);
@@ -534,6 +537,7 @@ git commit -m "feat(element-tracing): NodeMap builder — AST to NodeMapEntry[] 
 Composite key matching to map old nodeRefs to new nodeRefs after re-parse.
 
 **Files:**
+
 - Create: `lib/element-tracing/stability.ts`
 - Create: `lib/element-tracing/stability.test.ts`
 
@@ -568,15 +572,15 @@ describe('buildCompositeKey', () => {
     ];
     entries[0].children = ['f:1', 'f:2'];
 
-    const refToEntry = new Map(entries.map(e => [e.nodeRef, e]));
+    const refToEntry = new Map(entries.map((e) => [e.nodeRef, e]));
 
     const key0 = buildCompositeKey(entries[0], refToEntry);
     const key1 = buildCompositeKey(entries[1], refToEntry);
     const key2 = buildCompositeKey(entries[2], refToEntry);
 
     expect(key0).toBe('div|0|ROOT|0');
-    expect(key1).toBe('span|1|div|0');  // first span under div
-    expect(key2).toBe('span|1|div|1');  // second span under div
+    expect(key1).toBe('span|1|div|0'); // first span under div
+    expect(key2).toBe('span|1|div|1'); // second span under div
   });
 });
 
@@ -642,12 +646,8 @@ describe('mapNodeRefs', () => {
   });
 
   it('should return empty mapping for completely different structures', () => {
-    const oldEntries: NodeMapEntry[] = [
-      entry({ nodeRef: 'f:0', tag: 'div' }),
-    ];
-    const newEntries: NodeMapEntry[] = [
-      entry({ nodeRef: 'f:0', tag: 'section' }),
-    ];
+    const oldEntries: NodeMapEntry[] = [entry({ nodeRef: 'f:0', tag: 'div' })];
+    const newEntries: NodeMapEntry[] = [entry({ nodeRef: 'f:0', tag: 'section' })];
 
     const mapping = mapNodeRefs(oldEntries, newEntries);
     expect(mapping['f:0']).toBeUndefined();
@@ -679,10 +679,7 @@ import type { NodeMapEntry, NodeRef } from '../../shared/element-tracing/types';
  * This identity survives sibling insertions/deletions because it counts
  * only same-tag siblings, not raw child index.
  */
-export function buildCompositeKey(
-  entry: NodeMapEntry,
-  refToEntry: Map<NodeRef, NodeMapEntry>,
-): string {
+export function buildCompositeKey(entry: NodeMapEntry, refToEntry: Map<NodeRef, NodeMapEntry>): string {
   const parentEntry = entry.parentRef ? refToEntry.get(entry.parentRef) : null;
   const parentTag = parentEntry ? parentEntry.tag : 'ROOT';
 
@@ -718,12 +715,9 @@ export function buildCompositeKey(
  * @param newEntries - NodeMap entries from current parse
  * @returns Mapping from old nodeRef to new nodeRef. Missing keys = node was deleted/not matched.
  */
-export function mapNodeRefs(
-  oldEntries: NodeMapEntry[],
-  newEntries: NodeMapEntry[],
-): Record<NodeRef, NodeRef> {
-  const oldRefToEntry = new Map(oldEntries.map(e => [e.nodeRef, e]));
-  const newRefToEntry = new Map(newEntries.map(e => [e.nodeRef, e]));
+export function mapNodeRefs(oldEntries: NodeMapEntry[], newEntries: NodeMapEntry[]): Record<NodeRef, NodeRef> {
+  const oldRefToEntry = new Map(oldEntries.map((e) => [e.nodeRef, e]));
+  const newRefToEntry = new Map(newEntries.map((e) => [e.nodeRef, e]));
 
   // Build composite keys for both sets
   const oldKeyToRef = new Map<string, NodeRef>();
@@ -775,6 +769,7 @@ git commit -m "feat(element-tracing): nodeRef stability algorithm — composite 
 Orchestrator that parses files, builds NodeMap, tracks nodeRef stability across re-parses, and emits updates. Uses `FileIO` abstraction to work in both server and extension.
 
 **Files:**
+
 - Create: `lib/element-tracing/node-map-service.ts`
 - Create: `lib/element-tracing/node-map-service.test.ts`
 
@@ -1116,6 +1111,7 @@ git commit -m "feat(element-tracing): NodeMapService — parse, build, track, re
 Low-level functions for working with React fiber internals. Client-side only (runs in iframe).
 
 **Files:**
+
 - Create: `client/lib/element-tracing/fiber-utils.ts`
 - Create: `client/lib/element-tracing/fiber-utils.test.ts`
 
@@ -1167,7 +1163,7 @@ function mockDebugSource(overrides: Partial<DebugSource> = {}): DebugSource {
 describe('getFiberFromDOM', () => {
   it('should extract fiber from __reactFiber$ property', () => {
     const fiber = mockFiber();
-    const el = { '__reactFiber$abc123': fiber } as unknown as HTMLElement;
+    const el = { __reactFiber$abc123: fiber } as unknown as HTMLElement;
     // Need to make Object.keys work
     const result = getFiberFromDOM(el);
     expect(result).toBe(fiber);
@@ -1175,7 +1171,7 @@ describe('getFiberFromDOM', () => {
 
   it('should extract fiber from __reactInternalInstance$ (older React)', () => {
     const fiber = mockFiber();
-    const el = { '__reactInternalInstance$xyz': fiber } as unknown as HTMLElement;
+    const el = { __reactInternalInstance$xyz: fiber } as unknown as HTMLElement;
     const result = getFiberFromDOM(el);
     expect(result).toBe(fiber);
   });
@@ -1335,9 +1331,7 @@ export const FiberTag = {
 
 /** Extract React fiber from a DOM element */
 export function getFiberFromDOM(el: HTMLElement): Fiber | null {
-  const key = Object.keys(el).find(
-    k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'),
-  );
+  const key = Object.keys(el).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
   return key ? (el as Record<string, Fiber>)[key] : null;
 }
 
@@ -1410,11 +1404,7 @@ export function findHostFiber(fiber: Fiber): Fiber | null {
 /** Compare two DebugSource locations for equality */
 export function sameDebugSource(a: DebugSource | null, b: DebugSource | null): boolean {
   if (!a || !b) return false;
-  return (
-    a.fileName === b.fileName &&
-    a.lineNumber === b.lineNumber &&
-    (a.columnNumber ?? 0) === (b.columnNumber ?? 0)
-  );
+  return a.fileName === b.fileName && a.lineNumber === b.lineNumber && (a.columnNumber ?? 0) === (b.columnNumber ?? 0);
 }
 
 /**
@@ -1441,12 +1431,19 @@ export function walkFibers(root: Fiber | null, visitor: (fiber: Fiber) => void):
 export function getFiberDisplayName(fiber: Fiber): string {
   const { type } = fiber;
   if (typeof type === 'string') return type;
-  if (typeof type === 'function') return (type as { displayName?: string; name?: string }).displayName || (type as { name?: string }).name || 'Anonymous';
+  if (typeof type === 'function')
+    return (
+      (type as { displayName?: string; name?: string }).displayName || (type as { name?: string }).name || 'Anonymous'
+    );
   if (typeof type === 'object' && type !== null) {
     // memo/forwardRef wrapper
     const inner = (type as { type?: unknown; render?: unknown }).type ?? (type as { render?: unknown }).render;
     if (typeof inner === 'function') {
-      return (inner as { displayName?: string; name?: string }).displayName || (inner as { name?: string }).name || 'Anonymous';
+      return (
+        (inner as { displayName?: string; name?: string }).displayName ||
+        (inner as { name?: string }).name ||
+        'Anonymous'
+      );
     }
   }
   return 'Unknown';
@@ -1472,6 +1469,7 @@ git commit -m "feat(element-tracing): fiber utilities — getFiber, debugSource,
 Implements `FrameworkAdapter` interface using fiber utilities.
 
 **Files:**
+
 - Create: `client/lib/element-tracing/react-adapter.ts`
 - Create: `client/lib/element-tracing/react-adapter.test.ts`
 
@@ -1561,7 +1559,14 @@ function createMockDOM(): {
   (spanEl as Record<string, unknown>)['__reactFiber$test'] = spanFiber;
   (root as Record<string, unknown>)['__reactFiber$test'] = rootFiber;
 
-  return { root: root as HTMLElement, divEl: divEl as HTMLElement, spanEl: spanEl as HTMLElement, divFiber, spanFiber, rootFiber };
+  return {
+    root: root as HTMLElement,
+    divEl: divEl as HTMLElement,
+    spanEl: spanEl as HTMLElement,
+    divFiber,
+    spanFiber,
+    rootFiber,
+  };
 }
 
 describe('ReactAdapter', () => {
@@ -1594,7 +1599,7 @@ describe('ReactAdapter', () => {
       const chain = adapter.getComponentChain(spanEl);
 
       // Should include App (function component) but not host elements
-      const appInfo = chain.find(c => c.name === 'App');
+      const appInfo = chain.find((c) => c.name === 'App');
       expect(appInfo).toBeDefined();
       expect(appInfo!.source).not.toBeNull();
     });
@@ -1610,29 +1615,51 @@ describe('ReactAdapter', () => {
       // Build fiber tree with 3 siblings sharing same _debugSource (like .map())
       const source: DebugSource = { fileName: 'f.tsx', lineNumber: 10, columnNumber: 8 };
       const parentFiber: Fiber = {
-        tag: 5, type: 'ul', stateNode: null, return: null, child: null,
-        sibling: null, memoizedProps: {}, _debugSource: null, _debugOwner: null,
+        tag: 5,
+        type: 'ul',
+        stateNode: null,
+        return: null,
+        child: null,
+        sibling: null,
+        memoizedProps: {},
+        _debugSource: null,
+        _debugOwner: null,
       };
 
       const li1: Fiber = {
-        tag: 5, type: 'li',
+        tag: 5,
+        type: 'li',
         stateNode: Object.create(HTMLElement.prototype),
-        return: parentFiber, child: null, sibling: null,
-        memoizedProps: {}, _debugSource: source, _debugOwner: null,
+        return: parentFiber,
+        child: null,
+        sibling: null,
+        memoizedProps: {},
+        _debugSource: source,
+        _debugOwner: null,
       };
 
       const li2: Fiber = {
-        tag: 5, type: 'li',
+        tag: 5,
+        type: 'li',
         stateNode: Object.create(HTMLElement.prototype),
-        return: parentFiber, child: null, sibling: null,
-        memoizedProps: {}, _debugSource: source, _debugOwner: null,
+        return: parentFiber,
+        child: null,
+        sibling: null,
+        memoizedProps: {},
+        _debugSource: source,
+        _debugOwner: null,
       };
 
       const li3: Fiber = {
-        tag: 5, type: 'li',
+        tag: 5,
+        type: 'li',
         stateNode: Object.create(HTMLElement.prototype),
-        return: parentFiber, child: null, sibling: null,
-        memoizedProps: {}, _debugSource: source, _debugOwner: null,
+        return: parentFiber,
+        child: null,
+        sibling: null,
+        memoizedProps: {},
+        _debugSource: source,
+        _debugOwner: null,
       };
 
       parentFiber.child = li1;
@@ -1663,7 +1690,12 @@ Expected: FAIL — `Cannot find module './react-adapter'`
  * __reactFiber$ property exists on all React-rendered DOM elements since React 16.
  */
 
-import type { ComponentInfo, ComponentTreeNode, FrameworkAdapter, SourceLocation } from '../../../shared/element-tracing/types';
+import type {
+  ComponentInfo,
+  ComponentTreeNode,
+  FrameworkAdapter,
+  SourceLocation,
+} from '../../../shared/element-tracing/types';
 import {
   type DebugSource,
   type Fiber,
@@ -1689,18 +1721,22 @@ function debugSourceToLocation(ds: DebugSource): SourceLocation {
 function fiberToComponentInfo(fiber: Fiber): ComponentInfo {
   const name = getFiberDisplayName(fiber);
   const source = fiber._debugSource ? debugSourceToLocation(fiber._debugSource) : null;
-  const isLibrary = typeof fiber.type === 'function' &&
-    (fiber._debugSource?.fileName?.includes('node_modules') ?? false);
+  const isLibrary =
+    typeof fiber.type === 'function' && (fiber._debugSource?.fileName?.includes('node_modules') ?? false);
 
   // Serialize props (truncate values for transport)
   const props: Record<string, string> = {};
   if (fiber.memoizedProps && typeof fiber.memoizedProps === 'object') {
     for (const [key, val] of Object.entries(fiber.memoizedProps)) {
       if (key === 'children') continue;
-      const str = typeof val === 'string' ? val :
-                  typeof val === 'number' || typeof val === 'boolean' ? String(val) :
-                  typeof val === 'function' ? '[fn]' :
-                  '[object]';
+      const str =
+        typeof val === 'string'
+          ? val
+          : typeof val === 'number' || typeof val === 'boolean'
+            ? String(val)
+            : typeof val === 'function'
+              ? '[fn]'
+              : '[object]';
       props[key] = str.length > 50 ? `${str.slice(0, 47)}...` : str;
     }
   }
@@ -1739,9 +1775,7 @@ export class ReactAdapter implements FrameworkAdapter {
     const fiber = getFiberFromDOM(element);
     if (!fiber) return [];
 
-    return traceToRoot(fiber)
-      .filter(isUserComponent)
-      .map(fiberToComponentInfo);
+    return traceToRoot(fiber).filter(isUserComponent).map(fiberToComponentInfo);
   }
 
   getItemIndex(element: HTMLElement): number {
@@ -1875,6 +1909,7 @@ git commit -m "feat(element-tracing): ReactAdapter — fiber-based FrameworkAdap
 Client-side state machine that handles the race between HMR reload and NodeMap update delivery.
 
 **Files:**
+
 - Create: `client/lib/element-tracing/sync-state-machine.ts`
 - Create: `client/lib/element-tracing/sync-state-machine.test.ts`
 
@@ -1972,7 +2007,7 @@ describe('TracingSyncStateMachine', () => {
     expect(machine.state).toBe('awaiting-both');
 
     // Wait for timeout
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
     expect(machine.state).toBe('synced');
   });
@@ -2142,6 +2177,7 @@ git commit -m "feat(element-tracing): sync state machine — HMR/map-update race
 Transport interface is in shared types. `WSTracingTransport` is a WebSocket-based client for SaaS.
 
 **Files:**
+
 - Create: `client/lib/element-tracing/ws-tracing-transport.ts`
 - Create: `client/lib/element-tracing/ws-tracing-transport.test.ts`
 
@@ -2202,7 +2238,7 @@ describe('WSTracingTransport', () => {
     transport = new WSTracingTransport(() => mockWs as unknown as WebSocket);
 
     // Wait for connection
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
   });
 
   it('should report connected after WebSocket opens', () => {
@@ -2386,6 +2422,7 @@ git commit -m "feat(element-tracing): WSTracingTransport — WebSocket client fo
 Client orchestrator that wires adapter, transport, and sync state machine together.
 
 **Files:**
+
 - Create: `client/lib/element-tracing/element-tracer.ts`
 - Create: `client/lib/element-tracing/element-tracer.test.ts`
 - Create: `client/lib/element-tracing/index.ts`
@@ -2440,9 +2477,17 @@ function mockTransport(): TracingTransport & {
     handlers,
     connHandlers,
     sent,
-    send(msg: TracingClientMessage) { sent.push(msg); },
-    onMessage(handler) { handlers.add(handler); return () => handlers.delete(handler); },
-    onConnectionChange(handler) { connHandlers.add(handler); return () => connHandlers.delete(handler); },
+    send(msg: TracingClientMessage) {
+      sent.push(msg);
+    },
+    onMessage(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    onConnectionChange(handler) {
+      connHandlers.add(handler);
+      return () => connHandlers.delete(handler);
+    },
     simulateMessage(msg: TracingServerMessage) {
       for (const h of handlers) h(msg);
     },
@@ -2699,6 +2744,7 @@ git commit -m "feat(element-tracing): ElementTracer — client orchestrator (HYP
 Server-side WebSocket handler for `element-tracing` channel. Integrates with Bun.serve's existing websocket handler.
 
 **Files:**
+
 - Create: `server/services/element-tracing-channel.ts`
 - Modify: `server/proxy/shared.ts` (extend WSData)
 - Modify: `server/main.ts` (add WS handler branch + route)
@@ -2926,6 +2972,7 @@ git commit -m "feat(element-tracing): server WS channel — upgrade, dispatch, b
 Transport for VS Code extension that uses postMessage through webview panels and StateHub.
 
 **Files:**
+
 - Create: `vscode-extension/hypercanvas-preview/src/services/element-tracing/post-message-tracing-transport.ts`
 
 - [ ] **Step 1: Implement PostMessageTracingTransport**
@@ -2987,10 +3034,13 @@ export class PostMessageTracingTransport implements TracingTransport {
 
   send(msg: TracingClientMessage): void {
     if (this.mode === 'iframe' && typeof window !== 'undefined') {
-      window.parent.postMessage({
-        type: `${TRACING_PREFIX}${msg.type}`,
-        payload: msg,
-      }, '*');
+      window.parent.postMessage(
+        {
+          type: `${TRACING_PREFIX}${msg.type}`,
+          payload: msg,
+        },
+        '*',
+      );
     }
     // Host mode: handled externally via onWebviewMessage
   }
@@ -3023,7 +3073,9 @@ export class PostMessageTracingTransport implements TracingTransport {
   /** Extension host: subscribe to messages from client (iframe) */
   onClientMessage(handler: (msg: TracingClientMessage) => void): () => void {
     this._onClientMessage = handler;
-    return () => { this._onClientMessage = null; };
+    return () => {
+      this._onClientMessage = null;
+    };
   }
 
   /**
@@ -3065,6 +3117,7 @@ git commit -m "feat(element-tracing): PostMessageTracingTransport for VS Code ex
 End-to-end test: parse file → build node map → mock fiber with matching source → resolve element via ElementTracer. Also validate `_debugSource` column format assumptions.
 
 **Files:**
+
 - Create: `lib/element-tracing/integration.test.ts`
 
 - [ ] **Step 1: Write integration tests**
@@ -3110,12 +3163,12 @@ describe('element-tracing integration', () => {
     // Should find: div, h1, Card, p, ul, li (6 elements, no Fragment)
     expect(entries.length).toBeGreaterThanOrEqual(5);
 
-    const div = entries.find(e => e.tag === 'div');
-    const h1 = entries.find(e => e.tag === 'h1');
-    const card = entries.find(e => e.tag === 'Card');
-    const p = entries.find(e => e.tag === 'p');
-    const ul = entries.find(e => e.tag === 'ul');
-    const li = entries.find(e => e.tag === 'li');
+    const div = entries.find((e) => e.tag === 'div');
+    const h1 = entries.find((e) => e.tag === 'h1');
+    const card = entries.find((e) => e.tag === 'Card');
+    const p = entries.find((e) => e.tag === 'p');
+    const ul = entries.find((e) => e.tag === 'ul');
+    const li = entries.find((e) => e.tag === 'li');
 
     expect(div).toBeDefined();
     expect(h1).toBeDefined();
@@ -3143,7 +3196,7 @@ describe('element-tracing integration', () => {
     const entries = service.parseAndBuild(FIXTURE, 'src/Page.tsx');
 
     // Simulate _debugSource pointing at <Card> element
-    const card = entries.find(e => e.tag === 'Card')!;
+    const card = entries.find((e) => e.tag === 'Card')!;
     const resolved = service.resolveSourceLocation(card.loc);
 
     expect(resolved).not.toBeNull();
@@ -3156,13 +3209,10 @@ describe('element-tracing integration', () => {
     service.parseAndBuild(FIXTURE, 'src/Page.tsx');
 
     const oldEntries = service.getNodeMap('src/Page.tsx')!;
-    const oldCard = oldEntries.find(e => e.tag === 'Card')!;
+    const oldCard = oldEntries.find((e) => e.tag === 'Card')!;
 
     // Simulate adding a <nav> element before Card
-    const modifiedFixture = FIXTURE.replace(
-      '<Card title="Hello">',
-      '<nav>Nav</nav>\n    <Card title="Hello">',
-    );
+    const modifiedFixture = FIXTURE.replace('<Card title="Hello">', '<nav>Nav</nav>\n    <Card title="Hello">');
 
     const result = service.reparseAndUpdate(modifiedFixture, 'src/Page.tsx');
     expect(result.refMapping).toBeDefined();
@@ -3171,7 +3221,7 @@ describe('element-tracing integration', () => {
     const newCardRef = result.refMapping![oldCard.nodeRef];
     expect(newCardRef).toBeDefined();
 
-    const newCard = result.nodes.find(e => e.nodeRef === newCardRef);
+    const newCard = result.nodes.find((e) => e.nodeRef === newCardRef);
     expect(newCard).toBeDefined();
     expect(newCard!.tag).toBe('Card');
   });
@@ -3184,7 +3234,7 @@ describe('element-tracing integration', () => {
     service.parseAndBuild(FIXTURE, 'src/Page.tsx');
 
     const entries = service.getNodeMap('src/Page.tsx')!;
-    const div = entries.find(e => e.tag === 'div')!;
+    const div = entries.find((e) => e.tag === 'div')!;
 
     // Simulate _debugSource with container path
     const containerLoc: SourceLocation = {
@@ -3205,20 +3255,17 @@ describe('element-tracing integration', () => {
     const oldEntries = service.getNodeMap('src/Page.tsx')!;
 
     // Remove the <ul> block
-    const withoutUl = FIXTURE.replace(
-      /\s*<ul>[\s\S]*?<\/ul>/,
-      '',
-    );
+    const withoutUl = FIXTURE.replace(/\s*<ul>[\s\S]*?<\/ul>/, '');
 
     const result = service.reparseAndUpdate(withoutUl, 'src/Page.tsx');
 
-    const oldUl = oldEntries.find(e => e.tag === 'ul')!;
+    const oldUl = oldEntries.find((e) => e.tag === 'ul')!;
     // ul should NOT be in the mapping (deleted)
     expect(result.refMapping?.[oldUl.nodeRef]).toBeUndefined();
 
     // But div and Card should still be mapped
-    const oldDiv = oldEntries.find(e => e.tag === 'div')!;
-    const oldCard = oldEntries.find(e => e.tag === 'Card')!;
+    const oldDiv = oldEntries.find((e) => e.tag === 'div')!;
+    const oldCard = oldEntries.find((e) => e.tag === 'Card')!;
     expect(result.refMapping?.[oldDiv.nodeRef]).toBeDefined();
     expect(result.refMapping?.[oldCard.nodeRef]).toBeDefined();
   });
@@ -3232,7 +3279,7 @@ describe('element-tracing integration', () => {
       });
 
       const entries = buildNodeMap(ast, 'src/Page.tsx');
-      const div = entries.find(e => e.tag === 'div')!;
+      const div = entries.find((e) => e.tag === 'div')!;
 
       // Babel columns are 0-based — this should match _debugSource.columnNumber
       expect(div.loc.column).toBeGreaterThanOrEqual(0);
@@ -3328,6 +3375,7 @@ Expected: no new errors
 Run: `git diff main --stat` and `git diff main` to review all changes.
 
 Check:
+
 - No `any` or `as any` in new code
 - No commented-out code
 - All files have proper file header comments

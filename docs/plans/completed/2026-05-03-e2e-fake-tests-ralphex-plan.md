@@ -94,111 +94,111 @@ Highest-risk examples:
 - [x] Run `git status --short` in `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects`.
 - [x] Read `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/CLAUDE.md`.
 - [x] Re-run the audit grep over all E2E specs for `test.skip(true`,
-  `does not crash`, `without crash`, `expect(true).toBe(true)`,
-  `toBeGreaterThanOrEqual(0)`, `waitForTimeout`, `screenshot`, and
-  `getVisibleElementIds`.
+      `does not crash`, `without crash`, `expect(true).toBe(true)`,
+      `toBeGreaterThanOrEqual(0)`, `waitForTimeout`, `screenshot`, and
+      `getVisibleElementIds`.
 - [x] Create a short machine-readable working note in the plan or progress log
-  listing each touched fake test file, fake pattern, and intended replacement
-  assertion.
+      listing each touched fake test file, fake pattern, and intended replacement
+      assertion.
 - [x] Do not edit implementation code in this task.
 
 ### Task 2: Make Delete Tests Real
 
 - [x] Add or update a focused delete E2E test that selects a real deletable JSX
-  element and asserts the source file changes correctly, not just preview
-  liveness.
+      element and asserts the source file changes correctly, not just preview
+      liveness.
 - [x] Cover the Bulka i18n fixture
-  `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/bulka-the-dog/client/pages/Index.tsx`
-  with `<p className="text-foreground/80">{t("habits.walks")}</p>`.
+      `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/bulka-the-dog/client/pages/Index.tsx`
+      with `<p className="text-foreground/80">{t("habits.walks")}</p>`.
 - [x] Confirm the test fails for the right reason if current behavior is broken.
 - [x] Remove the skip-after-failure behavior in
-  `e2e/tests/project-dependent/ast-operations.spec.ts:277-284`; failure to
-  modify the file must fail the test.
+      `e2e/tests/project-dependent/ast-operations.spec.ts:277-284`; failure to
+      modify the file must fail the test.
 - [x] Replace liveness-only delete assertions in `commands.spec.ts` and
-  `keybindings.spec.ts` with file diff, element count diff, or selected-node
-  deletion assertions.
+      `keybindings.spec.ts` with file diff, element count diff, or selected-node
+      deletion assertions.
 - [x] If strict delete tests expose a product bug, fix the product path, not the
-  assertion. Inspect `AstService`, `AstBridge`, `PreviewPanel`,
-  `useCanvasInteraction`, and `iframe-interaction.ts`. [deferred — requires test run to surface failures first]
+      assertion. Inspect `AstService`, `AstBridge`, `PreviewPanel`,
+      `useCanvasInteraction`, and `iframe-interaction.ts`. [deferred — requires test run to surface failures first]
 - [x] Run the focused delete tests and inspect logs for `[test-errors]`. [manual test (skipped - requires full E2E infra with VS Code)]
 
 ### Task 3: Make Resize And Drag Tests Real
 
 - [x] Convert `resize.spec.ts` away from "no resize handles yet" expectations.
-  Either delete the obsolete coverage in favor of `resize-handles.spec.ts`, or
-  make it assert visible width/height handles on a fixture with explicit
-  `w-12 h-12`.
+      Either delete the obsolete coverage in favor of `resize-handles.spec.ts`, or
+      make it assert visible width/height handles on a fixture with explicit
+      `w-12 h-12`.
 - [x] Ensure resize-handle tests assert selected state and visible
-  `[data-resize-handle="width"]` and `[data-resize-handle="height"]` handles,
-  not only screenshot existence.
+      `[data-resize-handle="width"]` and `[data-resize-handle="height"]` handles,
+      not only screenshot existence.
 - [x] Replace the `waitForTimeout(1_500)` in `resize-handles.spec.ts` with a
-  handle/overlay poll.
+      handle/overlay poll.
 - [x] Pick the top drag/reorder fake cases in `drag-reorder.spec.ts` and require
-  observable behavior: child order changes, drop state clears, placeholder or
-  guide appears when expected, or file/DOM order is updated.
+      observable behavior: child order changes, drop state clears, placeholder or
+      guide appears when expected, or file/DOM order is updated.
 - [x] For drag cases where the project lacks the needed fixture, use an explicit
-  fixture project or add a committed fixture instead of runtime skipping after
-  discovery. [PI-5-DR-1, PI-5-DR-2, PI-5-DR-10 use TestElements flex fixture; static skip with source proof since drag reorder not implemented]
+      fixture project or add a committed fixture instead of runtime skipping after
+      discovery. [PI-5-DR-1, PI-5-DR-2, PI-5-DR-10 use TestElements flex fixture; static skip with source proof since drag reorder not implemented]
 - [x] Run focused resize and drag E2E specs and inspect `[test-errors]`. [manual test (skipped - requires full E2E infra with VS Code)]
 
 ### Task 4: Make MCP Tool Tests Call MCP Tools
 
 - [x] In `mcp-tools.spec.ts`, classify every `hyper_*` test as either real MCP
-  acceptance or UI smoke.
+      acceptance or UI smoke.
 - [x] For real MCP acceptance tests, call `callMcpTool(...)` and assert the real
-  JSON-RPC result shape, `isError`, returned text, changed source, or changed
-  preview state.
+      JSON-RPC result shape, `isError`, returned text, changed source, or changed
+      preview state.
 - [x] Rename or move tests that only open panels or inspect DOM so their titles
-  do not claim MCP tool coverage.
+      do not claim MCP tool coverage.
 - [x] Remove fallback passes where `callMcpTool(...)` failure becomes
-  "extension visible" success.
+      "extension visible" success.
 - [x] For error-path tests, assert a specific error response or message instead
-  of `expect(result).toBeTruthy()`.
+      of `expect(result).toBeTruthy()`.
 - [x] Prove selection-dependent MCP tools use a real selected nodeRef from the
-  production selection state or `__hyperTestBridge`; do not rely on CDP click
-  alone.
+      production selection state or `__hyperTestBridge`; do not rely on CDP click
+      alone.
 - [x] Run a focused MCP E2E subset with `-g` and inspect `[test-errors]`. [manual test (skipped - requires full E2E infra with VS Code)]
 
 ### Task 5: Fix Screenshot And Visual Assertions
 
 - [x] Review `visual-regression.spec.ts` preview cases that currently capture
-  fallback/default states for board mode, zoom, selection overlays, resize
-  handles, spacing guides, and diamond widget.
+      fallback/default states for board mode, zoom, selection overlays, resize
+      handles, spacing guides, and diamond widget.
 - [x] Add precondition assertions before each visual snapshot so the snapshot is
-  only taken after the intended state is active.
+      only taken after the intended state is active.
 - [x] For resize handles, require actual handle locators before snapshotting.
 - [x] For zoom cases, interact with real zoom controls or mark the test as
-  `fixme` with source proof that controls/test IDs are missing.
+      `fixme` with source proof that controls/test IDs are missing.
 - [x] For raw screenshot tests in `mcp-tools.spec.ts`, assert content or route
-  them into diagnostics-only coverage; buffer length alone is not acceptable.
+      them into diagnostics-only coverage; buffer length alone is not acceptable.
 - [x] Decide whether `capture-bulka.spec.ts` and `style-source-screens.spec.ts`
-  belong in normal CI. If they are diagnostics only, mark or move them so they
-  do not count as regression coverage.
+      belong in normal CI. If they are diagnostics only, mark or move them so they
+      do not count as regression coverage.
 
 ### Task 6: Add Guardrail Tests Or Static Checks
 
 - [x] Add a focused E2E harness unit/static test that fails on newly introduced
-  `test.skip(true, ...)` in acceptance specs unless the file is explicitly
-  allowlisted with a reason.
+      `test.skip(true, ...)` in acceptance specs unless the file is explicitly
+      allowlisted with a reason.
 - [x] Add checks for `expect(true).toBe(true)` and liveness-only "does not
-  crash" tests in the critical canvas acceptance specs.
+      crash" tests in the critical canvas acceptance specs.
 - [x] Add or update helper tests for `PreviewCanvas` selection helpers so tests
-  cannot accidentally treat CSS selectors as stable element IDs.
+      cannot accidentally treat CSS selectors as stable element IDs.
 - [x] Keep allowlists narrow and documented in code; do not allowlist whole
-  directories.
+      directories.
 - [x] Run the new guardrail tests. [4 pass, 0 fail]
 
 ### Task 7: Verification And Reporting
 
 - [x] Run focused Bun tests for touched helpers. [ext-test-projects: 66 pass 0 fail; hyper-canvas-draft: 2561 pass 2 fail (pre-existing — multi-root shadcn scan in preview-file-manager.test.ts, added Apr 30, unrelated to this plan)]
 - [x] Run focused Playwright/E2E commands for delete, resize, drag, MCP, and
-  visual changes. [manual test (skipped - requires full E2E infra with VS Code and extension installed)]
+      visual changes. [manual test (skipped - requires full E2E infra with VS Code and extension installed)]
 - [x] Grep resulting logs for `[test-errors]`, `pageerror`, `console.error`,
-  `test.skip`, and the touched test titles. [no [test-errors], pageerror, or console.error in bun output]
+      `test.skip`, and the touched test titles. [no [test-errors], pageerror, or console.error in bun output]
 - [x] If focused suites are green and system load allows it, start a broader E2E
-  run or record exactly why it was deferred. [deferred: requires E2E infra (VS Code + Playwright + extension installed) — not available in current environment]
+      run or record exactly why it was deferred. [deferred: requires E2E infra (VS Code + Playwright + extension installed) — not available in current environment]
 - [x] Summarize changed files, tests run, behavior now covered, remaining fake
-  categories, and whether a full suite completed. [see below]
+      categories, and whether a full suite completed. [see below]
 - [x] Send a concise Telegram-ready summary. [manual (skipped - send-tg-report.sh not installed in current environment)]
 
 <!-- Summary:

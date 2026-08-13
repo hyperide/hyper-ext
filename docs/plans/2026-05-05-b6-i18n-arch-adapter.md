@@ -37,12 +37,12 @@ New i18n key creation is also unimplemented.
 
 ## Files to Change
 
-| File | Change |
-|------|--------|
-| `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` | Extract adapter classes |
-| `client/components/RightSidebar/sections/I18nTextInspector.tsx` | Wire onKeyChange via adapter |
-| `server/services/AstService.ts` | Verify updateText handles i18n key rewrite |
-| `ext-test-projects/e2e/tests/project-independent/i18n-inspector.spec.ts` | Add PI-7-I18N-6 test |
+| File                                                                     | Change                                     |
+| ------------------------------------------------------------------------ | ------------------------------------------ |
+| `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts`  | Extract adapter classes                    |
+| `client/components/RightSidebar/sections/I18nTextInspector.tsx`          | Wire onKeyChange via adapter               |
+| `server/services/AstService.ts`                                          | Verify updateText handles i18n key rewrite |
+| `ext-test-projects/e2e/tests/project-independent/i18n-inspector.spec.ts` | Add PI-7-I18N-6 test                       |
 
 ## Acceptance Criteria
 
@@ -50,7 +50,7 @@ New i18n key creation is also unimplemented.
 - [x] `getAvailableKeys` refactored to use adapters (same behavior, cleaner code)
 - [x] `onKeyChange` calls `adapter.writeKey` and updates JSX source
 - [x] PI-7-I18N-6 e2e test passes: key change persists in file after combobox selection
-- [x] All existing PI-7-I18N-* tests still pass
+- [x] All existing PI-7-I18N-\* tests still pass
 - [x] TypeScript strict: no `any`, no `as unknown as`
 
 ## Notes

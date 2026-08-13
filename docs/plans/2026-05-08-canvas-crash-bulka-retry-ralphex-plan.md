@@ -18,7 +18,7 @@ landed on main today. Docker image is being rebuilt with corepack now.
 - Throwing frame must live in bundled `lib/` or a third-party dep. Need a runtime
   stack from inside the bulka container.
 - Symptoms: `[HyperIDE] Unhandled rejection: TypeError: Cannot convert undefined
-  or null to object at push (<anonymous>)` after Source Control "Discard All
+or null to object at push (<anonymous>)` after Source Control "Discard All
   Changes" while Hyper Canvas is open.
 
 ## Scope
@@ -29,6 +29,7 @@ the existing RED e2e (`bulka-canvas-discard-no-crash.spec.ts` already merged
 into main as part of plan `8a057900`-era work).
 
 Out of scope:
+
 - Refactoring `FileStructureStore` or `PreviewPanel` lifecycle (deferred FSM
   ticket exists in MEMORY).
 
@@ -62,7 +63,7 @@ Out of scope:
 - [ ] Open the screenshot with Read. Verify visually that the canvas survived
       the discard and a click selects an element.
 - [ ] TG report via `send-tg-report.sh` + screenshot via `send-tg-file.sh ...
-      --photo`. CLAUDE.md: no screenshot = bug not fixed.
+--photo`. CLAUDE.md: no screenshot = bug not fixed.
 
 ## Hard Rules
 

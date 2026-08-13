@@ -8,9 +8,7 @@ show resize dots or handles for width or height.
 Fixture class:
 
 ```tsx
-<div className="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center bg-primary/20 text-primary">
-  ...
-</div>
+<div className="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center bg-primary/20 text-primary">...</div>
 ```
 
 Current local finding before dispatch:
@@ -21,10 +19,10 @@ Current local finding before dispatch:
 - `shared/canvas-interaction/overlay-rects.ts` computes only overlay rects and
   placeholder rects. It does not attach size metadata to selection rects.
 - [x] SaaS calls the shared renderer through
-  `client/pages/Editor/components/hooks/useSelectionOverlays.ts`.
+      `client/pages/Editor/components/hooks/useSelectionOverlays.ts`.
 - [x] VS Code extension computes rects in
-  `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts`
-  and posts `hypercanvas:overlayRects` to the webview.
+      `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts`
+      and posts `hypercanvas:overlayRects` to the webview.
 - Tailwind parsing and writing appear capable of handling `w-12` and `h-12`:
   `client/lib/canvas-engine/utils/tailwindParser.ts`,
   `lib/tailwind/parser.ts`, `lib/tailwind/generator.ts`, and
@@ -39,15 +37,15 @@ mutation bug where handles render but dragging cannot update `w-*` or `h-*`.
 - Start with `git status --short`.
 - [x] Do not revert edits made by other agents.
 - [x] Do not touch `client/components/ui/color-combobox.tsx` or
-  `client/components/ui/color-combobox.test.tsx`.
+      `client/components/ui/color-combobox.test.tsx`.
 - Another ralphex may be running for drag; do not kill it.
 - [x] Use `rg` for code search.
 - If fixing canvas interaction, selection, overlay, or rendering behavior, check
   both SaaS `client/` and VS Code extension paths. Shared logic belongs under
   `shared/`.
 - [x] For VS Code extension E2E, first read
-  `/Users/ultra/work/ext-test-projects/CLAUDE.md` and use `launchVSCode()` /
-  the existing E2E harness.
+      `/Users/ultra/work/ext-test-projects/CLAUDE.md` and use `launchVSCode()` /
+      the existing E2E harness.
 
 ## Execution Plan
 

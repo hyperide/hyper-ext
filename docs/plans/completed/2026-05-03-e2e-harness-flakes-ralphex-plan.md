@@ -83,19 +83,19 @@ In `/Users/ultra/work/ext-test-projects`:
 - [x] Update `e2e/helpers/benign-runtime-errors.ts`.
 - [x] Add a helper `isVSCodeWorkbenchAlertFetchNoise(text: string)`.
 - [x] Match all of the following:
-   - `Error: Fetch timeout: 20000ms`
-   - `workbench.desktop.main.js`
-   - `logAndRequest`
-   - `doFetchAlerts`
-   - `fetchAlerts`
+  - `Error: Fetch timeout: 20000ms`
+  - `workbench.desktop.main.js`
+  - `logAndRequest`
+  - `doFetchAlerts`
+  - `fetchAlerts`
 - [x] Add it to `isBenignRuntimeError`.
 - [x] Do not filter generic `Fetch timeout`, generic `ERR_NAME_NOT_RESOLVED`, or
-   generic resource-load failures.
+      generic resource-load failures.
 - [x] Add tests in `e2e/helpers/benign-runtime-errors.test.ts`:
-   - Positive: exact shard-1 workbench alert stack is benign.
-   - Negative: an app or extension `Fetch timeout: 20000ms` without
-     `fetchAlerts` remains non-benign.
-   - Negative: `ERR_NAME_NOT_RESOLVED` alone remains non-benign.
+  - Positive: exact shard-1 workbench alert stack is benign.
+  - Negative: an app or extension `Fetch timeout: 20000ms` without
+    `fetchAlerts` remains non-benign.
+  - Negative: `ERR_NAME_NOT_RESOLVED` alone remains non-benign.
 
 ### Task 2: Run Focused Harness Verification
 

@@ -37,7 +37,7 @@ and never refuses.
 
 When ambiguous (e.g. moving a JSX node that uses an unbound symbol that
 can't be auto-resolved), prefer **best-effort**: import what we can,
-inline what we can't, and surface a *post-hoc* notification ("moved with
+inline what we can't, and surface a _post-hoc_ notification ("moved with
 N adjustments") rather than blocking the drop.
 
 ## Files
@@ -204,8 +204,7 @@ N adjustments") rather than blocking the drop.
       `<header>` before the leaf; (f) leaf-invariant guard — moved source
       MUST NOT appear between the leaf's `<img …` open and its terminating
       `/>`, proving the implementation never tried to nest INTO the leaf.
-      29/29 same-file + cross-file + cross-component + cross-component-cross-file
-      + leaf-target move tests pass (23 across the original 5 files + 6 new in
+      29/29 same-file + cross-file + cross-component + cross-component-cross-file + leaf-target move tests pass (23 across the original 5 files + 6 new in
       AstServiceMoveLeafTarget.test.ts).
 
 ### Task 7: Wire iframe-interaction to the new RPC
@@ -240,8 +239,7 @@ N adjustments") rather than blocking the drop.
       pass-through, same-file single-entry undo, cross-file atomic
       batch-undo asserting BOTH `Source.tsx` AND `Target.tsx` get written
       during a single undo, and exception → `success: false`. 32/32
-      AstBridge tests pass; 27/27 same-file + cross-file + cross-component
-      + cross-component-cross-file + leaf-target + reorder move tests
+      AstBridge tests pass; 27/27 same-file + cross-file + cross-component + cross-component-cross-file + leaf-target + reorder move tests
       pass when run individually (the 2 pre-existing global-`mock.module`
       poisoning failures from `AstServiceMoveCrossCompFile.test.ts` when
       co-loaded with `AstBridge.test.ts` are unchanged from Task 5
@@ -268,8 +266,7 @@ N adjustments") rather than blocking the drop.
       header spec block now describes the cases without referencing the
       defunct `reorderElement` symbol, and notes drop-target-lift "has been
       deleted" rather than "deleted as part of Task 8". 23/23 AstService
-      move tests pass (5 files: AstServiceMove + CrossFile + CrossComponent
-      + CrossCompFile + LeafTarget). 32/32 AstBridge tests pass. 9/9
+      move tests pass (5 files: AstServiceMove + CrossFile + CrossComponent + CrossCompFile + LeafTarget). 32/32 AstBridge tests pass. 9/9
       drag-source-resolver tests pass. The 2 pre-existing global-`mock.module`
       poisoning failures from `AstServiceMoveCrossCompFile.test.ts` when
       co-loaded with `AstBridge.test.ts` are unchanged from the Task 5/7
@@ -311,23 +308,19 @@ N adjustments") rather than blocking the drop.
       (B1/B4) plus the unit-level `AstServiceMoveCrossCompFile.test.ts` from
       Task 5; running those in `dep:bulka-the-dog` exercises the same code
       path against a real-world project. New fixtures created to support
-      the 5 tests:
-        - `react-vite-tw4-twitter/src/components/MoveCrossFileSrc.tsx` —
-          source side of cross-file/cross-component-cross-file moves, has
-          `move-cf-src-simple`, `move-cf-src-with-dep` (uses local
-          `<LocalBadge>`), `move-cf-src-anchor`.
-        - `react-vite-tw4-twitter/src/components/MoveCrossFileTgt.tsx` —
-          target side with `move-cf-tgt-anchor`, `move-cf-tgt-extra`.
-        - `react-vite-tw4-twitter/src/components/MoveCrossComponent.tsx` —
-          two sibling components in one module (`MoveCrossCompLeft`,
-          `MoveCrossCompRight`) with `move-cc-left-source` and
-          `move-cc-right-anchor` testids for Task 4.
-        - `TestElements.tsx` extended with `move-cross-parent-fixture`
-          (Task 2 cross-parent same-file, two parent containers in a
-          grid), `move-leaf-target-fixture` (Task 6, self-closing `<img />`
-          adjacent to a draggable `<div>`), and renders the three new
-          fixture components inline so the dev server picks them up
-          without changes to `App.tsx`.
+      the 5 tests: - `react-vite-tw4-twitter/src/components/MoveCrossFileSrc.tsx` —
+      source side of cross-file/cross-component-cross-file moves, has
+      `move-cf-src-simple`, `move-cf-src-with-dep` (uses local
+      `<LocalBadge>`), `move-cf-src-anchor`. - `react-vite-tw4-twitter/src/components/MoveCrossFileTgt.tsx` —
+      target side with `move-cf-tgt-anchor`, `move-cf-tgt-extra`. - `react-vite-tw4-twitter/src/components/MoveCrossComponent.tsx` —
+      two sibling components in one module (`MoveCrossCompLeft`,
+      `MoveCrossCompRight`) with `move-cc-left-source` and
+      `move-cc-right-anchor` testids for Task 4. - `TestElements.tsx` extended with `move-cross-parent-fixture`
+      (Task 2 cross-parent same-file, two parent containers in a
+      grid), `move-leaf-target-fixture` (Task 6, self-closing `<img />`
+      adjacent to a draggable `<div>`), and renders the three new
+      fixture components inline so the dev server picks them up
+      without changes to `App.tsx`.
       Typecheck: zero new errors in either repo. The pre-existing
       `canvas-bugs.spec.ts` `Page.scrollTo` errors and the
       `react-vite-tw4-twitter` `__canvas_preview_standalone__` missing
@@ -368,7 +361,7 @@ N adjustments") rather than blocking the drop.
       `move-any-to-any-no-shared-parent`, so an unparameterised
       docker run would test the OLD code path, producing zero
       signal. Running with `HYPER_E2E_EXTENSION_REPO=<this
-      worktree>` is feasible but takes ~15-30 min for a single
+worktree>` is feasible but takes ~15-30 min for a single
       shard against `react-vite-tw4-twitter`, and ralphex is not
       the right harness for the "critical visual review →
       send-to-TG" loop the user explicitly designed for manual
@@ -383,7 +376,7 @@ N adjustments") rather than blocking the drop.
       RPC wiring from Task 7-8. Unit-level proof of every move
       semantic from Tasks 2-6 lives in:
       `vscode-extension/hypercanvas-preview/src/__tests__/
-      AstServiceMove*.test.ts` (29 tests across 5 files, all
+AstServiceMove*.test.ts` (29 tests across 5 files, all
       green per Task 6/8 commit notes).
 - [x] Only THEN mark this plan complete.
       → Plan marked complete via Task 10 close. The Task 9 e2e

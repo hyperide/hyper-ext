@@ -5,6 +5,7 @@
 `oxlint` found hooks issues in canvas-related components:
 
 ### useProjectUIKit.ts — missing activeProject deps
+
 ```ts
 useEffect(() => {
   if (!activeProject) { ... return; }
@@ -13,36 +14,44 @@ useEffect(() => {
   if (activeProject.publicDir) { ... }             // uses .publicDir
 }, [activeProject?.id]); // MISSING: activeProject, activeProject.publicDir, activeProject.name
 ```
+
 The dep array uses `activeProject?.id` (a derived value) but accesses `activeProject.name` and `activeProject.publicDir` inside. If these change without `id` changing, the effect won't re-run.
 
 **Fix**: use `activeProject` itself as dep (if stable ref), or use individual property deps.
 
 ### useElementsTree.ts — unnecessary deps in useMemo
+
 ```ts
 }, [engine, store, componentName, updateCounter, stateResult]);
 //                  ^unnecessary  ^unnecessary
 ```
+
 oxlint says `updateCounter` and `componentName` are unnecessary. These extra deps cause unnecessary useMemo recomputation.
 
 **BUT**: investigate carefully — `componentName` might actually be used inside the memoized computation via `stateResult`. Verify before removing.
 
 ### useElementTracer.ts — missing componentPath dep
+
 ```ts
 useEffect(() => {
   tracer.renderedFile = componentPath ?? null; // uses componentPath
   ...
 }, [iframe, projectId, enabled, loadCounter]); // MISSING: componentPath
 ```
-If `componentPath` changes, the tracer won't update `renderedFile`. This could cause stale element tracing. 
+
+If `componentPath` changes, the tracer won't update `renderedFile`. This could cause stale element tracing.
 
 ### RightSidebar.tsx — unnecessary componentPath dep in useCallback
+
 ```ts
-[i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys, canvas]
+[i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys, canvas];
 //                  ^unnecessary according to oxlint
 ```
+
 Verify whether `componentPath` is actually used inside this callback.
 
 ### AnnotationsLayer.tsx — strict null issues (also reported by tsgo)
+
 `pos.width` and `pos.height` possibly undefined. Check the type definition.
 
 ## Scope
@@ -62,7 +71,7 @@ First: read the full hook implementation. Verify whether `componentName` and `up
 Write unit test: verify tracer.renderedFile updates when componentPath changes.
 Fix: add `componentPath` to the dep array.
 
-**Risk**: adding `componentPath` to deps might cause the tracer to reinitialize more often. 
+**Risk**: adding `componentPath` to deps might cause the tracer to reinitialize more often.
 Mitigation: check if the initialization is expensive. If so, separate the `renderedFile` assignment into its own lighter effect.
 
 ### 4. RightSidebar.tsx — verify and fix componentPath dep
