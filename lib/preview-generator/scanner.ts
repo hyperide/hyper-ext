@@ -562,46 +562,118 @@ export function detectPushStateRouterShell(sourceCode: string): boolean {
 }
 
 /**
- * Detect whether a file is a PROVIDER application shell — it statically imports
- * one or more React context providers (a value/namespace import whose local name
- * ends in `Provider`) and composes them. This complements `detectRouterShell`:
- * a SPA `App.tsx` that wraps the app in `AuthProvider` / `QueryClientProvider` /
- * `FeatureFlagsProvider` is a shell, not a previewable component — rendering it
- * standalone fires the providers' consumer hooks (useAuth, useBootstrap, …)
- * OUTSIDE the surrounding bootstrap providers that `main.tsx` mounts, throwing
- * "useAuth must be used inside <AuthProvider>" and blanking the preview (HYP-546).
- *
- * Deliberately broad and used ONLY as the AND-narrowing companion to
- * `extractMountedRootImportSources` (the entry's createRoot target): a false
- * positive here can never wrongly exclude a non-entry-root component, only fail
- * to exclude one — the entry-root gate is the hard constraint. Type-only imports
- * are ignored so `import type { FooProvider }` does not trip it.
+ * True when the file imports any React context provider symbol (a value/namespace
+ * import whose local name ends in `Provider`). Broad — used internally both by
+ * `detectProviderShell` (narrowed with a children-param check, HYP-758) and by
+ * `detectSelfBootstrapRoot` (broad is correct: any provider import in a self-mounting
+ * file signals the double-mount hazard). Type-only imports are ignored.
  */
-export function detectProviderShell(sourceCode: string): boolean {
-  return providerShellFromAst(parseSource(sourceCode));
-}
-
-/** AST-level body of `detectProviderShell`, so callers that already parsed reuse the AST. */
-function providerShellFromAst(ast: ParsedProgram): boolean {
+function hasProviderImportFromAst(ast: ParsedProgram): boolean {
   for (const node of ast.program.body) {
     if (node.type !== 'ImportDeclaration') continue;
     if (node.importKind === 'type') continue;
     for (const spec of node.specifiers) {
-      // Named import: `import { AuthProvider } from '…'` — match the imported name.
       if (spec.type === 'ImportSpecifier') {
         if (spec.importKind === 'type') continue;
         const name = spec.imported.type === 'Identifier' ? spec.imported.name : spec.local.name;
         if (name.endsWith('Provider')) return true;
         continue;
       }
-      // Default / namespace import: `import Foo from '…'` / `import * as Foo` —
-      // match the local binding name (e.g. a default-exported `AuthProvider`).
       if (spec.type === 'ImportDefaultSpecifier' || spec.type === 'ImportNamespaceSpecifier') {
         if (spec.local.name.endsWith('Provider')) return true;
       }
     }
   }
   return false;
+}
+
+/**
+ * True when the first parameter of a function/arrow accepts a `children` prop —
+ * either as a bare identifier (`children`) or as a destructured key `{ children }`.
+ */
+function paramAcceptsChildren(param: unknown): boolean {
+  if (!param || typeof param !== 'object') return false;
+  const p = param as { type: string; name?: string; properties?: unknown[] };
+  if (p.type === 'Identifier' && p.name === 'children') return true;
+  if (p.type === 'ObjectPattern' && Array.isArray(p.properties)) {
+    for (const prop of p.properties) {
+      const pr = prop as { type: string; key?: { type: string; name?: string } };
+      if (pr.type === 'ObjectProperty' && pr.key?.type === 'Identifier' && pr.key.name === 'children') {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * True when an exported function in the file accepts `children` as its first (or only)
+ * parameter. Covers:
+ *   - `export default function Providers({ children }) { … }`
+ *   - `export function Providers({ children }: Props) { … }`
+ *   - `export const Providers = ({ children }: Props) => { … }`
+ *
+ * Discriminates true provider-wrapper shells (wrap injected children) from components
+ * that merely USE a provider in their own JSX (like `App.tsx` with `<TooltipProvider>`
+ * wrapping its own rendered subtree rather than forwarding `{children}`). HYP-758.
+ */
+function exportedComponentAcceptsChildrenFromAst(ast: ParsedProgram): boolean {
+  for (const node of ast.program.body) {
+    if (node.type === 'ExportDefaultDeclaration') {
+      const decl = node.declaration as { type: string; params?: unknown[] };
+      if (
+        (decl.type === 'FunctionDeclaration' || decl.type === 'ArrowFunctionExpression') &&
+        Array.isArray(decl.params) &&
+        decl.params.length > 0 &&
+        paramAcceptsChildren(decl.params[0])
+      ) {
+        return true;
+      }
+    }
+    if (node.type === 'ExportNamedDeclaration') {
+      const namedNode = node as { declaration?: { type: string; params?: unknown[]; declarations?: unknown[] } };
+      const decl = namedNode.declaration;
+      if (!decl) continue;
+      if (
+        (decl.type === 'FunctionDeclaration' || decl.type === 'ArrowFunctionExpression') &&
+        Array.isArray(decl.params) &&
+        decl.params.length > 0 &&
+        paramAcceptsChildren(decl.params[0])
+      ) {
+        return true;
+      }
+      if (decl.type === 'VariableDeclaration' && Array.isArray(decl.declarations)) {
+        for (const varDecl of decl.declarations) {
+          const vd = varDecl as { init?: { type: string; params?: unknown[] } };
+          if (
+            vd.init &&
+            (vd.init.type === 'ArrowFunctionExpression' || vd.init.type === 'FunctionExpression') &&
+            Array.isArray(vd.init.params) &&
+            vd.init.params.length > 0 &&
+            paramAcceptsChildren(vd.init.params[0])
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Detect whether a file is a PURE PROVIDER WRAPPER SHELL — it both imports `*Provider`
+ * symbols AND exports a component that accepts `{children}` to wrap them. This narrows
+ * the original "any *Provider import = shell" heuristic (HYP-546) to exclude components
+ * that merely USE providers in their own JSX without forwarding children (e.g. `App.tsx`
+ * wrapping its layout in `<TooltipProvider>` is a consumer, not a wrapper shell). HYP-758.
+ *
+ * The `buildEntry` self-bootstrap gate handles the remaining case where the file ALSO
+ * calls `createRoot` (double-mount hazard regardless of the children check).
+ */
+export function detectProviderShell(sourceCode: string): boolean {
+  const ast = parseSource(sourceCode);
+  return hasProviderImportFromAst(ast) && exportedComponentAcceptsChildrenFromAst(ast);
 }
 
 /**
@@ -768,7 +840,7 @@ function reactRootMountFromAst(ast: ParsedProgram): boolean {
 export function detectSelfBootstrapRoot(sourceCode: string): boolean {
   const ast = parseSource(sourceCode);
   if (!reactRootMountFromAst(ast)) return false;
-  return routerShellFromAst(ast) || providerShellFromAst(ast);
+  return routerShellFromAst(ast) || hasProviderImportFromAst(ast);
 }
 
 /** Collect local JSX element names present in `arg` that map to a relative import. */

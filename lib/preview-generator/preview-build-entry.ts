@@ -174,10 +174,23 @@ export async function buildEntry(
   const isAppEntry = !isSelfBootstrapRoot && (options.appEntryPaths?.has(normalizedPath) ?? false);
   const allowShell = options.allowRouterShell || isAppEntry;
 
-  // HYP-546 — exclude SPA entry-root provider shells (the createRoot bootstrap
-  // target wrapping the app in providers/router). They are not renderable
-  // components and pollute the preview registry. Gated by !allowShell so
-  // an explicit web-app shell or app-mode target can still opt in.
+  // HYP-546 (self-bootstrap gate) — exclude files that both call createRoot themselves
+  // AND are in entryRootPaths. These are the double-mount hazard: the iframe already
+  // runs their createRoot call, so including them in the preview registry would re-fire it.
+  // Separate gate so the narrowed provider-shell check below (HYP-758) can focus on pure
+  // provider wrappers without needing to cover this case.
+  if (!allowShell && isSelfBootstrapRoot && options.entryRootPaths) {
+    if (options.entryRootPaths.has(normalizedPath)) {
+      return null;
+    }
+  }
+
+  // HYP-546 (provider-shell gate, narrowed by HYP-758) — exclude pure provider-wrapper
+  // shells in entryRootPaths. A pure shell imports *Provider symbols AND exports a
+  // component that accepts {children} to wrap (e.g. Providers.tsx). Components that merely
+  // USE a provider in their own JSX (e.g. App.tsx with <TooltipProvider> around its own
+  // layout) are NOT shells and must NOT be excluded — they are real components that enter
+  // the registry. The narrowed detectProviderShell now requires the children-param check.
   let isProviderShell = false;
   try {
     isProviderShell = detectProviderShell(sourceCode);

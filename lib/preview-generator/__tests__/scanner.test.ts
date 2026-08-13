@@ -543,7 +543,67 @@ describe('detectRouterShell', () => {
 });
 
 describe('detectProviderShell', () => {
-  it('returns true for a named provider import (AuthProvider/FeatureFlagsProvider)', () => {
+  // HYP-758: detectProviderShell now requires BOTH a *Provider import AND a component
+  // that accepts {children} — a pure wrapper shell. Components that merely USE a
+  // provider (like App.tsx with <TooltipProvider> around own layout) are NOT shells.
+
+  it('returns true for a named Providers wrapper that accepts {children}', () => {
+    const source = `
+      import { AuthProvider } from './auth/use-auth';
+      import { FeatureFlagsProvider } from './feature-flags';
+      import type { ReactNode } from 'react';
+      export function Providers({ children }: { children: ReactNode }) {
+        return (
+          <FeatureFlagsProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </FeatureFlagsProvider>
+        );
+      }
+    `;
+    expect(detectProviderShell(source)).toBe(true);
+  });
+
+  it('returns true for an arrow-function provider shell with {children}', () => {
+    const source = `
+      import { ThemeProvider } from './theme';
+      import type { ReactNode } from 'react';
+      export const AppProviders = ({ children }: { children: ReactNode }) => (
+        <ThemeProvider>{children}</ThemeProvider>
+      );
+    `;
+    expect(detectProviderShell(source)).toBe(true);
+  });
+
+  it('returns true for a default-exported provider shell with {children}', () => {
+    const source = `
+      import AuthProvider from './auth/AuthProvider';
+      export default function Providers({ children }) { return <AuthProvider>{children}</AuthProvider>; }
+    `;
+    expect(detectProviderShell(source)).toBe(true);
+  });
+
+  it('returns FALSE for App.tsx that uses a provider in its own JSX but has no {children} param (HYP-758)', () => {
+    // The real bug case: App.tsx in shadcn-linear wraps its own layout in <TooltipProvider>
+    // but does NOT forward children — it IS a real previewable component, not a shell.
+    const source = `
+      import { TooltipProvider } from '@/components/ui/tooltip';
+      import { Sidebar } from '@/components/Sidebar';
+      function App() {
+        return (
+          <TooltipProvider delayDuration={200}>
+            <div className="flex h-screen overflow-hidden">
+              <Sidebar />
+            </div>
+          </TooltipProvider>
+        );
+      }
+      export default App;
+    `;
+    expect(detectProviderShell(source)).toBe(false);
+  });
+
+  it('returns FALSE for App.tsx that imports AuthProvider/FeatureFlagsProvider but has no {children} param', () => {
+    // Previously returned true (too broad); now correctly returns false (not a wrapper shell).
     const source = `
       import { AuthProvider } from './auth/use-auth';
       import { FeatureFlagsProvider } from './feature-flags';
@@ -555,15 +615,7 @@ describe('detectProviderShell', () => {
         );
       }
     `;
-    expect(detectProviderShell(source)).toBe(true);
-  });
-
-  it('returns true for a default-imported provider', () => {
-    const source = `
-      import AuthProvider from './auth/AuthProvider';
-      export default function App() { return <AuthProvider><div /></AuthProvider>; }
-    `;
-    expect(detectProviderShell(source)).toBe(true);
+    expect(detectProviderShell(source)).toBe(false);
   });
 
   it('returns false when no provider is imported', () => {

@@ -56,6 +56,26 @@ const SELF_BOOTSTRAP_PROVIDER_APP = `
   createRoot(document.getElementById('root')!).render(<App />);
   export default App;`;
 
+// HYP-758: real-world App.tsx that imports a *Provider to wrap its own layout content, but
+// does NOT forward {children} — it IS a real previewable component, NOT a provider shell.
+// Previously excluded by the over-broad detectProviderShell check (any *Provider import →
+// excluded), which left it stuck on "Generating sample..." forever. Now correctly entered.
+const PROVIDER_CONSUMER_APP = `
+  import { TooltipProvider } from '@/components/ui/tooltip';
+  import { Sidebar } from '@/components/Sidebar';
+  import { FilterBar } from '@/components/FilterBar';
+  function App() {
+    return (
+      <TooltipProvider delayDuration={200}>
+        <div className="flex h-screen overflow-hidden">
+          <Sidebar />
+          <FilterBar />
+        </div>
+      </TooltipProvider>
+    );
+  }
+  export default App;`;
+
 describe('buildEntry — app-mode opt-in', () => {
   it('rejects a routed/provider App root by default (the reported bug)', async () => {
     const entry = await buildEntry(root, ioWith(ROUTED_APP), undefined, 'client/App.tsx', '/project/client', {
@@ -140,6 +160,39 @@ ${ROUTED_APP}`;
       { appEntryPaths: new Set(['client/App']) },
     );
     expect(entry?.isAppEntry).toBeUndefined();
+  });
+
+  it('HYP-758: ALLOWS a provider-consumer App.tsx in entryRootPaths (shadcn-linear pattern)', async () => {
+    // App.tsx imports TooltipProvider but does NOT forward {children} — it is a real
+    // previewable component that uses a provider for its own layout. Before HYP-758 the
+    // broad detectProviderShell returned true (any *Provider import = shell) and excluded
+    // it, leaving the preview stuck on "Generating sample..." forever. Now it enters the
+    // registry and renders normally.
+    const entry = await buildEntry(root, ioWith(PROVIDER_CONSUMER_APP), undefined, 'src/App.tsx', '/project/src', {
+      entryRootPaths: new Set(['src/App']),
+    });
+    expect(entry).not.toBeNull();
+    expect(entry?.componentName).toBe('App');
+  });
+
+  it('HYP-758: still EXCLUDES a pure Providers.tsx wrapper shell in entryRootPaths', async () => {
+    // A file that imports *Provider symbols AND exports a component accepting {children}
+    // is a true provider-wrapper shell — not a standalone component. Still excluded.
+    const providersShell = `
+      import { ThemeProvider } from './theme';
+      import { QueryClientProvider } from '@tanstack/react-query';
+      import type { ReactNode } from 'react';
+      export function Providers({ children }: { children: ReactNode }) {
+        return (
+          <QueryClientProvider client={new QueryClient()}>
+            <ThemeProvider>{children}</ThemeProvider>
+          </QueryClientProvider>
+        );
+      }`;
+    const entry = await buildEntry(root, ioWith(providersShell), undefined, 'src/providers.tsx', '/project/src', {
+      entryRootPaths: new Set(['src/providers']),
+    });
+    expect(entry).toBeNull();
   });
 });
 
