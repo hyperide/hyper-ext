@@ -8,7 +8,7 @@ import { LoadingOverlay } from '../LoadingOverlay';
 import { NoComponentOverlay } from '../NoComponentOverlay';
 import { OverlayShell } from '../OverlayShell';
 import { ParseErrorOverlay } from '../ParseErrorOverlay';
-import { buildUnsupportedFrameworkPrompt, PreviewSetupOverlay } from '../PreviewSetupOverlay';
+import { PreviewSetupOverlay } from '../PreviewSetupOverlay';
 import { RuntimeErrorOverlay } from '../RuntimeErrorOverlay';
 
 function frameworkRowOpeningTag(html: string, name: string): string {
@@ -231,9 +231,10 @@ describe('PreviewSetupOverlay', () => {
     expect(html).toContain('Dismiss');
   });
 
-  it('renders auto-fix button when onAutoFix provided', () => {
+  it('renders auto-fix button in the needs-patch variant when onAutoFix provided', () => {
     const html = renderToString(<PreviewSetupOverlay status="needs-patch" onAutoFix={() => {}} />);
     expect(html).toContain('Auto Fix');
+    expect(html).toContain(`data-testid="${TID.preview.supportAutoFixButton}"`);
   });
 
   it('Dismiss button click invokes onDismiss', () => {
@@ -258,44 +259,10 @@ describe('PreviewSetupOverlay', () => {
     expect(onManualFix).toHaveBeenCalledTimes(1);
   });
 
-  it('renders an Auto Fix button in the unsupported variant when onAutoFix provided (HYP-917)', () => {
+  it('does not render an Auto Fix button in the unsupported variant even when onAutoFix is provided', () => {
     const html = renderToString(<PreviewSetupOverlay status="unsupported" onAutoFix={() => {}} />);
-    expect(html).toContain('Auto Fix');
-  });
-
-  it('Auto Fix click in unsupported variant invokes onAutoFix with a prompt describing the framework', () => {
-    const onAutoFix = mock((_prompt: string) => {});
-    const { getByText } = render(
-      <PreviewSetupOverlay
-        status="unsupported"
-        description="Vue.js detected — not a supported framework."
-        frameworkSupport={[
-          { name: 'Next.js', level: 'supported' },
-          { name: 'Vue', level: 'planned' },
-        ]}
-        onAutoFix={onAutoFix}
-      />,
-    );
-    fireEvent.click(getByText('Auto Fix'));
-    expect(onAutoFix).toHaveBeenCalledTimes(1);
-    const prompt = onAutoFix.mock.calls[0][0];
-    expect(prompt).toContain('Vue.js detected — not a supported framework.');
-    expect(prompt).toContain('Next.js');
-    // Only 'supported' frameworks belong in the "currently supports" line — a 'planned'
-    // one leaking in would misrepresent what HyperIDE actually supports today.
-    expect(prompt).not.toMatch(/HyperIDE currently supports:[^\n]*Vue/);
-  });
-
-  it('buildUnsupportedFrameworkPrompt omits the "currently supports" line when frameworkSupport is empty/absent', () => {
-    const onAutoFix = mock((_prompt: string) => {});
-    const { getByText } = render(<PreviewSetupOverlay status="unsupported" onAutoFix={onAutoFix} />);
-    fireEvent.click(getByText('Auto Fix'));
-    expect(onAutoFix.mock.calls[0][0]).not.toContain('HyperIDE currently supports');
-  });
-
-  it('buildUnsupportedFrameworkPrompt falls back to the generic detection message when no description is given', () => {
-    const prompt = buildUnsupportedFrameworkPrompt(undefined);
-    expect(prompt).toContain('HyperIDE could not detect a supported framework in this project.');
+    expect(html).not.toContain('Auto Fix');
+    expect(html).not.toContain(`data-testid="${TID.preview.supportAutoFixButton}"`);
   });
 
   it('does not render any action button when no callbacks provided', () => {

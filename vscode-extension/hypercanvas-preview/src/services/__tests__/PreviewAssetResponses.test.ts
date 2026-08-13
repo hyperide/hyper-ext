@@ -164,6 +164,12 @@ describe('shouldShowDevServerUnreachable (HYP-903 — dev server with no /test-p
 });
 
 describe('buildDevServerUnreachableHtml (HYP-903)', () => {
+  function extractDevServerUnreachablePayload(html: string): Record<string, unknown> {
+    const match = html.match(/window\.parent\.postMessage\((\{[\s\S]*?\}), '\*'\);/);
+    if (!match) throw new Error('No dev-server-unreachable postMessage payload found');
+    return JSON.parse(match[1]);
+  }
+
   it('renders the target port, status, and requested path into a visible HTML page', () => {
     const html = buildDevServerUnreachableHtml('/test-preview?component=src%2FApp.tsx', 404, 3000);
     expect(html).toContain('<!DOCTYPE html>');
@@ -182,5 +188,38 @@ describe('buildDevServerUnreachableHtml (HYP-903)', () => {
   it('falls back to a plain-language status when none was received', () => {
     const html = buildDevServerUnreachableHtml('/test-preview', undefined, 3000);
     expect(html).toContain('no response');
+  });
+
+  it('announces the unreachable route to the parent webview with a parseable postMessage payload', () => {
+    const html = buildDevServerUnreachableHtml('/test-preview?component=src%2FApp.tsx', 404, 3000);
+
+    expect(extractDevServerUnreachablePayload(html)).toEqual({
+      type: 'hypercanvas:devServerUnreachable',
+      proxyPath: '/test-preview?component=src%2FApp.tsx',
+      statusCode: 404,
+      targetPort: 3000,
+    });
+  });
+
+  it('retries the parent announcement until ack with a bounded interval', () => {
+    const html = buildDevServerUnreachableHtml('/test-preview?component=src%2FApp.tsx', 404, 3000);
+
+    expect(html).toContain('hypercanvas:devServerUnreachableAck');
+    expect(html).toContain('setInterval');
+    expect(html).toContain('clearInterval');
+    expect(html).toContain('maxAttempts = 20');
+  });
+
+  it('uses null in the announce payload when no status was received', () => {
+    const html = buildDevServerUnreachableHtml('/test-preview', undefined, 3000);
+
+    expect(extractDevServerUnreachablePayload(html).statusCode).toBeNull();
+  });
+
+  it('escapes script-breaking proxy paths inside the announce payload', () => {
+    const html = buildDevServerUnreachableHtml('/test-preview?</script><script>alert(1)</script>', 404, 3000);
+
+    expect(extractDevServerUnreachablePayload(html).proxyPath).toBe('/test-preview?</script><script>alert(1)</script>');
+    expect(html.match(/<\/script>/gi)).toHaveLength(1);
   });
 });

@@ -29,6 +29,9 @@ export const TID = {
     loadingErrorRetry: 'hyper-preview-loading-error-retry',
     loadingErrorOpenOutput: 'hyper-preview-loading-error-open-output',
     loadingErrorMessage: 'hyper-preview-loading-error-message',
+    devServerUnreachable: 'hyper-preview-devserver-unreachable',
+    devServerUnreachableAutoFix: 'hyper-preview-devserver-unreachable-autofix',
+    devServerUnreachableDismiss: 'hyper-preview-devserver-unreachable-dismiss',
     // Component picker — centered empty-state list shown in the canvas when no component is
     // selected AND both side panels (Explorer + Inspector) are hidden, so a component can be
     // picked with no panel open. Clicking an item drives the normal stateHub selection pipeline.

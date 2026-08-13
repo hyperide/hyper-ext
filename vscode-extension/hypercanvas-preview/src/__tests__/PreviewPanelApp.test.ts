@@ -70,15 +70,16 @@ describe('shouldShowModeToolbar (HYP-782: mode HUD must not overlap the readonly
   // e2e readonly-stub spec — at the stub. While the stub covers the surface the canvas is
   // non-interactive, so the HUD must not render. This pins that gate.
   it('is HIDDEN while the readonly stub is shown — it would intercept the Continue button', () => {
-    expect(shouldShowModeToolbar({ isReadonly: true, readonlyDismissed: false })).toBe(false);
+    expect(shouldShowModeToolbar(true)).toBe(false);
   });
 
   it('is shown again once the user clicks Continue past the readonly stub', () => {
-    expect(shouldShowModeToolbar({ isReadonly: true, readonlyDismissed: true })).toBe(true);
+    // HYP-918: dev-server-unreachable suppresses the readonly stub, collapsing to this same false flag.
+    expect(shouldShowModeToolbar(false)).toBe(true);
   });
 
   it('is shown for normal (non-readonly) projects regardless of the dismiss flag', () => {
-    expect(shouldShowModeToolbar({ isReadonly: false, readonlyDismissed: false })).toBe(true);
-    expect(shouldShowModeToolbar({ isReadonly: false, readonlyDismissed: true })).toBe(true);
+    expect(shouldShowModeToolbar(false)).toBe(true);
+    expect(shouldShowModeToolbar(false)).toBe(true);
   });
 });

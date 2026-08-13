@@ -11,6 +11,7 @@ import { describe, expect, it, mock } from 'bun:test';
 import { act, createElement, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
+import type { DevServerUnreachableInfo } from '../webview-preview-panel/usePreviewBridge';
 import {
   buildComponentPreviewUrl,
   canUpdatePreviewComponentInPlace,
@@ -26,6 +27,7 @@ import {
 type BridgeSnapshot = {
   previewUrl: string | null;
   devServerRunning: boolean;
+  devServerUnreachable: DevServerUnreachableInfo | null;
 };
 
 function createCanvasAdapter(): CanvasAdapter {
@@ -51,8 +53,9 @@ function BridgeHarness({ onSnapshot }: { onSnapshot: (snapshot: BridgeSnapshot) 
     onSnapshot({
       previewUrl: bridge.previewUrl,
       devServerRunning: bridge.devServerRunning,
+      devServerUnreachable: bridge.devServerUnreachable,
     });
-  }, [bridge.devServerRunning, bridge.previewUrl, onSnapshot]);
+  }, [bridge.devServerRunning, bridge.devServerUnreachable, bridge.previewUrl, onSnapshot]);
 
   return createElement('iframe', { ref: setIframeEl, title: 'preview' });
 }
@@ -564,6 +567,211 @@ function renderBridgeWithHandshakeProbe(onProbe: (probe: HandshakeProbe) => void
 function postIframeMessage(iframe: HTMLIFrameElement, data: Record<string, unknown>): void {
   window.dispatchEvent(new window.MessageEvent('message', { data, source: iframe.contentWindow as unknown as Window }));
 }
+
+interface DevServerUnreachableProbe {
+  iframe: HTMLIFrameElement;
+  spy: PostMessageSpy;
+}
+
+function BridgeWithDevServerUnreachableProbe({
+  onProbe,
+  onSnapshot,
+}: {
+  onProbe: (probe: DevServerUnreachableProbe) => void;
+  onSnapshot: (snapshot: BridgeSnapshot) => void;
+}) {
+  const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null);
+  const spy = mock();
+  const bridge = usePreviewBridge({
+    iframeEl,
+    canvas: createCanvasAdapter(),
+    onStateUpdate: () => {},
+  });
+
+  useEffect(() => {
+    onSnapshot({
+      previewUrl: bridge.previewUrl,
+      devServerRunning: bridge.devServerRunning,
+      devServerUnreachable: bridge.devServerUnreachable,
+    });
+  }, [bridge.devServerRunning, bridge.devServerUnreachable, bridge.previewUrl, onSnapshot]);
+
+  const refCallback = (el: HTMLIFrameElement | null) => {
+    if (el?.contentWindow) {
+      Object.defineProperty(el.contentWindow, 'postMessage', { value: spy, configurable: true });
+      onProbe({ iframe: el, spy });
+    }
+    setIframeEl(el);
+  };
+
+  return createElement('iframe', {
+    ref: refCallback,
+    title: 'preview',
+    src: 'http://localhost:5173/test-preview?component=src%2FApp.tsx',
+  });
+}
+
+function renderBridgeWithDevServerUnreachableProbe(
+  onProbe: (probe: DevServerUnreachableProbe) => void,
+  onSnapshot: (snapshot: BridgeSnapshot) => void,
+) {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  act(() => {
+    root.render(createElement(BridgeWithDevServerUnreachableProbe, { onProbe, onSnapshot }));
+  });
+  return () => {
+    act(() => root.unmount());
+    host.remove();
+  };
+}
+
+describe('hypercanvas:devServerUnreachable → webview overlay state (HYP-918)', () => {
+  function renderProbe() {
+    let probe: DevServerUnreachableProbe | null = null;
+    const snapshots: BridgeSnapshot[] = [];
+    const cleanup = renderBridgeWithDevServerUnreachableProbe(
+      (p) => {
+        probe = p;
+      },
+      (snapshot) => snapshots.push(snapshot),
+    );
+    const mountedProbe = probe;
+    if (!mountedProbe) throw new Error('No iframe probe mounted');
+    return { cleanup, probe: mountedProbe, snapshots };
+  }
+
+  it('stores the iframe-announced unreachable route and caps proxyPath length', async () => {
+    const { cleanup, probe, snapshots } = renderProbe();
+
+    try {
+      const longProxyPath = `/test-preview?x=${'a'.repeat(600)}`;
+      await act(async () => {
+        postIframeMessage(probe.iframe, {
+          type: 'hypercanvas:devServerUnreachable',
+          proxyPath: longProxyPath,
+          statusCode: 404,
+          targetPort: 3000,
+        });
+      });
+
+      expect(snapshots.at(-1)?.devServerUnreachable).toEqual({
+        proxyPath: longProxyPath.slice(0, 500),
+        statusCode: 404,
+        targetPort: 3000,
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('acks each iframe-announced unreachable route back to the same iframe', async () => {
+    const { cleanup, probe } = renderProbe();
+
+    try {
+      await act(async () => {
+        postIframeMessage(probe.iframe, {
+          type: 'hypercanvas:devServerUnreachable',
+          proxyPath: '/test-preview',
+          statusCode: 404,
+          targetPort: 3000,
+        });
+      });
+
+      expect(probe.spy).toHaveBeenCalledWith({ type: 'hypercanvas:devServerUnreachableAck' }, 'http://localhost:5173');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('clears the unreachable state when the host sends updateUrl', async () => {
+    const { cleanup, probe, snapshots } = renderProbe();
+
+    try {
+      await act(async () => {
+        postIframeMessage(probe.iframe, {
+          type: 'hypercanvas:devServerUnreachable',
+          proxyPath: '/test-preview',
+          statusCode: 404,
+          targetPort: 3000,
+        });
+        postHostMessage({
+          type: 'updateUrl',
+          url: 'http://localhost:5173/test-preview?component=src%2FOther.tsx',
+        });
+      });
+
+      expect(snapshots.at(-1)?.devServerUnreachable).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('clears the unreachable state when the host sends setComponent', async () => {
+    const { cleanup, probe, snapshots } = renderProbe();
+
+    try {
+      await act(async () => {
+        postIframeMessage(probe.iframe, {
+          type: 'hypercanvas:devServerUnreachable',
+          proxyPath: '/test-preview',
+          statusCode: 404,
+          targetPort: 3000,
+        });
+        postHostMessage({ type: 'setComponent', component: 'src/Other.tsx' });
+      });
+
+      expect(snapshots.at(-1)?.devServerUnreachable).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('clears the unreachable state when the dev server stops', async () => {
+    const { cleanup, probe, snapshots } = renderProbe();
+
+    try {
+      await act(async () => {
+        postIframeMessage(probe.iframe, {
+          type: 'hypercanvas:devServerUnreachable',
+          proxyPath: '/test-preview',
+          statusCode: 503,
+          targetPort: 3000,
+        });
+        postHostMessage({ type: 'devserver:statusChanged', running: false, url: null });
+      });
+
+      expect(snapshots.at(-1)?.devServerUnreachable).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('does not clear the unreachable state on the iframe load event', async () => {
+    const { cleanup, probe, snapshots } = renderProbe();
+
+    try {
+      await act(async () => {
+        postIframeMessage(probe.iframe, {
+          type: 'hypercanvas:devServerUnreachable',
+          proxyPath: '/test-preview',
+          statusCode: 404,
+          targetPort: 3000,
+        });
+      });
+      const beforeLoad = snapshots.at(-1)?.devServerUnreachable;
+
+      await act(async () => {
+        probe.iframe.dispatchEvent(new Event('load'));
+      });
+
+      expect(snapshots.at(-1)?.devServerUnreachable).toEqual(beforeLoad);
+    } finally {
+      cleanup();
+    }
+  });
+});
 
 describe('hypercanvas:bridgeReady handshake → selection replay (#51)', () => {
   it('re-sends the current selection as hypercanvas:stateUpdate when the bridge announces ready', async () => {

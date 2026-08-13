@@ -39,6 +39,12 @@ export interface AppModeState {
   currentRoute: string;
 }
 
+export interface DevServerUnreachableInfo {
+  proxyPath: string;
+  statusCode: number | null;
+  targetPort: number;
+}
+
 interface UsePreviewBridgeOptions {
   iframeEl: HTMLIFrameElement | null;
   canvas: CanvasAdapter;
@@ -95,11 +101,14 @@ interface UsePreviewBridgeResult {
   autoStart: boolean;
   /** Non-null when previewing an app entry AS AN APP (shows the address bar). */
   appMode: AppModeState | null;
+  /** Non-null when the iframe loaded the raw dev-server-unreachable response page. */
+  devServerUnreachable: DevServerUnreachableInfo | null;
   /** Navigate the previewed app to an in-app address (posts into the iframe's own router). */
   navigateAppRoute: (route: string) => void;
   handleStartDevServer: () => void;
   handleRefresh: () => void;
   clearComponentError: () => void;
+  clearDevServerUnreachable: () => void;
   handleAutoStartChange: (value: boolean) => void;
   handleOpenAutoStartSettings: () => void;
 }
@@ -251,6 +260,20 @@ export function canUpdatePreviewComponentInPlace(
   }
 }
 
+function readDevServerUnreachableInfo(msg: {
+  proxyPath?: unknown;
+  statusCode?: unknown;
+  targetPort?: unknown;
+}): DevServerUnreachableInfo | null {
+  if (typeof msg.proxyPath !== 'string' || typeof msg.targetPort !== 'number') return null;
+  const statusCode = typeof msg.statusCode === 'number' ? msg.statusCode : null;
+  return {
+    proxyPath: msg.proxyPath.slice(0, 500),
+    statusCode,
+    targetPort: msg.targetPort,
+  };
+}
+
 export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreviewBridgeOptions): UsePreviewBridgeResult {
   const [devServerRunning, setDevServerRunning] = useState(false);
   const [devServerUrl, setDevServerUrl] = useState<string | null>(null);
@@ -266,6 +289,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [projectCapabilities, setProjectCapabilities] = useState<import('../types').ProjectCapabilities | null>(null);
   const [componentError, setComponentError] = useState<ComponentError | null>(null);
   const [unsupportedFile, setUnsupportedFile] = useState<NonPreviewableFile | null>(null);
+  const [devServerUnreachable, setDevServerUnreachable] = useState<DevServerUnreachableInfo | null>(null);
   const [autoStart, setAutoStart] = useState(false);
   const [appMode, setAppMode] = useState<AppModeState | null>(null);
   // Last in-app route we emitted canvas.routeNavigated for. A ref (not state) so
@@ -398,6 +422,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             requestId: msg.requestId,
             dataUrl: msg.dataUrl,
           } as unknown as PlatformMessage);
+        } else if (msg.type === 'hypercanvas:devServerUnreachable') {
+          const info = readDevServerUnreachableInfo(msg);
+          if (info) {
+            setDevServerUnreachable(info);
+            postToPreviewIframe(iframeEl, { type: 'hypercanvas:devServerUnreachableAck' });
+          }
         } else if (msg.type === 'hypercanvas:liveClassNameResult') {
           // HYP-544: iframe answered the write-time live-className request — forward to the
           // extension host, which resolves the pending requestLiveClassName promise.
@@ -610,6 +640,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const doRefresh = useCallback(() => {
     const frame = iframeElRef.current;
     if (!frame) return;
+    // A refresh is itself a fresh navigation attempt — clear a stale unreachable
+    // flag the same way updateUrl/setComponent do, so a project fixed via Auto Fix
+    // (or any other manual/MCP/sample-creation refresh — PreviewPanel.ts posts
+    // 'refresh' for all of those) doesn't stay stuck behind the old overlay forever.
+    setDevServerUnreachable(null);
     // Prefer contentWindow.location.href — it reflects the current component
     // after history.replaceState updates from setComponent (frame.src still
     // holds the original first-load URL and is never updated to avoid reloads).
@@ -672,6 +707,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             lastForwardedStateRef.current = null;
             setComponentError(null);
             setUnsupportedFile(null);
+            setDevServerUnreachable(null);
             setShowNoComponentHint(false);
             setStoredPreviewUrl(null);
           }
@@ -688,6 +724,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           const url = typeof msg.url === 'string' ? msg.url : undefined;
           if (!url) break;
           setShowNoComponentHint(false);
+          setDevServerUnreachable(null);
           // Only clear error when switching to a different component
           try {
             const comp = new URL(url).searchParams.get('component');
@@ -741,6 +778,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'setComponent': {
           const comp = typeof msg.component === 'string' ? msg.component : null;
           if (comp) currentComponentRef.current = comp;
+          setDevServerUnreachable(null);
           // Only clear error when switching to a DIFFERENT component
           setComponentError((prev) => (prev && prev.componentPath === comp ? prev : null));
           // Clear stale runtime style from previous component (postMessage switch skips iframe reload)
@@ -1073,6 +1111,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   }, [canvas]);
 
   const clearComponentError = useCallback(() => setComponentError(null), []);
+  const clearDevServerUnreachable = useCallback(() => setDevServerUnreachable(null), []);
 
   // Recommendation click in the non-previewable overlay → ask the host to select that
   // component (same path as an Explorer click: opens the file + drives the preview).
@@ -1123,10 +1162,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     selectRecommendation,
     autoStart,
     appMode,
+    devServerUnreachable,
     navigateAppRoute,
     handleStartDevServer,
     handleRefresh: doRefresh,
     clearComponentError,
+    clearDevServerUnreachable,
     handleAutoStartChange,
     handleOpenAutoStartSettings,
   };

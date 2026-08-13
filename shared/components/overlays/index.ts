@@ -19,6 +19,6 @@ export {
   type NonPreviewableRecommendation,
 } from './NonPreviewableFileOverlay';
 export { ParseErrorOverlay } from './ParseErrorOverlay';
-export { buildUnsupportedFrameworkPrompt, FrameworkUnsupportedContent, PreviewSetupOverlay } from './PreviewSetupOverlay';
+export { FrameworkUnsupportedContent, PreviewSetupOverlay } from './PreviewSetupOverlay';
 export type { SimplePropInfo } from './PropsForm';
 export { RuntimeErrorOverlay } from './RuntimeErrorOverlay';

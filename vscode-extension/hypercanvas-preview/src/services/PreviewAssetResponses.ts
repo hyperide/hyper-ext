@@ -176,6 +176,15 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char] ?? char);
 }
 
+function stringifyForInlineScript(payload: {
+  type: 'hypercanvas:devServerUnreachable';
+  proxyPath: string;
+  statusCode: number | null;
+  targetPort: number;
+}): string {
+  return JSON.stringify(payload).replace(/<\//g, '<\\/');
+}
+
 /**
  * Self-contained HTML page shown INSIDE the preview iframe in place of the raw (usually
  * empty-bodied) error response, once shouldShowDevServerUnreachable is true. Styled to match
@@ -183,6 +192,11 @@ function escapeHtml(value: string): string {
  * #d29922) so it reads as a HyperIDE diagnostic, not a generic browser error page. Served
  * with a 200 status (see PreviewProxy) so no browser "friendly error page" heuristic can
  * ever replace this body.
+ *
+ * The inline script retries the parent announcement until the webview acknowledges it because
+ * PreviewPanelApp can remount the iframe while this static page is parsing; a single synchronous
+ * postMessage can beat the newly mounted iframe listener. The retry loop is capped so stale
+ * webviews do not receive unbounded messages.
  */
 export function buildDevServerUnreachableHtml(
   proxyPath: string,
@@ -191,6 +205,12 @@ export function buildDevServerUnreachableHtml(
 ): string {
   const escapedPath = escapeHtml(proxyPath);
   const statusText = statusCode === undefined ? 'no response' : String(statusCode);
+  const announcePayload = stringifyForInlineScript({
+    type: 'hypercanvas:devServerUnreachable',
+    proxyPath,
+    statusCode: statusCode ?? null,
+    targetPort,
+  });
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>HyperCanvas: preview unreachable</title></head>
@@ -208,6 +228,51 @@ export function buildDevServerUnreachableHtml(
       serves its own root URL) — not a temporary glitch, so retrying will not help.
     </p>
   </div>
+  <script>
+    try {
+      const ackType = 'hypercanvas:devServerUnreachableAck';
+      const maxAttempts = 20;
+      let attempts = 0;
+      let stopped = false;
+      let retryTimer = undefined;
+
+      const stopRetrying = () => {
+        stopped = true;
+        if (retryTimer !== undefined) {
+          clearInterval(retryTimer);
+          retryTimer = undefined;
+        }
+      };
+
+      const postAnnouncement = () => {
+        try {
+          window.parent.postMessage(${announcePayload}, '*');
+        } catch {
+          // Ignore postMessage errors.
+        }
+      };
+
+      window.addEventListener('message', (event) => {
+        if (event.source === window.parent && event.data?.type === ackType) {
+          stopRetrying();
+        }
+      });
+
+      postAnnouncement();
+      retryTimer = setInterval(() => {
+        if (stopped) {
+          return;
+        }
+        attempts += 1;
+        postAnnouncement();
+        if (attempts >= maxAttempts) {
+          stopRetrying();
+        }
+      }, 300);
+    } catch {
+      // Ignore postMessage errors.
+    }
+  </script>
 </body>
 </html>`;
 }

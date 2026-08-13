@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'bun:test';
 import { FRAMEWORK_SUPPORT } from '@shared/framework-support';
 import { TID } from '@shared/data-testid-map';
-import { fireEvent, render } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { UnsupportedFrameworkScreen } from '../UnsupportedFrameworkScreen';
 
 function find(container: Element, testid: string): HTMLElement {
@@ -34,17 +34,6 @@ function findOptional(container: Element, testid: string): HTMLElement | null {
   }
 }
 
-function findButtonByText(container: Element, text: string): HTMLButtonElement {
-  const stack: Element[] = [container];
-  while (stack.length) {
-    const el = stack.pop();
-    if (!el) continue;
-    if (el.tagName === 'BUTTON' && el.textContent === text) return el as HTMLButtonElement;
-    for (let i = 0; i < el.children.length; i++) stack.push(el.children[i]);
-  }
-  throw new Error(`No button with text "${text}"`);
-}
-
 describe('UnsupportedFrameworkScreen', () => {
   it('renders the compatibility table root', () => {
     const { container } = render(<UnsupportedFrameworkScreen message="No supported framework detected." />);
@@ -63,20 +52,9 @@ describe('UnsupportedFrameworkScreen', () => {
     expect(container.textContent).toContain('Custom unsupported message.');
   });
 
-  // HYP-917: even when the extension genuinely cannot render this project, offer the
-  // standard "Auto Fix → AI chat" path instead of a dead end.
-  it('does not render an Auto Fix button when onAutoFix is not provided', () => {
+  it('does not render an Auto Fix button because unsupported frameworks are not auto-fixable', () => {
     const { container } = render(<UnsupportedFrameworkScreen message="No supported framework detected." />);
     expect(container.textContent).not.toContain('Auto Fix');
-  });
-
-  it('renders an Auto Fix button and invokes onAutoFix with a prompt when provided', () => {
-    const prompts: string[] = [];
-    const { container } = render(
-      <UnsupportedFrameworkScreen message="Vue.js detected, not supported." onAutoFix={(p) => prompts.push(p)} />,
-    );
-    fireEvent.click(findButtonByText(container, 'Auto Fix'));
-    expect(prompts).toHaveLength(1);
-    expect(prompts[0]).toContain('Vue.js detected, not supported.');
+    expect(findOptional(container, TID.preview.supportAutoFixButton)).toBeNull();
   });
 });

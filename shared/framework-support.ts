@@ -45,11 +45,8 @@ export const DETECTED_FRAMEWORK_KIND_TO_NAME: Record<'vue' | 'svelte' | 'angular
 };
 
 /**
- * Formats the "currently supports" line embedded in Auto Fix prompts (HYP-917) — the single
- * source of truth for that phrasing, shared between `buildUnsupportedFrameworkPrompt`
- * (shared/components/overlays/PreviewSetupOverlay.tsx) and `buildDimensionAutoFixPrompt`
- * (vscode-extension/.../SupportDimensionsTabs.tsx) so a future wording/filter tweak can't
- * silently diverge between the two. Returns '' when there's nothing supported to list.
+ * Formats the "currently supports" line embedded in Auto Fix prompts (HYP-917).
+ * Returns '' when there's nothing supported to list.
  */
 export function buildSupportedFrameworksLine(
   frameworkSupport: readonly { name: string; level: SupportLevel }[] | undefined,

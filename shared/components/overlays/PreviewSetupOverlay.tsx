@@ -18,11 +18,10 @@
 
 import type { CSSProperties } from 'react';
 import { TID } from '../../data-testid-map';
-import { buildSupportedFrameworksLine, type SupportLevel } from '../../framework-support';
+import type { SupportLevel } from '../../framework-support';
 import { OverlayShell } from './OverlayShell';
 
-/** Shared with `FrameworkUnsupportedContent`'s default description AND the Auto Fix prompt's
- * fallback context (HYP-917) — one string, so the two never drift apart. */
+/** Shared with `FrameworkUnsupportedContent`'s default description. */
 const DEFAULT_FRAMEWORK_DETECTION_MESSAGE = 'HyperIDE could not detect a supported framework in this project.';
 
 interface PreviewSetupOverlayProps {
@@ -135,29 +134,6 @@ const FALLBACK_PROMPT = `HyperIDE needs a \`/test-preview\` route in my JSX rout
 - Import \`CanvasPreview\` only when it doesn't already exist.
 - Tag the import with \`// @hyperide-managed\` so HyperIDE can track it.`;
 
-/**
- * Builds the Auto Fix prompt for the 'unsupported' framework screen (HYP-917). Unlike
- * FALLBACK_PROMPT this is a function, not a constant, because it must embed the
- * per-project `description` HyperIDE detected plus the list of currently-supported
- * frameworks, so the AI agent has the same context the user is looking at. Asks the agent
- * to find a real workaround (or confirm there isn't one) rather than guessing/faking support.
- */
-export function buildUnsupportedFrameworkPrompt(
-  description: string | undefined,
-  frameworkSupport?: Array<{ name: string; level: SupportLevel }>,
-): string {
-  const detected = description ?? DEFAULT_FRAMEWORK_DETECTION_MESSAGE;
-  const supportedLine = buildSupportedFrameworksLine(frameworkSupport);
-
-  return `HyperIDE's component preview does not support this project's current framework/setup.
-
-**Context:** ${detected}${supportedLine ? `\n${supportedLine}` : ''}
-
-**Task:** Look for a real way to make this project previewable in HyperIDE — a config change, an adapter, or a supported framework already present alongside the unsupported one. If you find one, apply it and explain what changed.
-
-**If there truly is no way** to make this project's current framework/setup previewable, say so clearly — do not guess or fake support.`;
-}
-
 export function PreviewSetupOverlay({
   status,
   frameworkSupport,
@@ -223,16 +199,6 @@ export function PreviewSetupOverlay({
           {onDismiss && (
             <button type="button" onClick={onDismiss} style={secondaryBtnStyle}>
               Dismiss
-            </button>
-          )}
-          {onAutoFix && (
-            <button
-              type="button"
-              data-testid={TID.preview.supportAutoFixButton}
-              onClick={() => onAutoFix(buildUnsupportedFrameworkPrompt(description, frameworkSupport))}
-              style={primaryBtnStyle}
-            >
-              Auto Fix
             </button>
           )}
           {onManualFix && (

@@ -26,7 +26,7 @@
  */
 
 import { useState } from 'react';
-import { buildUnsupportedFrameworkPrompt, FrameworkUnsupportedContent } from '@shared/components/overlays';
+import { FrameworkUnsupportedContent } from '@shared/components/overlays';
 import { buildSupportedFrameworksLine, FRAMEWORK_SUPPORT } from '@shared/framework-support';
 import { TID } from '@shared/data-testid-map';
 import type { SupportDimension, SupportStatus } from '../types';
@@ -37,10 +37,8 @@ function isLegacyFrameworkScreen(dimension: SupportDimension): boolean {
 }
 
 /**
- * Builds the Auto Fix prompt for a generic blocking dimension (bundler, styleSystem
- * needs-setup, react-native needs-setup) — these have no legacy screen and, unless they
- * carry a `fixLabel`, no mechanical fix command either (HYP-917). Shares the "currently
- * supports" line format with `buildUnsupportedFrameworkPrompt` via `buildSupportedFrameworksLine`.
+ * Builds the Auto Fix prompt for a generic needs-setup dimension — these have no legacy
+ * screen and may carry a mechanical fix command too (HYP-917).
  */
 function buildDimensionAutoFixPrompt(dimension: SupportDimension): string {
   const evidenceLines = dimension.evidence.map((row) => `- ${row.label}: ${row.detail}`).join('\n');
@@ -165,26 +163,13 @@ function DimensionPanel({
             frameworkSupport={FRAMEWORK_SUPPORT}
             detectedFrameworkName={dimension.detectedFrameworkName}
           />
-          {/* Centered (not the left-aligned actionRowStyle below) — legacyFrameworkCardStyle
-              mirrors PreviewSetupOverlay's centered card layout on purpose (HYP-913), so its
-              own Auto Fix button follows that centering, not the generic branch's row style. */}
-          {onAutoFix && (
-            <button
-              type="button"
-              data-testid={TID.preview.supportAutoFixButton}
-              style={{ ...fixButtonStyle, alignSelf: 'center' }}
-              onClick={() => onAutoFix(buildUnsupportedFrameworkPrompt(dimension.reason, FRAMEWORK_SUPPORT))}
-            >
-              Auto Fix
-            </button>
-          )}
         </div>
       </div>
     );
   }
 
   const showFix = Boolean(dimension.fixLabel && onFix);
-  const showAutoFix = Boolean(onAutoFix);
+  const showAutoFix = Boolean(onAutoFix) && dimension.status !== 'unsupported';
 
   return (
     <div role={role} data-testid={testId} style={panelStyle}>
@@ -206,10 +191,8 @@ function DimensionPanel({
         </tbody>
       </table>
 
-      {/* Every blocking dimension always offers a path forward: the mechanical Fix button
-          when one is wired (react-native-web install etc.), and/or Auto Fix — routing the
-          reason + evidence to the AI agent — for the dimensions (bundler, styleSystem,
-          framework needs-setup) that have no mechanical fix command at all (HYP-917). */}
+      {/* Auto Fix is a secondary path for needs-setup dimensions. Unsupported dimensions
+          are hard product limits, so the panel intentionally renders no action there. */}
       {(showFix || showAutoFix) && (
         <div style={actionRowStyle}>
           {dimension.fixLabel && onFix && (
@@ -222,7 +205,7 @@ function DimensionPanel({
               {dimension.fixLabel}
             </button>
           )}
-          {onAutoFix && (
+          {showAutoFix && onAutoFix && (
             <button
               type="button"
               data-testid={TID.preview.supportAutoFixButton}

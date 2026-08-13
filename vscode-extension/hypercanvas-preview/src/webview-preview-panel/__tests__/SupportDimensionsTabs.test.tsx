@@ -194,34 +194,29 @@ describe('SupportDimensionsTabs', () => {
     expect(container.textContent).not.toContain('needs attention');
   });
 
-  // HYP-917: every blocking dimension always offers a path to ask the AI, even when there's
-  // no mechanical auto-fix command wired for it.
-  describe('Auto Fix (HYP-917)', () => {
+  // Auto Fix is only meaningful for needs-setup dimensions; unsupported means HyperIDE
+  // cannot handle that dimension at all.
+  describe('Auto Fix', () => {
     it('renders no Auto Fix button when onAutoFix is not provided (legacy framework branch)', () => {
       const container = renderLocal(<SupportDimensionsTabs dimensions={[frameworkDim]} />);
       expect(findOptional(container, TID.preview.supportAutoFixButton)).toBeNull();
     });
 
-    it('renders an Auto Fix button for the legacy framework-unsupported branch and invokes onAutoFix with a prompt', () => {
+    it('renders no Auto Fix button for the legacy framework-unsupported branch even when onAutoFix is provided', () => {
       let sent: string | null = null;
       const container = renderLocal(
         <SupportDimensionsTabs dimensions={[frameworkDim]} onAutoFix={(p) => (sent = p)} />,
       );
-      const btn = find(container, TID.preview.supportAutoFixButton);
-      expect(btn.textContent).toBe('Auto Fix');
-      clickEl(btn);
-      expect(sent ?? '').toContain('Vue.js projects not supported');
+      expect(findOptional(container, TID.preview.supportAutoFixButton)).toBeNull();
+      expect(sent).toBeNull();
     });
 
-    it('renders an Auto Fix button for a generic blocking dimension with no fixLabel and invokes onAutoFix with a prompt built from its reason + evidence', () => {
+    it('renders no action button for a generic unsupported dimension even when onAutoFix is provided', () => {
       let sent: string | null = null;
       const container = renderLocal(<SupportDimensionsTabs dimensions={[bundlerDim]} onAutoFix={(p) => (sent = p)} />);
-      const btn = find(container, TID.preview.supportAutoFixButton);
-      clickEl(btn);
-      // Structural assertions on what buildDimensionAutoFixPrompt actually emits — not a
-      // coincidental substring match with a different prompt builder's fallback text.
-      expect(sent ?? '').toContain(bundlerDim.reason);
-      expect(sent ?? '').toContain('- Detected bundler: unknown');
+      expect(findOptional(container, TID.preview.supportFixButton)).toBeNull();
+      expect(findOptional(container, TID.preview.supportAutoFixButton)).toBeNull();
+      expect(sent).toBeNull();
     });
 
     it('renders no Auto Fix button for a generic blocking dimension when onAutoFix is not provided', () => {

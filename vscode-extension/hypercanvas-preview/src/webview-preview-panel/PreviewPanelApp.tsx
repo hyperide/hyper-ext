@@ -28,6 +28,7 @@ import { selectDimensionTabs } from '../services/support-dimensions';
 import { TID } from '../shared/data-testid-map';
 import type { UnsupportedProjectError } from '../types';
 import { CanvasComponentPicker, hasPickerComponents, shouldShowComponentPicker } from './CanvasComponentPicker';
+import { DevServerUnreachableOverlay } from './DevServerUnreachableOverlay';
 import { DisconnectedScreen } from './DisconnectedScreen';
 import { PreviewLoadErrorOverlay } from './PreviewLoadErrorOverlay';
 import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
@@ -124,7 +125,9 @@ function PreviewContent() {
     unsupportedFile,
     selectRecommendation,
     appMode,
+    devServerUnreachable,
     navigateAppRoute,
+    clearDevServerUnreachable,
     clearComponentError,
     handleStartDevServer,
     autoStart,
@@ -166,11 +169,15 @@ function PreviewContent() {
   // User must click "Continue in Readonly" to dismiss the stub and see the preview.
   const [readonlyDismissed, setReadonlyDismissed] = useState(false);
   const isReadonly = projectCapabilities?.readonly === true;
-  // The readonly stub is a full-surface overlay; while it covers the preview the
-  // canvas is non-interactive. Both the stub render and the mode-HUD suppression
+  // The readonly stub is a full-surface overlay (z-900); while it covers the preview
+  // the canvas is non-interactive. Both the stub render and the mode-HUD suppression
   // (see shouldShowModeToolbar) derive from this single condition so they stay in
   // lockstep — the HUD must be hidden exactly when the stub is up (HYP-782).
-  const readonlyStubVisible = isReadonly && !readonlyDismissed;
+  // Excludes `devServerUnreachable`: that overlay (z-15) is a genuine render-blocking
+  // dead end — the stub's "Preview rendered successfully" framing would be actively
+  // wrong on top of it, and its z-900 would bury the Auto Fix/Dismiss surface (HYP-918
+  // review finding).
+  const readonlyStubVisible = isReadonly && !readonlyDismissed && !devServerUnreachable;
 
   // Latched "the preview proved it renders" signal for the readonly stub. Gating
   // the Continue button AND the stub's status sentence on the LIVE signal lets a
@@ -236,10 +243,11 @@ function PreviewContent() {
   // reset effect above flips iframeLoadTimedOut back to false, which re-runs
   // this effect.
   useEffect(() => {
-    if (!iframeSrc || iframeLoaded || componentError || iframeLoadTimedOut || iframeError) return;
+    if (!iframeSrc || iframeLoaded || componentError || iframeLoadTimedOut || iframeError || devServerUnreachable)
+      return;
     const id = setTimeout(() => setIframeLoadTimedOut(true), PREVIEW_LOAD_TIMEOUT_MS);
     return () => clearTimeout(id);
-  }, [iframeSrc, iframeLoaded, componentError, iframeLoadTimedOut, iframeError]);
+  }, [iframeSrc, iframeLoaded, componentError, iframeLoadTimedOut, iframeError, devServerUnreachable]);
 
   const handleIframeLoad = useCallback(() => {
     setIframeLoaded(true);
@@ -281,10 +289,9 @@ function PreviewContent() {
     canvas.sendEvent({ type: 'command:fixUnsupportedProject' });
   }, [canvas]);
 
-  // Auto Fix (HYP-917): even when the extension genuinely cannot render this project, route
-  // the blocking/unsupported screen's prompt to the AI agent the STANDARD way — the same
-  // `ai:openChat` event the diagnostics panel's Auto Fix button and the SaaS editor already
-  // use (see webview/App.tsx, PanelRouter.ts, AIChatPanelProvider.ts). No new plumbing.
+  // Auto Fix prompts route to the AI agent the STANDARD way — the same `ai:openChat` event
+  // the diagnostics panel's Auto Fix button and the SaaS editor already use (see
+  // webview/App.tsx, PanelRouter.ts, AIChatPanelProvider.ts). No new plumbing.
   const handleAutoFixPrompt = useCallback(
     (prompt: string) => {
       canvas.sendEvent({ type: 'ai:openChat', prompt });
@@ -312,7 +319,7 @@ function PreviewContent() {
   //  - 'react-native': renders only after a fix (react-native-web) → fix button.
   if (projectError) {
     if (projectError.type === 'framework') {
-      return <UnsupportedFrameworkScreen message={projectError.message} onAutoFix={handleAutoFixPrompt} />;
+      return <UnsupportedFrameworkScreen message={projectError.message} />;
     }
     const handleFix = () => {
       canvas.sendEvent({ type: 'command:fixUnsupportedProject' });
@@ -382,12 +389,26 @@ function PreviewContent() {
           onError={handleIframeError}
         />
         <div ref={overlayCallbackRef} style={overlayStyle} />
-        {iframeSrc && !iframeLoaded && !componentError && !iframeLoadTimedOut && !iframeError && <LoadingOverlay />}
-        {iframeSrc && !componentError && !iframeError && iframeLoadTimedOut && (
+        {iframeSrc &&
+          !iframeLoaded &&
+          !componentError &&
+          !iframeLoadTimedOut &&
+          !iframeError &&
+          !devServerUnreachable && <LoadingOverlay />}
+        {iframeSrc && !componentError && !iframeError && !devServerUnreachable && iframeLoadTimedOut && (
           <PreviewLoadTimeoutOverlay onRetry={handleRetry} onOpenOutput={handleOpenOutput} />
         )}
         {iframeSrc && !componentError && iframeError && (
           <PreviewLoadErrorOverlay error={iframeError} onRetry={handleRetry} onOpenOutput={handleOpenOutput} />
+        )}
+        {iframeSrc && !componentError && !iframeError && !iframeLoadTimedOut && devServerUnreachable && (
+          <DevServerUnreachableOverlay
+            proxyPath={devServerUnreachable.proxyPath}
+            statusCode={devServerUnreachable.statusCode}
+            targetPort={devServerUnreachable.targetPort}
+            onAutoFix={handleAutoFixPrompt}
+            onDismiss={clearDevServerUnreachable}
+          />
         )}
       </div>
 
@@ -430,7 +451,7 @@ function PreviewContent() {
       {/* Hide the floating mode HUD while the readonly stub covers the surface —
           otherwise the z-[1000] HUD floats over the stub's Continue button and
           intercepts its pointer events, wedging the user at the stub (HYP-782). */}
-      {shouldShowModeToolbar({ isReadonly, readonlyDismissed }) && <ModeToolbar canvas={canvas} />}
+      {shouldShowModeToolbar(readonlyStubVisible) && <ModeToolbar canvas={canvas} />}
 
       <CanvasElementContextMenu
         selectedIds={contextMenu ? [contextMenu.elementId] : []}
@@ -674,19 +695,12 @@ const TOOLBAR_BUTTONS: {
  * `position:absolute inset:0 z-900` overlay. With the HUD on top of the stub it
  * floats OVER the stub's "Continue in Readonly" button and intercepts its pointer
  * events (Playwright: "subtree intercepts pointer events"), so the Continue click
- * never lands — a real user is wedged at the stub (HYP-782). While the stub covers
- * the surface the canvas is non-interactive (nothing to point/board/design at), so
- * the HUD must not render. Once the user clicks Continue (`readonlyDismissed`) the
- * preview is interactive again and the HUD returns.
+ * never lands — a real user is wedged at the stub (HYP-782). The caller passes the
+ * single derived `readonlyStubVisible` flag, already accounting for conditions like
+ * `devServerUnreachable`, so the stub render and HUD gate share exactly one source
+ * of truth for whether the full-surface stub covers the canvas right now.
  */
-export function shouldShowModeToolbar({
-  isReadonly,
-  readonlyDismissed,
-}: {
-  isReadonly: boolean;
-  readonlyDismissed: boolean;
-}): boolean {
-  const readonlyStubVisible = isReadonly && !readonlyDismissed;
+export function shouldShowModeToolbar(readonlyStubVisible: boolean): boolean {
   return !readonlyStubVisible;
 }
 
