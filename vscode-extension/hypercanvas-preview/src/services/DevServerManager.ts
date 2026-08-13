@@ -329,7 +329,7 @@ export class DevServerManager {
     // then loses the next start to that orphan with EADDRINUSE and the preview
     // never appears. We attribute the kill ONLY via the pid WE recorded for THIS
     // project — never "whoever holds the port" (occupancy is not ownership).
-    // See devServerOrphanRegistry (orphan-reap-on-reload, HYP-753).
+    // See devServerOrphanRegistry (orphan-reap-on-reload).
     this._reapOrphanedDevServer();
 
     try {

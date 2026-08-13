@@ -877,7 +877,7 @@ describe('DevServerManager', () => {
     });
   });
 
-  // HYP-753 (orphan-reap-on-reload): a detached dev server orphaned by a window
+  // Orphan-reap-on-reload: a detached dev server orphaned by a window
   // reload still holds its port; the next start must reap OUR recorded pid before
   // picking a port. These tests exercise the manager's wiring to the registry —
   // the registry's own behavior is covered in services/__tests__/devServerOrphanRegistry.test.ts.

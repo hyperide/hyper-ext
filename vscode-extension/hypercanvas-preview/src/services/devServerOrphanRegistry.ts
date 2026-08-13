@@ -5,7 +5,7 @@
  * paths (record + clear). Not exposed to the end user directly; its effect is a
  * preview that materializes after a "Developer: Reload Window" instead of hanging.
  *
- * Why this exists (orphan-reap-on-reload, HYP-753):
+ * Why this exists (orphan-reap-on-reload):
  * DevServerManager spawns the user's dev server DETACHED (its own process group).
  * On a VS Code window reload, deactivate() fires `void devServerManager.stop()`
  * fire-and-forget; VS Code tears down the extension host before the 5s graceful

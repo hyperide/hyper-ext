@@ -32,7 +32,7 @@ describe('hasErrorsInLogs', () => {
     expect(hasErrorsInLogs('Failed to compile.')).toBe(true);
   });
 
-  // HYP-753 (orphan-reap-on-reload): a dev server that loses the port race must
+  // Orphan-reap-on-reload: a dev server that loses the port race must
   // not crash silently. These are the port-in-use signatures across runtimes.
   it("detects Bun's port-collision crash", () => {
     expect(hasErrorsInLogs('error: Failed to start server. Is port 3000 in use?')).toBe(true);

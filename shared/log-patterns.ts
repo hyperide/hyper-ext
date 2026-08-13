@@ -30,7 +30,7 @@ export const ERROR_PATTERNS = [
   // "error: Failed to start server. Is port 3000 in use?" then exits. That string
   // matched none of the patterns above, so the failure was invisible and
   // _waitForReady() timed out with a generic "Server startup timeout" instead of
-  // surfacing the real cause (HYP-753, orphan-reap-on-reload). Node/Vite/webpack
+  // surfacing the real cause (orphan-reap-on-reload). Node/Vite/webpack
   // emit EADDRINUSE / "address already in use" for the same condition.
   /EADDRINUSE/i, // Node/libuv address-in-use error code
   /address already in use/i, // libuv / common server message

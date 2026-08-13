@@ -15,7 +15,7 @@ import {
 } from '../devServerOrphanRegistry';
 
 /**
- * Orphan-reap-on-reload regression (HYP-753). The reaper must:
+ * Orphan-reap-on-reload regression. The reaper must:
  *  - persist a per-project record on spawn and clear it on stop/exit,
  *  - on the next start, kill the recorded pid ONLY when it is still alive and the
  *    record belongs to THIS project (never "whoever holds the port"),
