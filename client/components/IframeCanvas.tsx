@@ -71,7 +71,7 @@ export default function IframeCanvas({
   const engine = useCanvasEngine();
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const { tracer } = useElementTracer({
+  const { tracer, clickRetryQueue } = useElementTracer({
     iframe: iframeRef.current,
     projectId: meta?.projectId ?? '',
     enabled: meta?.projectId != null,
@@ -79,7 +79,7 @@ export default function IframeCanvas({
     componentPath,
   });
 
-  const { setPendingSelection } = useTracerSelectionSync({ tracer, engine });
+  const { setPendingSelection } = useTracerSelectionSync({ tracer, engine, clickRetryQueue });
 
   const { loading, previewReady, canvasMode, canvasComposition, iframeSize } = useIframeCanvas({
     projectId: meta?.projectId,
@@ -98,6 +98,7 @@ export default function IframeCanvas({
     iframeRef,
     engine,
     tracer,
+    clickRetryQueue,
     setPendingSelection,
     canvasMode,
     activeInstanceId,

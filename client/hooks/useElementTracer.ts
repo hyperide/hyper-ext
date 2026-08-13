@@ -11,6 +11,7 @@ import { getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-
 import type { SourceLocation } from '@shared/element-tracing/types';
 import { useEffect, useRef, useState } from 'react';
 import { setActiveTracer } from '@/lib/element-tracing/active-tracer';
+import { ClickRetryQueue } from '@/lib/element-tracing/click-retry-queue';
 import { ElementTracer } from '@/lib/element-tracing/element-tracer';
 import { FiberSourceIndex, hookIntoReactCommits } from '@/lib/element-tracing/fiber-source-index';
 import type { Fiber } from '@/lib/element-tracing/fiber-utils';
@@ -32,6 +33,11 @@ interface UseElementTracerOptions {
 interface UseElementTracerResult {
   tracer: ElementTracer | null;
   ready: boolean;
+  /**
+   * Retry queue for clicks that raced source-map warmup (HYP-635). Click handlers
+   * enqueue a missed click here; it re-resolves when the module's map lands.
+   */
+  clickRetryQueue: ClickRetryQueue | null;
 }
 
 /** Fast-retry window: 15 × 200ms = 3s. After that, slow retry every 2s until disposed. */
@@ -81,6 +87,7 @@ export function useElementTracer({
   componentPath,
 }: UseElementTracerOptions): UseElementTracerResult {
   const tracerRef = useRef<ElementTracer | null>(null);
+  const clickRetryQueueRef = useRef<ClickRetryQueue | null>(null);
   // The init effect's setTimeout retry chain (up to 3s for React detection) can
   // outlive multiple prop changes. Reading the live value through a ref avoids
   // capturing a stale `componentPath` in the closure when tryInit finally fires.
@@ -92,6 +99,8 @@ export function useElementTracer({
   useEffect(() => {
     if (!iframe || !enabled || !projectId) {
       // Tear down if conditions no longer met
+      clickRetryQueueRef.current?.cancel();
+      clickRetryQueueRef.current = null;
       if (tracerRef.current) {
         tracerRef.current.dispose();
         tracerRef.current = null;
@@ -143,8 +152,14 @@ export function useElementTracer({
       // Mirrors the extension's iframe-resolver composition: platform source-map
       // resolver first, raw fiber parsing as fallback.
       let invalidateSourceIndex: (() => void) | null = null;
+      let clickRetryQueue: ClickRetryQueue | null = null;
       const moduleSourceMapResolver = new ModuleSourceMapResolver({
-        onResolved: () => invalidateSourceIndex?.(),
+        onResolved: () => {
+          // Order matters: invalidate the index FIRST so the queued click's
+          // re-resolution below sees freshly mapped coords, not stale raw ones.
+          invalidateSourceIndex?.();
+          clickRetryQueue?.notifyResolved();
+        },
       });
       const resolveFiberSource = (fiber: Fiber): SourceLocation | null =>
         moduleSourceMapResolver.resolveFiberSource(fiber) ?? getOwnFiberSourceLocation(fiber);
@@ -189,6 +204,19 @@ export function useElementTracer({
       const transport = new WSTracingTransport(() => new WebSocket(wsUrl));
       const tracer = new ElementTracer(adapter, transport);
 
+      // Retry-on-resolve for the first-click warmup race (HYP-635): a click that
+      // misses the node map while its module's source map is still fetching is
+      // queued and re-resolved from onResolved above. Tracer readiness is NOT
+      // gated on warmup — a hung map fetch must never block selection.
+      clickRetryQueue = new ClickRetryQueue({
+        resolve: (element) => tracer.resolveClickLocal(element),
+        isWarming: (element) => {
+          const fiber = getFiberFromDOM(element);
+          return fiber !== null && moduleSourceMapResolver.isFiberSourceWarming(fiber);
+        },
+      });
+      clickRetryQueueRef.current = clickRetryQueue;
+
       // Hook into React commit cycle inside the iframe to invalidate FiberSourceIndex
       unhookCommits = hookIntoReactCommits(sourceIndex, iframeWindow as unknown as typeof globalThis);
 
@@ -208,6 +236,8 @@ export function useElementTracer({
         clearTimeout(detectTimer);
       }
       unhookCommits?.();
+      clickRetryQueueRef.current?.cancel();
+      clickRetryQueueRef.current = null;
       if (tracerRef.current) {
         tracerRef.current.dispose();
         tracerRef.current = null;
@@ -228,5 +258,5 @@ export function useElementTracer({
     }
   }, [componentPath]);
 
-  return { tracer: tracerRef.current, ready };
+  return { tracer: tracerRef.current, ready, clickRetryQueue: clickRetryQueueRef.current };
 }

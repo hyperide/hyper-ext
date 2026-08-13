@@ -1,5 +1,7 @@
 import { describe, expect, it, mock, spyOn } from 'bun:test';
+import type { LocalResolveResult } from '../../../shared/canvas-interaction/types';
 import type { Fiber } from '../../../shared/element-tracing/fiber-internals';
+import { ClickRetryQueue } from './click-retry-queue';
 import { ModuleSourceMapResolver } from './module-source-map-resolver';
 
 // ─── VLQ encoding helpers (same encoding as shared/element-tracing/__tests__/source-map-resolver.test.ts) ───
@@ -141,6 +143,72 @@ describe('ModuleSourceMapResolver', () => {
     } finally {
       debugSpy.mockRestore();
     }
+  });
+
+  it('reports warming state per fiber module while the map fetch is in flight (HYP-635)', async () => {
+    const fetchFn = fetchReturning(makeModuleBody());
+    const resolver = new ModuleSourceMapResolver({ fetchFn });
+    const fiber = mockFiberWithStack(PROXIED_MODULE_URL, 19, 21);
+
+    // Nothing requested yet — not warming.
+    expect(resolver.isFiberSourceWarming(fiber)).toBe(false);
+
+    // Cold resolve kicks off the background fetch — now warming.
+    resolver.resolveFiberSource(fiber);
+    expect(resolver.isFiberSourceWarming(fiber)).toBe(true);
+
+    await resolver.flush();
+    expect(resolver.isFiberSourceWarming(fiber)).toBe(false);
+  });
+
+  it('onResolved observes the module as no longer warming (codex P1: retry queue pumps from it)', async () => {
+    // ClickRetryQueue.notifyResolved() runs inside onResolved and skips re-resolution
+    // while the element's module is still warming. If pending were cleared only AFTER
+    // onResolved (the old .finally ordering), the queued click would never retry.
+    const fetchFn = fetchReturning(makeModuleBody());
+    const fiber = mockFiberWithStack(PROXIED_MODULE_URL, 19, 21);
+    const warmingInsideCallback: boolean[] = [];
+    const resolver: ModuleSourceMapResolver = new ModuleSourceMapResolver({
+      fetchFn,
+      onResolved: () => warmingInsideCallback.push(resolver.isFiberSourceWarming(fiber)),
+    });
+
+    resolver.resolveFiberSource(fiber);
+    await resolver.flush();
+
+    expect(warmingInsideCallback).toEqual([false]);
+  });
+
+  it('integration: a click queued during warmup re-resolves when the map lands, no second click (HYP-635)', async () => {
+    // Full chain as wired by useElementTracer: resolver.onResolved pumps the queue;
+    // queue.isWarming probes the resolver; queue.resolve succeeds only once the
+    // module map yields ORIGINAL coords (stand-in for the node-map match).
+    const fetchFn = fetchReturning(makeModuleBody());
+    const fiber = mockFiberWithStack(PROXIED_MODULE_URL, 19, 21);
+    const element = document.createElement('div');
+    const delivered: LocalResolveResult[] = [];
+
+    let queue: ClickRetryQueue | null = null;
+    const resolver = new ModuleSourceMapResolver({
+      fetchFn,
+      onResolved: () => queue?.notifyResolved(),
+    });
+    queue = new ClickRetryQueue({
+      isWarming: () => resolver.isFiberSourceWarming(fiber),
+      resolve: () => {
+        const loc = resolver.resolveFiberSource(fiber);
+        return loc === null ? null : ({ nodeRef: `${loc.fileName}:${loc.line}:${loc.column}` } as LocalResolveResult);
+      },
+    });
+
+    // First click during warmup: cold resolve kicks off the fetch and misses the node map.
+    expect(resolver.resolveFiberSource(fiber)).toBeNull();
+    expect(queue.enqueue(element, (result) => delivered.push(result))).toBe(true);
+    expect(delivered).toHaveLength(0);
+
+    // Map lands → onResolved → queued click re-resolves with mapped coords. No second click.
+    await resolver.flush();
+    expect(delivered.map((r) => r.nodeRef)).toEqual(['src/components/Hero.tsx:4:6']);
   });
 
   it('warmFiberTree pre-warms every fiber with a _debugStack', async () => {

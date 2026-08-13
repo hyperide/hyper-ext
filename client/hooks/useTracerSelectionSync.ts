@@ -14,6 +14,7 @@
 import type { SourceLocation } from '@shared/element-tracing/types';
 import { useCallback, useEffect, useRef } from 'react';
 import type { CanvasEngine } from '@/lib/canvas-engine';
+import type { ClickRetryQueue } from '@/lib/element-tracing/click-retry-queue';
 import type { ElementTracer } from '@/lib/element-tracing/element-tracer';
 
 interface PendingSelection {
@@ -24,6 +25,8 @@ interface PendingSelection {
 interface UseTracerSelectionSyncOptions {
   tracer: ElementTracer | null;
   engine: CanvasEngine;
+  /** Warmup-race retry queue (HYP-635) — dropped once a server-confirmed selection lands. */
+  clickRetryQueue?: ClickRetryQueue | null;
 }
 
 /**
@@ -31,7 +34,7 @@ interface UseTracerSelectionSyncOptions {
  * - Confirms pending selections when server resolves them.
  * - Remaps selections when NodeMapUpdate includes refMapping.
  */
-export function useTracerSelectionSync({ tracer, engine }: UseTracerSelectionSyncOptions): {
+export function useTracerSelectionSync({ tracer, engine, clickRetryQueue }: UseTracerSelectionSyncOptions): {
   /** Call when click handler fires with nodeRef=null to register a pending selection. */
   setPendingSelection: (source: SourceLocation, itemIndex: number) => void;
 } {
@@ -50,12 +53,17 @@ export function useTracerSelectionSync({ tracer, engine }: UseTracerSelectionSyn
 
       if (response.nodeRef && response.entry) {
         engine.selectWithItemIndex(response.nodeRef, pendingRef.current.itemIndex);
+        // Do NOT cancel the retry queue here: if the user clicked A then B before
+        // A's server response arrived, pendingRef now holds B's data and cancelling
+        // would drop B's warmup retry. The queue is cancelled by new clicks and by
+        // useElementTracer on teardown; a duplicate re-selection (retry fires after
+        // server already resolved) is harmless.
       }
       pendingRef.current = null;
     });
 
     return unsub;
-  }, [tracer, engine]);
+  }, [tracer, engine, clickRetryQueue]);
 
   // Task 9e: Remap selection on NodeMapUpdate with refMapping
   useEffect(() => {

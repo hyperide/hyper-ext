@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { IPHONE_SIZES } from '@/components/RightSidebar/constants';
 import type { SourceLocation } from '@shared/element-tracing/types';
+import type { ClickRetryQueue } from '@/lib/element-tracing/click-retry-queue';
 import { ElementTracer } from '@/lib/element-tracing/element-tracer';
 import type { CanvasMode } from '../../../shared/types/canvas';
 
@@ -8,6 +9,8 @@ interface UseIframeEventHandlersParams {
   iframeRef: React.RefObject<HTMLIFrameElement | null>;
   engine: { getMode(): 'design' | 'interact' | 'code' };
   tracer: ElementTracer | null;
+  /** Retry queue for clicks that raced source-map warmup (HYP-635). */
+  clickRetryQueue?: ClickRetryQueue | null;
   setPendingSelection: (source: SourceLocation, itemIndex: number) => void;
   canvasMode: CanvasMode;
   activeInstanceId?: string | null;
@@ -39,6 +42,7 @@ export function useIframeEventHandlers({
   iframeRef,
   engine,
   tracer,
+  clickRetryQueue,
   setPendingSelection,
   canvasMode,
   activeInstanceId,
@@ -69,6 +73,9 @@ export function useIframeEventHandlers({
 
     const handleClick = (e: MouseEvent) => {
       const mode = engine.getMode();
+
+      // Any new click supersedes a retry queued for a previous one (HYP-635).
+      clickRetryQueue?.cancel();
 
       if (isAddingComment && onAddComment) {
         e.preventDefault();
@@ -119,6 +126,13 @@ export function useIframeEventHandlers({
               onElementClick(result.nodeRef, target, e, result.itemIndex, result.source);
               return;
             }
+            // Warmup race (HYP-635): the click may have resolved to raw transformed
+            // coords because the module's source map is still fetching. Queue it for
+            // one re-resolution when the map lands; the raw fallback below still runs
+            // so a hung fetch never blocks selection.
+            clickRetryQueue?.enqueue(target, (late) => {
+              onElementClick(late.nodeRef, target, e, late.itemIndex, late.source);
+            });
             const source = tracer.getSourceLocation(target);
             if (source) {
               const itemIndex = tracer.getItemIndex(target);
@@ -244,6 +258,11 @@ export function useIframeEventHandlers({
     }
 
     return () => {
+      // Do NOT cancel clickRetryQueue here: the deliver closure captures
+      // onElementClick at enqueue time (correct for the click that triggered it),
+      // and the queue is cancelled by every subsequent new click (line ~78) and by
+      // useElementTracer on teardown. Cancelling on every dep-change would drop a
+      // valid warmup-retry whenever onElementClick changes identity mid-flight.
       window.removeEventListener('mousedown', handleMouseDown, { capture: true });
       doc.removeEventListener('click', handleClick, { capture: true });
       doc.removeEventListener('mouseover', handleMouseOver, { capture: true });
@@ -267,6 +286,7 @@ export function useIframeEventHandlers({
     iframeLoadedCounter,
     canvasMode,
     tracer,
+    clickRetryQueue,
     setPendingSelection,
     overrideSrc,
     iframeRef,

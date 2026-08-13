@@ -158,6 +158,16 @@ export class ModuleSourceMapResolver {
     return loc;
   }
 
+  /**
+   * True while the source map for the fiber's nearest module frame is still being fetched.
+   * Lets click handling distinguish a warmup-race node-map miss (retry once the map lands —
+   * HYP-635) from a genuine miss (server resolve-element fallback is the only path).
+   */
+  isFiberSourceWarming(fiber: Fiber): boolean {
+    const frame = this.findFrame(fiber);
+    return frame !== null && this.pending.has(frame.url);
+  }
+
   /** Kick off background source-map fetches for every module referenced by the fiber tree. */
   warmFiberTree(root: Fiber): void {
     const stack: Fiber[] = [root];
@@ -193,16 +203,21 @@ export class ModuleSourceMapResolver {
   private warm(url: string): void {
     if (this.maps.has(url) || this.pending.has(url)) return;
     const task = this.load(url)
+      .catch((error: unknown) => {
+        console.debug('[tracing] module source-map fetch failed', url, error);
+        return null;
+      })
       .then((sm) => {
         this.maps.set(url, sm);
+        // Clear pending BEFORE notifying: onResolved consumers (ClickRetryQueue,
+        // HYP-635) probe isFiberSourceWarming and must see this module as done.
+        this.pending.delete(url);
         if (sm !== null) this.onResolved?.();
       })
       .catch((error: unknown) => {
-        this.maps.set(url, null);
-        console.debug('[tracing] module source-map fetch failed', url, error);
-      })
-      .finally(() => {
-        this.pending.delete(url);
+        // onResolved fans out to app callbacks (index invalidation, click retry) —
+        // a throw there must not surface as an unhandled rejection or poison flush().
+        console.debug('[tracing] onResolved callback failed', url, error);
       });
     this.pending.set(url, task);
   }
