@@ -88,7 +88,14 @@ function BridgeWithSpy({ onSpy }: { onSpy: (spy: PostMessageSpy) => void }) {
     setIframeEl(el);
   };
 
-  return createElement('iframe', { ref: refCallback, title: 'preview' });
+  // The preview iframe is always loaded from the dev-server URL in production, so
+  // postToPreviewIframe can derive a concrete target origin (never '*'). Give the
+  // test iframe a matching src so the forwarding path exercises that real origin.
+  return createElement('iframe', {
+    ref: refCallback,
+    title: 'preview',
+    src: 'http://localhost:5173/test-preview?component=src%2FApp.tsx',
+  });
 }
 
 function renderBridgeWithSpy(onSpy: (spy: PostMessageSpy) => void) {
@@ -233,6 +240,8 @@ describe('state:update → iframe forwarding', () => {
       const sentMsg = stateUpdateCall?.[0] as Record<string, unknown>;
       expect(sentMsg.selectedIds).toEqual(['node-abc']);
       expect(sentMsg.hoveredId).toBeNull();
+      // targetOrigin must be the derived dev-server origin, never the '*' wildcard.
+      expect(stateUpdateCall?.[1]).toBe('http://localhost:5173');
       // Must NOT forward raw state:update type
       const wrongCall = calls.find((args) => (args[0] as Record<string, unknown>).type === 'state:update');
       expect(wrongCall).toBeUndefined();
@@ -273,6 +282,8 @@ describe('iframe:scrollToElement → iframe forwarding', () => {
       expect(scrollCall).toBeDefined();
       const sentMsg = scrollCall?.[0] as Record<string, unknown>;
       expect(sentMsg.elementId).toBe('/project/src/App.tsx:42:8');
+      // targetOrigin must be the derived dev-server origin, never the '*' wildcard.
+      expect(scrollCall?.[1]).toBe('http://localhost:5173');
       // Must NOT echo the host-side type — iframe handler keys on the hypercanvas:* prefix.
       const wrongCall = calls.find((args) => (args[0] as Record<string, unknown>).type === 'iframe:scrollToElement');
       expect(wrongCall).toBeUndefined();

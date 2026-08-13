@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
 import type { UnsupportedProjectError } from '../types';
+import { postToPreviewIframe } from './postToPreviewIframe';
 import type { SimplePropInfo } from './PropsForm';
 
 interface UsePreviewBridgeOptions {
@@ -178,7 +179,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
       }
 
       if (currentComponent !== component) {
-        frame.contentWindow?.postMessage({ type: 'hypercanvas:setComponent', component }, '*'); // nosemgrep: wildcard-postmessage-configuration
+        postToPreviewIframe(frame, { type: 'hypercanvas:setComponent', component });
       }
       return true;
     },
@@ -301,8 +302,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
       const e = event as CustomEvent<{ elementId: string }>;
       const elementId = e.detail?.elementId;
       if (!elementId) return;
-      // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-      iframeElRef.current?.contentWindow?.postMessage({ type: 'hypercanvas:goToVisual', elementId }, '*');
+      postToPreviewIframe(iframeElRef.current, { type: 'hypercanvas:goToVisual', elementId });
     }
     window.addEventListener('hypercanvas:treeSelect', handleTreeSelect);
     return () => window.removeEventListener('hypercanvas:treeSelect', handleTreeSelect);
@@ -331,10 +331,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
       if (comp && iframeEl?.contentWindow) {
         // Small delay: wait for iframe scripts to initialize their message listeners
         setTimeout(() => {
-          iframeEl?.contentWindow?.postMessage(
-            { type: 'hypercanvas:setComponent', component: comp },
-            '*', // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-          );
+          postToPreviewIframe(iframeEl, { type: 'hypercanvas:setComponent', component: comp });
         }, 100);
       }
     }
@@ -436,7 +433,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             try {
               const component = new URL(url).searchParams.get('component');
               if (component && canUpdatePreviewComponentInPlace(getFrameHref(frame), url)) {
-                frame.contentWindow?.postMessage({ type: 'hypercanvas:setComponent', component }, '*'); // nosemgrep: wildcard-postmessage-configuration
+                postToPreviewIframe(frame, { type: 'hypercanvas:setComponent', component });
                 canvas.sendEvent({ type: 'state:update', patch: { selectedElementRuntimeStyle: null } });
                 break;
               }
@@ -469,7 +466,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             const currentComponent = getComponentFromPreviewUrl(getFrameHref(frame));
             if (currentComponent) {
               // Send via postMessage — no iframe reload
-              frame.contentWindow.postMessage({ type: 'hypercanvas:setComponent', component: msg.component }, '*'); // nosemgrep: wildcard-postmessage-configuration
+              postToPreviewIframe(frame, { type: 'hypercanvas:setComponent', component: msg.component });
             } else if (comp) {
               navigateToComponent(comp);
             }
@@ -486,8 +483,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             selectedItemIndices: {},
           });
           // Forward to iframe (state sync + scroll to element)
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:goToVisual', elementId: msg.elementId }, '*');
+          postToPreviewIframe(iframeEl, { type: 'hypercanvas:goToVisual', elementId: msg.elementId });
           break;
 
         case 'state:update':
@@ -507,7 +503,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // Iframe handler expects `hypercanvas:stateUpdate` with fields directly on the message
           // (not nested under `patch`). Forwarding raw `state:update` was silently ignored.
           if (msg.patch) {
-            iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:stateUpdate', ...msg.patch }, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+            postToPreviewIframe(iframeEl, { type: 'hypercanvas:stateUpdate', ...msg.patch });
           }
           break;
 
@@ -524,59 +520,56 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             }
             onStateUpdateRef.current(msg.state);
             // Forward to iframe as stateUpdate — same pattern as state:update above.
-            iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:stateUpdate', ...msg.state }, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+            postToPreviewIframe(iframeEl, { type: 'hypercanvas:stateUpdate', ...msg.state });
           }
           break;
 
         case 'iframe:clearGraceCache':
           // Drop stale selection-rect cache entry after i18n write; forces fresh DOM lookup
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:clearGraceCache', elementId: msg.elementId }, '*');
+          postToPreviewIframe(iframeEl, { type: 'hypercanvas:clearGraceCache', elementId: msg.elementId });
           break;
 
         case 'iframe:scrollToElement':
           // Scroll canvas (iframe) to the specified element without changing selection
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:scrollToElement', elementId: msg.elementId }, '*');
+          postToPreviewIframe(iframeEl, { type: 'hypercanvas:scrollToElement', elementId: msg.elementId });
           break;
 
         case 'iframe:writeI18nResource':
           // Freeze the last-known selection overlay rect during an i18n write so the
           // HMR re-render gap doesn't manifest as a visible deselect (Path B in
           // docs/plans/2026-05-06-selection-survives-i18n-write.md).
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:writeI18nResource', phase: msg.phase }, '*');
+          postToPreviewIframe(iframeEl, { type: 'hypercanvas:writeI18nResource', phase: msg.phase });
           break;
 
         case 'ast:response':
         case 'editor:activeFileChanged':
           // Forward to iframe
-          iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          postToPreviewIframe(iframeEl, msg);
           break;
 
         // Extension requests element content from iframe (Copy Text / Copy as HTML)
         case 'getElementText':
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage(
-            { type: 'hypercanvas:getElementText', elementId: msg.elementId, requestId: msg.requestId },
-            '*',
-          );
+          postToPreviewIframe(iframeEl, {
+            type: 'hypercanvas:getElementText',
+            elementId: msg.elementId,
+            requestId: msg.requestId,
+          });
           break;
 
         case 'getElementHTML':
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage(
-            { type: 'hypercanvas:getElementHTML', elementId: msg.elementId, requestId: msg.requestId },
-            '*',
-          );
+          postToPreviewIframe(iframeEl, {
+            type: 'hypercanvas:getElementHTML',
+            elementId: msg.elementId,
+            requestId: msg.requestId,
+          });
           break;
 
         case 'takeScreenshot':
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage(
-            { type: 'hypercanvas:takeScreenshot', elementId: msg.elementId, requestId: msg.requestId },
-            '*',
-          );
+          postToPreviewIframe(iframeEl, {
+            type: 'hypercanvas:takeScreenshot',
+            elementId: msg.elementId,
+            requestId: msg.requestId,
+          });
           break;
 
         case 'projectError':
@@ -602,9 +595,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
         case 'serverSourceMapResult':
           // Approach B: extension host resolved a server-side (RSC) source map — forward to iframe.
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           // Spread msg first so our namespaced type wins over msg.type ('serverSourceMapResult')
-          iframeEl?.contentWindow?.postMessage({ ...msg, type: 'hypercanvas:serverSourceMapResult' }, '*');
+          postToPreviewIframe(iframeEl, { ...msg, type: 'hypercanvas:serverSourceMapResult' });
           break;
 
         case 'canvas:refocusIframe':
@@ -614,10 +606,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
         case 'canvas:keyboard':
           // Forward keyboard command from VS Code keybinding into iframe
-          iframeEl?.contentWindow?.postMessage(
-            { type: 'hypercanvas:syntheticKeydown', key: msg.key, shiftKey: msg.shiftKey },
-            '*',
-          );
+          postToPreviewIframe(iframeEl, { type: 'hypercanvas:syntheticKeydown', key: msg.key, shiftKey: msg.shiftKey });
           break;
       }
     }

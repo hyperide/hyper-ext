@@ -17,6 +17,7 @@ import type { OverlayRect, PlaceholderRect } from '@shared/canvas-interaction/ty
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { canvasRPC } from '@/lib/platform/PlatformContext';
 import type { CanvasAdapter } from '@/lib/platform/types';
+import { postToPreviewIframe } from './postToPreviewIframe';
 
 // ============================================================================
 // Scroll compensation helpers (exported for unit testing)
@@ -227,11 +228,11 @@ export function useCanvasInteraction(
             } satisfies SelectedElementRuntimeStyle;
           } else {
             // No inline computed style (e.g. keyboard nav) — request it from the iframe
-            frame.contentWindow?.postMessage(
-              // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-              { type: 'hypercanvas:requestComputedStyle', elementId, itemIndex: msg.itemIndex ?? null },
-              '*',
-            );
+            postToPreviewIframe(frame, {
+              type: 'hypercanvas:requestComputedStyle',
+              elementId,
+              itemIndex: msg.itemIndex ?? null,
+            });
           }
           canvas.sendEvent({ type: 'state:update', patch });
           setContextMenu(null);
@@ -483,11 +484,11 @@ export function useCanvasInteraction(
               computedStyle: msg.computedStyle as Record<string, string>,
             } satisfies SelectedElementRuntimeStyle;
           } else {
-            frame.contentWindow?.postMessage(
-              // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-              { type: 'hypercanvas:requestComputedStyle', elementId: msg.elementId, itemIndex: msg.itemIndex ?? null },
-              '*',
-            );
+            postToPreviewIframe(frame, {
+              type: 'hypercanvas:requestComputedStyle',
+              elementId: msg.elementId,
+              itemIndex: msg.itemIndex ?? null,
+            });
           }
           canvas.sendEvent({ type: 'state:update', patch: selectPatch });
 
@@ -618,23 +619,18 @@ export function useCanvasInteraction(
         document.removeEventListener('pointerup', onDocPointerUp);
         activeDocPointerUp = null;
         // Restore original size in iframe
-        // nosemgrep: wildcard-postmessage-configuration -- parent webview → nested iframe, restore on cancel
-        frame.contentWindow?.postMessage({ type: 'hypercanvas:clearPreviewResize', elementId: capturedElementId }, '*');
+        postToPreviewIframe(frame, { type: 'hypercanvas:clearPreviewResize', elementId: capturedElementId });
       }
 
       function onPointerMove(e: PointerEvent) {
         const dX = e.clientX - startX;
         const dY = e.clientY - startY;
-        // nosemgrep: wildcard-postmessage-configuration -- parent webview → nested iframe, live resize preview
-        frame.contentWindow?.postMessage(
-          {
-            type: 'hypercanvas:previewResize',
-            elementId: capturedElementId,
-            width: axis === 'width' ? Math.max(1, Math.round(baseW + dX)) : undefined,
-            height: axis === 'height' ? Math.max(1, Math.round(baseH + dY)) : undefined,
-          },
-          '*',
-        );
+        postToPreviewIframe(frame, {
+          type: 'hypercanvas:previewResize',
+          elementId: capturedElementId,
+          width: axis === 'width' ? Math.max(1, Math.round(baseW + dX)) : undefined,
+          height: axis === 'height' ? Math.max(1, Math.round(baseH + dY)) : undefined,
+        });
       }
 
       activeDocPointerUp = onDocPointerUp;
@@ -685,15 +681,10 @@ export function useCanvasInteraction(
   iframeElRef.current = iframeEl;
 
   // patch comes from internal React state (usePreviewBridge), not from external
-  // input — no allowlist/sanitization needed.
-  // Note: In VS Code webviews the iframe origin is opaque (vscode-webview://<session-id>)
-  // and changes every session, so targetOrigin cannot be used. Use '*' like all other
-  // postMessages in usePreviewBridge.ts.
+  // input — no allowlist/sanitization needed. The preview iframe is loaded from
+  // the dev-server URL, so postToPreviewIframe targets that real origin (not '*').
   const updateState = useCallback((patch: Record<string, unknown>) => {
-    const frame = iframeElRef.current;
-    if (frame?.contentWindow) {
-      frame.contentWindow.postMessage({ type: 'hypercanvas:stateUpdate', ...patch }, '*'); // nosemgrep: wildcard-postmessage-configuration
-    }
+    postToPreviewIframe(iframeElRef.current, { type: 'hypercanvas:stateUpdate', ...patch });
   }, []);
 
   const clearContextMenu = useCallback(() => setContextMenu(null), []);
