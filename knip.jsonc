@@ -101,6 +101,15 @@
         "lib/testing/index.ts",
         // CLI entry point, run directly: `bun run lib/testing/cli/generate-tests.ts`.
         "lib/testing/cli/generate-tests.ts",
+        // Visual-verification public surface (unstyled-render detector, HYP-733).
+        // Consumed by agent proof scripts (scripts/*.tsx, which knip's
+        // `scripts/*.{ts,cjs}` entry glob does not see) and, later, the e2e
+        // blank-webview guard — so the barrel is entried to keep the curated API.
+        "lib/visual-verify/index.ts",
+        // Node-only headless-Chrome capture guard — kept OFF the browser-safe
+        // barrel (it imports playwright-core) and only referenced by the
+        // knip-invisible scripts/*.tsx proof path, so it is entried directly.
+        "lib/visual-verify/capture-and-verify.ts",
         "**/*.test.{ts,tsx}",
         // `bun test --isolate` (package.json "test") also collects *.spec.{ts,tsx}
         // (e.g. client/lib/utils.spec.ts). Without this glob knip flags the spec
@@ -142,7 +151,19 @@
       //   and pulls in the `bun` npm peer that scripts/fix-bun-shim.ts repairs in
       //   postinstall. Not a static module import in this repo, so knip can't see the
       //   dependency — keep it declared and silenced.
-      "ignoreDependencies": ["@playwright/mcp", "@swc/core", "@hookform/resolvers", "bun-plugin-tailwind"],
+      // playwright-core: imported (lazily) by lib/visual-verify/capture-and-verify.ts
+      //   for the headless-Chrome style-presence proof guard (HYP-733). It is the
+      //   library half of the same transitive Playwright copy pinned by @playwright/mcp
+      //   (1.59.0-alpha-…); declaring it directly would conflict with that pin, so we
+      //   rely on the transitive copy and silence the unlisted-dependency flag — same
+      //   rationale as the `playwright` binary below.
+      "ignoreDependencies": [
+        "@playwright/mcp",
+        "playwright-core",
+        "@swc/core",
+        "@hookform/resolvers",
+        "bun-plugin-tailwind",
+      ],
       // The `playwright` binary (postinstall: `npx playwright install chromium`) is
       // provided transitively by @playwright/mcp, which pins a prerelease
       // (1.59.0-alpha-…). Declaring `playwright` directly would conflict with that pin,
