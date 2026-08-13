@@ -9,6 +9,7 @@
 - [PART 0 — FRONT MATTER](#part-0--front-matter)
   - [0.1 Title, status, ownership, revision table](#01-title-status-ownership-revision-table)
   - [0.2 How to read this document](#02-how-to-read-this-document)
+  - [0.3 Code documentation convention (spec-linked `lib/` doc comments)](#03-code-documentation-convention-spec-linked-lib-doc-comments)
 - [PART 1 — EXECUTIVE SUMMARY](#part-1--executive-summary)
   - [1.1 The one-paragraph thesis](#11-the-one-paragraph-thesis)
   - [1.2 What works today (the honest floor)](#12-what-works-today-the-honest-floor)
@@ -159,12 +160,12 @@ authority once it appears in the FOLD-IN list below; each gets a one-line
 
 #### Revision table
 
-| Rev | Date | Author | Scope of change |
-|---|---|---|---|
-| 0.1 | 2026-06-12 | A. Ultra (CTO) + styles committee | Initial consolidation draft. Folds 11 specs ([§0.1](#01-title-status-ownership-revision-table) list), reproduces the AS-IS map ([Part 3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)), the discrepancy ledger ([Part 4](#part-4--discrepancy-ledger)), and the Q2–Q6 brainstorm convergence (Parts 5–11). Open decisions registered in [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open). **Not yet ratified** — TO-BE sections are prescriptive and require sign-off (see ratification process below). |
-| 0.1.1 | 2026-06-13 | A. Ultra (CTO) + styles committee | **Pre-ratification draft additions** (the "final v2 with all additions" — recorded here so the table stays truly append-only). Added [§9.8 Type Intelligence (LSP)](#98-type-intelligence-lsp--applications--realm-boundary) — server-side SaaS type resolution + the realm-boundary degradation rules — and the props-passing invariants; added [Part 15 — Packaging & extractability](#part-15--packaging--extractability-lib--cli--mcp) (the lib \| cli \| mcp split). Still a DRAFT — TO-BE sections prescriptive, ratification pending (it landed in 0.2 below). |
-| 0.2 | 2026-06-14 | A. Ultra (CTO) | **CTO RATIFICATION of OD-1..OD-5** ([HYP-722](https://linear.app/glide-vc/issue/HYP-722)). OD-1 inline-floor + VTSWR (3 conditions: no-system-only POLICY floor + persistent install-Tailwind popup; forwards-nothing = wrapper case; VTSWR always). OD-2 RATIFIED true (Q4 AI ladder). OD-3 System B `lib/` canonical + **DELETE** System A / converter / `classNameToStyles` / `ParsedStyles` (not @deprecate). OD-4 RATIFIED adopt (B0/B1 verify-everywhere; serverless degrade-don't-block decided; only settle-TTL knob open). OD-5 orthogonal-axes taxonomy + rename. Plus: serverless SaaS (NodePod/OPFS) promoted to a FIRST-CLASS third realm; ALL 12 `CssSystemId`s scheduled to build + all-dimensions ProjectDetector detection ([§5.6](#56-all-dimensions-detection--the-projectdetector-responsibility)); lockfile → `packageManager` axis (not whole `ProjectType`). OD-6..OD-11 remain open. fig-1-4 / fig-5-3 / fig-5-4 updated; fig-8-5 PNG flagged for regeneration. |
-| 0.3 | 2026-06-14 | A. Ultra (CTO) | **CTO additions ([HYP-722](https://linear.app/glide-vc/issue/HYP-722), ratified this revision).** (1) **Sixth resolution-state word `collateral-broken`** ([§2.3](#23-the-six-resolution-state-words-rigorous)): value landed but the edit broke something ELSE, detected by a deterministic, intelligent NON-AI expected-vs-actual screenshot px-diff (region-swap for a MOVE; geometry mask for flex/grid reflow) — the cheap B3 floor ([§9.6](#96-visual-regression-guard-b3--repair-sequencing)); AI-vision ([§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline)) is the escalation. New canonical `Compensated{cause}` verdict ([§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared)) + [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence) switch arm; wired into [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) (post-commit gate, not a matrix column) and the [§9.6](#96-visual-regression-guard-b3--repair-sequencing)/[§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) sequence. (2) **Inspector error/rollback UX** [§8.4-bis](#84-bis-error-rollback--recovery-ux-ux-is-important-everywhere): preserve entered value on any rollback; per-control loader + clickable error-status indicator; action ladder (retry / AI-fallback-if-applicable / set-key-then-manual-retry / fix-build-then-click-to-retry); notification with same action buttons → auto-hides into a notification manager; `unverifiable` tied to this UX (fig-8-4-bis brief, PNG to render). (3) **`elementRef`/`StyleIdentity` 7-char `sourceHash`** ([§2.1](#21-core-nouns)/[§7.3](#73-style-identity-is-a-structured-tuple)): content-addressed git blob hash (committed blob, else `hash-object` of the working-tree bytes — same algorithm both branches, never mtime) as a cheap identity HINT backed by the [§7.4](#74-frozen-plan-dumb-dispatch) content precondition. (4) **`ParsedStyles` DELETE** reconciliation made explicit in [§6.2](#62-normalized-ir--declaration-rows-not-raw-parsedstyles) (replaced by the normalized `StyleDeclaration[]` IR; the transient `toParsedStyles` shim has a scheduled death, not a permanent `@deprecated` projection) — consistent with the OD-3 ratification in [§2.1](#21-core-nouns) / [§5.3](#53-the-convergence-target--system-a-and-system-b-become-one) / [§13.4](#134-od-3--system-a--system-b-convergence-target-d23--ratified). |
+| Rev   | Date       | Author                            | Scope of change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----- | ---------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0.1   | 2026-06-12 | A. Ultra (CTO) + styles committee | Initial consolidation draft. Folds 11 specs ([§0.1](#01-title-status-ownership-revision-table) list), reproduces the AS-IS map ([Part 3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)), the discrepancy ledger ([Part 4](#part-4--discrepancy-ledger)), and the Q2–Q6 brainstorm convergence (Parts 5–11). Open decisions registered in [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open). **Not yet ratified** — TO-BE sections are prescriptive and require sign-off (see ratification process below).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 0.1.1 | 2026-06-13 | A. Ultra (CTO) + styles committee | **Pre-ratification draft additions** (the "final v2 with all additions" — recorded here so the table stays truly append-only). Added [§9.8 Type Intelligence (LSP)](#98-type-intelligence-lsp--applications--realm-boundary) — server-side SaaS type resolution + the realm-boundary degradation rules — and the props-passing invariants; added [Part 15 — Packaging & extractability](#part-15--packaging--extractability-lib--cli--mcp) (the lib \| cli \| mcp split). Still a DRAFT — TO-BE sections prescriptive, ratification pending (it landed in 0.2 below).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 0.2   | 2026-06-14 | A. Ultra (CTO)                    | **CTO RATIFICATION of OD-1..OD-5** ([HYP-722](https://linear.app/glide-vc/issue/HYP-722)). OD-1 inline-floor + VTSWR (3 conditions: no-system-only POLICY floor + persistent install-Tailwind popup; forwards-nothing = wrapper case; VTSWR always). OD-2 RATIFIED true (Q4 AI ladder). OD-3 System B `lib/` canonical + **DELETE** System A / converter / `classNameToStyles` / `ParsedStyles` (not @deprecate). OD-4 RATIFIED adopt (B0/B1 verify-everywhere; serverless degrade-don't-block decided; only settle-TTL knob open). OD-5 orthogonal-axes taxonomy + rename. Plus: serverless SaaS (NodePod/OPFS) promoted to a FIRST-CLASS third realm; ALL 12 `CssSystemId`s scheduled to build + all-dimensions ProjectDetector detection ([§5.6](#56-all-dimensions-detection--the-projectdetector-responsibility)); lockfile → `packageManager` axis (not whole `ProjectType`). OD-6..OD-11 remain open. fig-1-4 / fig-5-3 / fig-5-4 updated; fig-8-5 PNG flagged for regeneration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 0.3   | 2026-06-14 | A. Ultra (CTO)                    | **CTO additions ([HYP-722](https://linear.app/glide-vc/issue/HYP-722), ratified this revision).** (1) **Sixth resolution-state word `collateral-broken`** ([§2.3](#23-the-six-resolution-state-words-rigorous)): value landed but the edit broke something ELSE, detected by a deterministic, intelligent NON-AI expected-vs-actual screenshot px-diff (region-swap for a MOVE; geometry mask for flex/grid reflow) — the cheap B3 floor ([§9.6](#96-visual-regression-guard-b3--repair-sequencing)); AI-vision ([§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline)) is the escalation. New canonical `Compensated{cause}` verdict ([§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared)) + [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence) switch arm; wired into [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) (post-commit gate, not a matrix column) and the [§9.6](#96-visual-regression-guard-b3--repair-sequencing)/[§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) sequence. (2) **Inspector error/rollback UX** [§8.4-bis](#84-bis-error-rollback--recovery-ux-ux-is-important-everywhere): preserve entered value on any rollback; per-control loader + clickable error-status indicator; action ladder (retry / AI-fallback-if-applicable / set-key-then-manual-retry / fix-build-then-click-to-retry); notification with same action buttons → auto-hides into a notification manager; `unverifiable` tied to this UX (fig-8-4-bis brief, PNG to render). (3) **`elementRef`/`StyleIdentity` 7-char `sourceHash`** ([§2.1](#21-core-nouns)/[§7.3](#73-style-identity-is-a-structured-tuple)): content-addressed git blob hash (committed blob, else `hash-object` of the working-tree bytes — same algorithm both branches, never mtime) as a cheap identity HINT backed by the [§7.4](#74-frozen-plan-dumb-dispatch) content precondition. (4) **`ParsedStyles` DELETE** reconciliation made explicit in [§6.2](#62-normalized-ir--declaration-rows-not-raw-parsedstyles) (replaced by the normalized `StyleDeclaration[]` IR; the transient `toParsedStyles` shim has a scheduled death, not a permanent `@deprecated` projection) — consistent with the OD-3 ratification in [§2.1](#21-core-nouns) / [§5.3](#53-the-convergence-target--system-a-and-system-b-become-one) / [§13.4](#134-od-3--system-a--system-b-convergence-target-d23--ratified). |
 
 > The revision table is append-only. Every change to a **prescriptive** (TO-BE) section after
 > ratification requires a new row and a re-sign of the affected Part by its owner. Changes to
@@ -188,29 +189,29 @@ front-matter index.
 
 **FOLD-IN (11 specs — these ARE the master's body; each is bannered superseded):**
 
-| # | Spec | Folds into master |
-|---|---|---|
-| 1 | `2026-04-14-style-write-unification-plan.md` (4845 ln, anchor source) | Parts 3.7, 5.3, 7, 8 — mechanism folded; the reversed universal-inline doctrine explicitly retracted in [Part 8](#part-8--to-be-fallback-doctrine-vtswr) |
-| 2 | `2026-04-14-style-source-owner.md` (1028 ln) | Parts 2.1, 3.3, 7.3 — the 12-`CssSystemId` / `SourceForm` taxonomy backbone (carries D5, D17) |
-| 3 | `2026-04-14-style-source-confidence.md` (275 ln) | [Part 9](#part-9--to-be-verify--transaction--undo) — `SourceConfidence` = the confidence axis of the fail-closed matrix ([§9.4](#94-fail-closed-the-confidence--verifiability-matrix)) |
-| 4 | `2026-04-15-style-theme-resolution.md` (553 ln) | Parts 7, 8 — theme/global-edit handling in the priority chain (NOT inline-expressible per Q5) |
-| 5 | `2026-06-11-style-write-verified-pipeline.md` (629 ln, design HEAD) | Parts 5.2, 9 — the B0–B3 state machine, fail-closed `?? false`, honest-D2 framing |
-| 6 | `2026-06-09-hyp544-color-replace-rework.md` (343 ln) | Parts 3.8, 3.12, 12.3–12.4 — binding-kind classifier + Tier-1 probe (carries D8, D25) |
-| 7 | `2026-06-11-270-d2-source-routing.md` (375 ln, build-ready) | Parts 7.2, 11 — multi-select source-tab routing & write-target semantics |
-| 8 | `2026-06-11-270-d3-stylability-ladder.md` (342 ln, build-ready) | Parts 11.2–11.3, 8.4 — the L0–L3 ladder + honest partial-batch skip |
-| 9 | `2026-06-04-hyp535-270-read-write-transport-findings.md` (299 ln) | Parts 3.4, 6.1 — corrects the read model (editable values flow via `ParsedStyles`; `StyleReadResult.properties` is `[]`); carries D2/D13 |
-| 10 | `2026-03-11-phase2-all-css-frameworks-design.md` (856 ln, "Approved") | [Part 3.3](#33-adapters--system-b-libstyle-adapters) (framework enumeration) + [Part 4.2](#42-specspec-reversals-d12-d18) (flat-dispatch architecture explicitly retired) — **#1 banner-priority** |
-| 11 | `2026-03-10-universal-styling-adapters.md` (142 ln) + `-plan.md` (954 ln) | [Part 3.2](#32-adapters--system-a-client) — the live System-A `StyleAdapter` interface origin; forward plan overtaken |
+| #   | Spec                                                                      | Folds into master                                                                                                                                                                                  |
+| --- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `2026-04-14-style-write-unification-plan.md` (4845 ln, anchor source)     | Parts 3.7, 5.3, 7, 8 — mechanism folded; the reversed universal-inline doctrine explicitly retracted in [Part 8](#part-8--to-be-fallback-doctrine-vtswr)                                           |
+| 2   | `2026-04-14-style-source-owner.md` (1028 ln)                              | Parts 2.1, 3.3, 7.3 — the 12-`CssSystemId` / `SourceForm` taxonomy backbone (carries D5, D17)                                                                                                      |
+| 3   | `2026-04-14-style-source-confidence.md` (275 ln)                          | [Part 9](#part-9--to-be-verify--transaction--undo) — `SourceConfidence` = the confidence axis of the fail-closed matrix ([§9.4](#94-fail-closed-the-confidence--verifiability-matrix))             |
+| 4   | `2026-04-15-style-theme-resolution.md` (553 ln)                           | Parts 7, 8 — theme/global-edit handling in the priority chain (NOT inline-expressible per Q5)                                                                                                      |
+| 5   | `2026-06-11-style-write-verified-pipeline.md` (629 ln, design HEAD)       | Parts 5.2, 9 — the B0–B3 state machine, fail-closed `?? false`, honest-D2 framing                                                                                                                  |
+| 6   | `2026-06-09-hyp544-color-replace-rework.md` (343 ln)                      | Parts 3.8, 3.12, 12.3–12.4 — binding-kind classifier + Tier-1 probe (carries D8, D25)                                                                                                              |
+| 7   | `2026-06-11-270-d2-source-routing.md` (375 ln, build-ready)               | Parts 7.2, 11 — multi-select source-tab routing & write-target semantics                                                                                                                           |
+| 8   | `2026-06-11-270-d3-stylability-ladder.md` (342 ln, build-ready)           | Parts 11.2–11.3, 8.4 — the L0–L3 ladder + honest partial-batch skip                                                                                                                                |
+| 9   | `2026-06-04-hyp535-270-read-write-transport-findings.md` (299 ln)         | Parts 3.4, 6.1 — corrects the read model (editable values flow via `ParsedStyles`; `StyleReadResult.properties` is `[]`); carries D2/D13                                                           |
+| 10  | `2026-03-11-phase2-all-css-frameworks-design.md` (856 ln, "Approved")     | [Part 3.3](#33-adapters--system-b-libstyle-adapters) (framework enumeration) + [Part 4.2](#42-specspec-reversals-d12-d18) (flat-dispatch architecture explicitly retired) — **#1 banner-priority** |
+| 11  | `2026-03-10-universal-styling-adapters.md` (142 ln) + `-plan.md` (954 ln) | [Part 3.2](#32-adapters--system-a-client) — the live System-A `StyleAdapter` interface origin; forward plan overtaken                                                                              |
 
 **KEEP-SEPARATE-AND-UPDATE (5 core references the master summarizes + links):**
 
-| # | Spec | Master reference | Update on fold |
-|---|---|---|---|
-| 12 | `2026-03-13-color-picker-enhancements-design.md` (275 ln) | [Part 12.5](#125-the-color-picker-ui) | reconcile D16 (`COLOR_SEARCH_DISTANCE_THRESHOLD` 80-vs-40), link to [§12](#part-12--color--token-round-trip--color-picker), note D30 |
-| 13 | `2026-03-24-decompose-color-combobox.md` (381 ln, [HYP-349](https://linear.app/glide-vc/issue/HYP-349)) | [Part 12.5](#125-the-color-picker-ui) | add D30 follow-up; link [§12](#part-12--color--token-round-trip--color-picker) |
-| 14 | `2026-04-17-style-write-foundation-plan.md` (1978 ln) | Parts 7–9 | mark shipped vs B0/B1-overtaken tasks; banner "design context moved to master, this is the build checklist" |
-| 15 | `2026-04-18-style-adapters-phase3-4-plan.md` (305 ln) | [Part 3.3](#33-adapters--system-b-libstyle-adapters) | status-mark against D5 (4 shipped, 8 PLANNED) |
-| 16 | `2026-04-14-style-write-unification-workprocess.md` (1116 ln) | — | frozen workprocess log, no doctrinal authority; header pointer only |
+| #   | Spec                                                                                                    | Master reference                                     | Update on fold                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 12  | `2026-03-13-color-picker-enhancements-design.md` (275 ln)                                               | [Part 12.5](#125-the-color-picker-ui)                | reconcile D16 (`COLOR_SEARCH_DISTANCE_THRESHOLD` 80-vs-40), link to [§12](#part-12--color--token-round-trip--color-picker), note D30 |
+| 13  | `2026-03-24-decompose-color-combobox.md` (381 ln, [HYP-349](https://linear.app/glide-vc/issue/HYP-349)) | [Part 12.5](#125-the-color-picker-ui)                | add D30 follow-up; link [§12](#part-12--color--token-round-trip--color-picker)                                                       |
+| 14  | `2026-04-17-style-write-foundation-plan.md` (1978 ln)                                                   | Parts 7–9                                            | mark shipped vs B0/B1-overtaken tasks; banner "design context moved to master, this is the build checklist"                          |
+| 15  | `2026-04-18-style-adapters-phase3-4-plan.md` (305 ln)                                                   | [Part 3.3](#33-adapters--system-b-libstyle-adapters) | status-mark against D5 (4 shipped, 8 PLANNED)                                                                                        |
+| 16  | `2026-04-14-style-write-unification-workprocess.md` (1116 ln)                                           | —                                                    | frozen workprocess log, no doctrinal authority; header pointer only                                                                  |
 
 **Style-ADJACENT (own subsystems — master links as preconditions, does not absorb):** selection
 FSM (`hyp369*`, master [Part 5](#part-5--to-be-unified-architecture) precondition), devserver/proxy lifecycle FSM (`hyp370`, master [§9.3](#93-the-settle-handshake--never-compile-success-or-timeout)
@@ -299,17 +300,17 @@ which floor you are standing on.
 
 #### Status legend (applies to every AS-IS claim)
 
-| Status | Meaning |
-|---|---|
-| **WORKS** | Shipped on `main` and tested. Safe to depend on. |
-| **PARTIAL** | Shipped but gapped or limited — works on the happy path, has a named hole (e.g. dynamic-TW with explicit locations, Tamagui responsive variants). The hole is stated inline. |
-| **BROKEN** | Present in code but known-wrong or hard-fails (e.g. CSS-file write on a `findRule` miss = a dead click). Not softened. A planned fix, if any, is named. |
+| Status      | Meaning                                                                                                                                                                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **WORKS**   | Shipped on `main` and tested. Safe to depend on.                                                                                                                                                                                            |
+| **PARTIAL** | Shipped but gapped or limited — works on the happy path, has a named hole (e.g. dynamic-TW with explicit locations, Tamagui responsive variants). The hole is stated inline.                                                                |
+| **BROKEN**  | Present in code but known-wrong or hard-fails (e.g. CSS-file write on a `findRule` miss = a dead click). Not softened. A planned fix, if any, is named.                                                                                     |
 | **PLANNED** | Designed in a spec or brainstorm but **not on `main`**. The TO-BE model leans on these; do not assume they exist. (Notably: runtime-verify, `lib/style-attribution`, the AI routing locator, multi-select write, Tier-2 source resolution.) |
 
 Every roll-up uses these four words exactly (AS-IS [§9](#part-9--to-be-verify--transaction--undo), [Part 3.15](#315-as-is-subsystem-status-roll-up)). They are **engine-state** words
 about shipped code. Do not confuse them with the six **resolution-state** words (`unknown` /
 `inexpressible` / `stale` / `unlanded` / `unverifiable` / `collateral-broken`) defined rigorously in
-[Part 2.3](#23-the-six-resolution-state-words-rigorous) — those describe the outcome of resolving and verifying a *single style field*, a different
+[Part 2.3](#23-the-six-resolution-state-words-rigorous) — those describe the outcome of resolving and verifying a _single style field_, a different
 axis entirely. (The first five are pre-write / write-time resolver+B1 outcomes; the sixth,
 `collateral-broken`, is a POST-commit B3 visual-diff outcome that only exists AFTER B1 has already
 landed the value — [§2.3](#23-the-six-resolution-state-words-rigorous) / [§9.6](#96-visual-regression-guard-b3--repair-sequencing) — not a resolver/B1 verdict, so it is not a column of the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) matrix.)
@@ -320,9 +321,9 @@ landed the value — [§2.3](#23-the-six-resolution-state-words-rigorous) / [§9
 is a single tension — a spec saying X while the code does Y (SPEC↔CODE), two specs contradicting
 each other (SPEC↔SPEC), a stale fact `main` has moved past (STALE), Alex's intent diverging from
 what reviewers settled (INTENT↔SPEC), or a behavior with thin/no test (UNTESTED). The master takes
-a **position** on every Dxx: *resolved-by-TO-BE* (and which Part resolves it), *open-decision*
-(routed to a [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-n row), *ratified* (a fork that WAS an open-decision and has now been signed by
-the CTO — OD-1..OD-5, this revision; the row records the settled outcome), or *will-not-fix* — each with
+a **position** on every Dxx: _resolved-by-TO-BE_ (and which Part resolves it), _open-decision_
+(routed to a [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-n row), _ratified_ (a fork that WAS an open-decision and has now been signed by
+the CTO — OD-1..OD-5, this revision; the row records the settled outcome), or _will-not-fix_ — each with
 the named sub-variants the [Part 4](#part-4--discrepancy-ledger) preamble ([§4](#part-4--discrepancy-ledger)) enumerates (e.g. resolved-in-direction,
 open-micro-decision, open-action, acceptance-gate, stale-correction), so the vocabulary stays closed. When you see a Dxx cited in a TO-BE section, it
 is telling you "this claim deliberately reverses a prior Approved spec — here is the receipt." The
@@ -359,6 +360,60 @@ The text references three kinds of inline artifacts:
 
 [Part 0](#part-0--front-matter) itself carries no diagrams or pseudocode — it is governance. The first artifact is the hero
 pipeline diagram in [Part 1.4](#14-target-architecture-in-one-diagram).
+
+### 0.3 Code documentation convention (spec-linked `lib/` doc comments)
+
+> **Additive to Rev 0.3 (authoring convention, not a behavior change).** This subsection is appended
+> per a CTO directive (2026-06-28); it changes NO ratified content and introduces no new behavior. It
+> is a standing requirement on how the code that implements this spec is documented, recorded here so
+> it survives ("зафиксировать в спеке, чтобы не забывать"). Placement (Part 0 governance) is pending
+> CTO sign-off at review; the full convention also lives in the implementation plan
+> (`docs/plans/2026-06-28-css-in-js-full-edit-support-plan.md`).
+
+**The rule.** Every function in the `lib/` style directories carries a doc comment that does two
+things, mapping functions a third, and AST functions a fourth:
+
+1. **Cites the master spec** — the relevant section number plus a short verbatim excerpt (one or two
+   lines), so a reader of the code lands on the authority without searching. Example tag form:
+   `// Spec §7.1 (priority chain): "one inspector control change = one property = one plan".`
+2. **Explains the user-facing impact** — how and where this function affects the end user (what they
+   see/do in the inspector, what lands in their source, what fails safe). The reader must learn the
+   _why-for-the-user_, not just the _what-of-the-code_. This is heaviest on the **reader/writer**
+   adapters and the style-pipeline modules (`lib/style-read/`, `lib/style-write/`, `lib/style-values/`,
+   `lib/style-adapters/<system>/{reader,writer}`, the canonical `lib/tailwind` parser/generator, and
+   `lib/tamagui`).
+3. **Mappings ESPECIALLY** — any function that maps between representations (inspector value ↔ target
+   value; `CssSystemId` → `sourceForm`; computed style ↔ source owner; rung L0–L3 → write channel;
+   token ↔ hex; className ↔ CSS) must document **which ownership domains collide and WHY the mapping
+   resolves the way it does.** Name the colliding domains explicitly using this spec's vocabulary:
+   the three **realms** ([§5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract)), **cssFramework vs designSystem** ([§5.5](#55-the-capability-taxonomy-orthogonal-axes) axes),
+   **System A vs System B** ([§5.3](#53-the-convergence-target--system-a-and-system-b-become-one) convergence), the **priority-chain rungs L0–L3**
+   ([§11.2](#112-the-stylability-ladder-l0l3)), and the **source-confidence / verifiability** gates ([§9.4](#94-fail-closed-the-confidence--verifiability-matrix)). The comment
+   states the boundary the mapping draws and the rule that decides the winner (e.g. why a `designSystem`
+   L0 prop outranks a `cssFramework` L1 utility for the same property, or why `Computed` is never a
+   write target).
+4. **AST functions ESPECIALLY — SHOW the shape, do not only describe it.** Every function that
+   checks, reads, matches, generates, or transforms an AST node (in `lib/ast`, `lib/style-write`,
+   `lib/tailwind/parser`, `lib/services/component-parser`, `lib/services/tree-adapter`, and any AST
+   read/write/generate site) carries, **AT THE SITE of each check/read/generation**, an inline
+   **VISUAL example**: a small ASCII sketch of the AST node shape AND the source snippet it maps to.
+   For a transform, show **before → after** (the source it matches and the source it produces). The
+   reader must SEE the shape being matched or emitted, not reconstruct it from prose. Example tag form
+   at a list-render match site:
+
+   ```text
+   // AST shape:  JSXExpressionContainer > CallExpression(.map) > ArrowFunction > JSXElement
+   // Source:     {items.map(i => <Item/>)}
+   // (transform) before: <Item/>            after: <Item className="..."/>
+   ```
+
+   This composes with clauses 1–3 (the spec citation, the user-impact note, and — for mappings — the
+   ownership-collision rationale all still apply); clause 4 adds the visual at each AST site on top.
+
+**Scope & sequencing.** This is doc-debt to be paid _as code is written_ (every new adapter/reader/
+writer/mapping ships with the spec-linked comment) AND retroactively over existing `lib/` code (a
+sequenced documentation pass, style pipeline first), per the implementation plan. It is a review-gate
+item, not a one-off: a `lib/` style function without a spec citation + user-impact note is incomplete.
 
 ## PART 1 — EXECUTIVE SUMMARY
 
@@ -431,7 +486,7 @@ second-tier forks OD-6..OD-11 in [§13.7](#137-od-6-through-od-11--the-second-ti
 1. **Inline-floor vs skip-banner (D24, OD-1 — the headline) — RATIFIED.** Alex says inline-as-terminal-floor
    is fine (cascade down a per-project priority chain, banner only when the project has literally
    no styling system); reviewers and the Gen-3 specs say silent inline is a destructive hole.
-   *Ratified:* adopt VTSWR ([Part 8](#part-8--to-be-fallback-doctrine-vtswr)) — inline-floor WITH mandatory landing-verification +
+   _Ratified:_ adopt VTSWR ([Part 8](#part-8--to-be-fallback-doctrine-vtswr)) — inline-floor WITH mandatory landing-verification +
    surgical rollback, under three CTO conditions: (a) inline becomes the project's DEFAULT/POLICY sink
    ONLY in a no-styling-system project (a persistent install-Tailwind popup is offered, [§8.5](#85-token-system-none-and-project-bootstrap)) — though a
    per-(property,state) inline RUNG stays available on any project for a base-state property no higher
@@ -440,16 +495,16 @@ second-tier forks OD-6..OD-11 in [§13.7](#137-od-6-through-od-11--the-second-ti
    Residual CTO knob: the `unverifiable` escape hatch on the ext host. → [Part 13.2](#132-od-1--inline-floor-vs-skip-banner-d24-the-headline--ratified).
 2. **AI authority (D4/D15, OD-2) — RATIFIED true.** Three historical positions coexist — AI as first-class
    router, AI deleted (`analyzeClassNameWithAI` removed in `929aa1c4`, so AI is NOT a routing input on
-   `main`), and AI demoted to repair-tier-only. *Ratified:* adopt the Q4 ladder — AI
+   `main`), and AI demoted to repair-tier-only. _Ratified:_ adopt the Q4 ladder — AI
    discovers and ranks, the probe verifies, deterministic builders commit; AI is never the
    authority. Sub-knobs: Auto-default A/B arm, locator-rebuild timing. → [Part 13.3](#133-od-2--ai-authority-d4d15--ratified).
 3. **The verify-everywhere transaction (Q3, OD-4) — RATIFIED adopt.** Moving from today's "write and hope"
    to a B0 transaction + B1 verify + dual settle handshake + the fail-closed confidence×verifiability
-   matrix is a large jump that adds a round-trip per edit (worse in the ext realm). *Ratified:*
+   matrix is a large jump that adds a round-trip per edit (worse in the ext realm). _Ratified:_
    adopt it, build B0/B1 FIRST, tune the settle TTL as the live knob. Serverless NodePod/OPFS is
    decided degrade-don't-block; the only remaining knob is the settle-TTL policy. → [Part 13.5](#135-od-4--the-verify-everywhere-transaction-cost-q3--ratified-adopt).
 4. **System-A / System-B convergence target (D23, OD-3) — RATIFIED.** No spec declared which engine
-   wins per concern. *Ratified:* System B `lib/` is the canonical core; System A's styling code, the
+   wins per concern. _Ratified:_ System B `lib/` is the canonical core; System A's styling code, the
    duplicate converter, `classNameToStyles` and `ParsedStyles` are **DELETED** (not @deprecated — CTO
    correction), leaving only a styling-logic-free realm-transport shell; one converter, then zero of
    the old. Residual sub-decision: delete `classNameToStyles` immediately vs run the shadow-diff first.
@@ -458,7 +513,7 @@ second-tier forks OD-6..OD-11 in [§13.7](#137-od-6-through-od-11--the-second-ti
    Alex demands orthogonal axes — `cssFramework`, `designSystem` (shadcn is a DESIGN SYSTEM, not a
    CSS system), `jsFramework`, `router`, `bundler`, `packageManager` (a lockfile infers the
    `packageManager` axis, but NOT the whole ProjectType) — and `uiKit → designSystem` everywhere.
-   *Ratified:* adopt the taxonomy + the all-dimensions ProjectDetector ([§5.6](#56-all-dimensions-detection--the-projectdetector-responsibility)); schedule the rename as a
+   _Ratified:_ adopt the taxonomy + the all-dimensions ProjectDetector ([§5.6](#56-all-dimensions-detection--the-projectdetector-responsibility)); schedule the rename as a
    tracked migration. Sub-decision: big-bang vs incremental-behind-alias. → [Part 13.6](#136-od-5--capability-taxonomy-rename-d26--ratified).
 
 ### 1.4 Target architecture in one diagram
@@ -468,6 +523,7 @@ Parts 6-11 is a detailed view of one stage of the pipeline below; this hero diag
 the rest of the document points back to.
 
 ![Unified styles pipeline — one engine, three realms feeding a shared lib/ core.](./assets/fig-1-4-unified-styles-pipeline.svg)
+
 <!-- ASSET-SPEC fig-1-4-unified-styles-pipeline | KIND=svg | "Unified styles pipeline, one engine, three realms." Depicts: selection → ONE read (SelectionStyleRead, N≥1) → inspector → edit → planner (WHERE) → write → verify (DID it land) → classify → optional repair, wrapped in a B0 transaction; server-backed SaaS, VS Code ext, and serverless SaaS (NodePod/OPFS) shown as three transport columns feeding the SAME shared `lib/` core; the planner stage explicitly READS two facts-in inputs before deciding WHERE to write — a DOM read (computed style / matched rules / cascade winner = what renders now) AND an AST read (where the value lives in source: className, style prop, token ref = what source says) — drawn as two arrows into the planner; AI shown as a side input into planner (router), repair tier, and the verify stage as a constrained vision-witness (§9.7) whose verdict a deterministic policy judges — never as the keep/rollback authority. -->
 
 ## PART 2 — GLOSSARY & TERM-DECODE
@@ -487,7 +543,7 @@ document-wide WORKS / PARTIAL / BROKEN / PLANNED.
 **realm** — one of the **three** first-class execution hosts the engine must serve: (1) the
 **server-backed SaaS** browser realm (engine runs client-side, the preview is a same-origin iframe with
 live computed style, a server-side FS + language server back it), (2) the **VS Code extension** realm
-(split into an ext-host process with NO DOM and a preview *panel* that DOES have an iframe; VS Code's own
+(split into an ext-host process with NO DOM and a preview _panel_ that DOES have an iframe; VS Code's own
 language features supply types), and (3) the **serverless SaaS (NodePod / OPFS)** realm (fully
 browser-based; the project lives in OPFS and runs in an in-browser NodePod, with an in-pod `tsserver`
 for types when up). Realm differences are transport rows over one contract, not separate code paths
@@ -497,7 +553,7 @@ transport and its own type-backstop story; the only place it legitimately degrad
 
 **engine (System A / System B)** — the two parallel style engines that coexist on `main`. **System A**
 = the client canvas-engine adapters ([`client/lib/canvas-engine/adapters/`](https://github.com/hyperide/hyper-saas/tree/main/client/lib/canvas-engine/adapters)), canonical for SaaS-DOM
-editable-value read and client write *dispatch*. **System B** = the shared `lib/style-{read,write,
+editable-value read and client write _dispatch_. **System B** = the shared `lib/style-{read,write,
 values,adapters}/` core, canonical for VS Code source-tabs read and **the real file mutation on both
 realms**. Their convergence (System B wins as core) is [Part 5.3](#53-the-convergence-target--system-a-and-system-b-become-one) (resolves D23). Canonical: as above.
 
@@ -506,7 +562,7 @@ realms**. Their convergence (System B wins as core) is [Part 5.3](#53-the-conver
 load-bearing; `:10` is its JSDoc) and System B's `FrameworkStyleAdapter` (interface at
 `lib/style-write/types.ts:285`), a load-bearing SUBSET of which is `{id, reader?, writer?, …}` (the
 full shape also carries `sourceResolver`/`tokenResolver`/`themeResolver`/`layoutStrategy`). When
-ambiguous, qualify as *client adapter* vs *framework adapter*.
+ambiguous, qualify as _client adapter_ vs _framework adapter_.
 
 **reader / writer** — the two halves of a System-B `FrameworkStyleAdapter`. A **reader** extracts style
 facts from source for the inspector; a **writer** mutates source to apply an edit. The two registries
@@ -517,7 +573,7 @@ eight `CssSystemId` values are typed but unimplemented (PLANNED). Canonical:
 (writers).
 
 **`ParsedStyles`** — System A's canonical read shape: a flat map of CSS fields plus per-state variant
-maps, consumed directly by the inspector. It is the *editable-value* source on both realms (VS Code
+maps, consumed directly by the inspector. It is the _editable-value_ source on both realms (VS Code
 fills it via `classNameToStyles`). In the TO-BE model it is **DELETED** (OD-3 ratified DELETE, not
 @deprecate): inspector sections migrate to read the normalized IR (`StyleDeclaration[]`, [Part 6.2](#62-normalized-ir--declaration-rows-not-raw-parsedstyles)),
 and once a section is migrated the `ParsedStyles` path for it is removed — there is no permanent
@@ -538,7 +594,7 @@ owner, handed to the executor for the real mutation. Canonical: [`lib/style-writ
 an element (the "incumbent"). Drives planner step 2 (existing-exact-owner edits in place). Canonical:
 `lib/style-read/types.ts:202`, re-exported `lib/style-write/types.ts:23`.
 
-**`CssSystemId`** — the closed enum identifying a styling *system* (not a design system): `tailwind-v3 |
+**`CssSystemId`** — the closed enum identifying a styling _system_ (not a design system): `tailwind-v3 |
 tailwind-v4 | css-modules | plain-css | inline-style | emotion | styled-components | vanilla-extract |
 mui-system | chakra-ui | mantine | tamagui` (12). Only 4 have working adapters ([Part 3.3](#33-adapters--system-b-libstyle-adapters), D5).
 Canonical: `lib/style-read/types.ts:10`.
@@ -550,7 +606,7 @@ verify it) | `none` (no writable target — `NO_WRITABLE_TARGET`, no write). It 
 of the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) fail-closed matrix and the gate referenced by [§2.3](#23-the-six-resolution-state-words-rigorous) `unverifiable`. Canonical (TO-BE):
 folded from `2026-04-14-style-source-confidence.md` → [Part 9.4](#94-fail-closed-the-confidence--verifiability-matrix).
 
-**`SourceForm`** — where a style value *physically lives* in user code, the executor's dispatch key:
+**`SourceForm`** — where a style value _physically lives_ in user code, the executor's dispatch key:
 `elementClass` (className/`cn(...)`) | `cssStyleRule` (rule in a CSS file) | `scriptReactStyleRule`
 (`style={{...}}`) | `scriptNativeStyleRule` (`StyleSheet.create`) | `adapterKnownElementProp`
 (`<Button size="lg">`) | `arbitraryElementProp`. Canonical: `lib/style-read/types.ts:58`.
@@ -567,8 +623,8 @@ correctness at write time ([Part 7.3](#73-style-identity-is-a-structured-tuple))
 
 **`nodeRef`** — the tracer's stable handle to a rendered node, resolved to a source location via the
 source-map/fiber pipeline. The SaaS read path resolves a tree-select UUID → `nodeRef` → sourceLoc
-(`resolveUuidToNodeRef`, [HYP-593](https://linear.app/glide-vc/issue/HYP-593)). Distinct from `elementRef`: `nodeRef` is the *runtime* handle,
-`elementRef` is the *source* address. Canonical: [`client/components/RightSidebar/hooks/useStyleSync.ts`](https://github.com/hyperide/hyper-saas/blob/main/client/components/RightSidebar/hooks/useStyleSync.ts).
+(`resolveUuidToNodeRef`, [HYP-593](https://linear.app/glide-vc/issue/HYP-593)). Distinct from `elementRef`: `nodeRef` is the _runtime_ handle,
+`elementRef` is the _source_ address. Canonical: [`client/components/RightSidebar/hooks/useStyleSync.ts`](https://github.com/hyperide/hyper-saas/blob/main/client/components/RightSidebar/hooks/useStyleSync.ts).
 
 **`itemIndex`** — the per-`.map()` occurrence index that disambiguates one rendered instance of a
 list-rendered element from its siblings (a single source element renders N times). Held in the
@@ -587,7 +643,7 @@ selection-level fact, separate from per-field writability ([Part 6.5](#65-surfac
 `style-read-manager.ts` (`decideSurface:194`), NOT in a `lib/stylability` dir — that directory does NOT
 exist on main (D19).** Canonical: `lib/style-read/style-read-manager.ts:194`.
 
-**stylability ladder (L0–L3)** — the per-element classification of *how far* a value can be applied in
+**stylability ladder (L0–L3)** — the per-element classification of _how far_ a value can be applied in
 place: **L0** native design-system prop → **L1** generic className/style → **L2** partial (only some
 properties applicable, e.g. SVG `fill` only) → **L3** not stylable in place → needs wrapper promotion.
 The CTO law restated correctly: **L3 ≠ impossible; L3 = "needs promotion before this value can apply."**
@@ -601,22 +657,22 @@ human means; the right column is the term this master spec uses everywhere after
 the **Retires** disposition is deliberately retired by this spec; AS-IS sections may still quote the
 left column when describing current code verbatim, but TO-BE sections MUST use the spec name.
 
-| Code name (on `main`) | Human name | Spec name (this doc) | Disposition |
-|---|---|---|---|
-| `projectUIKit` | "the project's UI stack" (conflated) | **split → `cssFramework` + `designSystem`** | **Retires** — one field carries two orthogonal axes; never re-conflate (D26) |
-| `UiKitId` (`lib/style-read/types.ts:30`) | "which component library" | **`designSystem`** (`shadcn-ui`, `mui`, `mantine`, `tamagui`, …) | **Retires** the `uiKit` name; the *value set* stays |
-| `UIKitType` (client field type, `RightSidebar/types.ts:18`) | "the client-side alias of UiKitId" | **`designSystem`** (same spec name as `UiKitId`) | **Retires** the `uiKit` name; it is the client mirror of the same axis |
-| `uiKit` / `inspectorUIKit` field | "active styling preset" | **`designSystem`** (when it means a component library) **or** `cssFramework` (when it means Tailwind/CSS) — disambiguate per use | **Retires** — most uses mean one specific axis |
-| `getCssSystems` emits `tailwind-v4 \| css-modules \| inline-style` only | "detected CSS systems" | **`cssFramework` detection** (incomplete) | Keep; note it under-detects (D5) |
-| `CssSystemId` includes `chakra-ui`, `mantine`, `mui-system` | "CSS system" | **`cssFramework`** — but note these three are *design systems*, listed here as a code smell | Keep enum verbatim; flag the mis-axis'd members |
-| `writeMode` (`'className' \| 'props'`) | "which channel the adapter writes" | **channel-selection** (`channel`) | **Retires** the field name; the concept becomes the planner's per-element `channel` ([Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)) |
-| `tamagui` + `tamagui-props` (older drafts) | "Tamagui, split into class vs prop" | **single `cssSystem: 'tamagui'`, `sourceForm: 'adapterKnownElementProp'`** | **Retires** the split — never reintroduce `tamagui-props` (D17) |
-| `lib/stylability` / `lib/style-attribution` (cited as existing) | "the ladder / attribution modules" | **surface decision lives in `style-read-manager.ts`; the ladder is PLANNED** | **Retires the claim** — neither dir exists on `main` (D19) |
-| lockfile (`bun.lockb`) → ProjectType | "this is a Bun project" | **`packageManager: 'bun'`** (a pm axis, not a project type) | **Keep** the lockfile→`packageManager` inference (that is what the pm axis IS); **Retires** only lockfile→`ProjectType` — a lockfile sets the package-manager axis, never the whole project type (D26) |
+| Code name (on `main`)                                                   | Human name                           | Spec name (this doc)                                                                                                             | Disposition                                                                                                                                                                                            |
+| ----------------------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `projectUIKit`                                                          | "the project's UI stack" (conflated) | **split → `cssFramework` + `designSystem`**                                                                                      | **Retires** — one field carries two orthogonal axes; never re-conflate (D26)                                                                                                                           |
+| `UiKitId` (`lib/style-read/types.ts:30`)                                | "which component library"            | **`designSystem`** (`shadcn-ui`, `mui`, `mantine`, `tamagui`, …)                                                                 | **Retires** the `uiKit` name; the _value set_ stays                                                                                                                                                    |
+| `UIKitType` (client field type, `RightSidebar/types.ts:18`)             | "the client-side alias of UiKitId"   | **`designSystem`** (same spec name as `UiKitId`)                                                                                 | **Retires** the `uiKit` name; it is the client mirror of the same axis                                                                                                                                 |
+| `uiKit` / `inspectorUIKit` field                                        | "active styling preset"              | **`designSystem`** (when it means a component library) **or** `cssFramework` (when it means Tailwind/CSS) — disambiguate per use | **Retires** — most uses mean one specific axis                                                                                                                                                         |
+| `getCssSystems` emits `tailwind-v4 \| css-modules \| inline-style` only | "detected CSS systems"               | **`cssFramework` detection** (incomplete)                                                                                        | Keep; note it under-detects (D5)                                                                                                                                                                       |
+| `CssSystemId` includes `chakra-ui`, `mantine`, `mui-system`             | "CSS system"                         | **`cssFramework`** — but note these three are _design systems_, listed here as a code smell                                      | Keep enum verbatim; flag the mis-axis'd members                                                                                                                                                        |
+| `writeMode` (`'className' \| 'props'`)                                  | "which channel the adapter writes"   | **channel-selection** (`channel`)                                                                                                | **Retires** the field name; the concept becomes the planner's per-element `channel` ([Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain))                                            |
+| `tamagui` + `tamagui-props` (older drafts)                              | "Tamagui, split into class vs prop"  | **single `cssSystem: 'tamagui'`, `sourceForm: 'adapterKnownElementProp'`**                                                       | **Retires** the split — never reintroduce `tamagui-props` (D17)                                                                                                                                        |
+| `lib/stylability` / `lib/style-attribution` (cited as existing)         | "the ladder / attribution modules"   | **surface decision lives in `style-read-manager.ts`; the ladder is PLANNED**                                                     | **Retires the claim** — neither dir exists on `main` (D19)                                                                                                                                             |
+| lockfile (`bun.lockb`) → ProjectType                                    | "this is a Bun project"              | **`packageManager: 'bun'`** (a pm axis, not a project type)                                                                      | **Keep** the lockfile→`packageManager` inference (that is what the pm axis IS); **Retires** only lockfile→`ProjectType` — a lockfile sets the package-manager axis, never the whole project type (D26) |
 
 The orthogonal axes this spec enforces (Source: D26, detailed in [Part 5.5](#55-the-capability-taxonomy-orthogonal-axes)): **cssFramework** (Tailwind /
 CSS-modules / plain-CSS / emotion / styled-components / vanilla-extract / …), **designSystem** (shadcn,
-MUI, Mantine, Tamagui, Chakra — *shadcn is a design system, NOT a CSS system*), **jsFramework**
+MUI, Mantine, Tamagui, Chakra — _shadcn is a design system, NOT a CSS system_), **jsFramework**
 (react-vanilla / nextjs / remix / unknown, vue, svelte, solidjs), **router**, **bundler**,
 **packageManager** (npm / pnpm / yarn / bun). These axes are independent: a project is, e.g.,
 `{cssFramework: tailwind-v4, designSystem: shadcn-ui, jsFramework: nextjs, packageManager: bun}` — no
@@ -631,23 +687,23 @@ but MUST NOT infer the whole **`ProjectType`** (OD-5 / D26 correction).
 
 This is the most-cited mini-section in the document. The entire fallback doctrine ([Part 8](#part-8--to-be-fallback-doctrine-vtswr)) and the
 verify matrix ([Part 9.4](#94-fail-closed-the-confidence--verifiability-matrix)) hinge on **never conflating these six words**. They are NOT severity levels and
-NOT interchangeable — each names a *distinct* condition with a *distinct* triggered action. The first
+NOT interchangeable — each names a _distinct_ condition with a _distinct_ triggered action. The first
 five were defined exactly as the Q5 committee converged them (Source: Q5 Agreement [§4](#part-4--discrepancy-ledger); codex position
 §"Rigorous separation"; claude position §"Verification specifics"); the sixth — `collateral-broken` — is
-a CTO addition (this revision) that names the case the original five could not: *our* value landed
+a CTO addition (this revision) that names the case the original five could not: _our_ value landed
 correctly, but the edit broke something ELSE on the page (collateral damage). It is detected by a
 deterministic expected-vs-actual screenshot px-diff, NOT by AI vision ([§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) is the escalation, not this).
 
 **`unknown` — no recognized owner for this property on this element.**
 This is **NOT a failure.** The element resolved fine; there is simply no incumbent `StyleSourceOwner` for
 the property/condition being edited. The CTO is right that "unknown on the element" is not a refusal
-trigger (Q5 Agreement [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)): `unknown` is a *routing input* — fall through to project policy (the priority
+trigger (Q5 Agreement [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)): `unknown` is a _routing input_ — fall through to project policy (the priority
 chain). If the project has Tailwind, write Tailwind. **Action: route-to-policy.** Never banners, never
 skips on `unknown` alone.
 
 **`inexpressible` — a static capability check proves the candidate target cannot honestly encode this
 property/value/state.**
-Determined *before* any write, by capability, not by attempting and failing. Examples: `:hover` or a
+Determined _before_ any write, by capability, not by attempting and failing. Examples: `:hover` or a
 media query targeted at an inline `style` prop (inline is a base-state floor only, [§2.1](#21-core-nouns) ladder, Part
 8.3); a component that exposes only a boolean `underline` prop being asked for an arbitrary
 `text-decoration-color`; a non-tokenizable `13.5px` in a tokens-only target. **Action: skip THIS
@@ -657,13 +713,13 @@ expressible for the next — it is per-candidate, not terminal until every candi
 **`stale` — the DOM↔source identity can no longer be trusted.**
 The element's source location or content hash drifted out from under the editor (post-HMR selection
 loss, external file edit, hash mismatch). Acting on a `stale` identity risks writing into the wrong
-element — the one condition where falling through is *more* dangerous than stopping. **Action: re-resolve
+element — the one condition where falling through is _more_ dangerous than stopping. **Action: re-resolve
 ONCE; if still stale, STOP and show the blocking sync-banner ([Part 8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence) level 3). NEVER fall through on
-stale identity.** This is the only *pre-write* hard stop in the doctrine.
+stale identity.** This is the only _pre-write_ hard stop in the doctrine.
 
 **`unlanded` — the patch was applied but the rendered result did not match the intended value within
 tolerance.**
-A *post-write* verdict: the write went into source, the preview consumed it, and `computed(property) !=
+A _post-write_ verdict: the write went into source, the preview consumed it, and `computed(property) !=
 intended` on the edited state/breakpoint (after normalization — `#fff` vs `rgb(255,255,255)`, shorthand
 expansion, transitions neutralized). This is the swallowed-prop case (a wrapping component ate the
 `style` prop). **Action: surgically ROLL BACK our hunk (inverse of our edit, never `git checkout`) and
@@ -678,19 +734,19 @@ repair a slow build, [Part 9.3](#93-the-settle-handshake--never-compile-success-
 verdict is then gated by pre-write `SourceConfidence` ([§2.1](#21-core-nouns)) — `exact + unverifiable` may KEEP with a
 surfaced report; `probable + unverifiable` ROLLS BACK (the only `ask` is the audited OD-1 ext-host
 escape hatch, never a matrix disposition).** This is not two opposite actions:
-"treat as failure" is the *default posture* (absence of proof never promotes to landed), and the
+"treat as failure" is the _default posture_ (absence of proof never promotes to landed), and the
 keep-or-rollback within that posture is the confidence gate. The one open policy fork — whether the ext
 host gets an explicit, audited "apply anyway" escape hatch — is [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-1 (Source: Q5 Disagreement [§5](#part-5--to-be-unified-architecture)).
 
 **`collateral-broken` — our value landed correctly, but the SAME edit visibly broke something ELSE on
 the page.**
-A *post-write* verdict, orthogonal to `unlanded`: `computed(property) == intended` on the edited element
+A _post-write_ verdict, orthogonal to `unlanded`: `computed(property) == intended` on the edited element
 (the write DID land, B1 passed), yet a region of the page the edit had no business changing is now wrong —
 a sibling reflowed off-screen, an overlapping element occluded the target, a width bump pushed the layout
 into an overflow. This is COLLATERAL damage, not a failed write. It is detected by a **deterministic,
 intelligent-but-NON-AI visual check**: an expected-vs-actual screenshot px-diff that knows the SHAPE of the
-edit. For a simple element MOVE (no sibling reflow), the check synthesizes the *expected* after-frame by
-swapping the source/target regions on the before-screenshot and compares it to the *actual* after-frame;
+edit. For a simple element MOVE (no sibling reflow), the check synthesizes the _expected_ after-frame by
+swapping the source/target regions on the before-screenshot and compares it to the _actual_ after-frame;
 small differences (anti-alias, sub-pixel shift) are tolerated, but a delta OUTSIDE the expected-changed
 regions is `collateral-broken`. (The full per-edit-kind geometry — incl. the flex/grid case where siblings
 legitimately reflow and the simple swap is invalid → escalate — is [§9.6](#96-visual-regression-guard-b3--repair-sequencing).) This is the cheap deterministic
@@ -705,29 +761,30 @@ compensating inverse-patch transaction under the SAME `writeId`, AND it SURFACES
 [§8.4-bis](#84-bis-error-rollback--recovery-ux-ux-is-important-everywhere) error UX (preserved input + the action ladder), because a value that landed but broke the page is
 not a silent keep and not a quiet revert.
 This is the deterministic floor of the [§9.6](#96-visual-regression-guard-b3--repair-sequencing) visual-regression guard (B3): it catches the framed,
-mechanically-predictable collateral breakage *before* spending a model call on the cases that need meaning.
+mechanically-predictable collateral breakage _before_ spending a model call on the cases that need meaning.
 
 The pairwise distinctions that the doctrine depends on, stated explicitly so no downstream section
 collapses them:
 
-- `unknown` vs `inexpressible`: *no owner yet* (route) vs *this target structurally can't* (skip
+- `unknown` vs `inexpressible`: _no owner yet_ (route) vs _this target structurally can't_ (skip
   candidate). Conflating them turns a routable edit into a false skip.
-- `inexpressible` vs `unlanded`: *predicted-can't, before writing* (static) vs *wrote, didn't land*
+- `inexpressible` vs `unlanded`: _predicted-can't, before writing_ (static) vs _wrote, didn't land_
   (dynamic). Conflating them either writes blindly or skips writable targets.
-- `unlanded` vs `unverifiable`: *observed mismatch → roll back & fall through* vs *couldn't observe →
-  fail-closed, gated by confidence*. Conflating them either repairs a slow build (wrong) or silently
+- `unlanded` vs `unverifiable`: _observed mismatch → roll back & fall through_ vs _couldn't observe →
+  fail-closed, gated by confidence_. Conflating them either repairs a slow build (wrong) or silently
   keeps an unverified write (the exact hole the doctrine exists to close).
-- `unlanded` vs `collateral-broken`: *OUR value did not land* (the edited element is wrong) vs *our value
-  landed but the edit broke ELSEWHERE* (the edited element is right, the page is not). `unlanded` is a
+- `unlanded` vs `collateral-broken`: _OUR value did not land_ (the edited element is wrong) vs _our value
+  landed but the edit broke ELSEWHERE_ (the edited element is right, the page is not). `unlanded` is a
   failure of the edit; `collateral-broken` is a success that did damage. Conflating them either ignores
   real collateral breakage (treats a page-wrecking edit as a clean keep) or falsely fails a landed write.
-- `collateral-broken` vs `unverifiable`: *we observed a deterministic collateral delta* (a positive
-  px-diff signal → roll back + surface) vs *we could not observe at all* (no signal → fail-closed by
+- `collateral-broken` vs `unverifiable`: _we observed a deterministic collateral delta_ (a positive
+  px-diff signal → roll back + surface) vs _we could not observe at all_ (no signal → fail-closed by
   confidence). `collateral-broken` is evidence of damage; `unverifiable` is absence of evidence.
-- `stale` is orthogonal to the other five — it is an *identity* failure, not a *landing* failure, and it
+- `stale` is orthogonal to the other five — it is an _identity_ failure, not a _landing_ failure, and it
   is the only one that triggers a pre-write stop.
 
 ![Resolution-state decision tree from edit-attempt to triggered action.](./assets/fig-2-3-resolution-state-tree.svg)
+
 <!-- ASSET-SPEC fig-2-3-resolution-state-tree | KIND=svg | "Resolution-state decision tree." Depicts each of the six words as a leaf, the condition that produces it, and the action it triggers (route-to-policy / skip-candidate / re-resolve-then-banner / rollback-and-fall-through / treat-as-failure / px-diff-rollback-and-surface). The sixth leaf, collateral-broken, branches off the post-write path: our value landed but a deterministic expected-vs-actual screenshot px-diff found collateral damage outside the expected-changed regions → rollback + surface (AI-vision §9.7 is the escalation, not this leaf). -->
 
 ## PART 3 (AS-IS, sections 3.1–3.7) — CURRENT STATE: TOPOLOGY, ADAPTERS, READ & WRITE PIPELINES
@@ -783,7 +840,7 @@ same axis and the 95-vs-2 test corpora belong to the parser layer, not the conve
 - **Parser pair (D37).** Beneath the converters: the client Tailwind parser
   (`client/lib/canvas-engine/utils/tailwindParser`, **2 tests** in `tailwindParser.test.ts`) versus
   the canonical `lib/tailwind/parser` (**95 tests** in `parser.test.ts`). `classNameToStyles`
-  *consumes the client parser*, so the 95-vs-2 corpora measure the PARSER duplication (D37), not the
+  _consumes the client parser_, so the 95-vs-2 corpora measure the PARSER duplication (D37), not the
   converters (D23). `TailwindV4Reader` has its own tests.
 
 So D23 = the converter pair, D37 = the parser pair underneath it; the convergence ([Part 5.3](#53-the-convergence-target--system-a-and-system-b-become-one)) dedupes
@@ -794,6 +851,7 @@ both, but the thin-test risk the 95-vs-2 gap names is the parser layer. Folds: *
 > drift from the canonical `lib/tailwind/parser`).
 
 ![Two engines today — System A vs System B, the single funnel point, and the duplicated converter pair as debt.](./assets/fig-3-1-two-engines.svg)
+
 <!-- ASSET-SPEC fig-3-1-two-engines | KIND=svg | "Two engines today." Depicts System A and System B as two boxes, their distinct canonical shapes (ParsedStyles vs StyleReadResult/StyleWritePlan), the one funnel point where A dispatches into B, and the duplicated converter pair highlighted in red as consolidation debt. -->
 
 ### 3.2 Adapters — System A (client)
@@ -848,12 +906,12 @@ writer's `createPlan({context, sourceOwner}) → StyleWritePlan`.
 **The four working concrete writers** (all **WORKS**, unit-tested), with the `sourceForm` each
 emits:
 
-| Adapter | File | `sourceForm` | Notes |
-|---|---|---|---|
-| tailwind-v4 | [`lib/style-adapters/tailwind-v4/writer.ts`](https://github.com/hyperide/hyper-saas/blob/main/lib/style-adapters/tailwind-v4/writer.ts) | `elementClass` | builds a `TailwindPlan`; empty value = "remove property" (filtered out of class generation but kept in `removeForProperties`); `generateTailwindClasses(nonEmptyStyles, statePrefix)` does the CSS→class work |
-| css-modules | [`lib/style-adapters/css-modules/`](https://github.com/hyperide/hyper-saas/tree/main/lib/style-adapters/css-modules) | `cssStyleRule` | postcss rule find/create honoring the atRule cascade stack |
-| tamagui | [`lib/style-adapters/tamagui/`](https://github.com/hyperide/hyper-saas/tree/main/lib/style-adapters/tamagui) | `adapterKnownElementProp` | `setAttribute` per RN prop |
-| inline-style | [`lib/style-adapters/inline-style/`](https://github.com/hyperide/hyper-saas/tree/main/lib/style-adapters/inline-style) | `scriptReactStyleRule` | the universal fallback / floor |
+| Adapter      | File                                                                                                                                    | `sourceForm`              | Notes                                                                                                                                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tailwind-v4  | [`lib/style-adapters/tailwind-v4/writer.ts`](https://github.com/hyperide/hyper-saas/blob/main/lib/style-adapters/tailwind-v4/writer.ts) | `elementClass`            | builds a `TailwindPlan`; empty value = "remove property" (filtered out of class generation but kept in `removeForProperties`); `generateTailwindClasses(nonEmptyStyles, statePrefix)` does the CSS→class work |
+| css-modules  | [`lib/style-adapters/css-modules/`](https://github.com/hyperide/hyper-saas/tree/main/lib/style-adapters/css-modules)                    | `cssStyleRule`            | postcss rule find/create honoring the atRule cascade stack                                                                                                                                                    |
+| tamagui      | [`lib/style-adapters/tamagui/`](https://github.com/hyperide/hyper-saas/tree/main/lib/style-adapters/tamagui)                            | `adapterKnownElementProp` | `setAttribute` per RN prop                                                                                                                                                                                    |
+| inline-style | [`lib/style-adapters/inline-style/`](https://github.com/hyperide/hyper-saas/tree/main/lib/style-adapters/inline-style)                  | `scriptReactStyleRule`    | the universal fallback / floor                                                                                                                                                                                |
 
 **The taxonomy gap.** `CssSystemId` is defined over **twelve** systems (verbatim source order,
 `lib/style-read/types.ts:10`) —
@@ -881,6 +939,7 @@ and no writer detects or produces them. The unbuilt remainder is [HYP-606](https
 > writer tests).
 
 ![CssSystemId taxonomy — 12 cells, 4 implemented (green) and 8 typed-only (dashed) with the ticket that would build each.](./assets/fig-3-3-csssystemid-taxonomy.svg)
+
 <!-- ASSET-SPEC fig-3-3-csssystemid-taxonomy | KIND=svg | "CssSystemId taxonomy — implemented vs typed-only." 12 cells, 4 green (tailwind-v4, css-modules, inline-style, tamagui), 8 grey/dashed (tailwind-v3, plain-css, emotion, styled-components, mui-system, chakra-ui, mantine, vanilla-extract) with the ticket that would build each. -->
 
 ### 3.4 Read pipeline — client hub
@@ -984,6 +1043,7 @@ inline (`:251-574`, custom-i18n import-chain / locale-heuristic / DOM-text match
 > decision lives in `style-read-manager.ts`).
 
 ![Read pipeline today, both realms — SaaS sync branch and VS Code RPC branch converging on ParsedStyles, with StyleReadResult as a side-channel and the realm computed-style matrix (computed style is available in both realms; in the ext realm via the preview-iframe RPC, just not fed to the read manager).](./assets/fig-3-5-read-pipeline-both-realms.svg)
+
 <!-- ASSET-SPEC fig-3-5-read-pipeline-both-realms | KIND=svg | "Read pipeline today, both realms." Depicts the SaaS sync branch and the VS Code RPC branch converging on ParsedStyles, with StyleReadResult shown as a side-channel that only drives source-tabs/surface (properties[] empty), and the realm matrix. The matrix must NOT claim computed style is absent in the ext realm: it is available in SaaS directly and in the ext realm via the preview-iframe `requestComputedStyle` RPC (the §5.4/§9.2 transport row); the read pipeline simply does not feed it to the read manager today (host process passes `computedStyle:{}` — a D3 debt, not a realm limit). Only the ext *host process* itself has no DOM. -->
 
 ### 3.6 Write pipeline — client hook & contracts
@@ -1027,12 +1087,12 @@ user-defined Uppercase/member tags. It then calls `manager.createPlan` (the plan
 
 `StyleWriteExecutor.execute` (`:165`) dispatches by `plan.sourceForm`:
 
-| `sourceForm` | handler | line | status |
-|---|---|---|---|
-| `elementClass` | `executeTailwindPlan` ([§3.8](#38-tailwind-classname-write-format-preserving)) | `:188` | **WORKS** (with the dynamic-explicit-locations PARTIAL) |
-| `cssStyleRule` | `executeCssFilePlan` (postcss, finds/creates a rule honoring the atRule cascade stack) | `:348` | **BROKEN edge** — see below |
-| `scriptReactStyleRule` | `executeInlineStylePlan` (`applyInlineStyleUpdate`) | `:366` | **WORKS** |
-| `adapterKnownElementProp` | `executeAdapterPropPlan` (`setAttribute` per prop, Tamagui/Chakra) | `:386` | **WORKS** |
+| `sourceForm`              | handler                                                                                | line   | status                                                  |
+| ------------------------- | -------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------- |
+| `elementClass`            | `executeTailwindPlan` ([§3.8](#38-tailwind-classname-write-format-preserving))         | `:188` | **WORKS** (with the dynamic-explicit-locations PARTIAL) |
+| `cssStyleRule`            | `executeCssFilePlan` (postcss, finds/creates a rule honoring the atRule cascade stack) | `:348` | **BROKEN edge** — see below                             |
+| `scriptReactStyleRule`    | `executeInlineStylePlan` (`applyInlineStyleUpdate`)                                    | `:366` | **WORKS**                                               |
+| `adapterKnownElementProp` | `executeAdapterPropPlan` (`setAttribute` per prop, Tamagui/Chakra)                     | `:386` | **WORKS**                                               |
 
 **BROKEN — the CSS-file findRule miss is a dead click.** `executeCssFilePlan` (`:348`)
 **HARD-FAILS** when the target rule cannot be located: the color/style edit does nothing visible
@@ -1100,8 +1160,9 @@ function selectTargetWithDiagnostics(ctx: StyleWriteContext): SelectTargetResult
   if (elementFacts.elementCssSystems.length > 1) {
     const tw = elementFacts.elementCssSystems.find(isTailwind);
     const hasExactOwner = elementFacts.sourceOwners.some(
-      (o) => o.confidence === 'exact' && conditionsMatch(o.condition, condition) &&
-             requestedKebabKeys.includes(o.property));
+      (o) =>
+        o.confidence === 'exact' && conditionsMatch(o.condition, condition) && requestedKebabKeys.includes(o.property),
+    );
     if (tw && !hasExactOwner) {
       const r = resolveAdapterWriter(tw, createSyntheticOwner(tw, requestedKebabKeys[0], ctx), diagnostics);
       if (r) return r;
@@ -1112,9 +1173,7 @@ function selectTargetWithDiagnostics(ctx: StyleWriteContext): SelectTargetResult
   const projectSystems = ctx.projectCapabilities.projectCssSystems;
   if (projectSystems.length > 0) {
     const preferred =
-      projectSystems.find(isTailwind) ??
-      projectSystems.find((s) => s === 'css-modules') ??
-      projectSystems[0];
+      projectSystems.find(isTailwind) ?? projectSystems.find((s) => s === 'css-modules') ?? projectSystems[0];
     const r = resolveAdapterWriter(preferred, createSyntheticOwner(preferred, requestedKebabKeys[0], ctx), diagnostics);
     if (r) return r;
   }
@@ -1158,9 +1217,9 @@ that is genuinely format-preserving. It is `executeTailwindPlan`
 The path has six internal branches, evaluated in order:
 
 1. **Dynamic-plan-with-explicit-locations → unsupported (PARTIAL).** If the plan carries explicit
-   write locations on a *dynamic* className, the executor returns a failure whose real messages are
+   write locations on a _dynamic_ className, the executor returns a failure whose real messages are
    "…not supported by StyleWriteExecutor yet" (`:190`) / "…has no executable locations" (`:194`). This is a deliberate dead end: the surgical-splice machinery
-   below assumes it owns the resolution of *where* in the className expression to write, and an
+   below assumes it owns the resolution of _where_ in the className expression to write, and an
    externally-supplied location set is not yet reconciled with it. **PARTIAL** — a real edit shape
    the executor refuses rather than mis-handles.
 
@@ -1168,7 +1227,7 @@ The path has six internal branches, evaluated in order:
    executor consults the color-probe verdict threaded in as `probeDriving` ([§3.12](#312-color-probe-today-tier-1)). If the probe says
    the live color is driven by inline / CSS-var / module — i.e. a Tailwind class would lose the
    cascade — it writes an inline `style={{}}` override **instead of** appending a className, because a
-   `twMerge` wrap on a color the class doesn't actually drive is a no-op. This branch runs *before*
+   `twMerge` wrap on a color the class doesn't actually drive is a no-op. This branch runs _before_
    the literal-className branch so a probe-positive non-Tailwind driver never wastes a class append.
    **WORKS** (executor + probe tests).
 
@@ -1192,7 +1251,7 @@ The path has six internal branches, evaluated in order:
    express the edit through the className (e.g. an opaque same-group conflict it can't safely resolve,
    no resolvable merge function), it sets `writeHints.needsInlineFloor`; the executor then writes an
    inline `style` override rather than leaving the className a no-op ([HYP-544](https://linear.app/glide-vc/issue/HYP-544) Phase 2 [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain) "per-CSS-approach
-   last-resort floor"). This is a *fallback that lands a value*, not a silent miss. **WORKS**.
+   last-resort floor"). This is a _fallback that lands a value_, not a silent miss. **WORKS**.
 
 6. **twMerge-injection gate (`forceFullReprint` :291 / `projectResolvesTailwindMerge` :445).** Injecting
    a `twMerge` import has no existing source range, so it forces a whole-file recast (`forceFullReprint`).
@@ -1206,7 +1265,7 @@ inspector does not currently produce that shape for single-element edits, so the
 but it is a real PARTIAL that the TO-BE planner ([Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)) must reconcile.
 
 > **Discrepancies touching this subsystem:** **D9** (`writeOrder` on a dynamic className clobbers
-> `cn(...)` to a static string at the *adapter* layer — a different write path than `executeTailwindPlan`,
+> `cn(...)` to a static string at the _adapter_ layer — a different write path than `executeTailwindPlan`,
 > with no adapter-level guard; the caller must detect and fall back to the AST drag path). The format-
 > preserving splice in branch 4 is the executor's correct counter to exactly the class of corruption
 > `writeOrder` risks. **D33/D37** (no pseudo-selector/responsive write test; the duplicate client TW
@@ -1214,7 +1273,7 @@ but it is a real PARTIAL that the TO-BE planner ([Part 7](#part-7--to-be-planner
 
 ### 3.9 Modes — JSX vs DOM, single vs multi
 
-There are two write *modes* and a hard single-element *gate*. Status per AS-IS [§4](#part-4--discrepancy-ledger).
+There are two write _modes_ and a hard single-element _gate_. Status per AS-IS [§4](#part-4--discrepancy-ledger).
 
 **JSX-mode write — the only write the executor performs.** A JSX-mode write mutates the JSX source
 (className or props), with the target element resolved by `file:line:col` source location. Every path
@@ -1222,10 +1281,11 @@ in [§3.7](#37-write-pipeline--shared-executor--planner)–[§3.8](#38-tailwind-
 
 **DOM-mode — primarily a read/instant-feedback concern, not a source write.** "DOM-mode" in this
 codebase means three distinct things, none of which is a permanent source mutation:
-- the *read* side: `TailwindAdapter.read` (`client/lib/canvas-engine/adapters/TailwindAdapter.ts:82`)
+
+- the _read_ side: `TailwindAdapter.read` (`client/lib/canvas-engine/adapters/TailwindAdapter.ts:82`)
   prefers the live DOM className over the AST as runtime truth, and `mergeRuntimeStyle` patches in
   `getComputedStyle` values ([§3.4](#34-read-pipeline--client-hub));
-- the SaaS *instant override*: `engine.fastPatch.applyPatch` ([HYP-650](https://linear.app/glide-vc/issue/HYP-650)/651) paints the edit into the
+- the SaaS _instant override_: `engine.fastPatch.applyPatch` ([HYP-650](https://linear.app/glide-vc/issue/HYP-650)/651) paints the edit into the
   preview before the JSX write + HMR round-trip lands, then clears once verification settles;
 - the **[HYP-290](https://linear.app/glide-vc/issue/HYP-290) DOM-mode instance stack** (reorder / delete / duplicate / copy) — which is a separate
   feature, **out of scope for style write**, and not in any of these files.
@@ -1254,9 +1314,10 @@ The primary path is fully deterministic; AI exists only as a set of failure-hand
 **not** a routing input on `main`. Status per AS-IS [§5](#part-5--to-be-unified-architecture).
 
 **Deterministic primary (no LLM).** Inspector control → `syncStyleChange` → engine/RPC → executor →
-file write + HMR. No model is consulted to *route* or *commit* a write. **WORKS**.
+file write + HMR. No model is consulted to _route_ or _commit_ a write. **WORKS**.
 
 **The three AI fallbacks that exist:**
+
 - **Write FAILURE → AI chat.** `useStyleSync.onSyncError` → `RightSidebar.handleSyncError:215` →
   `openAIChat({prompt:"Style update failed…", forceNewChat:true})`. **WORKS**.
 - **NO-VISUAL-EFFECT → toast + Ask-AI.** `onStyleNotApplied` → `handleStyleNotApplied:254` → a "Style
@@ -1275,7 +1336,7 @@ removed as dead code in `929aa1c4`; with the AI-locator deleted, **no AI-derived
 produced** (the executor's real `locations` array is non-empty for deterministic plans,
 `style-write-executor.ts:247/259` — it is only the AI-locator's location set that is gone). So today
 there is **no AI routing path at all**: the "Auto tab routes via AI when configured" behavior is **PLANNED**,
-not built. The current head's intent ([HYP-544](https://linear.app/glide-vc/issue/HYP-544) [§0](#part-0--front-matter)) demotes AI further, to a *repair tier* (deterministic
+not built. The current head's intent ([HYP-544](https://linear.app/glide-vc/issue/HYP-544) [§0](#part-0--front-matter)) demotes AI further, to a _repair tier_ (deterministic
 outranks AI), which is yet a third position from the unification-plan's first-class routing grant.
 
 > **Discrepancies touching this subsystem:** **D4** (AI semantic source-routing is specced first-class
@@ -1288,30 +1349,29 @@ outranks AI), which is yet a third position from the unification-plan's first-cl
 The current fallback set is a mix of real value-landing floors, hard-fails, and silent drops. This is
 the inventory the contested fallback doctrine ([Part 8](#part-8--to-be-fallback-doctrine-vtswr)) is written against. Source: AS-IS [§6](#part-6--to-be-read-the-one-read-merge-model).
 
-| Fallback condition | Behavior on `main` | Status |
-|---|---|---|
-| Token/CSS system `none` | VS Code forces inspector to `'tailwind'`; SaaS shows `SetupTailwindButton` (AI install). The active client adapter still defaults to Tailwind regardless of `none` (`RightSidebar.tsx:67/86`). No first-class "no styling system" doctrine. | **PARTIAL** |
-| Read returns empty | VS Code returns `empty` on missing nodeRef / NodeMap-miss-no-syntheticRef / bundle-artifact / post-HMR not-found; client renders EMPTY_DATA / "Reading styles…". SaaS: no AST + DOM present → NodePod minimal (`parsedStyles:null`); neither → EMPTY_DATA. | **WORKS** |
-| Source-map miss (SaaS) | `ModuleSourceMapResolver` + suffix-match safety net ([HYP-594](https://linear.app/glide-vc/issue/HYP-594)) → `elementLoc` server fallback ([HYP-593](https://linear.app/glide-vc/issue/HYP-593) exact-loc guard) → final miss → notFound → AI fallback. | **WORKS** |
-| Planner exhausted | Falls through to the inline-style universal floor (planner step 6); unregistered inline adapter → throws "inline-style adapter must be registered" (`style-write-planner.ts:231`). | **WORKS** |
-| Dynamic TW the executor can't express | `needsInlineFloor` → inline `style` override ([§3.8](#38-tailwind-classname-write-format-preserving) branch 5) — lands a value, not a no-op. | **WORKS** |
-| **CSS-file write, findRule MISS** | `executeCssFilePlan` (`style-write-executor.ts:348`) **HARD-FAILS** — the color edit does nothing visible, no fallback. = dead click. [HYP-706](https://linear.app/glide-vc/issue/HYP-706) (Backlog) would flip this to the inline floor using the already-present `sourceElement.elementRef`. | **BROKEN** |
-| `borderStyle` on Tamagui | Silently dropped (RN solid-only, by design). | **PARTIAL** |
-| Color from unresolvable source | Color probe ([§3.12](#312-color-probe-today-tier-1)) → inline override. | **WORKS** |
+| Fallback condition                    | Behavior on `main`                                                                                                                                                                                                                                                                             | Status      |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Token/CSS system `none`               | VS Code forces inspector to `'tailwind'`; SaaS shows `SetupTailwindButton` (AI install). The active client adapter still defaults to Tailwind regardless of `none` (`RightSidebar.tsx:67/86`). No first-class "no styling system" doctrine.                                                    | **PARTIAL** |
+| Read returns empty                    | VS Code returns `empty` on missing nodeRef / NodeMap-miss-no-syntheticRef / bundle-artifact / post-HMR not-found; client renders EMPTY_DATA / "Reading styles…". SaaS: no AST + DOM present → NodePod minimal (`parsedStyles:null`); neither → EMPTY_DATA.                                     | **WORKS**   |
+| Source-map miss (SaaS)                | `ModuleSourceMapResolver` + suffix-match safety net ([HYP-594](https://linear.app/glide-vc/issue/HYP-594)) → `elementLoc` server fallback ([HYP-593](https://linear.app/glide-vc/issue/HYP-593) exact-loc guard) → final miss → notFound → AI fallback.                                        | **WORKS**   |
+| Planner exhausted                     | Falls through to the inline-style universal floor (planner step 6); unregistered inline adapter → throws "inline-style adapter must be registered" (`style-write-planner.ts:231`).                                                                                                             | **WORKS**   |
+| Dynamic TW the executor can't express | `needsInlineFloor` → inline `style` override ([§3.8](#38-tailwind-classname-write-format-preserving) branch 5) — lands a value, not a no-op.                                                                                                                                                   | **WORKS**   |
+| **CSS-file write, findRule MISS**     | `executeCssFilePlan` (`style-write-executor.ts:348`) **HARD-FAILS** — the color edit does nothing visible, no fallback. = dead click. [HYP-706](https://linear.app/glide-vc/issue/HYP-706) (Backlog) would flip this to the inline floor using the already-present `sourceElement.elementRef`. | **BROKEN**  |
+| `borderStyle` on Tamagui              | Silently dropped (RN solid-only, by design).                                                                                                                                                                                                                                                   | **PARTIAL** |
+| Color from unresolvable source        | Color probe ([§3.12](#312-color-probe-today-tier-1)) → inline override.                                                                                                                                                                                                                        | **WORKS**   |
 
 The two that the doctrine must own are the **BROKEN** CSS-file findRule miss (a documented universal
 floor that is not honored on this path) and the **PARTIAL** `none`-system handling (no doctrine).
 
-> **Discrepancies touching this subsystem:** **D1** (inline floor is implemented but the *verification
-> that it actually landed* — B1 runtime-verify — is absent on `main`; so the code ships a fallback the
+> **Discrepancies touching this subsystem:** **D1** (inline floor is implemented but the _verification
+> that it actually landed_ — B1 runtime-verify — is absent on `main`; so the code ships a fallback the
 > current head considers unsafe-without-verify). **D6** (CSS-file write hard-fails on a findRule miss
 > where the spec promises a floor). **D24** (Alex says inline-as-terminal-floor is fine; reviewers say
 > silent inline is a destructive hole — the headline reconciliation, deferred to [Part 8](#part-8--to-be-fallback-doctrine-vtswr) / OD-1).
 
 ### 3.12 Color probe today (Tier-1)
 
-The color probe answers the question "**what DRIVES this color**" so the Tailwind writer ([§3.8](#38-tailwind-classname-write-format-preserving) branch
-2) can decide between appending a class and writing an inline override. It is gated, off the hot path,
+The color probe answers the question "**what DRIVES this color**" so the Tailwind writer ([§3.8](#38-tailwind-classname-write-format-preserving) branch 2) can decide between appending a class and writing an inline override. It is gated, off the hot path,
 and never blocks a write. Status per AS-IS [§6](#part-6--to-be-read-the-one-read-merge-model).
 
 The entry point is `PanelRouter._maybeProbeColorCandidates`
@@ -1328,8 +1388,8 @@ twMerge path. More than one driver → a non-blocking VS Code warning, takes the
 throws and never blocks** the write — any failure falls back to the static AST path. **WORKS** (22 probe
 tests, run under happy-dom).
 
-**The PARTIAL-vs-intent gap.** This is **Tier-1 "what drives"** only. It tells you *which DOM candidate
-wins the cascade*, not *where in source the color is written*. The **Tier-2 "where in source"** half is
+**The PARTIAL-vs-intent gap.** This is **Tier-1 "what drives"** only. It tells you _which DOM candidate
+wins the cascade_, not _where in source the color is written_. The **Tier-2 "where in source"** half is
 **PLANNED** ([HYP-704](https://linear.app/glide-vc/issue/HYP-704)/705/706): the AST-candidate-enumeration the intent demands — the same logical color
 appearing as `rgb()` in source but resolving to a build-time `#hash`/token in the DOM, enumerated as
 source transformations and probed across ~10 hidden iframes — does not exist. The Tier-2 CDP path is
@@ -1368,13 +1428,13 @@ different transport entirely (HTTP + WebSocket, not postMessage). Status per AS-
 
 **Realm matrix** (where each capability runs and how it degrades):
 
-| Capability | SaaS (1 realm) | VS Code (split realms) |
-|---|---|---|
-| Editable-value read | client `classNameToStyles`/ParsedStyles + runtime merge | same client pipeline, fed by `styles:response` RPC |
-| Source-tabs/surface read | client engine | ext-host `StyleReadService` (garbage facts, [§3.5](#35-read-pipeline--shared-read-manager--vs-code-read-service)) |
-| Write transport | HTTP route + file-snapshot undo | `ast:*` postMessage + disk-diff undo |
-| Computed style available? | **yes** (iframe) | **no** (`computedStyle:{}` in host) — color probe needs the iframe |
-| i18n key read | **MISSING ([HYP-372](https://linear.app/glide-vc/issue/HYP-372))** | `styles:fetchI18nKeys` **WORKS** |
+| Capability                | SaaS (1 realm)                                                     | VS Code (split realms)                                                                                            |
+| ------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Editable-value read       | client `classNameToStyles`/ParsedStyles + runtime merge            | same client pipeline, fed by `styles:response` RPC                                                                |
+| Source-tabs/surface read  | client engine                                                      | ext-host `StyleReadService` (garbage facts, [§3.5](#35-read-pipeline--shared-read-manager--vs-code-read-service)) |
+| Write transport           | HTTP route + file-snapshot undo                                    | `ast:*` postMessage + disk-diff undo                                                                              |
+| Computed style available? | **yes** (iframe)                                                   | **no** (`computedStyle:{}` in host) — color probe needs the iframe                                                |
+| i18n key read             | **MISSING ([HYP-372](https://linear.app/glide-vc/issue/HYP-372))** | `styles:fetchI18nKeys` **WORKS**                                                                                  |
 
 The one outright hole is the SaaS i18n-key read: `styles:fetchI18nKeys` is handled in the extension
 (`PanelRouter:450`) but the **SaaS server has no equivalent route**, and `classData.i18nText` is never
@@ -1388,7 +1448,7 @@ to a SaaS route, not the named handler. **BROKEN/MISSING** for SaaS.
 ### 3.14 Color/token round-trip today
 
 The color subsystem has solid color math, two static token providers, and a working hex↔source round-trip
-for Tailwind and Tamagui — but the source-of-truth for *where a color lives in code* is the unbuilt
+for Tailwind and Tamagui — but the source-of-truth for _where a color lives in code_ is the unbuilt
 Tier-2 ([§3.12](#312-color-probe-today-tier-1)), and the client picker shows the wrong palette in the ext realm. Status per AS-IS [§8](#part-8--to-be-fallback-doctrine-vtswr).
 
 - **Color math** (`shared/utils/color.ts`): `hexToRgb` / `rgbToHex` / `hsl*` / `colorDistance` /
@@ -1410,7 +1470,7 @@ Tier-2 ([§3.12](#312-color-probe-today-tier-1)), and the client picker shows th
 - **The round-trip:** on write, the inspector hex `#rrggbbaa` → generator → a Tailwind class / Tamagui
   `$token` / inline value; on read, computed `getComputedStyle` color → `rgbToHex` → matched back to the
   nearest token. **WORKS** for Tailwind/Tamagui; **PARTIAL end-to-end** because the source-of-truth for
-  *where the color lives in code* is the unbuilt Tier-2.
+  _where the color lives in code_ is the unbuilt Tier-2.
 
 > **Discrepancies touching this subsystem:** **D11** (Tamagui token client picker shows hardcoded Radix,
 > not the project palette — half-wired: host yes, client no, [HYP-458](https://linear.app/glide-vc/issue/HYP-458)). **D16** (the
@@ -1425,26 +1485,26 @@ The whole current-state in one glance. This is the baseline the discrepancy ledg
 the migration path ([Part 14](#part-14--migration-path-as-is--to-be)) closes against. Reproduces AS-IS [§9](#part-9--to-be-verify--transaction--undo); the test-coverage column reconciles it
 against `discovery-tests.md`.
 
-| Subsystem | Status | Note (anchor / ticket) |
-|---|---|---|
-| Single-element Tailwind read+write (static+dynamic, format-preserving) | **WORKS** | [HYP-575](https://linear.app/glide-vc/issue/HYP-575)/544; `executeTailwindPlan:188`; 41+95+27 tests |
-| System-B planner (6-step) + css-modules / inline / tamagui writers | **WORKS** | `style-write-planner.ts:86`; except CSS-file findRule miss; 22 planner + 31 executor tests |
-| CSS-file write on findRule MISS | **BROKEN** | `executeCssFilePlan:348` hard-fails = dead click; [HYP-706](https://linear.app/glide-vc/issue/HYP-706) fix PLANNED |
-| Dynamic Tailwind plan with explicit locations | **PARTIAL** | executor "not supported yet" (`:189-195`) |
-| Tamagui responsive variants (`$md`/`$gtSm`) + grid layout | **PARTIAL** | grid → View; non-base order → `order-not-supported` |
-| VS Code `StyleReadService` element resolution + source-tabs + i18n | **WORKS** | facts are "garbage" ([§3.5](#35-read-pipeline--shared-read-manager--vs-code-read-service)); 37 tests but i18n-dominated (~10 style-read) |
-| VS Code ElementFacts (sourceOwners/propMappers/themeCaps/computedStyle) | **PARTIAL** | hardcoded empty/`true`; `buildElementFacts:704` |
-| Non-tailwind/tamagui adapters (emotion/styled/mui/chakra/mantine/plain-css/v3) | **PLANNED** | typed, never produced; [HYP-606](https://linear.app/glide-vc/issue/HYP-606)/607/608/600; no writer dirs/tests |
-| Color probe Tier-1 ("what drives") | **WORKS** | [HYP-544](https://linear.app/glide-vc/issue/HYP-544) Phase 3; `_maybeProbeColorCandidates:635`; 22 tests |
-| Color probe Tier-2 ("where in source") + Tier-3 | **PLANNED** | [HYP-704](https://linear.app/glide-vc/issue/HYP-704)/705/706 + B0/B1/A1 |
-| AI as routing input (Auto tab) | **PLANNED** | locator deleted (`929aa1c4`); AI demoted to repair tier |
-| Multi-select style write | **PLANNED** | [#270](https://github.com/hyperide/hyper-saas/pull/270) branch v1, starved on A1; single-element gate on `main` (`RightSidebar.tsx:111`) |
-| `StyleReadResult.properties` as editable source | **BROKEN/UNUSED** | values flow via `classNameToStyles`/ParsedStyles |
-| Runtime-verify (did the write land) + rollback transaction | **PLANNED** | B0/B1 unbuilt; `lib/style-attribution` / `lib/style-write/runtime-verify/` absent (D19) |
-| Cross-realm StateHub / PanelRouter / AstBridge transport | **WORKS** | [§3.13](#313-cross-realm-transport-today) |
-| SaaS i18n key read | **BROKEN/MISSING** | [HYP-372](https://linear.app/glide-vc/issue/HYP-372) Todo/BLOCKED |
-| Color/token round-trip (Tailwind/Tamagui) | **WORKS** | end-to-end source-of-truth still Tier-2 PLANNED; `parseAnyColorToHex` hsl→null gap |
-| Tamagui token client picker (shows Radix not project) | **PARTIAL** | [HYP-458](https://linear.app/glide-vc/issue/HYP-458) |
+| Subsystem                                                                      | Status             | Note (anchor / ticket)                                                                                                                   |
+| ------------------------------------------------------------------------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Single-element Tailwind read+write (static+dynamic, format-preserving)         | **WORKS**          | [HYP-575](https://linear.app/glide-vc/issue/HYP-575)/544; `executeTailwindPlan:188`; 41+95+27 tests                                      |
+| System-B planner (6-step) + css-modules / inline / tamagui writers             | **WORKS**          | `style-write-planner.ts:86`; except CSS-file findRule miss; 22 planner + 31 executor tests                                               |
+| CSS-file write on findRule MISS                                                | **BROKEN**         | `executeCssFilePlan:348` hard-fails = dead click; [HYP-706](https://linear.app/glide-vc/issue/HYP-706) fix PLANNED                       |
+| Dynamic Tailwind plan with explicit locations                                  | **PARTIAL**        | executor "not supported yet" (`:189-195`)                                                                                                |
+| Tamagui responsive variants (`$md`/`$gtSm`) + grid layout                      | **PARTIAL**        | grid → View; non-base order → `order-not-supported`                                                                                      |
+| VS Code `StyleReadService` element resolution + source-tabs + i18n             | **WORKS**          | facts are "garbage" ([§3.5](#35-read-pipeline--shared-read-manager--vs-code-read-service)); 37 tests but i18n-dominated (~10 style-read) |
+| VS Code ElementFacts (sourceOwners/propMappers/themeCaps/computedStyle)        | **PARTIAL**        | hardcoded empty/`true`; `buildElementFacts:704`                                                                                          |
+| Non-tailwind/tamagui adapters (emotion/styled/mui/chakra/mantine/plain-css/v3) | **PLANNED**        | typed, never produced; [HYP-606](https://linear.app/glide-vc/issue/HYP-606)/607/608/600; no writer dirs/tests                            |
+| Color probe Tier-1 ("what drives")                                             | **WORKS**          | [HYP-544](https://linear.app/glide-vc/issue/HYP-544) Phase 3; `_maybeProbeColorCandidates:635`; 22 tests                                 |
+| Color probe Tier-2 ("where in source") + Tier-3                                | **PLANNED**        | [HYP-704](https://linear.app/glide-vc/issue/HYP-704)/705/706 + B0/B1/A1                                                                  |
+| AI as routing input (Auto tab)                                                 | **PLANNED**        | locator deleted (`929aa1c4`); AI demoted to repair tier                                                                                  |
+| Multi-select style write                                                       | **PLANNED**        | [#270](https://github.com/hyperide/hyper-saas/pull/270) branch v1, starved on A1; single-element gate on `main` (`RightSidebar.tsx:111`) |
+| `StyleReadResult.properties` as editable source                                | **BROKEN/UNUSED**  | values flow via `classNameToStyles`/ParsedStyles                                                                                         |
+| Runtime-verify (did the write land) + rollback transaction                     | **PLANNED**        | B0/B1 unbuilt; `lib/style-attribution` / `lib/style-write/runtime-verify/` absent (D19)                                                  |
+| Cross-realm StateHub / PanelRouter / AstBridge transport                       | **WORKS**          | [§3.13](#313-cross-realm-transport-today)                                                                                                |
+| SaaS i18n key read                                                             | **BROKEN/MISSING** | [HYP-372](https://linear.app/glide-vc/issue/HYP-372) Todo/BLOCKED                                                                        |
+| Color/token round-trip (Tailwind/Tamagui)                                      | **WORKS**          | end-to-end source-of-truth still Tier-2 PLANNED; `parseAnyColorToHex` hsl→null gap                                                       |
+| Tamagui token client picker (shows Radix not project)                          | **PARTIAL**        | [HYP-458](https://linear.app/glide-vc/issue/HYP-458)                                                                                     |
 
 **Test-posture roll-up** (from `discovery-tests.md`): unit tests carry **zero** `.skip`/`.only`/`.todo`
 quarantine; e2e "skips" are all `test.skip(condition, reason)` project-matrix gates, not disables. The
@@ -1501,19 +1561,19 @@ OD-2 — the Q4 ladder is now settled, only sub-knobs remain); **D8** is resolve
 adapter limitation (**will-not-fix**, subsumed by D23); and **D10** is a missing SaaS route
 (resolved by a transport row). Everything else in D1-D11 is fully resolved by the pipeline.
 
-| Dxx | Discrepancy (anchor) | Disposition |
-|---|---|---|
-| **D1** | Inline floor specced as universal but can be a SILENT NO-OP — a swallowing `<Button>` makes the inline write win the cascade forever and mask future edits; the floor is implemented (`style-write-planner.ts:192`, throw `:231`; `executeTailwindPlan` decl `:188`, `needsInlineFloor` branch `:276`) but the landing-verification that proves it took is **not on main** (`lib/style-write/runtime-verify/` absent). | **resolved-by-Part-8 (VTSWR) + Part-9 (B1 verify)**. The cure is NOT removing inline — it is making each inline attempt a verified transaction (patch → preview consumes → re-identify → `computed(property)==intended`) and rolling back any attempt that does not land. The danger was never inline; it was inline that silently doesn't land and rots in source. Source: Q5 Synthesis (VTSWR), Q5 Agreement [§1](#part-1--executive-summary). |
-| **D2** | `StyleReadResult.properties` is the documented read result but is `[]`/unused for editable values — editable values flow through `classNameToStyles`→`ParsedStyles` (`useElementStyleData.ts:113/444`); `StyleReadResult` drives only source-tabs/surface. TWO parallel read shapes; the single-read-model is not the implementation. | **resolved-by-Part-6 (SelectionStyleRead + normalized IR)**. The unified read operates on a normalized `StyleDeclaration[]` IR (`fieldKey = property+condition`); `ParsedStyles` is DELETED (OD-3 — removed once sections migrate to the IR, NOT kept as a `@deprecated` projection). The two-shape split collapses into one door. Source: Q2 Agreement [§1](#part-1--executive-summary); OD-3. |
-| **D3** | "Honest D2 / fail-closed" is specced but the merged D2 is fed garbage facts and writes fail-OPEN — `StyleReadService.buildElementFacts:704` hardcodes `acceptsClassName/Style:true`, `sourceOwners:[]`; `getElementCssSystems` never checks className/style forwarding; [HYP-704](https://linear.app/glide-vc/issue/HYP-704) design carries a literal `rafVerified ?? true` fail-open bug. | **resolved-by-Part-9 (fail-closed matrix, `?? false`, [§9.4](#94-fail-closed-the-confidence--verifiability-matrix)) + the A1 forward-detector (specified in [§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home)) replacing the hardcoded `acceptsClassName:true`**. The keep/rollback decision becomes a function of pre-write confidence × verify verdict; `rafVerified ?? false`, never `?? true`. The forward-detector (its one canonical home is [§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home); consumed by the planner A2, [Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)) supplies real facts so the planner stops picking targets that cannot land. Source: Q3 fail-closed matrix. |
-| **D4** | AI semantic source-routing is specced as a first-class routing input, but on main the locator `analyzeClassNameWithAI` is DELETED (`929aa1c4`), executor passes `locations:[]` always — AI is NOT a routing input. Three positions coexist (#9 over-grants, #17 demotes to repair, code has none). | **RATIFIED true → Part-13 OD-2 (D4/D15)**, TO-BE direction in **Part-10**. The Q4 doctrine is ratified ("AI discovers and ranks; the probe verifies; deterministic builders commit") — AI as router + tie-breaker + repair, never authority. Two sub-knobs remain inside the ratified ladder: which default Auto behavior ships (AI-Router vs AI-Ranker) and whether to rebuild the deleted locator. Source: Q4 Synthesis; [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-2. |
-| **D5** | `getElementCssSystems` only ever emits 3 systems (tailwind-v4 / css-modules / inline-style, + tamagui-by-prop) despite 12 `CssSystemId`s and a 12-adapter taxonomy; emotion/styled-components/mui/chakra/mantine/vanilla-extract/plain-css/tailwind-v3 are typed but never detected or written (`StyleReadService.getCssSystems:731`, `executor.getElementCssSystems:542`). | **resolved-by-Part-5.6 (the ProjectDetector all-dimensions detection) + Part-7 (priority chain over real systems) + Part-14 (build ALL 12 adapters)**. RATIFIED target (OD-5/item 3): all twelve systems IMPLEMENTED (reader + writer + **detection**), and the ProjectDetector ([§5.6](#56-all-dimensions-detection--the-projectdetector-responsibility)) reports the COMPLETE set of systems in use plus every axis value — not 3, not a single best-guess. The 8 unbuilt systems are scheduled under the **[HYP-600](https://linear.app/glide-vc/issue/HYP-600) umbrella** (children [HYP-606](https://linear.app/glide-vc/issue/HYP-606)/607/608/609/610/619/620, matching [Part 14.2](#142-phase-map-with-the-live-tickets) build-all-twelve track); a system is not "built" until it is also DETECTED. Source: AS-IS [§1](#part-1--executive-summary), [Part 5.6](#56-all-dimensions-detection--the-projectdetector-responsibility), [Part 14](#part-14--migration-path-as-is--to-be) phase map. |
-| **D6** | CSS-file write HARD-FAILS on a `findRule` miss = dead click, no fallback (`style-write-executor.ts:348`); the universal-floor doctrine exists in spec but is not honored on this path. | **resolved-by-Part-8 (inline floor as a verified candidate) + [HYP-706](https://linear.app/glide-vc/issue/HYP-706)**. The hard-fail flips to the inline floor using the already-present `sourceElement.elementRef`, and that inline candidate is itself verified per VTSWR rather than blindly trusted. Source: AS-IS [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)c, [Part 8](#part-8--to-be-fallback-doctrine-vtswr). |
-| **D7** | Multi-select "generalize the one engine" is the central directive, but live code is single-element-only (`RightSidebar.tsx:111`; `length>1` → "Select a single element" `:945`); the batch path (`BatchStyleWritePlan`/`recordBatchEdit`/`ast:updateStylesBatch`/L0-L3) is v1-MERGED on the [#270](https://github.com/hyperide/hyper-saas/pull/270) branch, fed garbage facts, and starved until A1 lands. | **resolved-by-Part-11 (one engine, vectorized; single-select = `length===1`)**. Multi-select is the N≥1 generalization through `mergeSubjects()`/per-element resolution, never a parallel batch system; the batch plan is a frozen aggregate of independent single-element decisions. One of the four un-dodgeable reconciliations. Source: Q6 Agreement [§1](#part-1--executive-summary); [Part 11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion). |
-| **D8** | Tier-1 color probe is DOM-probe-first (`iframe-color-probe.ts` clones the element, tests which DOM candidate drives the color), but Alex's intent is AST-candidate-enumeration-first (enumerate source transformations: `rgb()` in source resolving to a build-time `#hash`/token in DOM, ~10 parallel hidden iframes); the "where in SOURCE" half (Tier-2) is unbuilt. | **resolved-in-direction-by-Part-12.4 (Tier-2 "where in source")** but the per-approach algorithm is **open-decision → Part-13 OD-7 (via D27)**. The built Tier-1 ("what drives") is correct and retained; Tier-2 ("where written") is the unbuilt design problem [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies) frames and [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) hands to the CTO. Source: D8/D27; [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies). |
-| **D9** | `writeOrder` on a dynamic className clobbers `cn(...)` to a static string (`TailwindAdapter.writeOrder:237`, JSDoc `:231`); no adapter-level guard, relies on the caller to detect and fall back to the AST drag path. Tamagui non-base breakpoint → flat `order-not-supported`. | **will-not-fix (subsumed by D23 convergence)**. System A's `TailwindAdapter` is **DELETED** (OD-3, [Part 5.3](#53-the-convergence-target--system-a-and-system-b-become-one)); the canonical dynamic-className write is the System-B `modifyDynamicClassName` surgical span-splice ([HYP-575](https://linear.app/glide-vc/issue/HYP-575), the dynamic-className branch of `executeTailwindPlan` (decl `:188`) at `:237`) which already preserves `cn(...)`. The clobber lives only in the adapter being removed. The Tamagui responsive-order gap is a PARTIAL tracked under [HYP-300](https://linear.app/glide-vc/issue/HYP-300). Source: AS-IS [§1](#part-1--executive-summary), [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)e; D23. |
-| **D10** | `styles:fetchI18nKeys` exists in VS Code (`PanelRouter:450`) but the SaaS server handler is MISSING; `classData.i18nText` is never populated in SaaS, the i18n combobox is hidden in browser mode. | **resolved-by-Part-5.4 (realm transport row) + [HYP-372](https://linear.app/glide-vc/issue/HYP-372)**. i18n-key read is a capability that differs only in transport, not in code path; the fix is porting `StyleReadService._tryDetectI18n` to a SaaS route. Style-adjacent but in the same inspector pipeline. Source: AS-IS [§2](#part-2--glossary--term-decode)c/[§7](#part-7--to-be-planner-where-the-value-lives-priority-chain); [Part 5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract). |
-| **D11** | Tamagui token client picker shows hardcoded Radix, not the project palette — [HYP-288](https://linear.app/glide-vc/issue/HYP-288) loads the palette into the ext-host MCP-process singleton, but the webview is a separate JS context, so the client renders Radix; no IDE route returns the token→hex map to the client ([HYP-458](https://linear.app/glide-vc/issue/HYP-458)). | **resolved-by-Part-12.2 (IDE route returning token→hex) + [HYP-458](https://linear.app/glide-vc/issue/HYP-458)**. The "DS adapter reads the project's actual tokens" intent is half-wired (host yes, client no); the missing piece is a transport row, the same shape as D10. Source: AS-IS [§8](#part-8--to-be-fallback-doctrine-vtswr); [Part 12.2](#122-token-providers--the-project-palette-gap). |
+| Dxx     | Discrepancy (anchor)                                                                                                                                                                                                                                                                                                                                                                                                   | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **D1**  | Inline floor specced as universal but can be a SILENT NO-OP — a swallowing `<Button>` makes the inline write win the cascade forever and mask future edits; the floor is implemented (`style-write-planner.ts:192`, throw `:231`; `executeTailwindPlan` decl `:188`, `needsInlineFloor` branch `:276`) but the landing-verification that proves it took is **not on main** (`lib/style-write/runtime-verify/` absent). | **resolved-by-Part-8 (VTSWR) + Part-9 (B1 verify)**. The cure is NOT removing inline — it is making each inline attempt a verified transaction (patch → preview consumes → re-identify → `computed(property)==intended`) and rolling back any attempt that does not land. The danger was never inline; it was inline that silently doesn't land and rots in source. Source: Q5 Synthesis (VTSWR), Q5 Agreement [§1](#part-1--executive-summary).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **D2**  | `StyleReadResult.properties` is the documented read result but is `[]`/unused for editable values — editable values flow through `classNameToStyles`→`ParsedStyles` (`useElementStyleData.ts:113/444`); `StyleReadResult` drives only source-tabs/surface. TWO parallel read shapes; the single-read-model is not the implementation.                                                                                  | **resolved-by-Part-6 (SelectionStyleRead + normalized IR)**. The unified read operates on a normalized `StyleDeclaration[]` IR (`fieldKey = property+condition`); `ParsedStyles` is DELETED (OD-3 — removed once sections migrate to the IR, NOT kept as a `@deprecated` projection). The two-shape split collapses into one door. Source: Q2 Agreement [§1](#part-1--executive-summary); OD-3.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **D3**  | "Honest D2 / fail-closed" is specced but the merged D2 is fed garbage facts and writes fail-OPEN — `StyleReadService.buildElementFacts:704` hardcodes `acceptsClassName/Style:true`, `sourceOwners:[]`; `getElementCssSystems` never checks className/style forwarding; [HYP-704](https://linear.app/glide-vc/issue/HYP-704) design carries a literal `rafVerified ?? true` fail-open bug.                             | **resolved-by-Part-9 (fail-closed matrix, `?? false`, [§9.4](#94-fail-closed-the-confidence--verifiability-matrix)) + the A1 forward-detector (specified in [§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home)) replacing the hardcoded `acceptsClassName:true`**. The keep/rollback decision becomes a function of pre-write confidence × verify verdict; `rafVerified ?? false`, never `?? true`. The forward-detector (its one canonical home is [§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home); consumed by the planner A2, [Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)) supplies real facts so the planner stops picking targets that cannot land. Source: Q3 fail-closed matrix.                                                                                                                                                                                                                                                             |
+| **D4**  | AI semantic source-routing is specced as a first-class routing input, but on main the locator `analyzeClassNameWithAI` is DELETED (`929aa1c4`), executor passes `locations:[]` always — AI is NOT a routing input. Three positions coexist (#9 over-grants, #17 demotes to repair, code has none).                                                                                                                     | **RATIFIED true → Part-13 OD-2 (D4/D15)**, TO-BE direction in **Part-10**. The Q4 doctrine is ratified ("AI discovers and ranks; the probe verifies; deterministic builders commit") — AI as router + tie-breaker + repair, never authority. Two sub-knobs remain inside the ratified ladder: which default Auto behavior ships (AI-Router vs AI-Ranker) and whether to rebuild the deleted locator. Source: Q4 Synthesis; [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-2.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **D5**  | `getElementCssSystems` only ever emits 3 systems (tailwind-v4 / css-modules / inline-style, + tamagui-by-prop) despite 12 `CssSystemId`s and a 12-adapter taxonomy; emotion/styled-components/mui/chakra/mantine/vanilla-extract/plain-css/tailwind-v3 are typed but never detected or written (`StyleReadService.getCssSystems:731`, `executor.getElementCssSystems:542`).                                            | **resolved-by-Part-5.6 (the ProjectDetector all-dimensions detection) + Part-7 (priority chain over real systems) + Part-14 (build ALL 12 adapters)**. RATIFIED target (OD-5/item 3): all twelve systems IMPLEMENTED (reader + writer + **detection**), and the ProjectDetector ([§5.6](#56-all-dimensions-detection--the-projectdetector-responsibility)) reports the COMPLETE set of systems in use plus every axis value — not 3, not a single best-guess. The 8 unbuilt systems are scheduled under the **[HYP-600](https://linear.app/glide-vc/issue/HYP-600) umbrella** (children [HYP-606](https://linear.app/glide-vc/issue/HYP-606)/607/608/609/610/619/620, matching [Part 14.2](#142-phase-map-with-the-live-tickets) build-all-twelve track); a system is not "built" until it is also DETECTED. Source: AS-IS [§1](#part-1--executive-summary), [Part 5.6](#56-all-dimensions-detection--the-projectdetector-responsibility), [Part 14](#part-14--migration-path-as-is--to-be) phase map. |
+| **D6**  | CSS-file write HARD-FAILS on a `findRule` miss = dead click, no fallback (`style-write-executor.ts:348`); the universal-floor doctrine exists in spec but is not honored on this path.                                                                                                                                                                                                                                 | **resolved-by-Part-8 (inline floor as a verified candidate) + [HYP-706](https://linear.app/glide-vc/issue/HYP-706)**. The hard-fail flips to the inline floor using the already-present `sourceElement.elementRef`, and that inline candidate is itself verified per VTSWR rather than blindly trusted. Source: AS-IS [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)c, [Part 8](#part-8--to-be-fallback-doctrine-vtswr).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **D7**  | Multi-select "generalize the one engine" is the central directive, but live code is single-element-only (`RightSidebar.tsx:111`; `length>1` → "Select a single element" `:945`); the batch path (`BatchStyleWritePlan`/`recordBatchEdit`/`ast:updateStylesBatch`/L0-L3) is v1-MERGED on the [#270](https://github.com/hyperide/hyper-saas/pull/270) branch, fed garbage facts, and starved until A1 lands.             | **resolved-by-Part-11 (one engine, vectorized; single-select = `length===1`)**. Multi-select is the N≥1 generalization through `mergeSubjects()`/per-element resolution, never a parallel batch system; the batch plan is a frozen aggregate of independent single-element decisions. One of the four un-dodgeable reconciliations. Source: Q6 Agreement [§1](#part-1--executive-summary); [Part 11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **D8**  | Tier-1 color probe is DOM-probe-first (`iframe-color-probe.ts` clones the element, tests which DOM candidate drives the color), but Alex's intent is AST-candidate-enumeration-first (enumerate source transformations: `rgb()` in source resolving to a build-time `#hash`/token in DOM, ~10 parallel hidden iframes); the "where in SOURCE" half (Tier-2) is unbuilt.                                                | **resolved-in-direction-by-Part-12.4 (Tier-2 "where in source")** but the per-approach algorithm is **open-decision → Part-13 OD-7 (via D27)**. The built Tier-1 ("what drives") is correct and retained; Tier-2 ("where written") is the unbuilt design problem [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies) frames and [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) hands to the CTO. Source: D8/D27; [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies).                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **D9**  | `writeOrder` on a dynamic className clobbers `cn(...)` to a static string (`TailwindAdapter.writeOrder:237`, JSDoc `:231`); no adapter-level guard, relies on the caller to detect and fall back to the AST drag path. Tamagui non-base breakpoint → flat `order-not-supported`.                                                                                                                                       | **will-not-fix (subsumed by D23 convergence)**. System A's `TailwindAdapter` is **DELETED** (OD-3, [Part 5.3](#53-the-convergence-target--system-a-and-system-b-become-one)); the canonical dynamic-className write is the System-B `modifyDynamicClassName` surgical span-splice ([HYP-575](https://linear.app/glide-vc/issue/HYP-575), the dynamic-className branch of `executeTailwindPlan` (decl `:188`) at `:237`) which already preserves `cn(...)`. The clobber lives only in the adapter being removed. The Tamagui responsive-order gap is a PARTIAL tracked under [HYP-300](https://linear.app/glide-vc/issue/HYP-300). Source: AS-IS [§1](#part-1--executive-summary), [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)e; D23.                                                                                                                                                                                                                      |
+| **D10** | `styles:fetchI18nKeys` exists in VS Code (`PanelRouter:450`) but the SaaS server handler is MISSING; `classData.i18nText` is never populated in SaaS, the i18n combobox is hidden in browser mode.                                                                                                                                                                                                                     | **resolved-by-Part-5.4 (realm transport row) + [HYP-372](https://linear.app/glide-vc/issue/HYP-372)**. i18n-key read is a capability that differs only in transport, not in code path; the fix is porting `StyleReadService._tryDetectI18n` to a SaaS route. Style-adjacent but in the same inspector pipeline. Source: AS-IS [§2](#part-2--glossary--term-decode)c/[§7](#part-7--to-be-planner-where-the-value-lives-priority-chain); [Part 5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract).                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **D11** | Tamagui token client picker shows hardcoded Radix, not the project palette — [HYP-288](https://linear.app/glide-vc/issue/HYP-288) loads the palette into the ext-host MCP-process singleton, but the webview is a separate JS context, so the client renders Radix; no IDE route returns the token→hex map to the client ([HYP-458](https://linear.app/glide-vc/issue/HYP-458)).                                       | **resolved-by-Part-12.2 (IDE route returning token→hex) + [HYP-458](https://linear.app/glide-vc/issue/HYP-458)**. The "DS adapter reads the project's actual tokens" intent is half-wired (host yes, client no); the missing piece is a transport row, the same shape as D10. Source: AS-IS [§8](#part-8--to-be-fallback-doctrine-vtswr); [Part 12.2](#122-token-providers--the-project-palette-gap).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 **Discrepancies touching this group also surface elsewhere:** D3 and D7 are the two SPEC↔CODE
 items that are also INTENT↔SPEC (Alex's directives), so they recur in [§4.4](#44-intentspec-tensions-d24-d29)'s spirit; D4 recurs in
@@ -1530,15 +1590,15 @@ overturns prescriptive spec language, **explicitly retracts** the superseded tex
 load-bearing reversals (D12, D15) fed the decision register via D24/D4 (AI authority); both are now
 RATIFIED (OD-1 and OD-2 respectively, this revision), so they are settled doctrine, not contested forks.
 
-| Dxx | The reversal | Disposition |
-|---|---|---|
-| **D12** | Inline fallback "always works" REVERSED across generations (the single biggest reversal). phase2 (#3) + unification-plan (#9): `InlineStyleAdapter` is the *permanent universal fallback*. D2 (#15a [§4.4](#44-intentspec-tensions-d24-d29)) + verified-pipeline (#17 [§0](#part-0--front-matter)): NO silent inline — it silently wins the cascade and masks edits. Crosses with D24 (Alex DISAGREES with the Gen-3 framing). | **resolved-by-Part-8 (VTSWR), and the master spec RETRACTS the unification-plan's universal-inline language** — but it adopts NEITHER pole verbatim. It does not adopt Gen-1 "inline always works" (which is unsafe-without-verify) nor Gen-3 "no silent inline, skip-and-report" (which throws away the floor). It adopts **inline-floor WITH mandatory landing-verification + rollback**, which keeps inline as a legitimate base-state floor and engineers out the reviewers' real fear (dead inline debris). The residual tension with D24 is carried to **Part-13 OD-1**. Source: Q5 Synthesis; [Part 8.1](#81-the-core-rule--verified-transactional-style-writes-with-rollback)-8.3. |
-| **D13** | Read merge "one new function" vs "two merges." crossrealm-bridge (#14 [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b): "`mergeStyleReadResults` + a `mixed` flag is the ONLY new read code." Transport-findings (#16): wrong — ext values flow through `ParsedStyles`, need a value-merge AND a tab-union; #16 supersedes #14 [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b but #14 still carries the wrong text. | **resolved-by-Part-6; #14 [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b text is RETRACTED**. The unified read is neither "one function" nor a literal two-merge bolt-on — it is the normalized-IR `mergeSubjects()` over `StyleDeclaration[]`, with the value-merge and tab-union subsumed into one IR accumulator. #16's correction stands; #14's "only new read code" claim is stale and superseded. Source: Q2 Agreement [§1](#part-1--executive-summary); [Part 6.2](#62-normalized-ir--declaration-rows-not-raw-parsedstyles). |
-| **D14** | D2 "always writes" vs verified-pipeline "honest D2 / fail-closed." D2 (#15a) + merged commit `af2c58fa` ("always writes, never silently…") vs #17 [§0](#part-0--front-matter)/[§1](#part-1--executive-summary) ("D2 is fed garbage facts → silent no-op; introduce honest-D2 A2 + VERIFY half"). The merged D2 is knowingly incomplete per the current head. | **resolved-by-Part-9 (verify half) + Part-7 (honest A2 resolve-where); the "always writes" framing is RETRACTED as incomplete**. The master adopts #17's head position: the write half without the verify half is a liability, so B0/B1 are built FIRST ([Part 14](#part-14--migration-path-as-is--to-be) sequencing). Same root as D3. Source: Q3 state machine; [Part 9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)-9.4. |
-| **D15** | AI's routing authority: first-class input (#9) vs repair-tier-only (#17). #9 permits AI semantic routing on Computed; #17 [§0](#part-0--front-matter): "deterministic OUTRANKS AI… AI is the repair tier, never auto-authoritative." A real narrowing. | **RATIFIED true → Part-13 OD-2 (D4/D15); TO-BE direction in Part-10**. The Q4 convergence (now ratified) overturns BOTH partially: it resurrects "Auto = AI" routing (against #17's repair-only demotion) AND keeps the probe as the commit gate with deterministic enumeration as the spine (against #9's over-grant). Which default Auto behavior ships is a sub-knob inside the ratified ladder. Source: Q4 Synthesis; [Part 10.1](#101-the-one-line-doctrine)-10.2, [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-2. |
-| **D16** | Color-search distance threshold literal: 80 vs 40. color-picker-enhancements (#4): `COLOR_SEARCH_DISTANCE_THRESHOLD` initial **80**. decompose-color-combobox (#5) + `use-color-search`: **40**. Same constant, two values. UI-only. | **stale-correction → Part-12.5 (records 40 canonical, retires 80)**. NOT an open decision: the code already converged — both call sites read `40` (`color-search-results.tsx:14`, `use-color-search.tsx:13`), so D16 is a SPEC↔SPEC drift the code settled. [Part 12.5](#125-the-color-picker-ui) records 40 as canonical and retires the 80 from the older spec; the only residual is a shared-constant cleanup to prevent re-drift. Source: D16; [Part 12.5](#125-the-color-picker-ui). |
-| **D17** | Tamagui CSS-system identity: an older-draft `tamagui-props` split vs source-owner (#7) which forbids it. #7 mandates one `cssSystem:'tamagui'`, `sourceForm:'adapterKnownElementProp'` — never split into `tamagui`/`tamagui-props`. | **resolved-keep-vigilant; #7's invariant WINS**. The master spec keeps one `tamagui` system identity; any TO-BE section that touches Tamagui must not reintroduce the split. No code change owed (code already honors #7), but the invariant is recorded so a future draft does not regress it. Source: #7; [Part 5.5](#55-the-capability-taxonomy-orthogonal-axes) (taxonomy). |
-| **D18** | L3 wrapper escalation: literal D3 directive ("create a wrapper") vs INVARIANT ("a value edit never auto-triggers a tree mutation"). The literal directive (eliminate non-stylable cases by wrapping) vs D3 (#15b [§0](#part-0--front-matter)/[§7](#part-7--to-be-planner-where-the-value-lives-priority-chain)) + verified-pipeline (L3 opt-in / single-element / deferred). Crosses Alex's [§2](#part-2--glossary--term-decode) wrapper rule (he WANTS wrapper-promotion, with constraints). | **resolved-by-Part-11.3 (type-enforced split: value `BatchPlan` has structurally NO tree-mutation field); the INVARIANT WINS over the literal directive**. L3 is restated as "needs promotion before this value can apply," wrapper-promotion is a SEPARATE `TreeMutationPlan` with its own opt-in lifecycle ([Part 11.4](#114-wrapper-promotion-decision-procedure--guards)-11.5). Alex's constrained wrapper-promotion desire is honored as the opt-in workflow, not as auto-mutation. Source: Q6 Agreement [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain); [Part 11.3](#113-the-hard-split--value-edit-vs-tree-mutation-type-enforced)-11.5. |
+| Dxx     | The reversal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **D12** | Inline fallback "always works" REVERSED across generations (the single biggest reversal). phase2 (#3) + unification-plan (#9): `InlineStyleAdapter` is the _permanent universal fallback_. D2 (#15a [§4.4](#44-intentspec-tensions-d24-d29)) + verified-pipeline (#17 [§0](#part-0--front-matter)): NO silent inline — it silently wins the cascade and masks edits. Crosses with D24 (Alex DISAGREES with the Gen-3 framing).                                                                           | **resolved-by-Part-8 (VTSWR), and the master spec RETRACTS the unification-plan's universal-inline language** — but it adopts NEITHER pole verbatim. It does not adopt Gen-1 "inline always works" (which is unsafe-without-verify) nor Gen-3 "no silent inline, skip-and-report" (which throws away the floor). It adopts **inline-floor WITH mandatory landing-verification + rollback**, which keeps inline as a legitimate base-state floor and engineers out the reviewers' real fear (dead inline debris). The residual tension with D24 is carried to **Part-13 OD-1**. Source: Q5 Synthesis; [Part 8.1](#81-the-core-rule--verified-transactional-style-writes-with-rollback)-8.3. |
+| **D13** | Read merge "one new function" vs "two merges." crossrealm-bridge (#14 [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b): "`mergeStyleReadResults` + a `mixed` flag is the ONLY new read code." Transport-findings (#16): wrong — ext values flow through `ParsedStyles`, need a value-merge AND a tab-union; #16 supersedes #14 [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b but #14 still carries the wrong text. | **resolved-by-Part-6; #14 [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b text is RETRACTED**. The unified read is neither "one function" nor a literal two-merge bolt-on — it is the normalized-IR `mergeSubjects()` over `StyleDeclaration[]`, with the value-merge and tab-union subsumed into one IR accumulator. #16's correction stands; #14's "only new read code" claim is stale and superseded. Source: Q2 Agreement [§1](#part-1--executive-summary); [Part 6.2](#62-normalized-ir--declaration-rows-not-raw-parsedstyles).                                                                                                            |
+| **D14** | D2 "always writes" vs verified-pipeline "honest D2 / fail-closed." D2 (#15a) + merged commit `af2c58fa` ("always writes, never silently…") vs #17 [§0](#part-0--front-matter)/[§1](#part-1--executive-summary) ("D2 is fed garbage facts → silent no-op; introduce honest-D2 A2 + VERIFY half"). The merged D2 is knowingly incomplete per the current head.                                                                                                                                             | **resolved-by-Part-9 (verify half) + Part-7 (honest A2 resolve-where); the "always writes" framing is RETRACTED as incomplete**. The master adopts #17's head position: the write half without the verify half is a liability, so B0/B1 are built FIRST ([Part 14](#part-14--migration-path-as-is--to-be) sequencing). Same root as D3. Source: Q3 state machine; [Part 9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)-9.4.                                                                                                                                                                                                                                        |
+| **D15** | AI's routing authority: first-class input (#9) vs repair-tier-only (#17). #9 permits AI semantic routing on Computed; #17 [§0](#part-0--front-matter): "deterministic OUTRANKS AI… AI is the repair tier, never auto-authoritative." A real narrowing.                                                                                                                                                                                                                                                   | **RATIFIED true → Part-13 OD-2 (D4/D15); TO-BE direction in Part-10**. The Q4 convergence (now ratified) overturns BOTH partially: it resurrects "Auto = AI" routing (against #17's repair-only demotion) AND keeps the probe as the commit gate with deterministic enumeration as the spine (against #9's over-grant). Which default Auto behavior ships is a sub-knob inside the ratified ladder. Source: Q4 Synthesis; [Part 10.1](#101-the-one-line-doctrine)-10.2, [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-2.                                                                                                                               |
+| **D16** | Color-search distance threshold literal: 80 vs 40. color-picker-enhancements (#4): `COLOR_SEARCH_DISTANCE_THRESHOLD` initial **80**. decompose-color-combobox (#5) + `use-color-search`: **40**. Same constant, two values. UI-only.                                                                                                                                                                                                                                                                     | **stale-correction → Part-12.5 (records 40 canonical, retires 80)**. NOT an open decision: the code already converged — both call sites read `40` (`color-search-results.tsx:14`, `use-color-search.tsx:13`), so D16 is a SPEC↔SPEC drift the code settled. [Part 12.5](#125-the-color-picker-ui) records 40 as canonical and retires the 80 from the older spec; the only residual is a shared-constant cleanup to prevent re-drift. Source: D16; [Part 12.5](#125-the-color-picker-ui).                                                                                                                                                                                                  |
+| **D17** | Tamagui CSS-system identity: an older-draft `tamagui-props` split vs source-owner (#7) which forbids it. #7 mandates one `cssSystem:'tamagui'`, `sourceForm:'adapterKnownElementProp'` — never split into `tamagui`/`tamagui-props`.                                                                                                                                                                                                                                                                     | **resolved-keep-vigilant; #7's invariant WINS**. The master spec keeps one `tamagui` system identity; any TO-BE section that touches Tamagui must not reintroduce the split. No code change owed (code already honors #7), but the invariant is recorded so a future draft does not regress it. Source: #7; [Part 5.5](#55-the-capability-taxonomy-orthogonal-axes) (taxonomy).                                                                                                                                                                                                                                                                                                            |
+| **D18** | L3 wrapper escalation: literal D3 directive ("create a wrapper") vs INVARIANT ("a value edit never auto-triggers a tree mutation"). The literal directive (eliminate non-stylable cases by wrapping) vs D3 (#15b [§0](#part-0--front-matter)/[§7](#part-7--to-be-planner-where-the-value-lives-priority-chain)) + verified-pipeline (L3 opt-in / single-element / deferred). Crosses Alex's [§2](#part-2--glossary--term-decode) wrapper rule (he WANTS wrapper-promotion, with constraints).            | **resolved-by-Part-11.3 (type-enforced split: value `BatchPlan` has structurally NO tree-mutation field); the INVARIANT WINS over the literal directive**. L3 is restated as "needs promotion before this value can apply," wrapper-promotion is a SEPARATE `TreeMutationPlan` with its own opt-in lifecycle ([Part 11.4](#114-wrapper-promotion-decision-procedure--guards)-11.5). Alex's constrained wrapper-promotion desire is honored as the opt-in workflow, not as auto-mutation. Source: Q6 Agreement [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain); [Part 11.3](#113-the-hard-split--value-edit-vs-tree-mutation-type-enforced)-11.5.                         |
 
 ---
 
@@ -1549,12 +1609,12 @@ them is wrong. None of these owe a behavioral change — they owe a TEXT correct
 banner — so their disposition is **stale-correction** (a will-not-fix variant: nothing to build,
 something to stop repeating), except D23, which is a genuine gap that a TO-BE section fills.
 
-| Dxx | The stale claim | Disposition |
-|---|---|---|
-| **D19** | `lib/stylability` / `lib/style-attribution` claimed to "exist on main" — they DO NOT (verified live). `decideSurface`/`surfaceDecision`/the stylability ladder live INSIDE `lib/style-read/style-read-manager.ts:194`. D3 (#15b) and verified-pipeline (#17) reference `lib/stylability/...` and `lib/style-attribution/...` paths that are PLANNED, not present. | **stale-correction (the biggest one), enforced doc-wide**. The master spec states once, authoritatively, that on `main` surface-decision lives in `style-read-manager.ts`, and that `lib/stylability/`, `lib/style-attribution/`, and `lib/style-write/runtime-verify/` are PLANNED directories. Every Part that names a future path marks it PLANNED. Any map/ticket asserting these exist is stale. Source: discrepancies §C (verified live); [Part 3.5](#35-read-pipeline--shared-read-manager--vs-code-read-service), [Part 14.5](#145-spec-consolidation--deprecation). |
-| **D20** | phase2 (#3) flat `StyleAdapter` / `writeMode` dispatch / global priority chain are SUPERSEDED but #3's header still reads "Approved" with no banner. Unification-plan §coverage-map explicitly supersedes them. | **stale-correction → Part-14.5 (consolidation/deprecation)**. #3 gets a one-line "SUPERSEDED BY master styles spec" header so no agent reads its flat-adapter/writeMode/global-chain guidance as current. The replacement model is the per-property/per-state priority chain ([Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)). Source: discrepancies §C; [Part 14.5](#145-spec-consolidation--deprecation). |
-| **D21** | salvage-rework (#13, "AWAITING CTO REVIEW") is overtaken by crossrealm-bridge (#14); its C/D/G/E features are re-specced adapter-first elsewhere. Process doc, never re-statused. | **stale-correction → Part-14.5**. #14 is the resolved successor; #13 archives with a supersession header. No content owed beyond the banner. Source: discrepancies §C; [Part 14.5](#145-spec-consolidation--deprecation). |
-| **D22** | crossrealm-bridge (#14) [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b multi-select read claim is superseded by #16 but #14 carries no banner. (Same fact as D13 from the spec-management angle.) | **stale-correction → Part-14.5 (same banner action as D13)**. #14 [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b's "only new read code" claim is retracted by D13's disposition; the spec-management action is the supersession header on #14. Source: discrepancies §C; D13; [Part 14.5](#145-spec-consolidation--deprecation). |
+| Dxx     | The stale claim                                                                                                                                                                                                                                                                                                                                                                             | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D19** | `lib/stylability` / `lib/style-attribution` claimed to "exist on main" — they DO NOT (verified live). `decideSurface`/`surfaceDecision`/the stylability ladder live INSIDE `lib/style-read/style-read-manager.ts:194`. D3 (#15b) and verified-pipeline (#17) reference `lib/stylability/...` and `lib/style-attribution/...` paths that are PLANNED, not present.                           | **stale-correction (the biggest one), enforced doc-wide**. The master spec states once, authoritatively, that on `main` surface-decision lives in `style-read-manager.ts`, and that `lib/stylability/`, `lib/style-attribution/`, and `lib/style-write/runtime-verify/` are PLANNED directories. Every Part that names a future path marks it PLANNED. Any map/ticket asserting these exist is stale. Source: discrepancies §C (verified live); [Part 3.5](#35-read-pipeline--shared-read-manager--vs-code-read-service), [Part 14.5](#145-spec-consolidation--deprecation).                                                                                                                                                                                                                                                      |
+| **D20** | phase2 (#3) flat `StyleAdapter` / `writeMode` dispatch / global priority chain are SUPERSEDED but #3's header still reads "Approved" with no banner. Unification-plan §coverage-map explicitly supersedes them.                                                                                                                                                                             | **stale-correction → Part-14.5 (consolidation/deprecation)**. #3 gets a one-line "SUPERSEDED BY master styles spec" header so no agent reads its flat-adapter/writeMode/global-chain guidance as current. The replacement model is the per-property/per-state priority chain ([Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)). Source: discrepancies §C; [Part 14.5](#145-spec-consolidation--deprecation).                                                                                                                                                                                                                                                                                                                                                                                                |
+| **D21** | salvage-rework (#13, "AWAITING CTO REVIEW") is overtaken by crossrealm-bridge (#14); its C/D/G/E features are re-specced adapter-first elsewhere. Process doc, never re-statused.                                                                                                                                                                                                           | **stale-correction → Part-14.5**. #14 is the resolved successor; #13 archives with a supersession header. No content owed beyond the banner. Source: discrepancies §C; [Part 14.5](#145-spec-consolidation--deprecation).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **D22** | crossrealm-bridge (#14) [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b multi-select read claim is superseded by #16 but #14 carries no banner. (Same fact as D13 from the spec-management angle.)                                                                                                                                                | **stale-correction → Part-14.5 (same banner action as D13)**. #14 [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b's "only new read code" claim is retracted by D13's disposition; the spec-management action is the supersession header on #14. Source: discrepancies §C; D13; [Part 14.5](#145-spec-consolidation--deprecation).                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **D23** | Two parallel style engines (System A client-adapters vs System B `lib/`) are documented consolidation debt, but NO spec states the convergence plan or which wins per concern. [HYP-299](https://linear.app/glide-vc/issue/HYP-299) is In Progress; the duplicated `classNameToStyles` (A) vs `TailwindV4Reader` (B) converters and the split read have no single doc declaring the target. | **resolved-by-Part-5.3 (the convergence target); RATIFIED → Part-13 OD-3** — this is the single doc the discrepancy said was missing. System B's `lib/` is the canonical core (the real mutation already funnels there via `executeStyleWriteRequest`); System A's styling code, the duplicate converter, `classNameToStyles` and `ParsedStyles` are **DELETED** (OD-3 CTO correction — NOT a `@deprecated` projection), leaving only a styling-logic-free realm-transport shell. ONE converter, then zero of the old. The deletion sequencing (delete `classNameToStyles` now vs shadow-diff-then-delete first) is the one sub-decision. Source: Q2 rollout, D23; [Part 5.3](#53-the-convergence-target--system-a-and-system-b-become-one), [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-3. |
 
 ---
@@ -1567,14 +1627,14 @@ the master spec's recommended direction (so the CTO has a default to accept or r
 OD-n it maps to. D24 is the headline; D26 carries a doc-wide naming guard the rest of the spec
 already obeys.
 
-| Dxx | The tension | Disposition |
-|---|---|---|
-| **D24** | Inline-as-terminal-fallback: Alex says it's FINE (cascade down a per-project priority order of styling systems, inline is the legitimate floor, banner ONLY when the project has literally no styling system); reviewers/Gen-3 specs say silent inline is a destructive hole (skip-banner). Alex ([§4](#part-4--discrepancy-ledger)): "почему отвергнут этот фолбек? Он хороший же." Directly contradicts D12/#17. | **RATIFIED → Part-13 OD-1 (the headline); doctrine in Part-8 (VTSWR)**. VTSWR is NOT "skip-banner," it is "inline-floor WITH mandatory landing-verification + rollback" — Alex's floor, the reviewers' fear (debris that masks future edits) engineered out. Ratified with three CTO conditions: (a) inline becomes the project's DEFAULT/POLICY sink ONLY in a no-styling-system project (a PERSISTENT install-Tailwind popup is offered, [§8.5](#85-token-system-none-and-project-bootstrap)), while a per-(property,state) inline RUNG stays available on any project for a base-state property no higher channel can express; (b) "component forwards nothing" is the WRAPPER case ([Part 11.4](#114-wrapper-promotion-decision-procedure--guards)), not inline-floor; (c) VTSWR is ALWAYS present, every realm. Banner is reserved for genuine loss of control. The one residual CTO knob is the `unverifiable` escape hatch on the ext host (defer/halt + visible status vs an audited "apply anyway"). One of the four un-dodgeable reconciliations. Source: D24, Q5 Disagreement [§5](#part-5--to-be-unified-architecture); [Part 8](#part-8--to-be-fallback-doctrine-vtswr), [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-1. |
-| **D25** | "master-component" semantics UNDECIDED: is a color arriving as a parent prop "external → twMerge" or "probe-able → candidate search"? Alex ([§3.5](#35-read-pipeline--shared-read-manager--vs-code-read-service)) explicitly left this open. twMerge is meant ONLY for external master-components (imported from another file); same-file const → find-replace at definition ([§3.1](#31-top-level-topology-two-parallel-engines)). Prop-from-parent is unclassified. | **open-decision → Part-13 OD-6 (binding-kind taxonomy)**. The master spec defines the boundary that must be drawn (same-file const vs external import vs prop-from-parent) but does not pick where prop-from-parent lands — that is an unanswered design question, not a settled fact. Source: D25; [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-6. |
-| **D26** | Capability taxonomy: code conflates dimensions; Alex demands orthogonal axes + a rename. Alex ([§5](#part-5--to-be-unified-architecture)): fully separate cssFramework / designSystem / jsFramework / router / bundler / packageManager; shadcn is a **design system, not a CSS system**; rename `uiKit` → `designSystem` everywhere; bun is a pm axis (a lockfile infers `packageManager`, but not the whole `ProjectType`). Code still uses `projectUIKit` and conflates css/ds. | **RATIFIED → Part-13 OD-5; taxonomy applied as a doc-wide naming guard (Part-5.5); the RENAME ergonomics (big-bang vs incremental-behind-alias) remain a sub-decision**. The master spec uses `designSystem` (never `uiKit`) and treats the six axes as orthogonal throughout, except when quoting current code verbatim. **Lockfile correction (CTO):** inferring the `packageManager` axis from a lockfile is FINE (`bun.lockb → packageManager: 'bun'`); only inferring the whole `ProjectType` from a lockfile is forbidden. The migration touches `projectUIKit` across many files, so its sequencing is the CTO call. Source: D26; [Part 5.5](#55-the-capability-taxonomy-orthogonal-axes), [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-5. |
-| **D27** | Per-CSS-approach Tier-2 candidate strategies for non-Tailwind projects are UNDESIGNED. Alex ([§3.1](#31-top-level-topology-two-parallel-engines)): "если другие подходы только, надо выработать применимые для них решения." CSS-modules, CSS-vars, plain-CSS each need their own source-candidate-enumeration strategy; only the Tailwind path + the empirical probe exist. | **open-decision → Part-13 OD-7 (via Part-12.4 framing)**. [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies) states the design problem (the AST-candidate-enumeration-first algorithm, the per-approach strategies) but does not solve it; the unbuilt strategies are a design backlog feeding ratification, tied to D5/D8. Source: D27; [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies), [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open). |
-| **D28** | "All available badges shown" + Auto tab + override-chip-vs-hide-tabs under homogeneous multi-select is an open product micro-decision Alex flagged ([§8](#part-8--to-be-fallback-doctrine-vtswr)); needs a real-code mockup per his acceptance bar. No spec locks it. | **open-decision → Part-13 OD-8 (needs a UI mockup)**. The master spec records the choices (show all capability badges; AI default tab = Auto; homogeneous-multi-select safe override-chip vs always-hide-tabs) but does not lock the override-chip-vs-hide-tabs fork — Alex's acceptance bar requires a real-code mockup before deciding. Source: D28; [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-8, [Part 11.6](#116-observability--badges-diff-preview-aggregated-status). |
-| **D29** | PropsEditor + Tamagui tokens must be SHARED ext↔SaaS; [HYP-709](https://linear.app/glide-vc/issue/HYP-709)/716 work is DONE but the PR ([#453](https://github.com/hyperide/hyper-saas/pull/453), ex-[#435](https://github.com/hyperide/hyper-saas/pull/435)) is NOT merged. Alex ([§8](#part-8--to-be-fallback-doctrine-vtswr)): "в ext должен использоваться этот код тоже." On main the ext does not yet share the PropsEditor. | **open-action → Part-13 OD-9 (merge [#453](https://github.com/hyperide/hyper-saas/pull/453), ex-[#435](https://github.com/hyperide/hyper-saas/pull/435), lands [HYP-709](https://linear.app/glide-vc/issue/HYP-709)/[HYP-716](https://linear.app/glide-vc/issue/HYP-716)); behavior already specced in Part-12.2**. The work is complete (shared `lib/tamagui/extract-tokens.ts`, `TokenCombobox`, 5 green Docker e2e) but unmerged; the disposition is a merge decision, not a design one. Source: D29; [Part 12.2](#122-token-providers--the-project-palette-gap), [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-9. |
+| Dxx     | The tension                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D24** | Inline-as-terminal-fallback: Alex says it's FINE (cascade down a per-project priority order of styling systems, inline is the legitimate floor, banner ONLY when the project has literally no styling system); reviewers/Gen-3 specs say silent inline is a destructive hole (skip-banner). Alex ([§4](#part-4--discrepancy-ledger)): "почему отвергнут этот фолбек? Он хороший же." Directly contradicts D12/#17.                                                                 | **RATIFIED → Part-13 OD-1 (the headline); doctrine in Part-8 (VTSWR)**. VTSWR is NOT "skip-banner," it is "inline-floor WITH mandatory landing-verification + rollback" — Alex's floor, the reviewers' fear (debris that masks future edits) engineered out. Ratified with three CTO conditions: (a) inline becomes the project's DEFAULT/POLICY sink ONLY in a no-styling-system project (a PERSISTENT install-Tailwind popup is offered, [§8.5](#85-token-system-none-and-project-bootstrap)), while a per-(property,state) inline RUNG stays available on any project for a base-state property no higher channel can express; (b) "component forwards nothing" is the WRAPPER case ([Part 11.4](#114-wrapper-promotion-decision-procedure--guards)), not inline-floor; (c) VTSWR is ALWAYS present, every realm. Banner is reserved for genuine loss of control. The one residual CTO knob is the `unverifiable` escape hatch on the ext host (defer/halt + visible status vs an audited "apply anyway"). One of the four un-dodgeable reconciliations. Source: D24, Q5 Disagreement [§5](#part-5--to-be-unified-architecture); [Part 8](#part-8--to-be-fallback-doctrine-vtswr), [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-1. |
+| **D25** | "master-component" semantics UNDECIDED: is a color arriving as a parent prop "external → twMerge" or "probe-able → candidate search"? Alex ([§3.5](#35-read-pipeline--shared-read-manager--vs-code-read-service)) explicitly left this open. twMerge is meant ONLY for external master-components (imported from another file); same-file const → find-replace at definition ([§3.1](#31-top-level-topology-two-parallel-engines)). Prop-from-parent is unclassified.              | **open-decision → Part-13 OD-6 (binding-kind taxonomy)**. The master spec defines the boundary that must be drawn (same-file const vs external import vs prop-from-parent) but does not pick where prop-from-parent lands — that is an unanswered design question, not a settled fact. Source: D25; [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-6.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **D26** | Capability taxonomy: code conflates dimensions; Alex demands orthogonal axes + a rename. Alex ([§5](#part-5--to-be-unified-architecture)): fully separate cssFramework / designSystem / jsFramework / router / bundler / packageManager; shadcn is a **design system, not a CSS system**; rename `uiKit` → `designSystem` everywhere; bun is a pm axis (a lockfile infers `packageManager`, but not the whole `ProjectType`). Code still uses `projectUIKit` and conflates css/ds. | **RATIFIED → Part-13 OD-5; taxonomy applied as a doc-wide naming guard (Part-5.5); the RENAME ergonomics (big-bang vs incremental-behind-alias) remain a sub-decision**. The master spec uses `designSystem` (never `uiKit`) and treats the six axes as orthogonal throughout, except when quoting current code verbatim. **Lockfile correction (CTO):** inferring the `packageManager` axis from a lockfile is FINE (`bun.lockb → packageManager: 'bun'`); only inferring the whole `ProjectType` from a lockfile is forbidden. The migration touches `projectUIKit` across many files, so its sequencing is the CTO call. Source: D26; [Part 5.5](#55-the-capability-taxonomy-orthogonal-axes), [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-5.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **D27** | Per-CSS-approach Tier-2 candidate strategies for non-Tailwind projects are UNDESIGNED. Alex ([§3.1](#31-top-level-topology-two-parallel-engines)): "если другие подходы только, надо выработать применимые для них решения." CSS-modules, CSS-vars, plain-CSS each need their own source-candidate-enumeration strategy; only the Tailwind path + the empirical probe exist.                                                                                                       | **open-decision → Part-13 OD-7 (via Part-12.4 framing)**. [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies) states the design problem (the AST-candidate-enumeration-first algorithm, the per-approach strategies) but does not solve it; the unbuilt strategies are a design backlog feeding ratification, tied to D5/D8. Source: D27; [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies), [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **D28** | "All available badges shown" + Auto tab + override-chip-vs-hide-tabs under homogeneous multi-select is an open product micro-decision Alex flagged ([§8](#part-8--to-be-fallback-doctrine-vtswr)); needs a real-code mockup per his acceptance bar. No spec locks it.                                                                                                                                                                                                              | **open-decision → Part-13 OD-8 (needs a UI mockup)**. The master spec records the choices (show all capability badges; AI default tab = Auto; homogeneous-multi-select safe override-chip vs always-hide-tabs) but does not lock the override-chip-vs-hide-tabs fork — Alex's acceptance bar requires a real-code mockup before deciding. Source: D28; [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-8, [Part 11.6](#116-observability--badges-diff-preview-aggregated-status).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **D29** | PropsEditor + Tamagui tokens must be SHARED ext↔SaaS; [HYP-709](https://linear.app/glide-vc/issue/HYP-709)/716 work is DONE but the PR ([#453](https://github.com/hyperide/hyper-saas/pull/453), ex-[#435](https://github.com/hyperide/hyper-saas/pull/435)) is NOT merged. Alex ([§8](#part-8--to-be-fallback-doctrine-vtswr)): "в ext должен использоваться этот код тоже." On main the ext does not yet share the PropsEditor.                                                  | **open-action → Part-13 OD-9 (merge [#453](https://github.com/hyperide/hyper-saas/pull/453), ex-[#435](https://github.com/hyperide/hyper-saas/pull/435), lands [HYP-709](https://linear.app/glide-vc/issue/HYP-709)/[HYP-716](https://linear.app/glide-vc/issue/HYP-716)); behavior already specced in Part-12.2**. The work is complete (shared `lib/tamagui/extract-tokens.ts`, `TokenCombobox`, 5 green Docker e2e) but unmerged; the disposition is a merge decision, not a design one. Source: D29; [Part 12.2](#122-token-providers--the-project-palette-gap), [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) OD-9.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ---
 
@@ -1585,17 +1645,17 @@ not contradictions — they are the **acceptance gate** the migration path ([Par
 before "done." Disposition for every row is **acceptance-gate-in-Part-14.4**; the table records
 what the test must assert and which TO-BE capability it gates.
 
-| Dxx | The coverage gap | Gates / closed-by |
-|---|---|---|
-| **D30** | `ColorCombobox` component-level interaction untested (1 test, theme-classes only). Hooks tested in isolation; composition (open/close, select, keyboard nav, recent-colors) is not. Inspector Fill e2e only checks "visible / unlink shows hex input" — no color-pick-applies assertion in the project-independent `inspector-ui.spec.ts`. | **Part-14.4 acceptance** — add a project-independent composition test asserting a picked color applies. Gates [Part 12.5](#125-the-color-picker-ui) (color picker). Source: D30; [Part 12.5](#125-the-color-picker-ui). |
-| **D31** | styled-components & Emotion have NO writer-adapter tests (and no adapter dirs `lib/style-adapters/styled*`/`emotion*`). css-modules write is unit-tested; styled/emotion are read-only-claimed. Same root as D5. | **Part-14.4** — writer adapters + tests land WITH the phased adapter build ([Part 14.2](#142-phase-map-with-the-live-tickets)). Gates D5's "12 systems" target. Source: D31; [Part 14.2](#142-phase-map-with-the-live-tickets). |
-| **D32** | No unit-level READ coverage for styled-components / Emotion / pseudo-selectors. `StyleReadService.test.ts` is i18n-dominated; reading actual values from CSS-Modules computed / styled / Emotion runtime / pseudo exists ONLY in project-gated, often-skipped e2e `css-adapters.spec.ts`. | **Part-14.4** — unit read tests per adapter, de-gated from the skip-on-fixture e2e. Source: D32; [Part 6](#part-6--to-be-read-the-one-read-merge-model), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix). |
-| **D33** | Pseudo-selector / responsive-variant WRITE untested anywhere. `css-adapters.spec.ts` reads ":hover/:focus if supported" (conditional); no write test for hover/focus/responsive edits; `writeOrder` tests cover `md:` for order only. Consistent with [HYP-300](https://linear.app/glide-vc/issue/HYP-300) (blocked on object-valued-JSX-prop AST infra). | **Part-14.4** — pseudo/responsive WRITE is currently untested AND partially unbuilt ([HYP-300](https://linear.app/glide-vc/issue/HYP-300)); the acceptance gate covers both the test and the AST infra. Gates the per-condition branch of the priority chain ([Part 7.1](#71-the-priority-chain-per-project-per-property-per-state)). Source: D33; [Part 7.1](#71-the-priority-chain-per-project-per-property-per-state), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix). |
-| **D34** | Multi-select style write: no unit or e2e test (batch / `ast:updateStylesBatch`). Expected (feature not on main per D7), but a live gap the acceptance gate must close once built. | **Part-14.4** — batch e2e + unit tests land WITH the multi-select generalization ([Part 11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion)). Gates D7. Source: D34; [Part 11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix). |
-| **D35** | Opacity/alpha write round-trip effectively unverified outside one fixture. `style-editing.spec.ts` "opacity set + HMR round-trip" is heavily skip-guarded → silently skips on most CSS systems. | **Part-14.4** — opacity round-trip test de-skip-guarded across CSS systems. Ties to the color round-trip ([Part 12.3](#123-the-round-trip-hex--source)) and the verify half ([Part 9](#part-9--to-be-verify--transaction--undo)). Source: D35; [Part 12.3](#123-the-round-trip-hex--source), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix). |
-| **D36** | CSS-Modules / styled-components / Emotion WRITE e2e skips with "may not support style writes." css-modules write IS unit-tested; styled/emotion are not (D31). | **Part-14.4** — same closure as D31 (writer adapters + de-skipped e2e). Source: D36; [Part 14.2](#142-phase-map-with-the-live-tickets). |
-| **D37** | [`client/lib/canvas-engine/utils/tailwindParser.test.ts`](https://github.com/hyperide/hyper-saas/blob/main/client/lib/canvas-engine/utils/tailwindParser.test.ts) is 2 tests (text size vs color) while the real TW parser coverage (95 tests) is the separate [`lib/tailwind/parser.test.ts`](https://github.com/hyperide/hyper-saas/blob/main/lib/tailwind/parser.test.ts). If the client copy diverges, its spacing/layout/flex/opacity branches are untested. Duplicate-code risk, ties to D23. | **Part-14.4 + Part-5.3 (D23 convergence)** — the duplicate client parser is DEDUPED as part of the System-A→System-B convergence; once there is one converter, there is one test surface. Until then the client copy's branches are an untested risk. Source: D37; [Part 5.3](#53-the-convergence-target--system-a-and-system-b-become-one), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix). |
-| **D38** | `getTamaguiTokens` happy-path token *usage* in the inspector is only exercised indirectly via one fixture (`tamagui-props-editor.spec.ts`, food-delivery). Thin. | **Part-14.4** — direct token-usage assertion; ties to the shared-PropsEditor merge (D29). Source: D38; [Part 12.2](#122-token-providers--the-project-palette-gap), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix). |
+| Dxx     | The coverage gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Gates / closed-by                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D30** | `ColorCombobox` component-level interaction untested (1 test, theme-classes only). Hooks tested in isolation; composition (open/close, select, keyboard nav, recent-colors) is not. Inspector Fill e2e only checks "visible / unlink shows hex input" — no color-pick-applies assertion in the project-independent `inspector-ui.spec.ts`.                                                                                                                                                          | **Part-14.4 acceptance** — add a project-independent composition test asserting a picked color applies. Gates [Part 12.5](#125-the-color-picker-ui) (color picker). Source: D30; [Part 12.5](#125-the-color-picker-ui).                                                                                                                                                                                                                                                             |
+| **D31** | styled-components & Emotion have NO writer-adapter tests (and no adapter dirs `lib/style-adapters/styled*`/`emotion*`). css-modules write is unit-tested; styled/emotion are read-only-claimed. Same root as D5.                                                                                                                                                                                                                                                                                    | **Part-14.4** — writer adapters + tests land WITH the phased adapter build ([Part 14.2](#142-phase-map-with-the-live-tickets)). Gates D5's "12 systems" target. Source: D31; [Part 14.2](#142-phase-map-with-the-live-tickets).                                                                                                                                                                                                                                                     |
+| **D32** | No unit-level READ coverage for styled-components / Emotion / pseudo-selectors. `StyleReadService.test.ts` is i18n-dominated; reading actual values from CSS-Modules computed / styled / Emotion runtime / pseudo exists ONLY in project-gated, often-skipped e2e `css-adapters.spec.ts`.                                                                                                                                                                                                           | **Part-14.4** — unit read tests per adapter, de-gated from the skip-on-fixture e2e. Source: D32; [Part 6](#part-6--to-be-read-the-one-read-merge-model), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix).                                                                                                                                                                                                                                                                  |
+| **D33** | Pseudo-selector / responsive-variant WRITE untested anywhere. `css-adapters.spec.ts` reads ":hover/:focus if supported" (conditional); no write test for hover/focus/responsive edits; `writeOrder` tests cover `md:` for order only. Consistent with [HYP-300](https://linear.app/glide-vc/issue/HYP-300) (blocked on object-valued-JSX-prop AST infra).                                                                                                                                           | **Part-14.4** — pseudo/responsive WRITE is currently untested AND partially unbuilt ([HYP-300](https://linear.app/glide-vc/issue/HYP-300)); the acceptance gate covers both the test and the AST infra. Gates the per-condition branch of the priority chain ([Part 7.1](#71-the-priority-chain-per-project-per-property-per-state)). Source: D33; [Part 7.1](#71-the-priority-chain-per-project-per-property-per-state), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix). |
+| **D34** | Multi-select style write: no unit or e2e test (batch / `ast:updateStylesBatch`). Expected (feature not on main per D7), but a live gap the acceptance gate must close once built.                                                                                                                                                                                                                                                                                                                   | **Part-14.4** — batch e2e + unit tests land WITH the multi-select generalization ([Part 11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion)). Gates D7. Source: D34; [Part 11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix).                                                                                                                                     |
+| **D35** | Opacity/alpha write round-trip effectively unverified outside one fixture. `style-editing.spec.ts` "opacity set + HMR round-trip" is heavily skip-guarded → silently skips on most CSS systems.                                                                                                                                                                                                                                                                                                     | **Part-14.4** — opacity round-trip test de-skip-guarded across CSS systems. Ties to the color round-trip ([Part 12.3](#123-the-round-trip-hex--source)) and the verify half ([Part 9](#part-9--to-be-verify--transaction--undo)). Source: D35; [Part 12.3](#123-the-round-trip-hex--source), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix).                                                                                                                              |
+| **D36** | CSS-Modules / styled-components / Emotion WRITE e2e skips with "may not support style writes." css-modules write IS unit-tested; styled/emotion are not (D31).                                                                                                                                                                                                                                                                                                                                      | **Part-14.4** — same closure as D31 (writer adapters + de-skipped e2e). Source: D36; [Part 14.2](#142-phase-map-with-the-live-tickets).                                                                                                                                                                                                                                                                                                                                             |
+| **D37** | [`client/lib/canvas-engine/utils/tailwindParser.test.ts`](https://github.com/hyperide/hyper-saas/blob/main/client/lib/canvas-engine/utils/tailwindParser.test.ts) is 2 tests (text size vs color) while the real TW parser coverage (95 tests) is the separate [`lib/tailwind/parser.test.ts`](https://github.com/hyperide/hyper-saas/blob/main/lib/tailwind/parser.test.ts). If the client copy diverges, its spacing/layout/flex/opacity branches are untested. Duplicate-code risk, ties to D23. | **Part-14.4 + Part-5.3 (D23 convergence)** — the duplicate client parser is DEDUPED as part of the System-A→System-B convergence; once there is one converter, there is one test surface. Until then the client copy's branches are an untested risk. Source: D37; [Part 5.3](#53-the-convergence-target--system-a-and-system-b-become-one), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix).                                                                              |
+| **D38** | `getTamaguiTokens` happy-path token _usage_ in the inspector is only exercised indirectly via one fixture (`tamagui-props-editor.spec.ts`, food-delivery). Thin.                                                                                                                                                                                                                                                                                                                                    | **Part-14.4** — direct token-usage assertion; ties to the shared-PropsEditor merge (D29). Source: D38; [Part 12.2](#122-token-providers--the-project-palette-gap), [Part 14.4](#144-acceptance-gate--erroredge-case-matrix).                                                                                                                                                                                                                                                        |
 
 ---
 
@@ -1619,7 +1679,7 @@ the contradictions where a wrong call propagates through the whole TO-BE:
 4. **D7 — multi-select generalize-not-parallelize (intent + spec, not in shipped code).** One
    engine, vectorized; single-select = `length===1`. Never a parallel batch system. → [Part 11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion).
 
-The biggest *stale fact* to correct everywhere remains **D19**: `lib/stylability` and
+The biggest _stale fact_ to correct everywhere remains **D19**: `lib/stylability` and
 `lib/style-attribution` do not exist on `main`; surface-decision lives in `style-read-manager.ts`.
 
 ## PART 5 — TO-BE: UNIFIED ARCHITECTURE
@@ -1638,7 +1698,7 @@ angles (cost/SRE, security, DX).
 
 1. **ONE engine; multi-select is the N≥1 generalization, never a parallel batch system — and it is
    PARTIAL-SUCCESS, not all-or-nothing.** Single-select is `selection.length === 1` flowing through the
-   *same* code path as `length === 50`. There is no second "batch" model. (Source: Q2 Agreement [§2](#part-2--glossary--term-decode), Q6
+   _same_ code path as `length === 50`. There is no second "batch" model. (Source: Q2 Agreement [§2](#part-2--glossary--term-decode), Q6
    Agreement [§1](#part-1--executive-summary); resolves the CTO directive behind D7.) The read door is `SelectionStyleRead` ([Part 6](#part-6--to-be-read-the-one-read-merge-model));
    the write door is `StyleWriteEngine.apply(selection[], patch)` ([Part 11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion)). **"Same code path" does NOT
    mean all-or-nothing:** a `set color: red` over N=50 where 5 elements are L3 (need wrapper promotion)
@@ -1656,29 +1716,29 @@ angles (cost/SRE, security, DX).
 2. **The pipeline is an ordered SEQUENCE, not two orthogonal axes.** The single canonical ordered
    stage list (identical here and in [§5.2](#52-the-pipeline-as-a-sequence-not-orthogonal-axes)) is:
    `read → B0 (open transaction) → A1 (forward-detect, advisory input to A2) → A2 (plan / resolve WHERE)
-   → A3 (write) → B1 (verify DID it land) → classify → [B2 opt-in repair] → B3 (visual-regression guard
-   → AI-vision verify, [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline))`,
+→ A3 (write) → B1 (verify DID it land) → classify → [B2 opt-in repair] → B3 (visual-regression guard
+→ AI-vision verify, [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline))`,
    the whole bracketed by the B0 transaction (Source: Q3 headline). A1 is advisory input to A2, not a
-   gate; "where to write" and "did it land" are *successive stages of one pipeline*, not independent
+   gate; "where to write" and "did it land" are _successive stages of one pipeline_, not independent
    dimensions. **B3 is itself two stages:** a deterministic screenshot-diff guard ([§9.6](#96-visual-regression-guard-b3--repair-sequencing)) AND the REQUIRED
-   AI-vision visual judge ([§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline)) — *did it land* (B1, computed-style) and *did it look right* ([§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline),
+   AI-vision visual judge ([§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline)) — _did it land_ (B1, computed-style) and _did it look right_ ([§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline),
    AI-with-vision) are distinct questions, the second answerable only by a verifier that LOOKS. This is
    the headline reframe of Q3 and the table of contents for Parts 6–11 (see [§5.2](#52-the-pipeline-as-a-sequence-not-orthogonal-axes)).
 
 3. **A value edit NEVER auto-mutates the tree.** Changing a style value can write a className, a prop,
    an inline style, or a CSS rule — but it can never insert, delete, or wrap a JSX node. Tree mutation
-   (wrapper promotion, L3) is a *separate, explicit, single-element, feature-flagged, separately-undoable
-   action*. In the TO-BE this is a **compile-time guarantee**, not developer discipline: the value
+   (wrapper promotion, L3) is a _separate, explicit, single-element, feature-flagged, separately-undoable
+   action_. In the TO-BE this is a **compile-time guarantee**, not developer discipline: the value
    `BatchPlan` structurally has no tree-mutation field (Source: Q6 Agreement [§5](#part-5--to-be-unified-architecture), claude-fable position;
    detailed in [Part 11.3](#113-the-hard-split--value-edit-vs-tree-mutation-type-enforced)). This invariant wins over the literal "create a wrapper to eliminate every
    non-stylable case" directive (D18) — see [§5.1](#51-design-principles-the-invariants) note on L3 below.
 
 4. **Two lanes: durable mutation fails CLOSED; ephemeral preview stays optimistic.** Fail-closed is a
    property of the DURABLE SOURCE WRITE, not a single system-wide policy on everything the user sees.
-   - **Durable lane (source mutation).** The absence of verification must NEVER promote a *kept source
-     write* to "landed." The dangerous line is `rafVerified ?? false` — **never `?? true`** (Source:
+   - **Durable lane (source mutation).** The absence of verification must NEVER promote a _kept source
+     write_ to "landed." The dangerous line is `rafVerified ?? false` — **never `?? true`** (Source:
      Q3 fail-closed contract; reverses the literal `rafVerified ?? true` fail-open bug noted in
-     D3/[HYP-704](https://linear.app/glide-vc/issue/HYP-704)). Unverified ≠ landed; the keep/rollback decision is a function of *both* pre-write
+     D3/[HYP-704](https://linear.app/glide-vc/issue/HYP-704)). Unverified ≠ landed; the keep/rollback decision is a function of _both_ pre-write
      confidence and verify verdict ([Part 9.4](#94-fail-closed-the-confidence--verifiability-matrix) matrix).
    - **Preview lane (ephemeral feedback during a gesture).** The optimistic on-screen value during a
      slider drag / key-repeat (the `fastPatch` pin, AS-IS [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)a) is NOT gated by the source verdict and
@@ -1688,16 +1748,16 @@ angles (cost/SRE, security, DX).
      optimistic + temporary: it is **demoted VISIBLY** (a marked "not landed — reverting" state) when
      the durable verdict disagrees, never silently kept as if landed and never rejected on the spot
      under latency.
-   **Supersession.** A newer edit to the same `(element, property, condition)` CANCELS the older
-   pending durable verdict — the stale verdict must not fire a revert against a value the user has since
-   changed (defined in [Part 9.4](#94-fail-closed-the-confidence--verifiability-matrix); the `Superseded` verdict kind is owned by [§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared), mechanism in [§9.4](#94-fail-closed-the-confidence--verifiability-matrix),
-   rendered in [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence); the revert-storm UX is [Part 8.6](#86-the-honest-residual-write-time-verify-cant-catch-everything) / OD-1). Chapter 8 (VTSWR) is the
-   durable-lane special case of this two-lane pipeline, not the normative core: VTSWR governs what
-   survives in SOURCE; the preview lane governs what the user sees mid-gesture.
+     **Supersession.** A newer edit to the same `(element, property, condition)` CANCELS the older
+     pending durable verdict — the stale verdict must not fire a revert against a value the user has since
+     changed (defined in [Part 9.4](#94-fail-closed-the-confidence--verifiability-matrix); the `Superseded` verdict kind is owned by [§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared), mechanism in [§9.4](#94-fail-closed-the-confidence--verifiability-matrix),
+     rendered in [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence); the revert-storm UX is [Part 8.6](#86-the-honest-residual-write-time-verify-cant-catch-everything) / OD-1). Chapter 8 (VTSWR) is the
+     durable-lane special case of this two-lane pipeline, not the normative core: VTSWR governs what
+     survives in SOURCE; the preview lane governs what the user sees mid-gesture.
 
 5. **AI discovers and ranks; it never commits — AND the allowlist is safety-scored before AI sees it.**
-   AI is a semantic router and tie-breaker that proposes ranked candidates *from a resolver-built
-   allowlist*; the deterministic probe is the commit gate and deterministic builders perform every
+   AI is a semantic router and tie-breaker that proposes ranked candidates _from a resolver-built
+   allowlist_; the deterministic probe is the commit gate and deterministic builders perform every
    write. AI is never the authority and never sets a target file or a free-text selector (a
    prompt-injection / out-of-project exfiltration vector — Q6 trust model). **"AI never commits" is
    necessary but not sufficient:** an enum-constrained AI can still pick a broad-but-verifying
@@ -1712,44 +1772,44 @@ angles (cost/SRE, security, DX).
    invariant is the rebuild contract, not a description of the present.
 
 6. **Heterogeneity is first-class.** A selection may legitimately span multiple CSS systems; a single
-   edit may legitimately write to several channels and files; an existing *local, mutable* declaration
+   edit may legitimately write to several channels and files; an existing _local, mutable_ declaration
    is edited in place as the predictable default — but edit-in-place is GATED on locality + mutability
-   + blast-radius + policy, NOT unconditional (a global/inherited/generated/vendor/`!important`
-   incumbent is treated as a broad edit needing confirmation, [Part 7.1](#71-the-priority-chain-per-project-per-property-per-state) step 2). The engine never
-   coerces the selection onto one styling system, and it shows ALL source badges across the selection
-   (Source: Q2 Agreement [§6](#part-6--to-be-read-the-one-read-merge-model), Q6 Agreement [§2](#part-2--glossary--term-decode)). The batch plan *owns* the heterogeneity; the dispatcher
-   does not collapse it.
+   - blast-radius + policy, NOT unconditional (a global/inherited/generated/vendor/`!important`
+     incumbent is treated as a broad edit needing confirmation, [Part 7.1](#71-the-priority-chain-per-project-per-property-per-state) step 2). The engine never
+     coerces the selection onto one styling system, and it shows ALL source badges across the selection
+     (Source: Q2 Agreement [§6](#part-6--to-be-read-the-one-read-merge-model), Q6 Agreement [§2](#part-2--glossary--term-decode)). The batch plan _owns_ the heterogeneity; the dispatcher
+     does not collapse it.
 
 A seventh, derived invariant deserves naming because it is the crux of the most contested reconciliation
-(D18, D24): **L3 ≠ impossible.** "No non-stylable element" is true at the level of the *proposal* (a
+(D18, D24): **L3 ≠ impossible.** "No non-stylable element" is true at the level of the _proposal_ (a
 stylable path always exists for every element — at worst via wrapper promotion), but NOT at the level
-of the *action* (the engine never automatically takes that path). All three Q6 models independently
+of the _action_ (the engine never automatically takes that path). All three Q6 models independently
 rephrased the CTO law this way (Q6 Agreement [§5](#part-5--to-be-unified-architecture)). The literal directive "eliminate every non-stylable
-case by wrapping" is honored *in spirit* and overridden *in letter* by invariant (3): L3 means "needs
+case by wrapping" is honored _in spirit_ and overridden _in letter_ by invariant (3): L3 means "needs
 promotion before this value can apply," and promotion is opt-in (D18 resolution; [Part 11.2](#112-the-stylability-ladder-l0l3)/11.4).
 
 ### 5.2 The pipeline as a sequence (not orthogonal axes)
 
 The system is **one ordered pipeline**, not two independent axes of "where" and "whether." Q3's
 single most useful reframe is that planning, writing, verifying, classifying and repairing are
-*successive responsibilities of one transaction*, each consuming the output of the previous stage. The
+_successive responsibilities of one transaction_, each consuming the output of the previous stage. The
 historical mental model — "pick a target" and "check it worked" as separable concerns wired together
 ad hoc — is exactly what produces the silent-no-op failure class (a write lands at a target that
 swallows it; D1/D3) and the fail-open verify bug (D3).
 
 The pipeline, stage by stage, with the Part that details each:
 
-| Stage | Name | Responsibility | Detailed in |
-|---|---|---|---|
-| **B0** | Open transaction | Assign one `writeId`; snapshot before-content/hash of every file ANY stage may touch | [Part 9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files) |
-| **A1** | Forward-detect (advisory) | Per-channel `{forwardsClassName, forwardsStyle, hostProp, confidence}`; a HIGH-confidence NEGATIVE is a pre-write exclusion | **[Part 9.2a](#92a-a1--the-forward-detector-its-one-canonical-home)** (canonical home) |
-| **A2** | Resolve WHERE | Priority chain, per element, per property, per state → frozen plan | **[Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)** |
-| **A3** | Write | Deterministic edit-builders at the chosen channel; CSS-file selector miss → reported verified inline floor (not a hard-fail) | [Part 8](#part-8--to-be-fallback-doctrine-vtswr) |
-| **B1** | Verify | After a CORRELATED settle, read live computed style + classlist/inline; classify `landed / not-landed / ambiguous / unverifiable` against the INTENDED value | **[Part 9.2](#92-verify-everywhere-via-the-preview-iframe-b1)–9.4** |
-| **B2** | Repair (offer only) | Explicit, single-element, flagged L3 wrapper; never auto | [Part 11.4](#114-wrapper-promotion-decision-procedure--guards) / [Part 9.6](#96-visual-regression-guard-b3--repair-sequencing) |
+| Stage  | Name                                       | Responsibility                                                                                                                                                                                                      | Detailed in                                                                                                                                                                 |
+| ------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **B0** | Open transaction                           | Assign one `writeId`; snapshot before-content/hash of every file ANY stage may touch                                                                                                                                | [Part 9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)                                                                                                |
+| **A1** | Forward-detect (advisory)                  | Per-channel `{forwardsClassName, forwardsStyle, hostProp, confidence}`; a HIGH-confidence NEGATIVE is a pre-write exclusion                                                                                         | **[Part 9.2a](#92a-a1--the-forward-detector-its-one-canonical-home)** (canonical home)                                                                                      |
+| **A2** | Resolve WHERE                              | Priority chain, per element, per property, per state → frozen plan                                                                                                                                                  | **[Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)**                                                                                                   |
+| **A3** | Write                                      | Deterministic edit-builders at the chosen channel; CSS-file selector miss → reported verified inline floor (not a hard-fail)                                                                                        | [Part 8](#part-8--to-be-fallback-doctrine-vtswr)                                                                                                                            |
+| **B1** | Verify                                     | After a CORRELATED settle, read live computed style + classlist/inline; classify `landed / not-landed / ambiguous / unverifiable` against the INTENDED value                                                        | **[Part 9.2](#92-verify-everywhere-via-the-preview-iframe-b1)–9.4**                                                                                                         |
+| **B2** | Repair (offer only)                        | Explicit, single-element, flagged L3 wrapper; never auto                                                                                                                                                            | [Part 11.4](#114-wrapper-promotion-decision-procedure--guards) / [Part 9.6](#96-visual-regression-guard-b3--repair-sequencing)                                              |
 | **B3** | Visual-regression guard + AI-vision verify | Runtime in-session screenshot; deterministic CV pre-filter rejects the 100%-broken set (large diff → rollback the whole `writeId`), then the REQUIRED AI-vision judge LOOKS at before/after for "did it look right" | [Part 9.6](#96-visual-regression-guard-b3--repair-sequencing) / **[Part 9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline)** |
 
-Read sits *before* A2 (it produces the IR the planner consumes): the read stage is `SelectionStyleRead`
+Read sits _before_ A2 (it produces the IR the planner consumes): the read stage is `SelectionStyleRead`
 ([Part 6](#part-6--to-be-read-the-one-read-merge-model)). Classification (`landed/ambiguous/unverifiable/not-landed`) is the output of B1 and the input
 to the keep/rollback matrix and to B2. The transaction (B0) brackets the whole thing so a single edit —
 including a multi-element, multi-file edit — is one atomic undo step.
@@ -1764,10 +1824,11 @@ load-bearing for the migration ([Part 14](#part-14--migration-path-as-is--to-be)
 - **The plan is FROZEN at the planner; dispatch is a dumb executor.** Once A2 resolves, the plan's
   nodeRefs, file paths, identities, chosen channels, previous values and intent are frozen; the
   executor must not synthesize new fallbacks after the freeze. A "miss → next candidate" is a
-  *pre-authorized plan step*, not reactive replanning (Source: Q3 + Q6 Agreement [§4](#part-4--discrepancy-ledger); detailed in
+  _pre-authorized plan step_, not reactive replanning (Source: Q3 + Q6 Agreement [§4](#part-4--discrepancy-ledger); detailed in
   [Part 7.4](#74-frozen-plan-dumb-dispatch)).
 
 ![Pipeline stages B0–B3 and A1–A3 as one transactional state machine, with the confidence×verifiability inset.](./assets/fig-5-2-pipeline-b0-b3-a1-a3.svg)
+
 <!-- ASSET-SPEC fig-5-2-pipeline-b0-b3-a1-a3 | KIND=svg | "Pipeline stages B0-B3 + A1-A3." Depicts the full state machine from Q3: B0 open transaction → A1 forward-detect → A2 resolve-where → A3 write → B1 verify → (landed/ambiguous/unverifiable/not-landed) → B2 repair-offer → B3 visual-regression guard (CV pre-filter → required AI-vision judge, §9.7), with the confidence×verifiability matrix as an inset. -->
 
 ### 5.3 The convergence target — System A and System B become one
@@ -1776,7 +1837,7 @@ Today two engines coexist (AS-IS [§0](#part-0--front-matter)): **System A** —
 (`client/lib/canvas-engine/adapters/{StyleAdapter,TailwindAdapter,TamaguiAdapter}.ts`), selected by
 `projectUIKit`, producing `ParsedStyles` — and **System B** — the shared `lib/style-{read,write,
 values,adapters}/` engine, routed by `CssSystemId`, producing `StyleReadResult`/`StyleWritePlan` and
-performing the *real file mutation on both realms* via `executeStyleWriteRequest`
+performing the _real file mutation on both realms_ via `executeStyleWriteRequest`
 (`lib/style-write/style-write-executor.ts:461`). They are connected at exactly one funnel point:
 System A's adapter `write*` dispatches into System B's executor. The duplication carries a central
 debt — **two CSS↔Tailwind converters** (`classNameToStyles`, `useElementStyleData.ts:113` vs
@@ -1793,7 +1854,7 @@ their call sites read the normalized IR (`StyleDeclaration[]`, [Part 6.2](#62-no
 the ONLY surviving piece of System A is:
 
 1. **Realm transport (the one surviving role).** A styling-logic-free I/O shell. It does not decide
-   *where* a style lives; it carries the selection/edit to the core over the realm's transport — one
+   _where_ a style lives; it carries the selection/edit to the core over the realm's transport — one
    per first-class realm: **server-backed SaaS** HTTP+WS, **VS Code ext** `ast:*` RPC, and **serverless
    SaaS** in-pod OPFS/NodePod I/O ([§5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract)) — and back. It contains NO converter, NO adapter selection, NO
    `ParsedStyles`.
@@ -1807,14 +1868,14 @@ matches BEFORE the old code is deleted; it orders the deletion, it does not pres
 
 The "wins per concern" table that D23 said was missing:
 
-| Concern | Winner | Rationale |
-|---|---|---|
-| Normalized value IR (`StyleDeclaration[]`) | **System B / `lib/`** | One read shape, not two; resolves D2 (`StyleReadResult.properties` was `[]`/unused) |
-| CSS↔value conversion | **One converter in `lib/`** | Retires the duplicate `classNameToStyles` vs `TailwindV4Reader` pair; resolves the duplicate-parser risk D37 |
-| Source ownership / tabs / surface | **System B** (`style-read-manager.ts:194`) | Surface decision already lives here; the planner needs owners, not the client adapter's DOM-className read |
-| The real file mutation | **System B** (`executeStyleWriteRequest`) | Already canonical on both realms; nothing changes |
-| Inspector value rendering | **System B normalized IR via `useStyleField`** | Sections migrate to read `StyleDeclaration[]` directly; the old `ParsedStyles` path is DELETED (OD-3), not kept as a projection |
-| Realm transport | **System A shells (the one surviving piece)** | Per-realm I/O, **no styling logic** — everything else in System A is deleted |
+| Concern                                    | Winner                                         | Rationale                                                                                                                       |
+| ------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Normalized value IR (`StyleDeclaration[]`) | **System B / `lib/`**                          | One read shape, not two; resolves D2 (`StyleReadResult.properties` was `[]`/unused)                                             |
+| CSS↔value conversion                       | **One converter in `lib/`**                    | Retires the duplicate `classNameToStyles` vs `TailwindV4Reader` pair; resolves the duplicate-parser risk D37                    |
+| Source ownership / tabs / surface          | **System B** (`style-read-manager.ts:194`)     | Surface decision already lives here; the planner needs owners, not the client adapter's DOM-className read                      |
+| The real file mutation                     | **System B** (`executeStyleWriteRequest`)      | Already canonical on both realms; nothing changes                                                                               |
+| Inspector value rendering                  | **System B normalized IR via `useStyleField`** | Sections migrate to read `StyleDeclaration[]` directly; the old `ParsedStyles` path is DELETED (OD-3), not kept as a projection |
+| Realm transport                            | **System A shells (the one surviving piece)**  | Per-realm I/O, **no styling logic** — everything else in System A is deleted                                                    |
 
 One converter, not two — and then **zero** of the old one: the duplicate `classNameToStyles` is
 DELETED, the concrete deliverable of "unify" (OD-3 ratified DELETE, not deprecate). The migration
@@ -1825,6 +1886,7 @@ convergence does NOT reintroduce the `projectUIKit` conflation: System A's selec
 is part of what is being deleted (see [§5.5](#55-the-capability-taxonomy-orthogonal-axes) / D26).
 
 ![Before/after: today's two engines plus duplicate converters versus the unified lib/ core with realm transport shells only; System A styling code, the duplicate converter and ParsedStyles are deleted (OD-3), not kept as a projection.](./assets/fig-5-3-convergence-two-to-one.svg)
+
 <!-- ASSET-SPEC fig-5-3-convergence-two-to-one | KIND=svg | "Convergence: from two engines to one." Before/after — left shows today's two boxes + duplicate converters; right shows the unified core in `lib/` with realm-specific transport shells only. Per OD-3 (DELETE, not deprecate) the right side has NO ParsedStyles projection: System A's styling code, the duplicate converter and the ParsedStyles shape are removed once the inspector reads the normalized IR. -->
 
 ### 5.4 Realm model — THREE first-class realms as transport rows over one contract
@@ -1842,10 +1904,10 @@ code paths:
    present, is a `tsserver` inside the pod.
 
 All three are FIRST-CLASS, not "two realms plus a degraded mode." This is Q3's most consequential
-structural claim: the differences between realms are *how a capability is reached*, not *whether the
-engine has it*. The same `lib/` core runs in all three; only the thin transport differs. Serverless
+structural claim: the differences between realms are _how a capability is reached_, not _whether the
+engine has it_. The same `lib/` core runs in all three; only the thin transport differs. Serverless
 SaaS is a peer of the other two — it has its own preview iframe (so it verifies like the others); the
-single place it *legitimately* degrades is the LSP/type backstop row, and only when its in-pod
+single place it _legitimately_ degrades is the LSP/type backstop row, and only when its in-pod
 `tsserver` is down ([§9.8](#98-type-intelligence-lsp--applications--realm-boundary)). Treating serverless as merely a degrade-column of SaaS is wrong: it is a
 realm with its own FS transport (OPFS-pod), its own undo transport, and its own type-backstop story.
 
@@ -1853,25 +1915,25 @@ The historical objection — "the VS Code extension host has no DOM, so it canno
 verify a write" — is answered by Q3: **the ext host has no DOM, but the preview PANEL does.** Every
 DOM-dependent capability is a transport row that, in the ext realm, round-trips through the preview
 panel's iframe (`host → preview-panel → iframe` RPC). Verification, computed-style read, matched-rules
-and screenshots are therefore *universal wherever a preview iframe exists* — which is all THREE realms
+and screenshots are therefore _universal wherever a preview iframe exists_ — which is all THREE realms
 (server-backed SaaS, ext, serverless SaaS each have a preview iframe). Do NOT accept "best-effort, no
 verify" in any realm (Source: Q3 verification-in-ext).
 
-| Capability | Server-backed SaaS | VS Code ext | Serverless SaaS (NodePod/OPFS) | Degrades? |
-|---|---|---|---|---|
-| computed-style read | iframe `getComputedStylesFromIframe` (same-origin) | `host → preview-panel → iframe requestComputedStyle` RPC | iframe read against the in-pod preview (same-origin) | No (all three have an iframe) |
-| matched cascade rules | iframe `document.styleSheets` traversal | `host → preview-panel → iframe` matched-rules RPC | iframe `document.styleSheets` traversal (pod preview) | No |
-| settle handshake | `import.meta.hot` render-echo / CSS stylesheet-epoch | `awaitRecompile` render-echo / CSS stylesheet-epoch | in-pod dev-server render-echo / CSS stylesheet-epoch | No |
-| B3 screenshot | browser canvas capture | preview-panel screenshot RPC (NOT Docker) | browser canvas capture (pod preview) | No |
-| i18n-key read | **missing today → [HYP-372](https://linear.app/glide-vc/issue/HYP-372)**: port `_tryDetectI18n` to a SaaS route + keys route | `styles:fetchI18nKeys` RPC (`PanelRouter:450`) | in-pod read of the OPFS project (same `_tryDetectI18n` logic, no server hop) | No (transport-only difference; D10) |
-| FS / write transport (B0) | server FS | `vscode-file-io` disk | OPFS-pod FS | No (one `writeId`/`rollback` contract, three FS transports) |
-| A1 LSP/type backstop (and the wider `TypeIntelligence` facade, [§9.8](#98-type-intelligence-lsp--applications--realm-boundary)) | server-side language server / TS program over HTTP (the shipped `getComponentPropsTypes` `ts.createProgram` is this transport today) | VS Code's own language features (`vscode.execute*Provider` / workspace TS service) | `tsserver` inside the pod when up, else AST-only + heuristic + B1 | **Yes — serverless (NodePod/OPFS) only** — degrade to AST + heuristic, never block. **Server-backed SaaS and the ext do NOT degrade** (real LS each). Full strategy: [§9.8](#98-type-intelligence-lsp--applications--realm-boundary) |
+| Capability                                                                                                                      | Server-backed SaaS                                                                                                                   | VS Code ext                                                                        | Serverless SaaS (NodePod/OPFS)                                               | Degrades?                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| computed-style read                                                                                                             | iframe `getComputedStylesFromIframe` (same-origin)                                                                                   | `host → preview-panel → iframe requestComputedStyle` RPC                           | iframe read against the in-pod preview (same-origin)                         | No (all three have an iframe)                                                                                                                                                                                                        |
+| matched cascade rules                                                                                                           | iframe `document.styleSheets` traversal                                                                                              | `host → preview-panel → iframe` matched-rules RPC                                  | iframe `document.styleSheets` traversal (pod preview)                        | No                                                                                                                                                                                                                                   |
+| settle handshake                                                                                                                | `import.meta.hot` render-echo / CSS stylesheet-epoch                                                                                 | `awaitRecompile` render-echo / CSS stylesheet-epoch                                | in-pod dev-server render-echo / CSS stylesheet-epoch                         | No                                                                                                                                                                                                                                   |
+| B3 screenshot                                                                                                                   | browser canvas capture                                                                                                               | preview-panel screenshot RPC (NOT Docker)                                          | browser canvas capture (pod preview)                                         | No                                                                                                                                                                                                                                   |
+| i18n-key read                                                                                                                   | **missing today → [HYP-372](https://linear.app/glide-vc/issue/HYP-372)**: port `_tryDetectI18n` to a SaaS route + keys route         | `styles:fetchI18nKeys` RPC (`PanelRouter:450`)                                     | in-pod read of the OPFS project (same `_tryDetectI18n` logic, no server hop) | No (transport-only difference; D10)                                                                                                                                                                                                  |
+| FS / write transport (B0)                                                                                                       | server FS                                                                                                                            | `vscode-file-io` disk                                                              | OPFS-pod FS                                                                  | No (one `writeId`/`rollback` contract, three FS transports)                                                                                                                                                                          |
+| A1 LSP/type backstop (and the wider `TypeIntelligence` facade, [§9.8](#98-type-intelligence-lsp--applications--realm-boundary)) | server-side language server / TS program over HTTP (the shipped `getComponentPropsTypes` `ts.createProgram` is this transport today) | VS Code's own language features (`vscode.execute*Provider` / workspace TS service) | `tsserver` inside the pod when up, else AST-only + heuristic + B1            | **Yes — serverless (NodePod/OPFS) only** — degrade to AST + heuristic, never block. **Server-backed SaaS and the ext do NOT degrade** (real LS each). Full strategy: [§9.8](#98-type-intelligence-lsp--applications--realm-boundary) |
 
 The realm asymmetry that today's AS-IS map records (`computedStyle:{}` passed to the read manager in
 the ext host, `StyleReadService.ts:186`; the wider "garbage facts" — `buildElementFacts:704`,
 `getCssSystems:731` — AS-IS [§2](#part-2--glossary--term-decode)c) is therefore an artifact of the
-host trying to answer DOM questions *without going through the preview panel* — not a fundamental realm
-limitation. The TO-BE routes those questions through the panel. The single realm that *legitimately*
+host trying to answer DOM questions _without going through the preview panel_ — not a fundamental realm
+limitation. The TO-BE routes those questions through the panel. The single realm that _legitimately_
 degrades is **serverless SaaS (NodePod/OPFS)** on the LSP/type-backstop row alone; there the rule is
 **degrade to AST-only + heuristic + B1, never block** (Source: Q3). Note the corrected LSP transports
 ([§9.8](#98-type-intelligence-lsp--applications--realm-boundary)): **server-backed SaaS** does NOT degrade — it gets a real **server-side** language server / TS
@@ -1883,26 +1945,27 @@ in `lib/`; the realms differ only in the FS transport — **server-backed SaaS**
 transport row, not a degraded variant — detailed in [Part 9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files).
 
 ![Realm transport matrix: capability rows (computed-style, matched-rules, settle, screenshot, LSP/type backstop) against server-backed-SaaS / VS Code ext / serverless-SaaS (NodePod-OPFS) columns, each cell showing the transport and whether it degrades; the LSP row shows server-side LS for server-backed SaaS, VS Code language features for the ext, and in-pod tsserver else AST for serverless.](./assets/fig-5-4-realm-transport-matrix.svg)
+
 <!-- ASSET-SPEC fig-5-4-realm-transport-matrix | KIND=svg | "Realm transport matrix." A table-as-diagram: rows = capabilities (computed-style, matched-rules, settle, screenshot, LSP/type backstop), columns = server-backed SaaS / VS Code ext / serverless SaaS (NodePod-OPFS), each cell showing the transport and whether it degrades. The LSP/type-backstop row (per §9.8) reads: server-backed SaaS = server-side language server / TS program over HTTP (no degrade); VS Code ext = VS Code's own language features (no degrade); serverless SaaS = tsserver inside the NodePod pod, degrading to AST + heuristic on cold/failure. Only the serverless column degrades on that row. -->
 
 ### 5.5 The capability taxonomy (orthogonal axes)
 
 The project's styling capability is described by **orthogonal axes**, not a single conflated
 `projectUIKit` field. This is the D26 reconciliation: Alex's stated intent is that CSS framework,
-design system, JS framework, router, bundler and package manager are *independent dimensions*, and the
+design system, JS framework, router, bundler and package manager are _independent dimensions_, and the
 code's `projectUIKit` conflates at least the first two. The TO-BE adopts the orthogonal model and the
 rename; this REVERSES the conflated taxonomy that current code uses verbatim (D26).
 
 The axes:
 
-| Axis | Values (non-exhaustive) | Notes |
-|---|---|---|
-| **cssFramework** | tailwind-v3, tailwind-v4, plain-css, css-modules, vanilla-extract, emotion, styled-components | How CSS is authored. NOT the design system. |
-| **designSystem** | shadcn, mui-system, chakra-ui, mantine, tamagui, none | A component/token layer. **shadcn is a design system, NOT a CSS system** — it sits *on top of* Tailwind. |
-| **jsFramework** | react-vanilla, nextjs, remix, vue, svelte, solidjs, unknown | The component runtime/router host. |
-| **router** | (framework-bound or standalone) | Orthogonal to bundler and pm. |
-| **bundler** | vite, webpack, turbopack, … | Settle-signal source differs by bundler ([Part 9.3](#93-the-settle-handshake--never-compile-success-or-timeout)). |
-| **packageManager** | bun, npm, pnpm, yarn | **A lockfile DOES infer this axis** (`bun.lockb → bun`, `pnpm-lock.yaml → pnpm`, …) — that is the axis's purpose. **Do NOT infer the whole ProjectType from a lockfile** (OD-5 / D26). |
+| Axis               | Values (non-exhaustive)                                                                       | Notes                                                                                                                                                                                  |
+| ------------------ | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **cssFramework**   | tailwind-v3, tailwind-v4, plain-css, css-modules, vanilla-extract, emotion, styled-components | How CSS is authored. NOT the design system.                                                                                                                                            |
+| **designSystem**   | shadcn, mui-system, chakra-ui, mantine, tamagui, none                                         | A component/token layer. **shadcn is a design system, NOT a CSS system** — it sits _on top of_ Tailwind.                                                                               |
+| **jsFramework**    | react-vanilla, nextjs, remix, vue, svelte, solidjs, unknown                                   | The component runtime/router host.                                                                                                                                                     |
+| **router**         | (framework-bound or standalone)                                                               | Orthogonal to bundler and pm.                                                                                                                                                          |
+| **bundler**        | vite, webpack, turbopack, …                                                                   | Settle-signal source differs by bundler ([Part 9.3](#93-the-settle-handshake--never-compile-success-or-timeout)).                                                                      |
+| **packageManager** | bun, npm, pnpm, yarn                                                                          | **A lockfile DOES infer this axis** (`bun.lockb → bun`, `pnpm-lock.yaml → pnpm`, …) — that is the axis's purpose. **Do NOT infer the whole ProjectType from a lockfile** (OD-5 / D26). |
 
 The naming guard (D26) the rest of this document obeys: use **`designSystem`**, never `uiKit`; never
 collapse cssFramework and designSystem into one field. The only place the retired `projectUIKit` /
@@ -1911,10 +1974,10 @@ collapse cssFramework and designSystem into one field. The only place the retire
 
 - **The 12-`CssSystemId` taxonomy on main mixes axes.** The current `CssSystemId` union
   (`tailwind-v3|tailwind-v4|css-modules|plain-css|inline-style|emotion|styled-components|mui-system|
-  chakra-ui|mantine|vanilla-extract|tamagui`, AS-IS [§1](#part-1--executive-summary)) folds design systems (mui-system, chakra-ui,
+chakra-ui|mantine|vanilla-extract|tamagui`, AS-IS [§1](#part-1--executive-summary)) folds design systems (mui-system, chakra-ui,
   mantine, tamagui) and CSS frameworks (tailwind, plain-css, css-modules, vanilla-extract, emotion,
   styled-components) into one enum. Under the orthogonal model a project is `(cssFramework,
-  designSystem)` — e.g. a shadcn project is `(tailwind-v4, shadcn)`, not a single "shadcn CSS system."
+designSystem)` — e.g. a shadcn project is `(tailwind-v4, shadcn)`, not a single "shadcn CSS system."
   Only 4 of the 12 have working adapters today (D5); the ratified target is all twelve built + detected
   (OD-5 item 3, [§5.6](#56-all-dimensions-detection--the-projectdetector-responsibility)) — the rename and the unbuild are tracked separately.
 - **The rename is a tracked migration, not a description.** `projectUIKit` threads through many files;
@@ -1956,8 +2019,8 @@ each independently, across the project:
   side of the "build ALL 12" target ([§3.3](#33-adapters--system-b-libstyle-adapters), OD-5/item 3): you cannot route to a system you did not detect.
 - **Every axis value ([§5.5](#55-the-capability-taxonomy-orthogonal-axes)).** `cssFramework`, `designSystem`, `jsFramework`, `router`, `bundler`,
   `packageManager` — each resolved independently. A project is, e.g., `{cssFramework: tailwind-v4,
-  designSystem: shadcn, jsFramework: nextjs, router: app-router, bundler: turbopack, packageManager:
-  bun}`, and the detector populates ALL six, never collapsing two into one `projectUIKit` (D26).
+designSystem: shadcn, jsFramework: nextjs, router: app-router, bundler: turbopack, packageManager:
+bun}`, and the detector populates ALL six, never collapsing two into one `projectUIKit` (D26).
 - **The packageManager axis from the lockfile (OD-5 correction).** A lockfile DOES infer the
   `packageManager` axis (`bun.lockb → bun`, `pnpm-lock.yaml → pnpm`, …) — that is exactly this axis's
   detection signal. It must NOT be used to infer the whole `ProjectType`; lockfile → one axis, never
@@ -1980,7 +2043,7 @@ lockstep with the implemented systems — a system is not "built" until it is al
 ## PART 6 — TO-BE READ: THE ONE READ-MERGE MODEL
 
 > Detailed view of the read stage of the unified pipeline ([Part 5.2](#52-the-pipeline-as-a-sequence-not-orthogonal-axes): `read → plan → write →
-> verify → classify → [repair]`). Almost entirely from **Q2** — the most thoroughly-brainstormed
+verify → classify → [repair]`). Almost entirely from **Q2** — the most thoroughly-brainstormed
 > question (codex gpt-5.5, gemini-2.5-flash, claude-fable-5; 4 full rounds, converged). This part
 > resolves **D2** (the two-parallel-read-shapes discrepancy) and consumes the stale-fact correction
 > from **D19** (no `lib/stylability` dir — the surface decision lives in `style-read-manager.ts`).
@@ -2011,21 +2074,21 @@ N>1 (AS-IS [§2](#part-2--glossary--term-decode)a/[§2](#part-2--glossary--term-
 
 ```ts
 interface SelectionStyleRead {
-  subjects: SubjectStyleSnapshot[];        // single-select = length === 1
-  fields: MergedStyleField[];              // aggregates only — see §6.4
-  tabs: MergedStyleTab[];                  // union by stable tabId, coverage all|partial — §6.5
-  surface: SurfaceDecision;               // stylable | partially-stylable(+blocked) | not-stylable-here — §6.5
+  subjects: SubjectStyleSnapshot[]; // single-select = length === 1
+  fields: MergedStyleField[]; // aggregates only — see §6.4
+  tabs: MergedStyleTab[]; // union by stable tabId, coverage all|partial — §6.5
+  surface: SurfaceDecision; // stylable | partially-stylable(+blocked) | not-stylable-here — §6.5
   capabilities: { computedStyles: boolean }; // one flag, one consumer (header banner) — §6.3
-  selectionEpoch: number;                  // lifecycle: bumped on any selection change
-  selectionFingerprint: string;            // identity: hash of the subject-id set (distinct from epoch)
+  selectionEpoch: number; // lifecycle: bumped on any selection change
+  selectionFingerprint: string; // identity: hash of the subject-id set (distinct from epoch)
   readStatus: 'ready' | 'reading' | 'degraded';
-  diagnostics: ReadDiagnostic[];           // per-subject, explainable "without a debugger"
+  diagnostics: ReadDiagnostic[]; // per-subject, explainable "without a debugger"
 }
 
 interface SubjectStyleSnapshot {
-  subjectId: string;                       // structured identity tuple — see Part 7.3
-  static: StaticStyleSnapshot;             // cacheable, pure function of source — §6.3
-  overlay: RuntimeOverlay;                 // selection-scoped, NEVER cached — §6.3
+  subjectId: string; // structured identity tuple — see Part 7.3
+  static: StaticStyleSnapshot; // cacheable, pure function of source — §6.3
+  overlay: RuntimeOverlay; // selection-scoped, NEVER cached — §6.3
   editability: Map<FieldKey, Editability>; // per-property, per-element — §6.5
 }
 ```
@@ -2049,7 +2112,7 @@ so you merge neither raw — you merge declaration rows that carry both (Source:
 **The replacement is explicit: `ParsedStyles` is replaced BY the normalized `StyleDeclaration[]` IR
 defined in this section, and `ParsedStyles` itself is DELETED — not `@deprecated`.** (OD-3 ratified
 DELETE, [§13.4](#134-od-3--system-a--system-b-convergence-target-d23--ratified); Pass-A reconciliation across [§2.1](#21-core-nouns) / [§5.3](#53-the-convergence-target--system-a-and-system-b-become-one) / [§13.4](#134-od-3--system-a--system-b-convergence-target-d23--ratified).) During migration `ParsedStyles` is
-reached ONLY via a *temporary* `toParsedStyles(merged)` shim, while `RightSidebar` sections migrate to
+reached ONLY via a _temporary_ `toParsedStyles(merged)` shim, while `RightSidebar` sections migrate to
 `useStyleField` one at a time ([§6.6](#66-the-single-consumption-hook)). That shim is a **transient migration bridge with a scheduled death,
 not a permanent `@deprecated` projection** — the two are different end-states and this spec means the
 former: per OD-3 the shim AND the `ParsedStyles` shape are **DELETED** once the last section consumes the
@@ -2061,11 +2124,11 @@ type FieldKey = string & { readonly __brand: 'FieldKey' };
 // constructed ONLY via fieldKey(property, condition) — never string concat (§6.6)
 
 interface StyleDeclaration {
-  fieldKey: FieldKey;                        // property + condition (e.g. 'paddingTop' | 'color@:hover')
-  value: KnownValue | { kind: 'unknown'; reason: ReasonCode };  // KnownValue, ReasonCode: §6.8
-  owner: StyleSourceOwner;                   // which CSS system / file / selector — Part 7.3 identity
-  writeTarget: WriteTargetRef | null;        // §6.8; resolved LAZILY at write time, null in the snapshot — §6.7
-  evidence: Evidence;                        // §6.8 — provenance ONLY ("how obtained"); never security posture — §6.7
+  fieldKey: FieldKey; // property + condition (e.g. 'paddingTop' | 'color@:hover')
+  value: KnownValue | { kind: 'unknown'; reason: ReasonCode }; // KnownValue, ReasonCode: §6.8
+  owner: StyleSourceOwner; // which CSS system / file / selector — Part 7.3 identity
+  writeTarget: WriteTargetRef | null; // §6.8; resolved LAZILY at write time, null in the snapshot — §6.7
+  evidence: Evidence; // §6.8 — provenance ONLY ("how obtained"); never security posture — §6.7
 }
 ```
 
@@ -2085,22 +2148,22 @@ function mergeSubjects(subjects: SubjectStyleSnapshot[], epoch: number): MergedS
   const acc = new Map<FieldKey, PropAccumulator>();
 
   for (const group of groups.values()) {
-    const weight = group.length;                 // group size = how many subjects this row stands for
-    const rep = group[0];                        // representative subject (identical statics)
+    const weight = group.length; // group size = how many subjects this row stands for
+    const rep = group[0]; // representative subject (identical statics)
     for (const fieldKey of allFieldKeys(rep.static)) {
       const a = acc.get(fieldKey) ?? newAccumulator(fieldKey);
 
       // 2. one EFFECTIVE declaration per readable subject:
       //    static parse first; overlay may FILL an unknown static, never overwrite a known one,
       //    and only when the subject is in this epoch (stale-leak closed by construction — §6.3).
-      let decl = rep.static.declarationOf(fieldKey);          // may be unknown:'computed-unavailable'
+      let decl = rep.static.declarationOf(fieldKey); // may be unknown:'computed-unavailable'
       if (decl.value.kind === 'unknown' && inEpoch(rep.subjectId, epoch)) {
-        const overlaid = rep.overlay.get(fieldKey);           // empty Map in ext host → no-op
+        const overlaid = rep.overlay.get(fieldKey); // empty Map in ext host → no-op
         if (overlaid !== undefined) decl = fillUnknown(decl, overlaid);
       }
 
       // 3. accumulate as a bounded multiset (cap K distinct values + their writability).
-      a.add(decl, weight);                                     // O(P) per group, NOT O(N)
+      a.add(decl, weight); // O(P) per group, NOT O(N)
       acc.set(fieldKey, a);
     }
   }
@@ -2109,12 +2172,15 @@ function mergeSubjects(subjects: SubjectStyleSnapshot[], epoch: number): MergedS
   return [...acc.values()].map((a) => ({
     fieldKey: a.fieldKey,
     value:
-      a.allKnownEqual() && a.noUnknownOrMissing() ? { kind: 'same', value: a.theValue() }
-      : a.hasUnknown()                              ? { kind: 'unknown', reason: a.unknownReason() }
-      : a.isEmptyEverywhere()                       ? { kind: 'empty' }
-      :                                              { kind: 'mixed', examples: a.examples(K) },
-    writability: { writable: a.writableCount(), total: a.totalCount() },   // COUNTS are truth — §6.4
-    tabs: a.tabCoverage(),                                                  // all | partial
+      a.allKnownEqual() && a.noUnknownOrMissing()
+        ? { kind: 'same', value: a.theValue() }
+        : a.hasUnknown()
+          ? { kind: 'unknown', reason: a.unknownReason() }
+          : a.isEmptyEverywhere()
+            ? { kind: 'empty' }
+            : { kind: 'mixed', examples: a.examples(K) },
+    writability: { writable: a.writableCount(), total: a.totalCount() }, // COUNTS are truth — §6.4
+    tabs: a.tabCoverage(), // all | partial
   }));
 }
 ```
@@ -2145,14 +2211,14 @@ Q2 Fable point 2, Agreement [§3](#part-3-as-is-sections-3137--current-state-top
 
 ```ts
 interface StaticStyleSnapshot {
-  elementKey: string;                 // part of the cache key with styleVersion
-  styleVersion: number;               // bumps when source mutates
-  declHash: string;                   // xxhash64 of normalized declarations — merge fast path
+  elementKey: string; // part of the cache key with styleVersion
+  styleVersion: number; // bumps when source mutates
+  declHash: string; // xxhash64 of normalized declarations — merge fast path
   declarationOf(k: FieldKey): StyleDeclaration;
 }
 interface RuntimeOverlay {
-  readonly epoch: number;             // dies with the selectionEpoch — never cached
-  get(k: FieldKey): KnownValue | undefined;  // empty Map in ext host
+  readonly epoch: number; // dies with the selectionEpoch — never cached
+  get(k: FieldKey): KnownValue | undefined; // empty Map in ext host
 }
 ```
 
@@ -2166,6 +2232,7 @@ flag with exactly one consumer — a header banner — so no inspector section c
 principle: computed-style is a transport row that degrades, not a fork.
 
 ![Static snapshot vs runtime overlay lifecycle.](./assets/fig-6-3-static-snapshot-vs-overlay.svg)
+
 <!-- ASSET-SPEC fig-6-3-static-snapshot-vs-overlay | KIND=svg | "Static snapshot vs runtime overlay lifecycle." Depicts the cacheable static layer keyed by (elementKey, styleVersion), the ephemeral overlay scoped to a selectionEpoch, and the merge point; an arrow showing the overlay being discarded on selection change. -->
 
 ### 6.4 "Mixed" is a display state, never a value
@@ -2183,8 +2250,8 @@ Agreement [§5](#part-5--to-be-unified-architecture)). The four arms are not int
 - **`unknown`** — value could not be resolved (computed-unavailable, sanitization-failed, parse-miss).
   Carries a `ReasonCode` ([§6.6](#66-the-single-consumption-hook)). Distinct from `empty`.
 - **`empty`** — the property genuinely has no value here: placeholder / inherited / "—". **`empty ≠
-  unknown`** (Source: Q2 Fable). The current `ParsedStyles` collapses both to `undefined`, so today's
-  inspector *lies* — it cannot tell "we don't know" from "there's nothing." The IR keeps them apart.
+unknown`** (Source: Q2 Fable). The current `ParsedStyles` collapses both to `undefined`, so today's
+  inspector _lies_ — it cannot tell "we don't know" from "there's nothing." The IR keeps them apart.
 
 **Counts are truth; enums are derived.** The field carries `writability: {writable, total}` and any
 `writableOf(field)` predicate is a tiny tested helper over the counts, not a stored enum. The Q2 R2
@@ -2193,7 +2260,7 @@ enums drift from the counts they shadow (Source: Q2 Fable, Agreement [§6](#part
 
 ### 6.5 Surface decision & per-property editability
 
-The **surface decision** composes by COUNTS, not by a boolean, and it is a *selection-level routing*
+The **surface decision** composes by COUNTS, not by a boolean, and it is a _selection-level routing_
 fact — which inspector to show — kept strictly SEPARATE from per-field writability (Source: Q2
 Agreement [§6](#part-6--to-be-read-the-one-read-merge-model)). It lives where it already lives on main: inside `style-read-manager.ts` (`decideSurface`,
 `style-read-manager.ts:194`), **not** in a `lib/stylability` dir — that directory does not exist
@@ -2202,12 +2269,12 @@ on main (D19; AS-IS [§2](#part-2--glossary--term-decode)b note). Any spec or ti
 ```ts
 type SurfaceDecision =
   | { kind: 'stylable' }
-  | { kind: 'partially-stylable'; blockedSubjectIds: string[] }   // carries the blocked set
+  | { kind: 'partially-stylable'; blockedSubjectIds: string[] } // carries the blocked set
   | { kind: 'not-stylable-here' };
 ```
 
 `partially-stylable` carries `blockedSubjectIds` so the notification "2 of 5 not stylable here" gets a
-one-click **"Select only stylable"** affordance — the model lets the user *exit* heterogeneity, not
+one-click **"Select only stylable"** affordance — the model lets the user _exit_ heterogeneity, not
 just report it (Source: Q2 Fable). This generalizes the current binary `standardStyleInspector` vs
 `propsEditor` surface (`style-read-manager.ts:194`, AS-IS [§2](#part-2--glossary--term-decode)b) to a counts-based routing across N≥1
 subjects.
@@ -2215,15 +2282,15 @@ subjects.
 **Writability is a separate, per-field, per-subject fact.** Each subject carries `editability:
 Map<FieldKey, Editability>` (gemini's per-property authorization — the element-level surface decision
 is too coarse for multi-select). Editability merges with **"most restrictive wins"** so a single input
-disables and explains *why* via a `ReasonCode` tooltip:
+disables and explains _why_ via a `ReasonCode` tooltip:
 
 ```ts
 type Editability =
   | 'editable'
   | 'read-only-system-default'
   | 'read-only-locked-source'
-  | 'read-only-component-restriction'  // e.g. <Button> forwards neither className nor style
-  | 'not-applicable';                  // property doesn't apply to this element (SVG fill on a <div>)
+  | 'read-only-component-restriction' // e.g. <Button> forwards neither className nor style
+  | 'not-applicable'; // property doesn't apply to this element (SVG fill on a <div>)
 ```
 
 A computed (overlay-derived) value **never** grants `editable` — it is a display fill only; writability
@@ -2239,10 +2306,10 @@ the one realm gap that is open until OD-9 merges:
    section gates on **(a)** the selection resolving to a **React component** (not a host/intrinsic
    element), **(b)** a **TypeScript prop schema** being readable for that component, and **(c)** an
    **engine being present** to project it — NOT on which `designSystem` the project uses. Tamagui only
-   *flavors the color control* (the `TokenCombobox` / project-palette swatches of [Part 12.2](#122-token-providers--the-project-palette-gap)); a
+   _flavors the color control_ (the `TokenCombobox` / project-palette swatches of [Part 12.2](#122-token-providers--the-project-palette-gap)); a
    plain-React, Chakra, MUI, or unstyled project gets the same props editor with a generic color
    control. Any spec or code path that reads "props editor ⇒ Tamagui project" is wrong: Tamagui is one
-   *value-control flavor*, never the gate. (This is the [§5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract) doctrine again — capability is universal,
+   _value-control flavor_, never the gate. (This is the [§5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract) doctrine again — capability is universal,
    only a sub-control's transport/flavor differs by `designSystem`.)
 2. **The Props section is ALWAYS positioned BELOW the main styles form** in the inspector. The
    standard style fields (the `standardStyleInspector` surface — spacing, color, typography, layout) sit
@@ -2273,23 +2340,27 @@ epoch subscription that makes a stale render physically impossible. Source: Q2 F
 
 ```ts
 type StyleFieldView =
-  | { state: 'same';    value: KnownValue; writability: { writable: number; total: number } }
-  | { state: 'mixed';   examples: KnownValue[]; writability: { writable: number; total: number } }
+  | { state: 'same'; value: KnownValue; writability: { writable: number; total: number } }
+  | { state: 'mixed'; examples: KnownValue[]; writability: { writable: number; total: number } }
   | { state: 'unknown'; reason: ReasonCode }
   | { state: 'empty' };
 
 function useStyleField(prop: string, opts?: { condition?: StyleCondition }): StyleFieldView {
-  const k = fieldKey(prop, opts?.condition);   // typed constructor — NEVER `prop + ':' + cond`
+  const k = fieldKey(prop, opts?.condition); // typed constructor — NEVER `prop + ':' + cond`
   // subscribe to the CURRENT selectionEpoch; a re-render after a selection change reads the NEW read,
   // never a memo over a stale overlay. A stale render is unreachable, not merely discouraged.
-  const read = useSelectionStyleRead();        // epoch-scoped subscription
+  const read = useSelectionStyleRead(); // epoch-scoped subscription
   const field = read.fields.find((f) => f.fieldKey === k);
   if (!field) return { state: 'empty' };
   switch (field.value.kind) {
-    case 'same':    return { state: 'same',    value: field.value.value, writability: field.writability };
-    case 'mixed':   return { state: 'mixed',   examples: field.value.examples, writability: field.writability };
-    case 'unknown': return { state: 'unknown', reason: field.value.reason };
-    case 'empty':   return { state: 'empty' };
+    case 'same':
+      return { state: 'same', value: field.value.value, writability: field.writability };
+    case 'mixed':
+      return { state: 'mixed', examples: field.value.examples, writability: field.writability };
+    case 'unknown':
+      return { state: 'unknown', reason: field.value.reason };
+    case 'empty':
+      return { state: 'empty' };
   }
 }
 ```
@@ -2325,7 +2396,7 @@ caps and the DoS guard; no separate machinery (Source: Q2 Fable point 3 / R3).
 stores no eager `contributors[]`; the write plan is derived lazily, at write time, from the immutable
 per-subject snapshots plus a `sourceVersion`/`fingerprint` revalidation and a `subjectId ∈ selection`
 Set check. Security comes from **freshness + authoritative re-validation**, not a client-side copy (a
-frozen array is *more* stale at write time than a freshly re-derived plan), so `writeTarget` is `null`
+frozen array is _more_ stale at write time than a freshly re-derived plan), so `writeTarget` is `null`
 in the snapshot and resolved lazily (the source-mapping is expensive; resolving it
 per-property-per-element "just in case" is wasteful and goes stale). This is the master's
 RECOMMENDATION, not a settled resolution — the eager-vs-lazy `contributors[]` fork is the one Q2
@@ -2361,7 +2432,7 @@ the root-cause fix; the per-part copies are illustrative projections of these ca
 // ---- value & provenance ----
 type KnownValue = string & { readonly __brand: 'KnownValue' }; // sanitized, grammar-validated (§6.7)
 type ReasonCode = string & { readonly __brand: 'ReasonCode' }; // machine code; human copy in one reasonCopy dict (§6.6)
-type WriteId    = string & { readonly __brand: 'WriteId' };    // one per B0 saga (Part 9.1)
+type WriteId = string & { readonly __brand: 'WriteId' }; // one per B0 saga (Part 9.1)
 
 // NormalizedMediaQuery: a media query that has been parsed and RE-SERIALIZED to a single fixed form
 // (lowercased feature names, exactly one space after each `:`, sorted/canonical feature order). It is
@@ -2380,28 +2451,34 @@ type NormalizedMediaQuery = string & { readonly __brand: 'NormalizedMediaQuery' 
 // is STATED, not silent.
 type StyleCondition =
   | { kind: 'state'; pseudo: ':hover' | ':focus' | ':active' | ':focus-visible' | ':disabled' }
-  | { kind: 'breakpoint'; query: NormalizedMediaQuery }   // e.g. normalize('@media (min-width: 768px)')
+  | { kind: 'breakpoint'; query: NormalizedMediaQuery } // e.g. normalize('@media (min-width: 768px)')
   | { kind: 'pseudo-element'; el: '::before' | '::after' };
 
 // Evidence is PROVENANCE ONLY ("how obtained") — never security posture (the Q2 gate rule, §6.7).
 // The planner's routing rationale is a DIFFERENT field, renamed `routingRationale`, so "evidence" is
 // never overloaded between "how the value was obtained" and "why a channel was chosen".
-interface Evidence { source: 'static-parse' | 'runtime-overlay' | 'source-owner'; note?: string; }
+interface Evidence {
+  source: 'static-parse' | 'runtime-overlay' | 'source-owner';
+  note?: string;
+}
 
 // RoutingRationale is the planner's "why this channel" record (the OLD `ResolutionEvidence` /
 // `SkipEvidence`), kept SEPARATE from read-time `Evidence` so the word `evidence` is never overloaded.
-interface RoutingRationale { chosenBy: 'incumbent' | 'priority-chain' | 'ai-tiebreak' | 'token-snap';
-                             ladderRung: 'L0' | 'L1' | 'L2' | 'L3'; badges: string[]; }
+interface RoutingRationale {
+  chosenBy: 'incumbent' | 'priority-chain' | 'ai-tiebreak' | 'token-snap';
+  ladderRung: 'L0' | 'L1' | 'L2' | 'L3';
+  badges: string[];
+}
 
 // ---- the one write-channel union (resolves the three-vocabulary divergence) ----
 // Canonical names: tailwindUtility (NOT className), scopedCss KEPT, liftedToExistingWrapper (NOT liftedToWrapper).
 type ResolvedChannel =
-  | 'designSystemProp'          // L0
-  | 'tailwindUtility'           // L1 Tailwind class
-  | 'cssModule'                 // L1 *.module.css rule
-  | 'scopedCss'                 // L1 scoped/plain stylesheet rule
-  | 'inlineStyle'               // verified inline floor (base-state only, Part 8.3)
-  | 'liftedToExistingWrapper';  // L3-lift onto an already-present wrapper (no tree mutation)
+  | 'designSystemProp' // L0
+  | 'tailwindUtility' // L1 Tailwind class
+  | 'cssModule' // L1 *.module.css rule
+  | 'scopedCss' // L1 scoped/plain stylesheet rule
+  | 'inlineStyle' // verified inline floor (base-state only, Part 8.3)
+  | 'liftedToExistingWrapper'; // L3-lift onto an already-present wrapper (no tree mutation)
 // L3 *new-wrapper* has NO ResolvedChannel — it is a ResolvedSkip{reason:'requires-wrapper'} carrying a
 // TreeMutationDraft, not a write (Part 11.3). Rung→channel map: L0→designSystemProp;
 // L1→{tailwindUtility|cssModule|scopedCss|inlineStyle}; L2→same set over the applicable subset;
@@ -2411,12 +2488,12 @@ type ResolvedChannel =
 // Spelling: `inexpressible` (the Part 2.3 doctrine word) is the static-capability skip;
 // `ambiguous-class-identity` IS real (same class name in two files, Part 7.3) and is retained.
 type SkipReason =
-  | 'requires-wrapper'              // L3 new-wrapper — promotion draft attached
-  | 'inexpressible'                 // static capability check fails (e.g. :hover via inline — Part 8.3)
-  | 'no-writable-source'            // source not resolvable/writable (bundle artifact, lost-after-HMR)
-  | 'stale-node-ref'                // precondition fingerprint mismatch at preflight
-  | 'partial-property-unsupported'  // L2 inapplicable subset (e.g. padding on an SVG primitive)
-  | 'ambiguous-class-identity';     // same class name, two files, no disambiguation possible
+  | 'requires-wrapper' // L3 new-wrapper — promotion draft attached
+  | 'inexpressible' // static capability check fails (e.g. :hover via inline — Part 8.3)
+  | 'no-writable-source' // source not resolvable/writable (bundle artifact, lost-after-HMR)
+  | 'stale-node-ref' // precondition fingerprint mismatch at preflight
+  | 'partial-property-unsupported' // L2 inapplicable subset (e.g. padding on an SVG primitive)
+  | 'ambiguous-class-identity'; // same class name, two files, no disambiguation possible
 
 // WriteTargetRef: a resolved, canonicalized pointer to the SHARED LOCUS a value is written to. Resolved
 // LAZILY at write time (null in the read snapshot, §6.7). It is NOT an alias of StyleIdentity (Part 7.3):
@@ -2436,11 +2513,23 @@ type SkipReason =
 // `ruleSelector`/`classOrTokenId` is the field StyleIdentity lacks; it is what makes a shared rule comparable.
 type WriteTargetRef =
   // shared-locus channels — element-INDEPENDENT, the supersession key two elements share
-  | { kind: 'shared'; channel: ResolvedChannel; canonicalProjectRelPath: string;
-      ruleSelector?: string; classOrTokenId?: string; property: string }
+  | {
+      kind: 'shared';
+      channel: ResolvedChannel;
+      canonicalProjectRelPath: string;
+      ruleSelector?: string;
+      classOrTokenId?: string;
+      property: string;
+    }
   // node-exclusive channels — locus legitimately carries the node identity
-  | { kind: 'node-exclusive'; channel: ResolvedChannel; canonicalProjectRelPath: string;
-      nodeId: string; occurrenceIndex: number; property: string };
+  | {
+      kind: 'node-exclusive';
+      channel: ResolvedChannel;
+      canonicalProjectRelPath: string;
+      nodeId: string;
+      occurrenceIndex: number;
+      property: string;
+    };
 // Because `property` is now carried by WriteTargetRef itself (no longer doubly embedded via a StyleIdentity
 // that also carried it), the §9.4 rollback key `(WriteTargetRef, property, normalizedCondition)` no longer
 // double-counts `property`: WriteTargetRef.property and the tuple's `property` are the SAME field referenced
@@ -2453,9 +2542,9 @@ type WriteTargetRef =
 // SaaS wire payload at the §9.1 trust boundary is `intents: StylePatch[]` (PLURAL, = BatchPlan.intents)
 // + the subject identities; the server re-plans from that intent set.
 interface StylePatch {
-  property: string;                 // the CSS property (e.g. 'padding-top')
-  value: string;                    // the intended value
-  condition?: StyleCondition;       // §6.8 — base | :hover | @media …; `undefined` ⇒ base state
+  property: string; // the CSS property (e.g. 'padding-top')
+  value: string; // the intended value
+  condition?: StyleCondition; // §6.8 — base | :hover | @media …; `undefined` ⇒ base state
 }
 
 // ---- subject identity: runtime handle vs stable addressing key (the Part 2.1 nodeRef/elementRef axis) ----
@@ -2464,8 +2553,11 @@ interface StylePatch {
 // SubjectId — the STABLE addressing key PROJECTED from a SubjectRef (canonicalProjectRelPath + nodeId +
 //   occurrenceIndex); survives remount, used to address one of N subjects inside a frozen plan and to
 //   correlate a write back to its subject. SubjectId is the durable projection; SubjectRef is the live handle.
-interface SubjectRef { nodeRef: string; itemIndex: number; }  // runtime handle — Part 2.1 nodeRef axis
-type SubjectId = string & { readonly __brand: 'SubjectId' };  // stable key projected from a SubjectRef
+interface SubjectRef {
+  nodeRef: string;
+  itemIndex: number;
+} // runtime handle — Part 2.1 nodeRef axis
+type SubjectId = string & { readonly __brand: 'SubjectId' }; // stable key projected from a SubjectRef
 
 // ---- the one BatchPlan (resolves the 7.4/11.3 structural incompatibility) ----
 // Canonical = the FROZEN plan: readonly, branded WriteId, carries `intents`, uses ResolvedWrite/ResolvedSkip.
@@ -2478,9 +2570,9 @@ interface BatchPlan {
   // under ONE writeId (§9.1: single- and multi-element/property all share one writeId / one BatchPlan).
   // B1 verifies EACH write against the matching `intents[]` entry (same property+condition); a
   // multi-element gesture is one intent fanned across N `writes[]` of the same property.
-  readonly intents: readonly StylePatch[];     // the user gesture(s) — verifier compares each write to its matching intent
-  readonly writes: readonly ResolvedWrite[];   // L0–L2 + L3-lift channels only
-  readonly skips: readonly ResolvedSkip[];     // first-class, structured reasons
+  readonly intents: readonly StylePatch[]; // the user gesture(s) — verifier compares each write to its matching intent
+  readonly writes: readonly ResolvedWrite[]; // L0–L2 + L3-lift channels only
+  readonly skips: readonly ResolvedSkip[]; // first-class, structured reasons
   readonly preconditions: readonly Precondition[];
   // NO `mutations` / `treeOps` / `wrapperCreates` field — the absence is the invariant (Part 11.3).
 }
@@ -2489,20 +2581,22 @@ interface BatchPlan {
 // `subjectId` addresses one of N subjects; for a single-element gesture N=1 (one subjectId). The §7.4
 // frozen-plan view and the §11.3 multi-select view are the SAME shapes — they differ in nothing but the
 // per-block comments, so neither part is the authority for the field set.
-interface ResolvedWrite {                      // frozen at the planner; never recomputed at dispatch
-  readonly subjectId: SubjectId;               // which of the N subjects this write addresses (N=1 ⇒ the lone subject)
-  readonly identity: StyleIdentity;            // §7.3 structured tuple — carries `channel` (§6.8 union; L0–L2 + L3-lift)
-                                               //   AND `property`; single source, never re-listed
-  readonly condition?: StyleCondition;         // §6.8 — base | :hover | @media …
-  readonly newValue: string;                   // already sanitized + grammar-validated (§6.7)
-  readonly previousValue: string | null;       // inverse-patch payload for surgical rollback + undo (§9.1)
+interface ResolvedWrite {
+  // frozen at the planner; never recomputed at dispatch
+  readonly subjectId: SubjectId; // which of the N subjects this write addresses (N=1 ⇒ the lone subject)
+  readonly identity: StyleIdentity; // §7.3 structured tuple — carries `channel` (§6.8 union; L0–L2 + L3-lift)
+  //   AND `property`; single source, never re-listed
+  readonly condition?: StyleCondition; // §6.8 — base | :hover | @media …
+  readonly newValue: string; // already sanitized + grammar-validated (§6.7)
+  readonly previousValue: string | null; // inverse-patch payload for surgical rollback + undo (§9.1)
 }
-interface ResolvedSkip {                       // structured skip — never an anonymous "nothing happened"
-  readonly subjectId: SubjectId;               // which of the N subjects was skipped (N=1 ⇒ the lone subject)
-  readonly property: string;                   // the skipped CSS property — pairs with subjectId for addressing
-  readonly reason: SkipReason;                 // §6.8 canonical union, never a free-string
+interface ResolvedSkip {
+  // structured skip — never an anonymous "nothing happened"
+  readonly subjectId: SubjectId; // which of the N subjects was skipped (N=1 ⇒ the lone subject)
+  readonly property: string; // the skipped CSS property — pairs with subjectId for addressing
+  readonly reason: SkipReason; // §6.8 canonical union, never a free-string
   readonly routingRationale: RoutingRationale; // §6.8 — why no channel was chosen (badges, ladder rung, guard verdict)
-  readonly promotion?: TreeMutationDraft;      // present iff reason === 'requires-wrapper' — a READY draft, NOT executed
+  readonly promotion?: TreeMutationDraft; // present iff reason === 'requires-wrapper' — a READY draft, NOT executed
 }
 
 // ---- the verify/outcome vocabulary (single owner — the two-types-one-name fix) ----
@@ -2528,26 +2622,26 @@ type VerifyOutcome = 'landed' | 'not-landed' | 'ambiguous' | 'unverifiable';
 // stop-the-line / supersession state has a kind (see §8.4 for the switch).
 type Verdict =
   | { kind: 'Landed'; proof: 'owner-proven' | 'causally-affected' }
-  | { kind: 'Ambiguous' }                                              // value transformed/clamped; keep-report vs report-demote is carried by the wrapping Disposition.kind, NOT duplicated here
-  | { kind: 'VerifyFailed' }                                            // not-landed, rolled back
-  | { kind: 'HeldPendingRepair' }                                       // exact+not-landed: held, B2 offered
+  | { kind: 'Ambiguous' } // value transformed/clamped; keep-report vs report-demote is carried by the wrapping Disposition.kind, NOT duplicated here
+  | { kind: 'VerifyFailed' } // not-landed, rolled back
+  | { kind: 'HeldPendingRepair' } // exact+not-landed: held, B2 offered
   | { kind: 'Unverifiable'; reason: 'timeout' | 'realm' | 'remount' }
-  | { kind: 'Inexpressible' }                                           // static skip (Part 8.3)
-  | { kind: 'NoWritableTarget' }                                        // confidence==='none' — nothing writable resolved (reported floor)
-  | { kind: 'Skipped'; by: 'policy' }                                   // §7.1-P banned candidate
-  | { kind: 'RollbackFailed' }                                          // §9.1 stop-the-line
-  | { kind: 'Superseded' }                                             // newer edit cancelled this (§9.4)
+  | { kind: 'Inexpressible' } // static skip (Part 8.3)
+  | { kind: 'NoWritableTarget' } // confidence==='none' — nothing writable resolved (reported floor)
+  | { kind: 'Skipped'; by: 'policy' } // §7.1-P banned candidate
+  | { kind: 'RollbackFailed' } // §9.1 stop-the-line
+  | { kind: 'Superseded' } // newer edit cancelled this (§9.4)
   | { kind: 'Compensated'; cause: 'visual-regression' | 'collateral-broken' | 'ai-vision' } // POST-commit B3 unwind: §9.6 LARGE-threshold (visual-regression) / §2.3 deterministic collateral (collateral-broken) / §9.7 AI-vision semantic failure (ai-vision); committed→compensated, surfaced §8.4-bis
-  | { kind: 'CommittedUnverifiedOverride' };                           // OD-1 "apply anyway", audited
+  | { kind: 'CommittedUnverifiedOverride' }; // OD-1 "apply anyway", audited
 
 // Disposition — the §9.4 matrix output. It CARRIES the canonical `Verdict` so `verdictToFeedbackLevel`
 // has its input produced by the matrix: `decide()` builds both.
 type Disposition =
   | { kind: 'commit'; verdict: Verdict }
   | { kind: 'rollback'; reason: string; verdict: Verdict }
-  | { kind: 'keep-report'; note: string; verdict: Verdict }   // kept, surfaced — never silent
-  | { kind: 'report-demote'; verdict: Verdict }               // landed below preference; badge (8.4)
-  | { kind: 'offer-b2'; hold: 'pending'; verdict: Verdict }   // held under writeId; rollback on decline/TTL
+  | { kind: 'keep-report'; note: string; verdict: Verdict } // kept, surfaced — never silent
+  | { kind: 'report-demote'; verdict: Verdict } // landed below preference; badge (8.4)
+  | { kind: 'offer-b2'; hold: 'pending'; verdict: Verdict } // held under writeId; rollback on decline/TTL
   | { kind: 'no-write'; code: 'NO_WRITABLE_TARGET' | 'SUPERSEDED'; verdict: Verdict };
 ```
 
@@ -2557,7 +2651,7 @@ divergent copy: `KnownValue`, `ReasonCode`, `WriteId`, `NormalizedMediaQuery`, `
 `ResolvedChannel`, `SkipReason`, `WriteTargetRef`, `StylePatch`, `SubjectRef`, `SubjectId`, `BatchPlan`,
 `ResolvedWrite`, `ResolvedSkip`,
 **`ProofLevel`**, **`Confidence`**, **`VerifyOutcome`**, **`Verdict`**, **`Disposition`**. [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence) shows
-the authoritative `Verdict` switch and [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) shows `decide()` building a `Disposition`; both are *uses*
+the authoritative `Verdict` switch and [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) shows `decide()` building a `Disposition`; both are _uses_
 of the types fixed here, not re-declarations. The [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) four-string verify outcome is `VerifyOutcome`,
 NOT a second `Verdict`.
 
@@ -2565,6 +2659,7 @@ NOT a second `Verdict`.
 [§9.4](#94-fail-closed-the-confidence--verifiability-matrix)'s `decide()` (the keep/rollback matrix). FIVE are produced OUTSIDE `decide()`, on dedicated paths,
 and `decide()` never returns them — they are listed here so "every kind is produced somewhere" can be
 checked by hand:
+
 - `Inexpressible` — emitted by the planner's static-capability skip path ([Part 8.3](#83-inline-is-a-base-state-floor-not-a-universal-floor)), never by `decide()`;
 - `Skipped{by:'policy'}` — emitted by the [§7.1](#71-the-priority-chain-per-project-per-property-per-state)-P policy gate when a candidate is banned, never by `decide()`;
 - `RollbackFailed` — emitted by the [§9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files) journal stop-the-line, not by the matrix;
@@ -2584,12 +2679,12 @@ frozen-plan ([Part 7.4](#74-frozen-plan-dumb-dispatch) / 11.3).
 ## PART 7 — TO-BE PLANNER: WHERE THE VALUE LIVES (priority chain)
 
 > Detailed view of the **"plan (WHERE)"** stage of the unified pipeline ([Part 5.2](#52-the-pipeline-as-a-sequence-not-orthogonal-axes)). The planner
-> answers one question per `(element, property, state)`: *which source target should carry this
-> value?* It does not write, verify, or mutate the tree — it produces a **frozen plan** that the
+> answers one question per `(element, property, state)`: _which source target should carry this
+> value?_ It does not write, verify, or mutate the tree — it produces a **frozen plan** that the
 > dumb dispatcher ([Part 9](#part-9--to-be-verify--transaction--undo)) executes and the verifier ([Part 9.2](#92-verify-everywhere-via-the-preview-iframe-b1)) checks. This part folds the AS-IS
 > 6-step `selectTargetWithDiagnostics` ([Part 3.7](#37-write-pipeline--shared-executor--planner)), the Q5 priority chain, and the Q6 per-element /
 > identity / frozen-plan model into one specification. The planner is the seam where heterogeneous
-> multi-select stays a *generalization* of single-select rather than a parallel system.
+> multi-select stays a _generalization_ of single-select rather than a parallel system.
 
 ### 7.1 The priority chain (per project, per property, per state)
 
@@ -2601,13 +2696,13 @@ Agreement [§2](#part-2--glossary--term-decode), Q5 Synthesis "The chain"; Q6 Ag
 WHERE the value physically lives, not WHAT the user means to affect.**
 
 - **Stage 7.1-S — Scope resolution (a first-class axis).** "Set color to red" is ambiguous
-  between *this instance*, *all instances of the component*, *this variant*, *a token group*, and
-  *the current selection*. If the channel chain runs first, the channel choice silently decides the
+  between _this instance_, _all instances of the component_, _this variant_, _a token group_, and
+  _the current selection_. If the channel chain runs first, the channel choice silently decides the
   blast radius (a `cva` variant edit hits every instance; an inline edit hits one). So the planner
   resolves SCOPE first — `instance | component | variant | token-group | selection` — with a default
   (the safest: **instance** for a single-select, **selection** for multi-select) and a **visible
-  inspector control** so the user can widen it deliberately. Channel selection then runs *constrained
-  to the chosen scope*: a `component`-scope edit only considers channels that affect the component
+  inspector control** so the user can widen it deliberately. Channel selection then runs _constrained
+  to the chosen scope_: a `component`-scope edit only considers channels that affect the component
   definition; an `instance`-scope edit excludes shared-declaration channels (or routes them through
   the [§10.4](#104-commit-invariants-every-write-ai-or-not) invariant 6 blast-radius confirmation). Scope is documented as a first-class axis in [Part 5](#part-5--to-be-unified-architecture)/6
   alongside the capability taxonomy. Source: Q5/Q6 (codex blast-radius).
@@ -2629,12 +2724,12 @@ per state within the chosen scope and over the policy-allowed candidates only:
    ([Part 8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence) level 3). Never fall through a stale identity into a lower target — a write placed on
    the wrong node is worse than no write. Source: Q5 Agreement [§4](#part-4--discrepancy-ledger).
 2. **Incumbent owner as EVIDENCE, edit-in-place GATED (property-specific)** — if a recognized owner
-   already declares this exact `(property, condition)`, the incumbent is the *first evidence* of where
+   already declares this exact `(property, condition)`, the incumbent is the _first evidence_ of where
    the value lives, resolved per property (an existing CSS-module `padding` stays CSS-module even on
    an element whose `color` lives in a Tailwind class). But "incumbent" is NOT a synonym for "trusted":
    the declaration that currently wins the cascade may be a **global selector, an inherited token, a
    generated/vendor class, a reset, a cascade-layer rule, or an accidental `!important`** — editing
-   any of those *in place* silently mutates shared declarations and unselected nodes. So edit-in-place
+   any of those _in place_ silently mutates shared declarations and unselected nodes. So edit-in-place
    is taken ONLY when the incumbent is provably **local + mutable + bounded blast-radius + policy-allowed**
    (the [§10.4](#104-commit-invariants-every-write-ai-or-not) invariant 6 blast-radius check applies here too); otherwise the incumbent edit is treated as a
    **broad edit requiring explicit confirmation** (blast-radius note), or the chain falls through to a
@@ -2644,7 +2739,7 @@ per state within the chosen scope and over the policy-allowed candidates only:
 3. **Design-system token-snap — a PRE-WRITE intent transform, NOT a chain rung.** Token-snap
    is **NOT a write candidate** and is deliberately lifted OUT of the write/verify chain. If it were a
    rung, asking `17px` and snapping to `spacing-4` (`16px`) would either fail verify (`computed 16 ≠
-   intended 17`, rolling back a correct snap) or silently rewrite `intended` to `16` so the write
+intended 17`, rolling back a correct snap) or silently rewrite `intended` to `16` so the write
    verifies its own substitution — both wrong. Instead: when the project exposes a token scale and the
    requested value maps cleanly-enough, the inspector shows a **dismissible ghost chip BEFORE the
    write** — `17 → 16 (spacing-4) [×]`. If the user ACCEPTS, `intended` becomes `16` and the chain
@@ -2665,7 +2760,7 @@ per state within the chosen scope and over the policy-allowed candidates only:
    (`color`, `padding`, `width`) but **not** `:hover`, media queries, pseudo-elements, child
    selectors, keyframes, or theme/global edits; those bottom out at step 6/7 or banner ([Part 8.3](#83-inline-is-a-base-state-floor-not-a-universal-floor)).
    Inline is taken **only with mandatory landing-verification and rollback** ([Part 8.1](#81-the-core-rule--verified-transactional-style-writes-with-rollback) VTSWR) — it
-   is a *verified* floor, never a universal one. **CSS-expressible ≠ source-safe-to-write:** a
+   is a _verified_ floor, never a universal one. **CSS-expressible ≠ source-safe-to-write:** a
    property being inline-expressible does not mean the inline write is safe at the target JSX site —
    it may overwrite an existing `style={expr}`, clobber a `{...spread}`, defeat a forwarded
    `props.style`, or change precedence vs `className`. Every source-write candidate (inline most
@@ -2686,17 +2781,18 @@ distinct from the Tamagui-by-prop heuristic. Its inline floor (`:192`) throws wh
 unregistered (`:231`) and — critically — is **unverified** on main: the value is written and hoped
 to land (D1). The TO-BE chain reorders, per-propertizes, inserts the stale gate and token-snap, and
 binds the floor to verification. This reordering **reverses the unification-plan's universal-inline
-floor** (D12) only in the sense of *requiring verification before keeping an inline write*; the
+floor** (D12) only in the sense of _requiring verification before keeping an inline write_; the
 floor itself survives — see [Part 8.2](#82-why-landing-verification-dissolves-the-disagreement) and the OD-1 ratification ([Part 13.2](#132-od-1--inline-floor-vs-skip-banner-d24-the-headline--ratified)).
 
 ![Vertical cascade of the priority chain with per-property/per-state branch annotations and the verified inline floor at the bottom](./assets/fig-7-1-priority-chain.svg)
+
 <!-- ASSET-SPEC fig-7-1-priority-chain | KIND=svg | "The priority chain." Vertical cascade of the chain steps with the per-property/per-state branch annotations and the inline floor at the bottom marked 'base-state CSS only, verified'. -->
 
 ### 7.2 Per-element resolution under heterogeneous multi-select
 
 A single user gesture ("set `color` to red") produces **one `ResolvedAction` per
-`(element, property)` pair**, each resolved through the [§7.1](#71-the-priority-chain-per-project-per-property-per-state) chain *as if its element were the only
-one selected*. Multi-select does not introduce a second resolution path; it coordinates N
+`(element, property)` pair**, each resolved through the [§7.1](#71-the-priority-chain-per-project-per-property-per-state) chain _as if its element were the only
+one selected_. Multi-select does not introduce a second resolution path; it coordinates N
 independent single-element resolutions into one atomic action ([Part 11.1](#111-one-engine-vectorized)). Source: Q6 Agreement
 [§1](#part-1--executive-summary)–3, Q6 Synthesis [§2](#part-2--glossary--term-decode).
 
@@ -2724,18 +2820,18 @@ Resolution yields a `ResolvedAction`:
 
 ```ts
 interface ResolvedAction {
-  identity: StyleIdentity;             // structured tuple, §7.3
+  identity: StyleIdentity; // structured tuple, §7.3
   property: string;
-  condition?: StyleCondition;          // §6.8 canonical type; undefined = base
-  newValue: string;                    // sanitized; written via serializer, never concat
-  previousValue: string | null;       // for rollback + undo
+  condition?: StyleCondition; // §6.8 canonical type; undefined = base
+  newValue: string; // sanitized; written via serializer, never concat
+  previousValue: string | null; // for rollback + undo
   resolvedLevel: 'L0' | 'L1' | 'L2' | 'L3';
   resolvedChannel: ResolvedChannel | null; // §6.8 canonical union; NULL only for L3-new-wrapper
-                                            // (no writable channel → a requires-wrapper skip, Part 11.3)
-  treeMutationRequired: boolean;       // true ⟺ resolvedLevel === 'L3' new-wrapper
-  skipReason?: SkipReason;             // §6.8 canonical union; structured, never silent (Part 11.6)
-  routingRationale: RoutingRationale;  // why THIS channel — for badges + audit (renamed from `evidence`
-                                       // so the word `evidence` stays read-time provenance only, §6.8)
+  // (no writable channel → a requires-wrapper skip, Part 11.3)
+  treeMutationRequired: boolean; // true ⟺ resolvedLevel === 'L3' new-wrapper
+  skipReason?: SkipReason; // §6.8 canonical union; structured, never silent (Part 11.6)
+  routingRationale: RoutingRationale; // why THIS channel — for badges + audit (renamed from `evidence`
+  // so the word `evidence` stays read-time provenance only, §6.8)
 }
 ```
 
@@ -2743,7 +2839,7 @@ interface ResolvedAction {
 under one `color: red` edit legitimately resolve to three different channels —
 `designSystemProp` (L0), inline `fill` only (L2, the SVG case), and a new CSS-module class (L1) —
 all in one batch plan. The planner **never coerces the selection onto one system** to make the
-output uniform; doing so loses data and surprises the user. An existing *local, mutable* declaration
+output uniform; doing so loses data and surprises the user. An existing _local, mutable_ declaration
 wins (edit-in-place) regardless of what the rest of the selection resolves to — but the edit-in-place
 gate of [Part 7.1](#71-the-priority-chain-per-project-per-property-per-state) step 2 still applies per element (a global/inherited/shared incumbent is a broad edit
 needing confirmation, not a silent in-place mutation). **Show every source badge across the selection**
@@ -2763,12 +2859,12 @@ A write target is identified by a **structured tuple**, never by a delimiter-joi
 
 ```ts
 interface StyleIdentity {
-  canonicalProjectRelPath: string;     // realpath, relative to project root, canonicalized
-  nodeId: string;                      // stable AST node id (not a DOM handle)
-  occurrenceIndex: number;             // per-.map() / repeated-render index (today's itemIndex)
-  channel: ResolvedChannel;            // §6.8 canonical union — which source surface carries the value
-  property: string;                    // the CSS property (e.g. 'padding-top')
-  sourceHash: string | null;           // 7-char reliability HINT (content-derived blob hash; NEVER mtime) OR null === 'unavailable' (NodePod no-git / custom clean filter); a null|mismatch is only an early hint — §7.4 holds correctness. See below.
+  canonicalProjectRelPath: string; // realpath, relative to project root, canonicalized
+  nodeId: string; // stable AST node id (not a DOM handle)
+  occurrenceIndex: number; // per-.map() / repeated-render index (today's itemIndex)
+  channel: ResolvedChannel; // §6.8 canonical union — which source surface carries the value
+  property: string; // the CSS property (e.g. 'padding-top')
+  sourceHash: string | null; // 7-char reliability HINT (content-derived blob hash; NEVER mtime) OR null === 'unavailable' (NodePod no-git / custom clean filter); a null|mismatch is only an early hint — §7.4 holds correctness. See below.
 }
 ```
 
@@ -2782,7 +2878,7 @@ Q6 Agreement [§8](#part-8--to-be-fallback-doctrine-vtswr).
 `sourceHash` that stamps WHICH version of the file the identity was resolved against:
 
 - **If the file is committed and clean** → the **last committed git BLOB hash of THIS file**
-  (`git hash-object <path>` / the blob id `HEAD:<path>` resolves to — NOT the HEAD *commit* hash), the
+  (`git hash-object <path>` / the blob id `HEAD:<path>` resolves to — NOT the HEAD _commit_ hash), the
   content-addressed blob object id. It must be CONTENT-derived for this file: the commit hash
   changes on every unrelated commit/rebase while the file is byte-identical, which would falsely mark a
   stable identity `stale`. The blob hash changes ONLY when this file's bytes change, which is exactly the
@@ -2825,9 +2921,9 @@ This is a cheap, deterministic reliability stamp: comparing two `sourceHash` val
 same file version I resolved against?" cheaply (the hash is computed once at resolve, carried on the
 tuple). It is a **fast identity HINT, not the authoritative TOCTOU guard** — it is
 **complementary to, not a replacement for, the [§7.4](#74-frozen-plan-dumb-dispatch) `Precondition` hashes**: `sourceHash` is the
-*identity-level* "which file version" stamp carried on the tuple (cheap, survives across the
+_identity-level_ "which file version" stamp carried on the tuple (cheap, survives across the
 selection→plan boundary), while the authoritative correctness gate remains the [§7.4](#74-frozen-plan-dumb-dispatch) `Precondition`
-whole-file content hash plus the per-AST-node `nodeFingerprint`, the *write-time* TOCTOU guard that fails
+whole-file content hash plus the per-AST-node `nodeFingerprint`, the _write-time_ TOCTOU guard that fails
 the dispatch if the targeted node moved between freeze and apply ([§7.4](#74-frozen-plan-dumb-dispatch)). A `sourceHash` mismatch is an early, cheap "the file changed under me"
 signal feeding `stale` ([§2.3](#23-the-six-resolution-state-words-rigorous)) before the heavier fingerprint check runs; a `sourceHash` MATCH is never
 trusted as proof on its own — the mandatory [§7.4](#74-frozen-plan-dumb-dispatch) content precondition still runs at write time. So even
@@ -2863,16 +2959,16 @@ freeze nodeRefs, file paths, identities, chosen channels, previous values, and i
 immutable artifact. Dispatch consumes the frozen plan and performs **no live recomputation** — it
 groups writes by `(channel, canonicalProjectRelPath)` and applies them. A "miss → next candidate"
 that the chain authorized is a **pre-authorized plan step**, not reactive replanning; the executor
-must never synthesize a *new* fallback after freeze. If the dispatcher hits a precondition mismatch
+must never synthesize a _new_ fallback after freeze. If the dispatcher hits a precondition mismatch
 it **aborts the whole batch and re-resolves — never a partial apply**. The trust boundary runs
 through the frozen plan: everything before it (selection, AI output, project file contents) is
-untrusted input; everything after it is a dumb executor with no authority to decide. *If dispatch
-re-decides anything, you have a second engine and a hole at the same time.* Source: Q6 Agreement [§4](#part-4--discrepancy-ledger),
+untrusted input; everything after it is a dumb executor with no authority to decide. _If dispatch
+re-decides anything, you have a second engine and a hole at the same time._ Source: Q6 Agreement [§4](#part-4--discrepancy-ledger),
 Q6 Synthesis [§5](#part-5--to-be-unified-architecture), claude-fable position; Q3 frozen-plan.
 
 The frozen plan is **type-shaped to make a class of bugs unrepresentable**: the value `BatchPlan`
 carries `writes[]` (L0–L2 channels) and `skips[]` and **structurally has no tree-mutation field**.
-Wrapper-promotion (L3) produces a *separate* `TreeMutationPlan` artifact ([Part 11.3](#113-the-hard-split--value-edit-vs-tree-mutation-type-enforced)) with its own
+Wrapper-promotion (L3) produces a _separate_ `TreeMutationPlan` artifact ([Part 11.3](#113-the-hard-split--value-edit-vs-tree-mutation-type-enforced)) with its own
 lifecycle, so "a value edit never mutates the tree" is a **compile-time guarantee, not developer
 discipline** — the only guarantee that survives refactors.
 
@@ -2880,8 +2976,9 @@ discipline** — the only guarantee that survives refactors.
 // PLANNED — the frozen value-write plan. No mutation field exists, by design.
 // `BatchPlan`, `ResolvedWrite`, `ResolvedSkip`, `SkipReason`, `ResolvedChannel` and `WriteId` are the
 // CANONICAL types owned by §6.8 — this block is the frozen-plan view of them, not a second declaration.
-interface BatchPlan {                  // = the §6.8 canonical BatchPlan
-  readonly writeId: WriteId;           // §6.8 branded; ties to the B0 saga + verify (Part 9.1)
+interface BatchPlan {
+  // = the §6.8 canonical BatchPlan
+  readonly writeId: WriteId; // §6.8 branded; ties to the B0 saga + verify (Part 9.1)
   readonly intents: readonly StylePatch[]; // one per (property, condition) the gesture covers; §6.8
   readonly writes: readonly ResolvedWrite[];
   readonly skips: readonly ResolvedSkip[];
@@ -2890,27 +2987,29 @@ interface BatchPlan {                  // = the §6.8 canonical BatchPlan
   // Tree mutation lives in a separate TreeMutationPlan (Part 11.3).
 }
 
-interface ResolvedWrite {              // = the §6.8 canonical ResolvedWrite; frozen at the planner, never recomputed at dispatch
-  readonly subjectId: SubjectId;       // §6.8 — the addressed subject's stable key (one of N=1 here)
-  readonly identity: StyleIdentity;    // §7.3 — carries `channel` (§6.8 union; L0–L2 + L3-lift only;
-                                       //   L3-new is NOT writable here) AND `property`; single source.
+interface ResolvedWrite {
+  // = the §6.8 canonical ResolvedWrite; frozen at the planner, never recomputed at dispatch
+  readonly subjectId: SubjectId; // §6.8 — the addressed subject's stable key (one of N=1 here)
+  readonly identity: StyleIdentity; // §7.3 — carries `channel` (§6.8 union; L0–L2 + L3-lift only;
+  //   L3-new is NOT writable here) AND `property`; single source.
   readonly condition?: StyleCondition; // §6.8 — base | :hover | @media …
   readonly newValue: string;
-  readonly previousValue: string | null;         // for surgical rollback + undo
+  readonly previousValue: string | null; // for surgical rollback + undo
 }
 
-interface ResolvedSkip {                          // = the §6.8 canonical ResolvedSkip, single-select view
-  readonly subjectId: SubjectId;                  // §6.8 — the lone subject's stable key (one of N=1 here)
-  readonly property: string;                      // the skipped (property) — pairs with subjectId for addressing
-  readonly reason: SkipReason;                    // §6.8 canonical union
-  readonly routingRationale: RoutingRationale;    // §6.8 — why no channel was chosen (badges, ladder rung, guard verdict)
-  readonly promotion?: TreeMutationDraft;         // present iff reason === 'requires-wrapper' — a READY draft, NOT executed
+interface ResolvedSkip {
+  // = the §6.8 canonical ResolvedSkip, single-select view
+  readonly subjectId: SubjectId; // §6.8 — the lone subject's stable key (one of N=1 here)
+  readonly property: string; // the skipped (property) — pairs with subjectId for addressing
+  readonly reason: SkipReason; // §6.8 canonical union
+  readonly routingRationale: RoutingRationale; // §6.8 — why no channel was chosen (badges, ladder rung, guard verdict)
+  readonly promotion?: TreeMutationDraft; // present iff reason === 'requires-wrapper' — a READY draft, NOT executed
 }
 
 interface Precondition {
   readonly canonicalProjectRelPath: string;
-  readonly fileContentHash: string;               // whole-file hash — coarse staleness signal
-  readonly nodeFingerprint: string;               // per-AST-node — fine-grained TOCTOU guard
+  readonly fileContentHash: string; // whole-file hash — coarse staleness signal
+  readonly nodeFingerprint: string; // per-AST-node — fine-grained TOCTOU guard
 }
 
 // type-level invariant: BatchPlan has no member assignable to a tree-mutation op.
@@ -2921,13 +3020,13 @@ interface Precondition {
 editor instance, formatter-on-save, `git checkout`, hot reload, a sibling AI agent). The plan
 carries a **per-file content hash AND a per-AST-node fingerprint**: the whole-file hash is too
 brittle alone (an edit elsewhere in the file should not fail the plan), so the node fingerprint is
-the load-bearing check — it fails only when *the targeted node itself* moved or changed. On any
+the load-bearing check — it fails only when _the targeted node itself_ moved or changed. On any
 mismatch: abort-all, re-resolve, never partial. A silent partial multi-select write (user thinks 12
 elements changed, 9 did, finds out in production) is the worst failure mode the planner exists to
 prevent. Source: Q6 claude-fable "TOCTOU is the main hole", Q6 Synthesis [§4](#part-4--discrepancy-ledger)–5.
 
 **`previousValue` is captured at freeze, not at dispatch** — it is the inverse-patch payload the
-write-ahead journal ([Part 9.5](#95-one-atomic-undo-across-files--systems-the-journal)) persists *before* the forward patch, and the value the verifier and
+write-ahead journal ([Part 9.5](#95-one-atomic-undo-across-files--systems-the-journal)) persists _before_ the forward patch, and the value the verifier and
 undo re-check against the node fingerprint to avoid undo poisoning (Ctrl+Z overwriting a later
 manual edit with a stale `oldValue`). The planner's job ends at producing this frozen, self-verifying
 artifact; everything downstream is mechanical. Source: Q6 Synthesis [§5](#part-5--to-be-unified-architecture), Q3.
@@ -2982,42 +3081,42 @@ Source: Q5 Synthesis (`brainstorm-Q5:205-214`), unanimous across all three model
 > per (property, state): inline is reached for a given base-state property only when every higher
 > channel is `inexpressible` for THAT slice — which can legitimately happen even on a project that HAS
 > a styling system (e.g. a one-off base-state property no Tailwind utility / module rule covers). That
-> per-(property,state) inline write is allowed and verified. What OD-1(a) gates is *inline becoming the
-> project's standing POLICY*: that is ratified only for the no-styling-system case, and even there the
+> per-(property,state) inline write is allowed and verified. What OD-1(a) gates is _inline becoming the
+> project's standing POLICY_: that is ratified only for the no-styling-system case, and even there the
 > persistent install-Tailwind popup ([§8.5](#85-token-system-none-and-project-bootstrap)) offers to switch the project off inline. So the chain's
 > inline rung and OD-1(a) are consistent — the rung is a per-slice fallthrough; OD-1(a) governs only
 > when inline is allowed to become the default sink.
 
-Five mechanical properties make this a *transaction*, not best-effort telemetry:
+Five mechanical properties make this a _transaction_, not best-effort telemetry:
 
 1. **Per-candidate atomicity.** Each step down the priority chain ([Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain) [§7.1](#71-the-priority-chain-per-project-per-property-per-state)) is its own
    write-verify-keep-or-rollback unit. A candidate that does not verify-land leaves the source
    in exactly the state it was in before that candidate ran.
 2. **Verify against the INTENDED value, and grade the PROOF.** The baseline check is
    `computed(property) == intended` on the edited state/breakpoint, not "did the computed value
-   change" — if the value already equalled the target, that is *success*, not a no-op
+   change" — if the value already equalled the target, that is _success_, not a no-op
    (`brainstorm-Q5:118-122`, claude position). But `computed(property) == intended` is **necessary,
-   not sufficient**: a matching sampled computed value does not prove *our edited declaration* is
+   not sufficient**: a matching sampled computed value does not prove _our edited declaration_ is
    the cascade owner. It can pass while (a) some OTHER declaration (a global selector, an inherited
    value, a `!important`) is the real winner and our hunk is dead, (b) the property is inherited and
    a PARENT changed (an inherited-property false positive), or (c) an optimistic CSSOM/`fastPatch`
    pin is still up and we read the pin, not the source write ([Part 9.3](#93-the-settle-handshake--never-compile-success-or-timeout) guard 1). Therefore the
    verdict is not binary landed/not-landed; it carries a causal **proof level**, strongest first:
    **owner-proven** (a toggle-probe — flip our written declaration off/on in the off-screen clone —
-   confirmed *our* declaration drives the computed value) > **causally-affected** (toggling our hunk
+   confirmed _our_ declaration drives the computed value) > **causally-affected** (toggling our hunk
    changes computed, but a co-owner may share the effect) > **effect-only** (`computed == intended`
    but we never proved our hunk caused it — the inherited / cascade-loser / pinned cases) >
    **unproven** (could not read the post-write state at all — distinct from effect-only, which IS a read
    with causation unproven). [Part 9](#part-9--to-be-verify--transaction--undo) [§9.2](#92-verify-everywhere-via-the-preview-iframe-b1)/[§9.4](#94-fail-closed-the-confidence--verifiability-matrix) own how the proof level is obtained and
    graded; [Part 8](#part-8--to-be-fallback-doctrine-vtswr) asserts only that the fallback chain consumes it. The commit gate is in property 5.
 3. **Surgical rollback, not coarse revert.** Rollback applies the inverse of the text/AST hunk
-   *this candidate* produced. It never touches lines the candidate did not write, and it is NOT
+   _this candidate_ produced. It never touches lines the candidate did not write, and it is NOT
    `git checkout` (which would also discard unrelated user work). On main today there is no such
    per-candidate rollback because there is no verify stage at all
    (`lib/style-write/runtime-verify/` is absent — AS-IS [§9](#part-9--to-be-verify--transaction--undo) roll-up: "Runtime-verify + rollback
    transaction — PLANNED"; D1); VTSWR adds both at once.
-4. **Banner is the exception, provenance is the rule.** A verified-landed write — *including a
-   verified-landed inline write* — is a SUCCESS and surfaces as a quiet inspector provenance
+4. **Banner is the exception, provenance is the rule.** A verified-landed write — _including a
+   verified-landed inline write_ — is a SUCCESS and surfaces as a quiet inspector provenance
    line (`padding → tailwind: p-4`), never a warning (`brainstorm-Q5:66`, codex). Banners are
    reserved for genuine loss of control; see [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence).
 5. **Commit gates on proof, not on the sampled value alone.** For a **shared or inline** target
@@ -3034,8 +3133,8 @@ detailed in [Part 9](#part-9--to-be-verify--transaction--undo) ([§9.1](#91-tran
 atomicity, so B0 is a journaled saga with CAS-on-hash before each patch, per-file locks, dirty-buffer
 handling, a durable write-ahead journal with crash recovery, and a terminal `rollback_failed`
 stop-the-line state ([§9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)) — the "surgical rollback" property below is only as safe as that saga
-makes it. [Part 8](#part-8--to-be-fallback-doctrine-vtswr) owns *which target to try and what to do with the verdict*; [Part 9](#part-9--to-be-verify--transaction--undo) owns *how the
-write is wrapped and how the verdict is obtained*. VTSWR is the policy; B0/B1 is the machinery. They
+makes it. [Part 8](#part-8--to-be-fallback-doctrine-vtswr) owns _which target to try and what to do with the verdict_; [Part 9](#part-9--to-be-verify--transaction--undo) owns _how the
+write is wrapped and how the verdict is obtained_. VTSWR is the policy; B0/B1 is the machinery. They
 are co-dependent and must ship together — the chain is unsafe without the verify, and the verify is
 pointless without a chain that acts on it.
 
@@ -3054,8 +3153,8 @@ danger was never inline. It is inline
 that SILENTLY does not land and then rots in source, masking every future edit.**
 
 The reviewers' fear, stated precisely (claude position, `brainstorm-Q5:99-103`): a wrapping
-design-system component can swallow the `style` prop. The inline write succeeds *as a source
-mutation* but never reaches the DOM. Worse than the lost edit is the residue — a dead
+design-system component can swallow the `style` prop. The inline write succeeds _as a source
+mutation_ but never reaches the DOM. Worse than the lost edit is the residue — a dead
 `style={{...}}` stays in the source, so the next editing session reads that inline prop, concludes
 "inline is this element's styling system," and writes into the same hole again. The hole is
 self-perpetuating. This is the real failure mode behind D12's "silent inline wins the cascade
@@ -3064,8 +3163,8 @@ forever and masks future edits."
 **Landing-verification removes exactly that failure mode** while preserving the CTO's "inline is
 fine" (D24): if the inline write is verified to have landed on the DOM, it is by definition not a
 silent no-op, and the reviewers' debris scenario cannot occur. The two positions were never
-actually in conflict about *outcomes* — both sides agree silent no-ops are bad
-(`brainstorm-Q5:23-27`). They disagreed about the *terminal* behavior because neither had the
+actually in conflict about _outcomes_ — both sides agree silent no-ops are bad
+(`brainstorm-Q5:23-27`). They disagreed about the _terminal_ behavior because neither had the
 verify-and-rollback mechanism that makes inline observably safe.
 
 **But verification ALONE is insufficient — this is the non-obvious addition all three models
@@ -3079,9 +3178,9 @@ collapses the doctrine back into one of the two original broken positions.
 
 Consequence for the spec: VTSWR is the deliberate reversal of the unification-plan / phase2
 "InlineStyleAdapter is the permanent universal fallback" language (D12, D1). That superseded
-text is retracted in **[Part 4](#part-4--discrepancy-ledger) [§4.2](#42-specspec-reversals-d12-d18)**; this section is the *engineering reason* for the retraction.
+text is retracted in **[Part 4](#part-4--discrepancy-ledger) [§4.2](#42-specspec-reversals-d12-d18)**; this section is the _engineering reason_ for the retraction.
 The retraction is narrow: it kills "silent universal inline," NOT "inline as a floor." Inline
-remains a legitimate terminal target — it is now a *verified* terminal target.
+remains a legitimate terminal target — it is now a _verified_ terminal target.
 
 ---
 
@@ -3097,6 +3196,7 @@ a valid bottom-of-chain candidate (sourceForm `scriptReactStyleRule`, the inline
 `lib/style-read/types.ts:64`).
 
 **Inline CANNOT express:**
+
 - pseudo-classes (`:hover`, `:focus`, `:active`)
 - media / container queries (responsive breakpoints)
 - pseudo-elements (`::before`, `::after`)
@@ -3123,7 +3223,7 @@ OD-1(b) makes this split explicit: inline-floor = "project has no styling system
 inline"; wrapper-promotion = "element accepts no style channel at all." Never conflate the two.
 
 This is why the priority chain in [Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain) [§7.1](#71-the-priority-chain-per-project-per-property-per-state) marks the inline floor "base-state CSS only,
-verified": the floor is per-property *and* per-state. A single edit to one element can legitimately
+verified": the floor is per-property _and_ per-state. A single edit to one element can legitimately
 resolve to inline for its base-state `color` and to a CSS-module rule for its `:hover` color — the
 chain is resolved independently per (property, state), per [Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain) [§7.1](#71-the-priority-chain-per-project-per-property-per-state) and Q5 Agreement [§2](#part-2--glossary--term-decode)
 (`brainstorm-Q5:145-148`). "Inline is the floor" is true only inside the base-state slice of the
@@ -3142,18 +3242,18 @@ the moderator endorsed over gemini's initial "Type-C banner on every inline" (re
 banner-fatigue, `brainstorm-Q5:77-81`, Disagreement [§1](#part-1--executive-summary)).
 
 **Level 1 — Silent success (the common case).**
-The write landed in the *preferred* system for that property. No banner, no badge — only an
+The write landed in the _preferred_ system for that property. No banner, no badge — only an
 inspector **provenance line** under the field: `padding → tailwind: p-4`. This is the verified-
 inline case too: if inline is the configured preferred system ([§8.5](#85-token-system-none-and-project-bootstrap)), a landed inline write is
-Level 1, not Level 2. The provenance line is the always-on receipt that *something was written and
-where*; it is not a warning.
+Level 1, not Level 2. The provenance line is the always-on receipt that _something was written and
+where_; it is not a warning.
 
 **Level 2 — Non-blocking downgrade badge.**
 The write landed and verified, but **below** the project's preferred system — e.g. the project
 prefers a design-system prop but `<Button>`'s API does not expose `padding`, so the edit landed
 inline. A small, non-blocking badge states the downgrade and offers a path up:
 `written inline — <Button> API doesn't expose padding. [Convert]`. This makes the cascade
-*discoverable* and turns inline into a **buffer with a path up**, not a dump (claude,
+_discoverable_ and turns inline into a **buffer with a path up**, not a dump (claude,
 `brainstorm-Q5:110-113`). It never blocks the edit; the value is already applied and verified.
 **`[Convert]` is a full transactional ownership-move write, not a cosmetic chip:** it is itself a
 recursive VTSWR write (move the value from inline to the higher system) and it can alter other
@@ -3171,7 +3271,7 @@ transaction so it always matches where the value actually lives.
 **Level 3 — Blocking sync-banner (the only PRE-write stop).**
 The DOM↔source identity is `stale` — the source map / element identity can no longer be trusted
 to point at the right node ([Part 2](#part-2--glossary--term-decode) [§2.3](#23-the-six-resolution-state-words-rigorous), [Part 6](#part-6--to-be-read-the-one-read-merge-model)). VTSWR re-resolves **once**; if still stale, it
-stops *before writing anything* and shows a blocking banner with a `[Resync]` action. This is the
+stops _before writing anything_ and shows a blocking banner with a `[Resync]` action. This is the
 single case where the doctrine halts ahead of a write, because writing against a stale identity is
 how you corrupt the wrong element. `stale` NEVER falls through to the next candidate — re-resolve
 once, then banner (Q5 Agreement [§4](#part-4--discrepancy-ledger), `brainstorm-Q5:154-156`; codex `:46`). **`[Resync]` does MORE than
@@ -3185,7 +3285,7 @@ reindex the hot path does not run.
 The trigger is per `(property, state)`, and the copy is **per-candidate**, not a single "concrete
 cause" — because one gesture aggregates up to 7 candidates that fail for DIFFERENT reasons, and one
 synthetic cause string would be a lie. The exact trigger, reworded so it does not over-claim that the
-runtime can enumerate *every* React styling path (it can only enumerate the KNOWN ones):
+runtime can enumerate _every_ React styling path (it can only enumerate the KNOWN ones):
 
 ```text
 banner-level-4(property, state)  ⇔  no SAFE VERIFIED path among the KNOWN enumerated candidates:
@@ -3216,7 +3316,7 @@ the dial that answers the banner-fatigue-vs-honesty trade-off (`brainstorm-Q5:25
 provenance for the 99% case, badges for downgrades, banners only for genuine loss of control.
 
 **L1–L4 is a UI dial, not the total state machine — one verdict type drives both this and [§9.4](#94-fail-closed-the-confidence--verifiability-matrix).**
-The feedback levels are a *projection*; the authoritative outcome is ONE discriminated-union `Verdict`
+The feedback levels are a _projection_; the authoritative outcome is ONE discriminated-union `Verdict`
 (owned by [§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared), NOT re-declared here) that every other state (`Ambiguous`, `Unverifiable`,
 `HeldPendingRepair`, `RollbackFailed`, `Superseded`, `Skipped` by policy, the OD-1
 `CommittedUnverifiedOverride`) maps into, so none falls through the cracks. A single **exported total**
@@ -3229,18 +3329,30 @@ the level function and the matrix share one type, not two; see [§9.4](#94-fail-
 // `Verdict` is the §6.8 canonical union — shown here for the switch, NOT re-declared.
 function verdictToFeedbackLevel(v: Verdict): 1 | 2 | 3 | 4 {
   switch (v.kind) {
-    case 'Landed':                       return 1;  // (rendered 2 if landed below the preferred system — badge)
-    case 'Ambiguous':                    return 2;  // value transformed/clamped — surfaced; report-demote adds the badge
-    case 'CommittedUnverifiedOverride':  return 2;  // kept with a visible, audited override badge
-    case 'Skipped':                      return 2;  // policy-skipped, surfaced (never silent)
-    case 'Superseded':                   return 1;  // the newer edit owns the field; no banner for the old
-    case 'Unverifiable':                 return 2;  // surfaced report (keep) or rollback per §9.4 — never silent
-    case 'HeldPendingRepair':            return 2;  // exact+not-landed: held under writeId, B2 offered (badge)
-    case 'Inexpressible':                return 4;  // contributes to the can't-style aggregation
-    case 'NoWritableTarget':             return 4;  // confidence==='none' floor — contributes to the can't-style aggregation
-    case 'VerifyFailed':                 return 4;  // not-landed + rolled back — can't-style aggregation
-    case 'Compensated':                  return 2;  // POST-commit B3 unwind (LARGE-threshold §9.6 / collateral-broken §2.3 / AI-vision §9.7 — by `cause`): committed → compensated / landed → reverted — surfaced via §8.4-bis, never silent
-    case 'RollbackFailed':               return 3;  // blocking stop-the-line (§9.1)
+    case 'Landed':
+      return 1; // (rendered 2 if landed below the preferred system — badge)
+    case 'Ambiguous':
+      return 2; // value transformed/clamped — surfaced; report-demote adds the badge
+    case 'CommittedUnverifiedOverride':
+      return 2; // kept with a visible, audited override badge
+    case 'Skipped':
+      return 2; // policy-skipped, surfaced (never silent)
+    case 'Superseded':
+      return 1; // the newer edit owns the field; no banner for the old
+    case 'Unverifiable':
+      return 2; // surfaced report (keep) or rollback per §9.4 — never silent
+    case 'HeldPendingRepair':
+      return 2; // exact+not-landed: held under writeId, B2 offered (badge)
+    case 'Inexpressible':
+      return 4; // contributes to the can't-style aggregation
+    case 'NoWritableTarget':
+      return 4; // confidence==='none' floor — contributes to the can't-style aggregation
+    case 'VerifyFailed':
+      return 4; // not-landed + rolled back — can't-style aggregation
+    case 'Compensated':
+      return 2; // POST-commit B3 unwind (LARGE-threshold §9.6 / collateral-broken §2.3 / AI-vision §9.7 — by `cause`): committed → compensated / landed → reverted — surfaced via §8.4-bis, never silent
+    case 'RollbackFailed':
+      return 3; // blocking stop-the-line (§9.1)
     // no default: a new Verdict kind is a COMPILE error until it is mapped here.
   }
 }
@@ -3257,6 +3369,7 @@ property 5 / [§9.2](#92-verify-everywhere-via-the-preview-iframe-b1)) and surfa
 only.
 
 ![Four-level feedback in the inspector — provenance line, downgrade badge, sync-banner, can't-style banner](./assets/fig-8-4-four-level-feedback.png)
+
 <!-- ASSET-SPEC fig-8-4-four-level-feedback | KIND=mockup | Shows: (a) a quiet provenance line under a field; (b) a downgrade badge with a [Convert] chip; (c) a blocking sync-banner with [Resync]; (d) the rare can't-style banner naming the cause ('<Button> from @acme/ui forwards neither style nor className') with exit buttons. -->
 
 ---
@@ -3287,9 +3400,10 @@ never re-types a hex they already entered because a build was slow. This is the 
 **2. Every inspector control has a loader AND an error-status indicator.** Each field (color swatch,
 spacing stepper, the className combobox, every editable row) carries two affordances inline, not in a
 separate panel:
+
 - a **loader** — a per-control pending state shown from the moment the write dispatches until B0/B1
   resolve (the `editing → pending` FSM edge, [§8.6](#86-the-honest-residual-write-time-verify-cant-catch-everything)). The optimistic preview pin ([§5.1](#51-design-principles-the-invariants) two-lane) gives
-  instant *visual* feedback in the canvas; the loader gives instant *status* feedback on the control, so
+  instant _visual_ feedback in the canvas; the loader gives instant _status_ feedback on the control, so
   the user knows the write is in flight and not yet durable.
 - an **error-status indicator** — a small, persistent, CLICKABLE marker on the control when the durable
   verdict is an error/rollback (`reverted` / can't-style / kept-but-unverified). It is NOT shown for a
@@ -3301,18 +3415,19 @@ separate panel:
 
 **3. On error, an action ladder — concrete rungs, in order.** The error indicator (and the notification,
 principle 4) offer the applicable rungs for THIS error, never a generic "something failed":
+
 - **Retry** — re-run the SAME write + verify under a fresh `writeId` (the common case: a slow build that
   timed out to `unverifiable`, an HMR hiccup). One click, same target, no re-entry of the value
   (principle 1).
 - **Fall back to AI — IF applicable.** A SEPARATE rung, offered ONLY when AI is a real next step, never
   as noise. Two sub-cases of THIS rung (both are AI-fallback, kept here because they are the same rung):
-  - *auto-AI-fallback already ran and failed* → the ladder surfaces the AI failure and offers a manual
+  - _auto-AI-fallback already ran and failed_ → the ladder surfaces the AI failure and offers a manual
     re-ask (e.g. with a refined instruction), not a silent dead end;
-  - *no AI key is set* → the rung is "set an API key to let AI resolve this," which deep-links to the key
+  - _no AI key is set_ → the rung is "set an API key to let AI resolve this," which deep-links to the key
     settings; once the user sets the key they can retry the write **manually** (the system does not
     auto-fire AI behind their back just because a key appeared).
-  AI fallback is always a constrained, diff-confirmed proposal ([Part 10.3](#103-ai-output-is-a-structured-proposal-constrained-to-an-allowlist)) — the error UX is the *entry
-  point* to it, not a bypass of its allowlist.
+    AI fallback is always a constrained, diff-confirmed proposal ([Part 10.3](#103-ai-output-is-a-structured-proposal-constrained-to-an-allowlist)) — the error UX is the _entry
+    point_ to it, not a bypass of its allowlist.
 - **Fix-build-and-retry — a SEPARATE, NON-AI rung (not an AI sub-case).** For a verification failure the
   user can fix themselves — e.g. the build was broken — the user fixes the build, then retries the
   write+verify by **CLICKING the error indicator on the control** (principle 2). The click re-dispatches
@@ -3328,12 +3443,13 @@ the user can act without hunting for the field. The notification **auto-hides af
 that stays available. Nothing is lost when the toast fades: the manager is the durable record of "what
 went wrong and what I can still do about it," and the per-control error indicator remains the in-context
 anchor. The notification manager and the [§8.6](#86-the-honest-residual-write-time-verify-cant-catch-everything) style-health panel are complementary surfaces: the manager
-is recent *transactional* errors with live actions; the health panel is accumulated *rotted* writes with
+is recent _transactional_ errors with live actions; the health panel is accumulated _rotted_ writes with
 promotion affordances.
 
 **Tie to `unverifiable` ([§2.3](#23-the-six-resolution-state-words-rigorous)) — this is the UX it was missing.** `unverifiable` previously specified the
 keep/rollback POLICY (`exact + unverifiable` keeps + reports; `probable + unverifiable` rolls back — [§9.4](#94-fail-closed-the-confidence--verifiability-matrix))
 but had **no UX**. It now does, explicitly:
+
 - **`exact + unverifiable` = keep + report** → the value is APPLIED and KEPT, so the field FSM ([§8.6](#86-the-honest-residual-write-time-verify-cant-catch-everything)) is
   in **`landed`** — but `landed` carrying the degraded `Unverifiable` verdict, which the error-status
   indicator surfaces as a Level-2 report (not a new FSM state — `landed` is the kept state, the badge
@@ -3342,10 +3458,10 @@ but had **no UX**. It now does, explicitly:
 - **`probable + unverifiable` = rollback** → the source reverts, the entered value is PRESERVED on the
   control (principle 1), the error indicator + notification carry the **Fix-and-retry / Retry / AI** ladder
   (the dominant cause is a slow build → fix or wait, then click to retry the write+verify).
-This is also the home of the [§2.3](#23-the-six-resolution-state-words-rigorous) `collateral-broken` surface (rollback + surface), the OD-1 ext-host
-"apply anyway" override (rendered as a visibly-marked, audited keep with a re-verify action, [§13.2](#132-od-1--inline-floor-vs-skip-banner-d24-the-headline--ratified)), and
-every B3/[§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) post-commit compensation. Every error verdict in the system has exactly one of these UX
-shapes — none falls through as a silent flip or a value the user has to re-enter.
+  This is also the home of the [§2.3](#23-the-six-resolution-state-words-rigorous) `collateral-broken` surface (rollback + surface), the OD-1 ext-host
+  "apply anyway" override (rendered as a visibly-marked, audited keep with a re-verify action, [§13.2](#132-od-1--inline-floor-vs-skip-banner-d24-the-headline--ratified)), and
+  every B3/[§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) post-commit compensation. Every error verdict in the system has exactly one of these UX
+  shapes — none falls through as a silent flip or a value the user has to re-enter.
 
 **`collateral-broken` flows through the canonical B3 compensation outcome — the SAME one the [§9.6](#96-visual-regression-guard-b3--repair-sequencing)
 LARGE-threshold unwind already needs.** It is a post-commit B3 result, NOT a resolver/B1/[§9.4](#94-fail-closed-the-confidence--verifiability-matrix) outcome:
@@ -3366,6 +3482,7 @@ pipeline, so the [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-si
 > per-control loader + clickable error indicator with the action ladder, and the popped notification that
 > auto-hides into a notification manager. (Brief only — the PNG is not yet rendered; the embed lands when
 > the asset is produced.)
+
 <!-- ASSET-SPEC fig-8-4-bis-error-rollback-ux | KIND=mockup | STATUS=brief-only (PNG not yet rendered — do not add the ![..] embed until docs/specs/assets/fig-8-4-bis-error-rollback-ux.png exists) | Shows: (a) an inspector field mid-write with its inline loader; (b) the same field after a rollback — entered value PRESERVED in a dirty "entered, not applied" state with a clickable error-status indicator; (c) the indicator expanded to the action ladder (Retry / Fall back to AI / Set API key / Fix build & retry); (d) a notification that popped with the same action buttons; (e) the notification manager list where auto-hidden errors stay reviewable. Tie the `unverifiable` keep+report and the `collateral-broken` rollback+surface cases to these affordances. -->
 
 ---
@@ -3373,7 +3490,7 @@ pipeline, so the [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-si
 ### 8.5 token-system `none` and project bootstrap
 
 **Tokens are a VALUE layer, never a write target.** `tokenSystem=none` does NOT block styling.
-A project with no design tokens still styles fine: raw values flow through the *same* priority
+A project with no design tokens still styles fine: raw values flow through the _same_ priority
 chain ([Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain) [§7.1](#71-the-priority-chain-per-project-per-property-per-state)), and token-snap (`16px → spacing-4`) only engages when tokens exist AND the
 value maps cleanly — and even then the snap is **visible** (`(spacing-4)` UI feedback), never a
 silent value substitution. Source: Q5 Agreement [§6](#part-6--to-be-read-the-one-read-merge-model) (`brainstorm-Q5:160-162`), codex `:56-58`.
@@ -3425,7 +3542,7 @@ the one product disagreement in Q5, Disagreement [§2](#part-2--glossary--term-d
 product choice — OD-1(a) ratifies install-Tailwind as the recommended/highlighted default, while the
 card still offers the `styles.css` and keep-inline alternatives so the user is not forced.)
 
-**If the user chooses inline-as-policy:** inline becomes the *preferred* system, so the [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence)
+**If the user chooses inline-as-policy:** inline becomes the _preferred_ system, so the [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence)
 Level-2 downgrade badges **disappear** — there is no longer a "higher" system to downgrade from.
 A landed inline write is now Level-1 silent success. **Verification stays in force regardless**
 (`brainstorm-Q5:126-127`): inline-as-policy still verifies every write lands. The user opted into
@@ -3454,8 +3571,8 @@ land TODAY and rot TOMORROW.** Source: claude position, the only model that pres
 The failure mode: a verified-landed inline write is correct at write time. Later, someone wraps the
 component in a parent that no longer forwards the `style` prop, or refactors the component's prop
 surface. The inline value silently stops reaching the DOM. **Write-time verification cannot catch
-this** — the verify ran, passed, and is long over; the rot happens in a future edit to *different*
-code. VTSWR guarantees "no unverified write survives the *session*"; it does not and cannot
+this** — the verify ran, passed, and is long over; the rot happens in a future edit to _different_
+code. VTSWR guarantees "no unverified write survives the _session_"; it does not and cannot
 guarantee "every landed write stays landed forever."
 
 This is the boundary of the doctrine, not a hole in it. The cure is three structural pieces, none
@@ -3488,7 +3605,7 @@ into the B0/B1 core, not a later phase:
 
 1. **Provenance records + the [§8.6](#86-the-honest-residual-write-time-verify-cant-catch-everything) health/retro-verify panel are core.** They are the ONLY surface
    that drains the inline buffer and retro-verifies — required the MOMENT any inline / `exact +
-   unverifiable` / OD-1 apply-anyway write can exist (Phase 2), not a Phase-N nicety. Every write
+unverifiable` / OD-1 apply-anyway write can exist (Phase 2), not a Phase-N nicety. Every write
    records its channel + proof level ([§8.1](#81-the-core-rule--verified-transactional-style-writes-with-rollback) property 5); the panel re-grades writes that decay
    (owner-proven → effect-only) and surfaces them.
 2. **Per-edit explicit target override (OD-8) is a chain PREREQUISITE, not a cosmetic chip.** It is
@@ -3512,13 +3629,13 @@ as `landed → reverted`). So the field UI always reflects the durable verdict (
 preview/durable split rendered per field), and a demotion/revert is a visible state transition, never a
 silent flip.
 
-> **Carried to [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) (OD-1, [§13.2](#132-od-1--inline-floor-vs-skip-banner-d24-the-headline--ratified)):** the one residual *decision*, distinct from this residual
-> *limitation*, is the `unverifiable` escape hatch on the VS Code ext host. The ext host has no
+> **Carried to [Part 13](#part-13--decision-register-od-1od-5-ratified-by-cto-od-6od-11-open) (OD-1, [§13.2](#132-od-1--inline-floor-vs-skip-banner-d24-the-headline--ratified)):** the one residual _decision_, distinct from this residual
+> _limitation_, is the `unverifiable` escape hatch on the VS Code ext host. The ext host has no
 > direct DOM/computed-style access (AS-IS [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain) realm matrix, `computedStyle:{}`), so a write there
 > can be `unverifiable` rather than verified-landed or verified-failed. Q5 split on it
 > (Disagreement [§5](#part-5--to-be-unified-architecture), `brainstorm-Q5:195-199`): codex/SRE allow an explicit, audited,
 > visibly-marked "apply anyway"; gemini treats `unverifiable` as a hard failure. The master spec's
-> position ([Part 9](#part-9--to-be-verify--transaction--undo) [§9.2](#92-verify-everywhere-via-the-preview-iframe-b1)) is that verification round-trips through the preview *panel's* iframe even
+> position ([Part 9](#part-9--to-be-verify--transaction--undo) [§9.2](#92-verify-everywhere-via-the-preview-iframe-b1)) is that verification round-trips through the preview _panel's_ iframe even
 > in the ext host, so `unverifiable` should be rare — but the policy when it does occur
 > (defer/halt + visible status vs. audited apply-anyway) is a CTO decision, not settled here.
 
@@ -3526,7 +3643,7 @@ silent flip.
 
 > Detailed view of the **verify (DID it land)** stage and the transaction that wraps every write.
 > Almost entirely from Q3. The model is a SEQUENCE — `plan (WHERE) → write → verify → classify →
-> [opt-in repair]` (Source: 5.2, Q3 headline) — and this Part owns the bracket around it: the B0
+[opt-in repair]` (Source: 5.2, Q3 headline) — and this Part owns the bracket around it: the B0
 > transaction that opens before the planner runs, the B1 verify that closes it, and the cross-file
 > undo journal that makes the whole edit one atomic Ctrl-Z. Verification is **authoritative and
 > fail-CLOSED**: an unverified write is never promoted to landed (`?? false`, never `?? true`).
@@ -3565,7 +3682,7 @@ silent flip.
 >    Before applying any inverse patch (rollback, B3 compensation, OR crash-recovery replay), compare the
 >    target span's current on-disk hash and classify into exactly one branch: `current == after-hash` →
 >    apply the inverse; `current == before-hash` → forward never landed, skip; `current == the after-hash
->    of a LATER committed writeId owning the span` → skip as **Superseded** (NOT a failure); else →
+of a LATER committed writeId owning the span` → skip as **Superseded** (NOT a failure); else →
 >    `rollback_failed` (surface to the user, never silent debris). `rollback_failed` is the FOURTH branch
 >    ONLY — never unconditional.
 > 4. **The supersession key is the element-INDEPENDENT `WriteTargetRef`.** Rollback/mutation supersession
@@ -3576,7 +3693,7 @@ silent flip.
 >    actually closes the cross-element clobber.)
 > 5. **A terminal saga state is NEVER auto-replayed.** Crash recovery resumes ONLY non-terminal states
 >    (the transient and held sets). Every terminal in `{committed, rolled_back, partially_committed(n/m),
->    rollback_failed, superseded, compensated}` is skipped on restart — replaying one would double-revert.
+rollback_failed, superseded, compensated}` is skipped on restart — replaying one would double-revert.
 > 6. **`keep-report` / `report-demote` are DURABLE COMMITS, not held states.** Both leave the source
 >    CHANGED on disk and MUST map to the `committed` terminal (carrying degraded verdict metadata), so
 >    crash recovery skips them like any commit and a kept-with-report edit can never silently vanish.
@@ -3656,38 +3773,40 @@ naive "snapshot then revert" pretends away:
   is already gone by the time the edit sits `held_pending_repair`, so a slider burst's next writeId
   acquires the same file freely instead of timing out behind the held edit — the OD-11 "blast radius:
   small" claim ([§13.7](#137-od-6-through-od-11--the-second-tier-opens)) holds because the held state lives in the queue, not under a lock.
+
 - **Durable write-ahead journal with crash recovery.** Inverse patches are fsynced to the journal
   BEFORE any forward patch touches a source file, AND the journal is transitioned to and fsynced as
   `forward_in_progress` (carrying each target's `before-hash` + expected `after-hash`) BEFORE the first
   forward patch mutates a file (apply-intent is write-ahead, step 3 — so no forward mutation can ever land
   under a still-`snapshotted` record and survive a crash un-rollbackable; the [§9.5](#95-one-atomic-undo-across-files--systems-the-journal) WAL). On startup, B0 scans for every journal
   whose status is **NOT IN the terminal set** `{committed, rolled_back, partially_committed(n/m),
-  rollback_failed, superseded, compensated}` — i.e. the transient states `{open, snapshotted,
-  forward_in_progress, rolling_back, compensating}` AND the two held states `{forward_applied_pending_verify,
-  held_pending_repair}`. The TRANSIENT records are auto-replayed (inverse patches) to recover; the HELD
+rollback_failed, superseded, compensated}` — i.e. the transient states `{open, snapshotted,
+forward_in_progress, rolling_back, compensating}` AND the two held states `{forward_applied_pending_verify,
+held_pending_repair}`. The TRANSIENT records are auto-replayed (inverse patches) to recover; the HELD
   records are NOT auto-replayed but are rolled back WITH a user notice (their verify/B2-offer TTL is dead
   after a crash — see the table). A terminal record is NEVER touched; auto-replaying one would
   double-revert a `compensated` saga or revert a target a newer committed writeId now owns. The recovery
   action per status is fixed by this table (every non-terminal status is handled; no terminal status is
   auto-replayed):
 
-  | journal status on restart | class | recovery action |
-  |---|---|---|
-  | `open` / `snapshotted` | transient (pre-forward) | discard ONLY after verifying on-disk hash == recorded `before-hash` for EVERY target (== no forward patch landed; nothing to undo). On ANY mismatch (a forward patch landed before `forward_in_progress` was fsynced — only possible if the step-3 ordering is violated) DO NOT discard: treat exactly as `forward_in_progress` and apply the four-way CAS recovery (step 5) |
-  | `forward_in_progress` | transient | apply the four-way CAS classification (step 5) per target: `current == after-hash` → replay inverse (CAS-guarded, reverse-commit-order); `current == before-hash` → forward never landed, skip; `current == after-hash of a LATER committed writeId owning the span` → skip as Superseded; else → `rollback_failed`. A forward patch may be half-applied across targets, so classify each target independently |
-  | `rolling_back` | transient | resume the inverse replay where it stopped (CAS-guarded) |
-  | `compensating` | transient | resume the B3 compensating inverse replay (CAS-guarded) |
-  | `forward_applied_pending_verify` | held (NOT auto-replayed) | the forward patch landed but B1 verify never resolved; ROLL BACK with a user notice (the pending verify is lost on crash — never silently keep an unverified write) |
-  | `held_pending_repair` | held (NOT auto-replayed) | OD-11 held an `exact+not-landed` edit while offering B2; the offer's TTL is dead after a crash, so ROLL BACK with a user notice naming the held edit (never silently drop the B2 offer) |
-  | `committed` | TERMINAL | skip — the edit stands; no replay. Covers degraded-but-kept commits too (a `keep-report` / `report-demote` disposition is `committed` with degraded verdict metadata, [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) — NOT a held state, so it is skipped, never crash-rolled-back) |
-  | `partially_committed(n/m)` | TERMINAL (derived) | skip — the ledger already records which hunks committed vs reverted; no replay |
-  | `rolled_back` | TERMINAL | skip — already unwound; no replay |
-  | `compensated` | TERMINAL | skip — already B3-unwound; replaying would be a SECOND revert |
-  | `superseded` | TERMINAL | skip the inverse — a newer edit to the same target landed first ([§9.4](#94-fail-closed-the-confidence--verifiability-matrix)); reconciled, never reverted |
-  | `rollback_failed` | TERMINAL | inspect + RE-SURFACE to the user (the [§9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files) stop-the-line); never blind-replay — explicit user-directed re-attempt only |
+  | journal status on restart        | class                    | recovery action                                                                                                                                                                                                                                                                                                                                                                                                |
+  | -------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `open` / `snapshotted`           | transient (pre-forward)  | discard ONLY after verifying on-disk hash == recorded `before-hash` for EVERY target (== no forward patch landed; nothing to undo). On ANY mismatch (a forward patch landed before `forward_in_progress` was fsynced — only possible if the step-3 ordering is violated) DO NOT discard: treat exactly as `forward_in_progress` and apply the four-way CAS recovery (step 5)                                   |
+  | `forward_in_progress`            | transient                | apply the four-way CAS classification (step 5) per target: `current == after-hash` → replay inverse (CAS-guarded, reverse-commit-order); `current == before-hash` → forward never landed, skip; `current == after-hash of a LATER committed writeId owning the span` → skip as Superseded; else → `rollback_failed`. A forward patch may be half-applied across targets, so classify each target independently |
+  | `rolling_back`                   | transient                | resume the inverse replay where it stopped (CAS-guarded)                                                                                                                                                                                                                                                                                                                                                       |
+  | `compensating`                   | transient                | resume the B3 compensating inverse replay (CAS-guarded)                                                                                                                                                                                                                                                                                                                                                        |
+  | `forward_applied_pending_verify` | held (NOT auto-replayed) | the forward patch landed but B1 verify never resolved; ROLL BACK with a user notice (the pending verify is lost on crash — never silently keep an unverified write)                                                                                                                                                                                                                                            |
+  | `held_pending_repair`            | held (NOT auto-replayed) | OD-11 held an `exact+not-landed` edit while offering B2; the offer's TTL is dead after a crash, so ROLL BACK with a user notice naming the held edit (never silently drop the B2 offer)                                                                                                                                                                                                                        |
+  | `committed`                      | TERMINAL                 | skip — the edit stands; no replay. Covers degraded-but-kept commits too (a `keep-report` / `report-demote` disposition is `committed` with degraded verdict metadata, [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) — NOT a held state, so it is skipped, never crash-rolled-back)                                                                                                              |
+  | `partially_committed(n/m)`       | TERMINAL (derived)       | skip — the ledger already records which hunks committed vs reverted; no replay                                                                                                                                                                                                                                                                                                                                 |
+  | `rolled_back`                    | TERMINAL                 | skip — already unwound; no replay                                                                                                                                                                                                                                                                                                                                                                              |
+  | `compensated`                    | TERMINAL                 | skip — already B3-unwound; replaying would be a SECOND revert                                                                                                                                                                                                                                                                                                                                                  |
+  | `superseded`                     | TERMINAL                 | skip the inverse — a newer edit to the same target landed first ([§9.4](#94-fail-closed-the-confidence--verifiability-matrix)); reconciled, never reverted                                                                                                                                                                                                                                                     |
+  | `rollback_failed`                | TERMINAL                 | inspect + RE-SURFACE to the user (the [§9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files) stop-the-line); never blind-replay — explicit user-directed re-attempt only                                                                                                                                                                                                                     |
 
   The CAS-on-hash and 3-way-rebase below are the backstop that keeps even a mis-classified replay from
   corrupting content; this table is the CONTRACT that makes the backstop unnecessary for terminal records.
+
 - **Per-file serialization across writeIds (no inter-saga clobber).** CAS-on-hash protects ONE saga
   against external mutation, but it does not order TWO concurrent writeIds whose snapshot/forward/inverse
   windows interleave on the SAME file (rapid edits, or a slider drag opening writeId N+1 while N's
@@ -3744,14 +3863,14 @@ the saga can reach — so it is `{committed, reverted, compensated, superseded-s
 NOT a 2-valued `{committed, reverted}` (which cannot express the B3-unwound, supersession-skipped, or
 partial-revert-failure cases). The saga TERMINAL is then a pure function of the hunk-status multiset:
 
-| per-hunk statuses across the ledger | saga terminal |
-|---|---|
-| all `committed` | `committed` |
-| all `reverted` | `rolled_back` |
-| mix of `committed` + `reverted` (≥1 each) | `partially_committed(n/m)` — n committed, m−n reverted |
-| ≥1 `compensated` (B3 unwound a committed hunk), rest committed/reverted | `compensated` |
-| ≥1 `superseded-skipped` (inverse skipped — a later committed writeId owns the span, [§9.4](#94-fail-closed-the-confidence--verifiability-matrix)), no `revert-failed` | `superseded` |
-| ≥1 `revert-failed` (an inverse patch failed its CAS, step 5 fourth branch) | `rollback_failed` (stop-the-line; dominates) |
+| per-hunk statuses across the ledger                                                                                                                                   | saga terminal                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| all `committed`                                                                                                                                                       | `committed`                                            |
+| all `reverted`                                                                                                                                                        | `rolled_back`                                          |
+| mix of `committed` + `reverted` (≥1 each)                                                                                                                             | `partially_committed(n/m)` — n committed, m−n reverted |
+| ≥1 `compensated` (B3 unwound a committed hunk), rest committed/reverted                                                                                               | `compensated`                                          |
+| ≥1 `superseded-skipped` (inverse skipped — a later committed writeId owns the span, [§9.4](#94-fail-closed-the-confidence--verifiability-matrix)), no `revert-failed` | `superseded`                                           |
+| ≥1 `revert-failed` (an inverse patch failed its CAS, step 5 fourth branch)                                                                                            | `rollback_failed` (stop-the-line; dominates)           |
 
 `revert-failed` dominates (any one forces `rollback_failed`); otherwise the terminal follows the table top
 to bottom. This
@@ -3760,31 +3879,31 @@ failed hunk does NOT punitively revert the other six (preserving the report-demo
 punish one element for another's failure" spirit). **"One editor undo step" is redefined as inversion of
 the saga's NET effect** — undo replays every committed hunk's inverse under the writeId header, so the
 user still sees one Ctrl+Z that unwinds exactly what landed (6 hunks here), not m separate undo entries
-and not a no-op for the reverted hunk.
-5. **Inverse-patch application is classified by ONE normative four-way CAS rule (and `rollback_failed`
-   is the FOURTH branch only, not unconditional).** Before applying any inverse patch — on rollback,
-   on B3 compensation, AND on crash-recovery replay — B0 compares the target span's CURRENT on-disk hash
-   against the journal and classifies into exactly one of four branches (this single rule is referenced
-   by the recovery table, by B3 compensation, and by [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) supersession, so the four sites cannot drift):
-   - `current == after-hash` (the value we wrote is still there) → **apply the inverse** (the normal revert).
-   - `current == before-hash` (the forward patch never landed, or was already cleanly reverted) → **skip**;
-     forward never landed, there is nothing to undo. Mark the hunk `reverted`.
-   - `current == the after-hash of a LATER committed `writeId` that OWNS this span` (journal lookup —
-     a newer edit superseded ours, [§9.4](#94-fail-closed-the-confidence--verifiability-matrix)) → **skip as `Superseded`**, NOT a failure. Mark the hunk
-     `superseded-skipped`. This is the benign supersession the path-keyed queue's "rebased 3-way or
-     skipped, never force-applied" rule already anticipates — never force-applied over the newer value.
-   - **none of the above** (the span was mutated by something outside our journal we cannot account for)
-     → **`rollback_failed`**: mark the hunk `revert-failed`, the saga records `rollback_failed`, leaves
-     the partially-reverted state on disk under the dangling journal, and **surfaces it to the user** (a
-     blocking notice naming the files that could not be reverted and the journal id) — it is NEVER silent
-     debris. Recovery is manual or on next startup, but the user is told the edit is in an inconsistent
-     state.
+and not a no-op for the reverted hunk. 5. **Inverse-patch application is classified by ONE normative four-way CAS rule (and `rollback_failed`
+is the FOURTH branch only, not unconditional).** Before applying any inverse patch — on rollback,
+on B3 compensation, AND on crash-recovery replay — B0 compares the target span's CURRENT on-disk hash
+against the journal and classifies into exactly one of four branches (this single rule is referenced
+by the recovery table, by B3 compensation, and by [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) supersession, so the four sites cannot drift):
 
-   So a stale inverse whose hunk was superseded by a later committed `writeId` resolves to the THIRD
-   branch (`superseded`), NOT `rollback_failed` — closing the false-alarm-vs-benign-skip ambiguity between
-   this step and the path-keyed-queue rule. This is `design-intent` mechanism realizing [§9.1.0](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files) invariants
-   2 and 3; the exact four-way classification and recovery ordering are validated by the executable model
-   per the [§9.1.0](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files) validation gate, not by further prose.
+- `current == after-hash` (the value we wrote is still there) → **apply the inverse** (the normal revert).
+- `current == before-hash` (the forward patch never landed, or was already cleanly reverted) → **skip**;
+  forward never landed, there is nothing to undo. Mark the hunk `reverted`.
+- `current == the after-hash of a LATER committed `writeId` that OWNS this span` (journal lookup —
+  a newer edit superseded ours, [§9.4](#94-fail-closed-the-confidence--verifiability-matrix)) → **skip as `Superseded`**, NOT a failure. Mark the hunk
+  `superseded-skipped`. This is the benign supersession the path-keyed queue's "rebased 3-way or
+  skipped, never force-applied" rule already anticipates — never force-applied over the newer value.
+- **none of the above** (the span was mutated by something outside our journal we cannot account for)
+  → **`rollback_failed`**: mark the hunk `revert-failed`, the saga records `rollback_failed`, leaves
+  the partially-reverted state on disk under the dangling journal, and **surfaces it to the user** (a
+  blocking notice naming the files that could not be reverted and the journal id) — it is NEVER silent
+  debris. Recovery is manual or on next startup, but the user is told the edit is in an inconsistent
+  state.
+
+So a stale inverse whose hunk was superseded by a later committed `writeId` resolves to the THIRD
+branch (`superseded`), NOT `rollback_failed` — closing the false-alarm-vs-benign-skip ambiguity between
+this step and the path-keyed-queue rule. This is `design-intent` mechanism realizing [§9.1.0](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files) invariants
+2 and 3; the exact four-way classification and recovery ordering are validated by the executable model
+per the [§9.1.0](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files) validation gate, not by further prose.
 
 **Realm asymmetry is absorbed into one shared contract.** Today the two realms undo differently and
 this is the single biggest source of "the change half-reverted" bugs:
@@ -3802,7 +3921,7 @@ this is the single biggest source of "the change half-reverted" bugs:
   "content unchanged → NO undo entry" inside `_withUndoTracking` (`:220`), and a redo-stack clear
   before any write in the sibling batch method that shares the same invariant (`:236`). But cross-file
   writes are fragile — when `contentBeforeWrite` is unavailable it
-  *skips the undo snapshot* for that file (`:200`), which is exactly the partial-revert hole B0
+  _skips the undo snapshot_ for that file (`:200`), which is exactly the partial-revert hole B0
   closes.
 
 Status today: **PARTIAL.** Both realms have a working single-file undo (AS-IS [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b/[§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)c); NEITHER has a
@@ -3865,12 +3984,12 @@ DOM, but the preview PANEL does. So B1's computed-style read is a TRANSPORT ROW,
 across realms, exactly as the realm model in 5.4 establishes (realm differences are transport rows
 over one contract, not separate code paths). Source: Q3 verification-in-ext.
 
-| Concern | Server-backed SaaS | VS Code ext | Serverless SaaS (NodePod/OPFS) |
-|---|---|---|---|
-| computed-style read | iframe `getComputedStylesFromIframe` (same-origin) | host→preview-panel→iframe `requestComputedStyle` RPC | iframe read against the in-pod preview (same-origin) |
-| cascade matched-rules | iframe `document.styleSheets` traversal | host→preview-panel→iframe matched-rules RPC | iframe `document.styleSheets` traversal (pod preview) |
-| settle handshake | `import.meta.hot` render-echo / CSS stylesheet-epoch | `awaitRecompile` render-echo / CSS stylesheet-epoch | in-pod dev-server render-echo / CSS stylesheet-epoch |
-| B3 screenshot | browser canvas capture | preview-panel screenshot RPC (NOT Docker) | browser canvas capture (pod preview) |
+| Concern               | Server-backed SaaS                                   | VS Code ext                                          | Serverless SaaS (NodePod/OPFS)                        |
+| --------------------- | ---------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------- |
+| computed-style read   | iframe `getComputedStylesFromIframe` (same-origin)   | host→preview-panel→iframe `requestComputedStyle` RPC | iframe read against the in-pod preview (same-origin)  |
+| cascade matched-rules | iframe `document.styleSheets` traversal              | host→preview-panel→iframe matched-rules RPC          | iframe `document.styleSheets` traversal (pod preview) |
+| settle handshake      | `import.meta.hot` render-echo / CSS stylesheet-epoch | `awaitRecompile` render-echo / CSS stylesheet-epoch  | in-pod dev-server render-echo / CSS stylesheet-epoch  |
+| B3 screenshot         | browser canvas capture                               | preview-panel screenshot RPC (NOT Docker)            | browser canvas capture (pod preview)                  |
 
 The SaaS side of this is partly shipped: `startStyleVerification`
 (`client/lib/style-change-detector.ts:120`) already reads computed style from the iframe
@@ -3884,7 +4003,7 @@ a toast.
 **The B1 procedure.** After a CORRELATED settle (9.3), read live computed style PLUS classlist /
 inline-attr on the edited element, and classify against the INTENDED value. `computed(property) ==
 intended` is the **necessary** condition, never the sufficient one ([Part 8.1](#81-the-core-rule--verified-transactional-style-writes-with-rollback) property 2): a sampled
-match proves one runtime effect, not that *our* edited declaration is the cascade owner. So B1
+match proves one runtime effect, not that _our_ edited declaration is the cascade owner. So B1
 attaches a causal **proof level** to a value match — **owner-proven** (a toggle-probe flips our hunk
 off/on in the off-screen clone and the computed value follows it), **causally-affected** (toggling
 moves the value but a co-owner may share it), or **effect-only** (the value matches but the cause is
@@ -3911,14 +4030,15 @@ not the bare value match.
 **The one `ProofLevel` → `VerifyOutcome` projection (centralized, not case-scattered).** B1 projects the
 four-rung `ProofLevel` ([§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared)) onto the `VerifyOutcome` axis BEFORE calling `decide()`, by exactly this
 rule — every other mention above is an instance of it, not a separate rule:
+
 - `owner-proven` | `causally-affected`, on a **node-exclusive or co-owned** target → **`landed`** (this is
   the `b1.proof` that `Verdict.Landed` carries);
 - `effect-only` (value matches but our hunk's causation is unproven), OR a `causally-affected` match on a
   **shared/inline** target where a co-owner may be the real cause → **`not-landed`** → `VerifyFailed`;
 - `unproven` (the post-write state could NOT be read at all — distinct from `effect-only`, which IS a
   read) → **`unverifiable`** → routed through the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) matrix.
-This is why `Verdict.Landed.proof` and `decide()`'s `b1.proof` admit only `owner-proven | causally-affected`:
-the two weaker rungs are projected out before the matrix sees them.
+  This is why `Verdict.Landed.proof` and `decide()`'s `b1.proof` admit only `owner-proven | causally-affected`:
+  the two weaker rungs are projected out before the matrix sees them.
 
 **Iframe-RPC verify has same-origin / CSP / sandbox PRECONDITIONS — and a defined fallback when they
 fail.** The in-page iframe RPC (both the `getComputedStyle` read and the bridge injection) assumes the
@@ -3988,14 +4108,15 @@ write would use?** Its output, per (element, channel):
 
 ```ts
 interface ForwardDetectorResult {
-  forwardsClassName: boolean;   // does `className` reach a DOM element (vs being swallowed by the component)?
-  forwardsStyle: boolean;       // does `style` reach the DOM (vs a wrapping component eating the prop)?
-  hostProp: string | null;      // a design-system prop that maps the property (L0), else null
-  confidence: 'high' | 'low';   // high requires a type/LSP signal or an explicit forward; else low
+  forwardsClassName: boolean; // does `className` reach a DOM element (vs being swallowed by the component)?
+  forwardsStyle: boolean; // does `style` reach the DOM (vs a wrapping component eating the prop)?
+  hostProp: string | null; // a design-system prop that maps the property (L0), else null
+  confidence: 'high' | 'low'; // high requires a type/LSP signal or an explicit forward; else low
 }
 ```
 
 The detection algorithm, strongest evidence first:
+
 1. **Type/LSP signal (high confidence).** Read the component's prop type via the LSP/TS type backstop:
    does it declare `className?: string` / `style?: CSSProperties`, and is that prop spread onto a host
    element (`<div {...props}>` / explicit `className={className}`)? A typed-and-forwarded prop is a
@@ -4007,7 +4128,7 @@ The detection algorithm, strongest evidence first:
 3. **Heuristic fallback (low confidence).** No type info available — untyped JS, or **serverless
    (NodePod/OPFS) when its in-pod `tsserver` is not up** (cold/fail/timeout, [§9.8](#98-type-intelligence-lsp--applications--realm-boundary)): fall back to an
    AST-only heuristic + the B1 verify verdict — NEVER block. This is the single legitimately-degrading
-   realm row ([Part 5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract)). Note this is a *degraded-availability* fallback, not an inherent property of
+   realm row ([Part 5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract)). Note this is a _degraded-availability_ fallback, not an inherent property of
    the realm: server-backed SaaS reads the type signal from a server-side LS and serverless reads it
    from the in-pod `tsserver` when booted ([§9.8](#98-type-intelligence-lsp--applications--realm-boundary)); the heuristic is the floor each falls to, not the
    only thing those realms can do.
@@ -4018,7 +4139,7 @@ case). A low-confidence result does NOT block — it admits the candidate as `pr
 the arbiter (the confidence×verifiability matrix, [§9.4](#94-fail-closed-the-confidence--verifiability-matrix)).
 
 **A1 `confidence` ('high'|'low') is NOT identical to the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) `Confidence` axis ('exact'|'probable'|
-'none'); it is an INPUT to it.** The detector's two-valued forwarding confidence is *one* signal the
+'none'); it is an INPUT to it.** The detector's two-valued forwarding confidence is _one_ signal the
 planner (A2) folds — together with incumbent-owner recognition, probe-positive evidence, and
 type-forwarding — into the three-valued `Confidence` the matrix reads. The mapping:
 
@@ -4090,6 +4211,7 @@ inline / cva vs a CSS file) is mandatory. `timeout / no-edge` ⇒ `unverifiable`
    and rolls back a write that is, in fact, landing; freeze the transition for the single read frame.
 
 ![Dual settle signals: a className/inline edit waits for a TSX render-echo, a CSS-file edit waits for a stylesheet-epoch bump.](./assets/fig-9-3-dual-settle-signals.svg)
+
 <!-- ASSET-SPEC fig-9-3-dual-settle-signals | KIND=svg | Two timelines — className/inline edit (write → TSX render-echo on writeId → read) and CSS-file edit (write → stylesheet-epoch bump → read) — showing why a CSS edit must NOT wait for a render echo. -->
 
 Status today: **PARTIAL.** The SaaS `style-change-detector` already does a pre/post-HMR compare
@@ -4118,11 +4240,11 @@ The verify-outcome columns are the `VerifyOutcome` axis ([§6.8](#68-canonical-s
 each cell's keep/rollback decision carries a canonical `Verdict` ([§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared)) that `verdictToFeedbackLevel`
 ([§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence)) renders to a UI level.
 
-| confidence | landed | not-landed | ambiguous | unverifiable |
-|---|---|---|---|---|
-| **exact** | commit | **B2 offer (held-pending; rollback on decline/TTL) — PROVISIONAL, OD-11** | report, keep | **keep + report** (write was already trusted) |
-| **probable** | commit | rollback | report, demote | **ROLLBACK — NEVER silently keep** |
-| **none** | (no write — reported floor / `NO_WRITABLE_TARGET`) | — | — | — |
+| confidence   | landed                                             | not-landed                                                                | ambiguous      | unverifiable                                  |
+| ------------ | -------------------------------------------------- | ------------------------------------------------------------------------- | -------------- | --------------------------------------------- |
+| **exact**    | commit                                             | **B2 offer (held-pending; rollback on decline/TTL) — PROVISIONAL, OD-11** | report, keep   | **keep + report** (write was already trusted) |
+| **probable** | commit                                             | rollback                                                                  | report, demote | **ROLLBACK — NEVER silently keep**            |
+| **none**     | (no write — reported floor / `NO_WRITABLE_TARGET`) | —                                                                         | —              | —                                             |
 
 The **`exact + not-landed`** cell is marked PROVISIONAL because its disposition is the live open
 decision OD-11 ([§13.7](#137-od-6-through-od-11--the-second-tier-opens)) — hold-pending is the recommendation, immediate-rollback the live alternative;
@@ -4171,7 +4293,7 @@ condition)` is unsafe whenever two elements resolve to a SHARED write target (a 
   target, NOT the element. `WriteTargetRef` here is the element-INDEPENDENT projection defined in [§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared) (it
   is NOT `StyleIdentity`, which carries the element's `nodeId`/`occurrenceIndex` and is used only to ADDRESS
   a write): for a shared channel it is `{channel, canonicalProjectRelPath, ruleSelector|classOrTokenId,
-  property}` with the element fields DROPPED, so two elements sharing one physical rule project to the SAME
+property}` with the element fields DROPPED, so two elements sharing one physical rule project to the SAME
   `WriteTargetRef` and compare EQUAL; for a node-exclusive channel (inline / node-local decl) the locus
   legitimately retains `nodeId`. (`property` lives on `WriteTargetRef` itself, so the triple references it
   once for emphasis, not twice — no double-count, [§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared).) A pending durable verdict is bound to this triple
@@ -4213,15 +4335,15 @@ the load-bearing line.]
 // old `{ proof; unverifiableCause }` bag). `b1.outcome` IS the §9.2 `VerifyOutcome` value — decide()
 // switches on it directly, so the separate `outcome` parameter is gone (one source of the classification).
 type B1OutcomeDetails =
-  | { outcome: 'landed'; proof: 'owner-proven' | 'causally-affected' }   // proof is meaningful ONLY here
-  | { outcome: 'ambiguous' }                                             // no extra detail
-  | { outcome: 'not-landed' }                                           // no extra detail
+  | { outcome: 'landed'; proof: 'owner-proven' | 'causally-affected' } // proof is meaningful ONLY here
+  | { outcome: 'ambiguous' } // no extra detail
+  | { outcome: 'not-landed' } // no extra detail
   | { outcome: 'unverifiable'; unverifiableCause: 'timeout' | 'realm' | 'remount' }; // cause ONLY here
 
 function decide(
   confidence: Confidence,
   isLatestForField: boolean,
-  b1: B1OutcomeDetails,  // the B1 read classification + its per-outcome detail (never a hardcoded default)
+  b1: B1OutcomeDetails, // the B1 read classification + its per-outcome detail (never a hardcoded default)
 ): Disposition {
   // SUPERSESSION GUARD (runs first): a stale verdict is cancelled, never fired.
   if (!isLatestForField) {
@@ -4252,8 +4374,8 @@ function decide(
     case 'not-landed':
       // a REAL settle edge fired and value ≈ before (timeout/no-edge is 'unverifiable', not this)
       return confidence === 'exact'
-        // OD-11: PROVISIONAL — hold-pending is recommended, immediate-rollback is the live alternative.
-        ? { kind: 'offer-b2', hold: 'pending', verdict: { kind: 'HeldPendingRepair' } }
+        ? // OD-11: PROVISIONAL — hold-pending is recommended, immediate-rollback is the live alternative.
+          { kind: 'offer-b2', hold: 'pending', verdict: { kind: 'HeldPendingRepair' } }
         : { kind: 'rollback', reason: 'probable-not-landed', verdict: { kind: 'VerifyFailed' } };
     case 'unverifiable': {
       // could not read post-write state at all — carry the REAL B1 cause (timeout | realm | remount),
@@ -4274,11 +4396,12 @@ verdict metadata (the `Ambiguous` / `Unverifiable` verdict on the disposition, r
 report by [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence)) — NOT to a non-terminal HELD state. Crash recovery then SKIPS them exactly like any
 `committed` saga (recovery table row `committed`), so a kept-with-report edit can never silently vanish on
 the next crash. Only `offer-b2` (the OD-11 `exact+not-landed` hold) is a genuine HELD state
-(`held_pending_repair`, crash-rolled-back with notice); the keep-* / report-demote dispositions are
+(`held_pending_repair`, crash-rolled-back with notice); the keep-\* / report-demote dispositions are
 durable, degraded-but-kept commits. (If an implementation wants to distinguish them in telemetry it MAY
 use a `committed` sub-tag / `committed_reported`, but the crash-recovery class is `committed` either way.)
 
 ![Confidence × verifiability matrix: a 3×4 grid mapping pre-write confidence and verify verdict to a keep/rollback disposition.](./assets/fig-9-4-confidence-verifiability-matrix.svg)
+
 <!-- ASSET-SPEC fig-9-4-confidence-verifiability-matrix | KIND=svg | A 3×4 grid (exact/probable/none rows × landed/not-landed/ambiguous/unverifiable cols) with each cell's disposition (commit / rollback / report-keep / B2-offer). -->
 
 Status today: **BROKEN/fail-open** on the as-built D2 path (D3: literal `?? true` to be flipped) →
@@ -4327,7 +4450,7 @@ one journal entry under the shared `writeId`, and "content unchanged → no undo
 undo granularity. The abort-all-never-partial rule from the planner (7.4) and the journal are the
 same invariant on TWO DIFFERENT axes, not one absolute. The planner's `abort-all` is a PRE-DISPATCH /
 TOCTOU precondition ([§7.4](#74-frozen-plan-dumb-dispatch)): on any precondition or fingerprint mismatch it refuses to dispatch a partial
-plan *before any write touches a file*. After dispatch the journal commits PER-HUNK and DERIVES
+plan _before any write touches a file_. After dispatch the journal commits PER-HUNK and DERIVES
 `partially_committed(n/m)` when B1 verifies some hunks and rolls back others ([§9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)) — a VERIFIED partial
 outcome (the 6-land-1-revert case), never a SILENT one. So the "never partial" rule is precisely
 PRE-DISPATCH ATOMICITY plus NO-SILENT-PARTIALS — it does not forbid a post-verify per-hunk ledger, and
@@ -4369,7 +4492,7 @@ producer of the [§2.3](#23-the-six-resolution-state-words-rigorous) `collateral
 - **The mechanism, per edit kind (machine-derived expected frame, then compare).** The check synthesizes
   what the after-frame SHOULD look like and diffs it against the captured actual after-frame:
   - **MOVE** — the region-swap is the FAST PATH, valid ONLY for an absolutely/transform-positioned move
-    where no sibling reflows: swap the source-region and target-region pixels on the *before*-screenshot
+    where no sibling reflows: swap the source-region and target-region pixels on the _before_-screenshot
     to build the expected after-frame, then diff vs the actual after-frame; a delta OUTSIDE the two
     swapped regions = `collateral-broken`. **In normal flex/grid/list flow — or whenever the moved
     element and its neighbors are differently sized — a pixel swap is NOT a valid expected frame**: the
@@ -4387,8 +4510,8 @@ producer of the [§2.3](#23-the-six-resolution-state-words-rigorous) `collateral
     `collateral-broken`.
   - **WRAP / zero-diff** — ANY structural delta outside tolerance = `collateral-broken` (a refactor must
     be visually invisible, the [§8.1](#81-the-core-rule--verified-transactional-style-writes-with-rollback) property-2 zero-drift expectation).
-  Differences within tolerance (anti-alias, ≤1-px sub-pixel shift, font-hinting jitter) are IGNORED — the
-  comparison is region-masked and structural, not naive byte-equality.
+    Differences within tolerance (anti-alias, ≤1-px sub-pixel shift, font-hinting jitter) are IGNORED — the
+    comparison is region-masked and structural, not naive byte-equality.
 - **Action on `collateral-broken`.** Roll back the WHOLE `writeId` transaction (value + any wrapper +
   any file) via the same `committed → compensated` saga edge as the LARGE-threshold unwind, and **surface
   it through the [§8.4-bis](#84-bis-error-rollback--recovery-ux-ux-is-important-everywhere) error UX** (preserved input + action ladder), never a silent revert. Like the
@@ -4415,7 +4538,7 @@ value edit can NEVER auto-trigger a tree mutation; tree mutation is opt-in, sing
 preflighted, flagged. **The B2 single-element offer IS the N=1 instance of the [Part 11.4](#114-wrapper-promotion-decision-procedure--guards) procedure**:
 it runs the same 14-guard `wrapperEligibility` chain (framed there on `sel: SubjectRef[]`) with
 `sel = [E]`, so the guard set binding the offer is identical to the multi-select set by construction —
-B2 here is only the verify-stage *trigger* that OFFERS it; [Part 11.4](#114-wrapper-promotion-decision-procedure--guards) owns the procedure. AI's role
+B2 here is only the verify-stage _trigger_ that OFFERS it; [Part 11.4](#114-wrapper-promotion-decision-procedure--guards) owns the procedure. AI's role
 HERE is the Tier-4 repair step ([Part 10.2](#102-the-precedence-ladder-one-ladder-two-entry-behaviors)) — advisory and diff-confirmed, below deterministic
 resolution; per [Part 10](#part-10--to-be-ai-assisted-vs-deterministic-paths), AI's role across the styles pipeline is router + tie-breaker + repair ([Part 10](#part-10--to-be-ai-assisted-vs-deterministic-paths)
 explicitly overrules "AI = repair-only", [§10.1](#101-the-one-line-doctrine)), PLUS — added by [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) — a constrained **vision-witness**
@@ -4451,12 +4574,12 @@ PLANNED.
 
 ### 9.7 AI-vision verification — the capture → cvGate → visionClient → policyEngine → queue pipeline
 
-[§9.6](#96-visual-regression-guard-b3--repair-sequencing) ends the deterministic safety net: B1 ([§9.2](#92-verify-everywhere-via-the-preview-iframe-b1)) proves the *declaration* landed in the cascade, B3
+[§9.6](#96-visual-regression-guard-b3--repair-sequencing) ends the deterministic safety net: B1 ([§9.2](#92-verify-everywhere-via-the-preview-iframe-b1)) proves the _declaration_ landed in the cascade, B3
 diffs the edited region against the pre-write frame and unwinds a layout blow-up above the LARGE
 threshold. But a computed-style match and an SSIM-under-threshold diff are both BLIND to meaning — a
 price `100` → `1.00` is a few pixels and a semantic catastrophe, an icon that swapped to the wrong glyph
 is "within threshold," a heading that overflowed its container by 2px wraps wrong but diffs small. The
-deterministic gate proves *the value landed*; it cannot answer *did the edit look RIGHT*. [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) closes
+deterministic gate proves _the value landed_; it cannot answer _did the edit look RIGHT_. [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) closes
 that gap by promoting **AI-with-vision to a first-class, REQUIRED verifier** — it LOOKS at the
 before/after rendered screenshots with the full edit context and ASSESSES the visual outcome (a
 deterministic policy still holds the keep/rollback authority, subsection (f)) — and by
@@ -4478,10 +4601,10 @@ shape as [§9.4](#94-fail-closed-the-confidence--verifiability-matrix)'s fail-OP
 
 **Where [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) sits in the verify sequence.** It is a stage of B3, not a replacement for B1. The runtime
 order per `writeId`: B0 opens ([§9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)) → A3 writes → [§9.3](#93-the-settle-handshake--never-compile-success-or-timeout) correlated settle → **B1** computed-style verify
-([§9.2](#92-verify-everywhere-via-the-preview-iframe-b1)) decides *did the declaration land* and feeds the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) matrix → saga commits → **B3 visual guard
+([§9.2](#92-verify-everywhere-via-the-preview-iframe-b1)) decides _did the declaration land_ and feeds the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) matrix → saga commits → **B3 visual guard
 ([§9.6](#96-visual-regression-guard-b3--repair-sequencing))** captures and diffs, including the **deterministic collateral check** ([§9.6](#96-visual-regression-guard-b3--repair-sequencing), the [§2.3](#23-the-six-resolution-state-words-rigorous)
 `collateral-broken` producer — a non-AI region-masked px-diff that auto-REJECTS framed collateral damage)
-→ **[§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) AI-vision** judges *did it look right*. The deterministic check only ever auto-rejects framed
+→ **[§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) AI-vision** judges _did it look right_. The deterministic check only ever auto-rejects framed
 breakage; it NEVER auto-keeps, so a clean OR inconclusive deterministic result still passes through the
 REQUIRED [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) vision pass (the [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline)(c) "no symmetric CV auto-keep" rule — every non-fatal, non-bypassed
 case is seen by the model). [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) is the meaning-aware ESCALATION above the deterministic collateral
@@ -4540,10 +4663,11 @@ callAIVision(config, {
 ```
 
 **Per-provider wire-format adapters** translate the internal block shape:
+
 - **Anthropic Messages**: `{ type:'image', source:{ type:'base64', media_type:'image/png', data } }`;
   ~5 MB/image limit, optimal long side ≤ 1568px.
 - **OpenAI Chat Completions**: `{ type:'image_url', image_url:{ url:'data:image/png;base64,…',
-  detail:'low'|'high' } }`.
+detail:'low'|'high' } }`.
 - **Gemini**: via the OpenAI-compatible endpoint → the same `image_url` data-URI; native API →
   `{ inline_data:{ mime_type:'image/png', data } }` in the adapter.
 
@@ -4559,6 +4683,7 @@ string-match the model name: `vision: true`, `structuredOutput: true`, `maxImage
 **Fallback when the configured provider has NO vision** (load-bearing — it directly enforces the CTO
 mandate): configured model → its provider's vision model → a cross-provider vision model from the catalog
 → **if none, NEVER a silent text-only keep.** This maps onto the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) fail-closed matrix exactly:
+
 - **Interactive mode** → the edit continues with status `unverified`, flagged in the inspector
   (the [§8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence) four-level feedback), queued, and **publish/export BLOCKED** (`verification_blocked`).
 - **CI / agent mode** → **fail closed** (the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) `probable + unverifiable` discipline — degradation
@@ -4589,7 +4714,7 @@ posture. Ranked defenses (top = mandatory, near-zero cost):
 2. **Strict schema / forced structured output** (~zero cost). The model returns ONLY the schema —
    Anthropic forced `tool_use` with `input_schema`, or OpenAI `response_format: json_schema, strict:true`.
    Enum verdict + bounded confidence + bounded defects (≤~5, each with a bbox) + `injection_suspected:
-   boolean` + a `note` (≤~200 chars, ALWAYS treated as data). Invalid output → one retry → fail-closed to
+boolean` + a `note` (≤~200 chars, ALWAYS treated as data). Invalid output → one retry → fail-closed to
    the rollback queue, **never default-keep**. Honest caveat: the schema protects PIPELINE INTEGRITY
    (injection can't make the system execute instructions) but not verdict CORRECTNESS (it can still try
    to flip the enum to `keep`) — hence 3 and 4.
@@ -4650,6 +4775,7 @@ The cost question (the model is 300ms–2s and expensive — is there a symmetri
 keep WITHOUT the model" fast-path?) resolves to a **single** exception, and it is NOT threshold-based. The
 only permitted CV-keep is a narrowly defined, explicitly CTO-APPROVED, audited **`no_effect_bypass`**
 requiring a TRIPLE coincidence — not a threshold:
+
 - the operation is MACHINE-DERIVED as having no visual effect (not actor-claimed);
 - before/after viewport image **HASHES are identical** (byte-identical, NOT SSIM≈1);
 - DOM GEOMETRY hashes are identical;
@@ -4695,6 +4821,7 @@ type VisualExpectation = {
   risk: 'low' | 'normal' | 'high';
 };
 ```
+
 - **Wrap/refactor** → expect zero visual drift (any real change = regression — the same [§8.1](#81-the-core-rule--verified-transactional-style-writes-with-rollback) property-2
   zero-drift expectation B1 already holds for a refactor).
 - **Drag/move** → target movement expected; collateral movement is suspicious.
@@ -4706,14 +4833,15 @@ type VisualExpectation = {
 [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) does NOT introduce a parallel verdict axis; it ADDS a second judge under the SAME fail-closed
 discipline. The two judges answer different questions and compose, they do not race:
 
-| | B1 ([§9.2](#92-verify-everywhere-via-the-preview-iframe-b1)) | [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) AI-vision (a B3 stage) |
-|---|---|---|
-| Question | *Did our declaration land in the cascade?* | *Did the committed edit look RIGHT?* |
-| Evidence | computed-style + toggle-probe `ProofLevel` ([§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared)) | before/after frames + diff crop + contract |
-| Authority | deterministic; gates the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) commit | model = witness; deterministic policy = judge |
-| Timing | pre-commit (feeds [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) matrix) | post-commit (B3 compensation, binds `afterHash`) |
+|           | B1 ([§9.2](#92-verify-everywhere-via-the-preview-iframe-b1))                                                                   | [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) AI-vision (a B3 stage) |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Question  | _Did our declaration land in the cascade?_                                                                                     | _Did the committed edit look RIGHT?_                                                                                       |
+| Evidence  | computed-style + toggle-probe `ProofLevel` ([§6.8](#68-canonical-shared-types-the-single-owner--referenced-never-re-declared)) | before/after frames + diff crop + contract                                                                                 |
+| Authority | deterministic; gates the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) commit                                   | model = witness; deterministic policy = judge                                                                              |
+| Timing    | pre-commit (feeds [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) matrix)                                         | post-commit (B3 compensation, binds `afterHash`)                                                                           |
 
 The two compose through the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) fail-closed spine — neither can fail-OPEN:
+
 - The [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) matrix is unchanged for the **pre-commit** decision (B1's `Confidence × VerifyOutcome`). [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline)
   is a **gate AFTER** that commit, so it can only ever move a `committed` saga to `compensated` (rollback),
   hold it (`human_review`), or offer `repair` — it can never upgrade a B1 `not-landed` into a keep.
@@ -4726,8 +4854,8 @@ The two compose through the [§9.4](#94-fail-closed-the-confidence--verifiabilit
   `?? keep`. Degradation (no vision model, provider down, schema-invalid twice) routes to the SAME
   `verification_blocked` / fail-closed dispositions as subsection (a), under the [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) confidence rows.
 
-This is the confidence × verifiability matrix's natural completion: [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) made the *computed-style* verdict
-fail-closed; [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) makes the *visual* verdict fail-closed too, with the model REQUIRED to look and a
+This is the confidence × verifiability matrix's natural completion: [§9.4](#94-fail-closed-the-confidence--verifiability-matrix) made the _computed-style_ verdict
+fail-closed; [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) makes the _visual_ verdict fail-closed too, with the model REQUIRED to look and a
 deterministic policy — not the model — holding the keep/rollback/repair authority.
 
 **Cross-cutting hardening (all carried from the v2 brainstorm, consistent with the rest of [Part 9](#part-9--to-be-verify--transaction--undo)):**
@@ -4764,8 +4892,8 @@ enforce-mode authority to act on the model's witness verdict is earned against a
 > editor — the live proof of the server-side SaaS transport below; **(2)** the ext go-to-definition
 > path `PanelRouter._goToDefinitionViaLsp` → `vscode.executeDefinitionProvider` for
 > `master:goToComponent` misses ([HYP-563](https://linear.app/glide-vc/issue/HYP-563)) — the live proof of the VS Code transport. Both are
-> standalone today (no shared facade, no shared contract). This subsection records the *doctrine*, the
-> *ranked applications*, and the *realm strategy* so the build does not improvise an LSP integration ad
+> standalone today (no shared facade, no shared contract). This subsection records the _doctrine_, the
+> _ranked applications_, and the _realm strategy_ so the build does not improvise an LSP integration ad
 > hoc, does not rebuild those two shipped paths, and so a reader does not mistake the rest for shipped.
 > Sources: `review --brainstorm` multi-model synthesis (codex / claude-fable / gemini, 5 rounds) for
 > the application list; a CTO realm correction (below) for the boundary.
@@ -4773,10 +4901,10 @@ enforce-mode authority to act on the model's witness verdict is earned against a
 **The doctrine — AST writes, TypeScript advises.** The deterministic AST/source-map/fiber stack stays
 the editor and the sole write path; it owns canvas-node→JSX mapping and every source mutation. The
 TypeScript language service is a **semantic ADVISOR** — types, diagnostics, references, definitions, and
-refactor *plans* — never a replacement for the write path. No model dissented. Higher-level LSP value is
+refactor _plans_ — never a replacement for the write path. No model dissented. Higher-level LSP value is
 gated on one foundation: **canvas selection → JSX location → TypeScript symbol must be trustworthy
-first** (the existing nodeRef/source-map/fiber path already gives the JSX *location*; TS is needed only
-to verify the imported *symbol identity*). Every LSP feature is exposed behind a single
+first** (the existing nodeRef/source-map/fiber path already gives the JSX _location_; TS is needed only
+to verify the imported _symbol identity_). Every LSP feature is exposed behind a single
 `TypeIntelligence` facade — `getElementTypeInfo`, `validateEdit`, `getDefinition`, `findImpact`,
 `getCompletions`, later `getRenamePlan` — so consumers depend on the **capability**, never on a realm's
 concrete LS transport, and a realm with no LS degrades the facade, not the callers. This is the [§5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract)
@@ -4798,7 +4926,7 @@ each notes the AST fallback and the LSP-vs-AST verdict.
    `TypeIntelligence` work here is to **generalize and unify that existing server-side endpoint behind
    the facade** (one program reused across consumers, the same contract reaching the ext and serverless
    transports), NOT to build the typed inspector from zero — do not rebuild or de-scope the shipped
-   endpoint. What is still greenfield is the *ext* and *serverless* transports of the same capability
+   endpoint. What is still greenfield is the _ext_ and _serverless_ transports of the same capability
    (the ext has no props editor at all until OD-9; serverless has no LS yet) and the unification under
    the facade.
 2. **Preflight (pre-apply) diagnostics** (the friction killer). Catch a type error a prop/style edit
@@ -4811,8 +4939,8 @@ each notes the AST fallback and the LSP-vs-AST verdict.
    invariant holds in degraded realms.
 3. **Selection→symbol verification** (the FOUNDATION; ties directly to A1 [§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home)). Guarantees a canvas
    node maps to the right JSX element AND the right component symbol before any type/refactor question —
-   makes cases 1/2/5/6 trustworthy. **Partially LSP:** source-maps already find the JSX *location*; TS
-   only adds *symbol-identity* proof. All realms (location half already exists).
+   makes cases 1/2/5/6 trustworthy. **Partially LSP:** source-maps already find the JSX _location_; TS
+   only adds _symbol-identity_ proof. All realms (location half already exists).
 4. **Build-time component manifest + curated design-system registry**
    (`hyperide-manifest.json`). The force multiplier: shift type extraction to a build-time artifact so a
    typed inspector works in ALL realms — including a cold serverless pod and a not-yet-warm
@@ -4849,26 +4977,26 @@ each notes the AST fallback and the LSP-vs-AST verdict.
 - **structural component-tree explorer** (single-file JSX outline) — an AST `getDocumentSymbols`
   equivalent is cheaper.
 - **signature help** — the typed inspector already replaces text argument lists; subsumed.
-- **semantic tokens / call hierarchy** — deep code-analysis tools, niche for a visual *authoring* tool;
+- **semantic tokens / call hierarchy** — deep code-analysis tools, niche for a visual _authoring_ tool;
   **defer indefinitely.**
 - a conservative **"probably shared" estimate** — the AST import graph is enough; reserve LSP for the
-  *exact* on-demand count.
+  _exact_ on-demand count.
 
-**Realm strategy (the CTO correction).** LSP is **client-agnostic** — VS Code is just *one* client of a
+**Realm strategy (the CTO correction).** LSP is **client-agnostic** — VS Code is just _one_ client of a
 language server, not a precondition for one. The brainstorm's earlier "SaaS has no real LSP, so don't
 rely on it" framing was wrong; the language server runs wherever a Node runtime and the project files
 exist, and HyperIDE has both in every realm. The `TypeIntelligence` facade therefore has **one
 implementation per transport**, mapping onto the [§5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract) realm-as-transport matrix's "LSP/type backstop"
 row:
 
-| Realm | LS transport for `TypeIntelligence` | Degrades? |
-|---|---|---|
-| **VS Code extension** | VS Code's own language features (`vscode.execute*Provider`, the workspace TS service). Free — the editor already runs it. **Start here.** | No |
-| **SaaS, server-backed** (Docker/server runs the project) | The language server runs **SERVER-SIDE** — the backend already runs Node and holds the project on disk; the browser queries the facade over **HTTP/WS** to that server-side LS. NOT a browser worker, NOT "no LSP in SaaS." | No |
+| Realm                                                       | LS transport for `TypeIntelligence`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Degrades?                                                                                                                                                                                               |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **VS Code extension**                                       | VS Code's own language features (`vscode.execute*Provider`, the workspace TS service). Free — the editor already runs it. **Start here.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | No                                                                                                                                                                                                      |
+| **SaaS, server-backed** (Docker/server runs the project)    | The language server runs **SERVER-SIDE** — the backend already runs Node and holds the project on disk; the browser queries the facade over **HTTP/WS** to that server-side LS. NOT a browser worker, NOT "no LSP in SaaS."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | No                                                                                                                                                                                                      |
 | **Serverless SaaS** (NodePod/OPFS, pure browser, no server) | **Run `tsserver` / `typescript-language-server` INSIDE the NodePod pod** — the same in-browser Node pod that already runs `npm install` + vite (`useNodePodRuntime.ts`) lazy-boots the language server via `pod.spawn` and talks stdio JSON, exactly like the dev server. Because the pod already ran the real install, the project's real `node_modules` `.d.ts` are on the pod FS, so type-acquisition is solved for free — the one approach that gives the "it knows MY components" inspector for an arbitrary serverless project. Secondary path: a `ts.createLanguageService` Web Worker over an OPFS-backed `@typescript/vfs` (TS is plain JS — no WASM-TS — but it inherits the unsolved type-acquisition gap for library `.d.ts`, so it is lib-only until an install has run). | **Yes** — degrade to **AST + heuristic** (the floor) on cold pod / boot failure / timeout / big-repo memory pressure; never block ([§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home) rule). |
 
 The honest trade-off (details in the serverless-LSP research): none of these matches a desktop VS Code
-LSP. The serverless in-pod tsserver is the closest because it runs the *real* server against a *real*
+LSP. The serverless in-pod tsserver is the closest because it runs the _real_ server against a _real_
 install, but it pays memory and cold-start in a tab already running a Node runtime + vite — so it must
 be **lazy-booted** (only when a consumer fires), **capped, idle-killed, and always willing to fall back
 to AST**. The build-time **manifest (case 4)** is what makes the common case — a known design system —
@@ -4897,11 +5025,11 @@ already-half-built foundation, and the **A1 forward-detector ([§9.2a](#92a-a1--
 the facade's type signal. Explicit phase-1 NON-GOALS (so scope does not creep): the browser TS worker,
 the in-pod serverless LS transport, extract/wrap, verified blast-radius, third-party manifest
 ingestion, and code actions beyond auto-import-from-installed. (The server-side SaaS transport is NOT a
-non-goal — its primitive already ships as `getComponentPropsTypes`; phase-1 *unifies* it behind the
+non-goal — its primitive already ships as `getComponentPropsTypes`; phase-1 _unifies_ it behind the
 facade rather than building it anew.) Confidence UI is shown **only where it
 gates an action** (blast-radius "apply everywhere") or **changed an already-shown answer** — the typed
 inspector enriches silently (a dropdown just appears), never narrating its own confidence. **Caveat on
-"design-intent": no *unified* `TypeIntelligence` facade exists in the product today** — the A1 hook
+"design-intent": no _unified_ `TypeIntelligence` facade exists in the product today** — the A1 hook
 ([§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home)) is PLANNED, and the two shipped type-intelligence primitives are standalone and unfacaded: the
 server-side SaaS `ts.createProgram` props endpoint (`getComponentPropsTypes`) and the ext
 go-to-definition path (`PanelRouter._goToDefinitionViaLsp` → `vscode.executeDefinitionProvider`).
@@ -4914,7 +5042,7 @@ itself) is design-intent.
 > Detailed view of where AI sits in the unified styles pipeline. This part is the
 > "plan (WHERE)" stage of [Part 5](#part-5--to-be-unified-architecture)'s sequence (`plan → write → verify → classify → repair`)
 > viewed through the AI/deterministic lens. It is sourced **entirely from Q4** — both
-> surviving models (codex gpt-5.x, gemini-2.5-pro) converged strongly *against* all three
+> surviving models (codex gpt-5.x, gemini-2.5-pro) converged strongly _against_ all three
 > of the project's historical positions, and the synthesis below is the ratification target
 > carried into the decision register as OD-2 ([Part 13.3](#133-od-2--ai-authority-d4d15--ratified)). Every TO-BE claim here that
 > reverses an "Approved" spec cites the superseding discrepancy: **D4** (spec #9 over-grants
@@ -4933,7 +5061,7 @@ itself) is design-intent.
 sees where it wrote.** (Source: Q4 Synthesis, "One-line doctrine".)
 
 AI is a **semantic router and tie-breaker**, NEVER the authority. The authority is the
-*verified source transaction* — probe-positive candidate + stable-AST-range resolution +
+_verified source transaction_ — probe-positive candidate + stable-AST-range resolution +
 file-hash match + deterministic edit-builder + parse/type-check + rendered-value verify.
 (This doctrine governs the WRITE path. [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) adds a fourth AI role in the VERIFY path — a
 constrained **vision-witness** that assesses the rendered before/after — but it too is NEVER
@@ -4942,32 +5070,32 @@ finally" holds across both paths.) This single sentence reconciles the three pos
 project carried into the brainstorm, each of which Q4 partially keeps and partially overrules:
 
 - **Position (1) — "AI as a first-class routing input, default Auto tab = AI decides"**
-  (unification-plan #9; Alex's [§6](#part-6--to-be-read-the-one-read-merge-model) intent). RESURRECTED as the *router* role: AI enters first
-  in `Auto` and proposes ranked candidates. But it does not *decide finally* — "Auto = AI when
+  (unification-plan #9; Alex's [§6](#part-6--to-be-read-the-one-read-merge-model) intent). RESURRECTED as the _router_ role: AI enters first
+  in `Auto` and proposes ranked candidates. But it does not _decide finally_ — "Auto = AI when
   configured" means AI participates first in choosing the route, not that AI may patch arbitrary
   text. **Reverses D4's over-grant** (the spec let AI route on the Computed tab as an
   authority; here AI routing is gated by the probe before any write).
 - **Position (2) — "AI locator deleted; only deterministic AST enumeration + empirical probe"**
   (the state on `main`, `analyzeClassNameWithAI` removed at `929aa1c4`, as-is [§5](#part-5--to-be-unified-architecture)). KEPT as the
-  *spine and the validator*: deterministic enumeration + the off-screen probe remain the
+  _spine and the validator_: deterministic enumeration + the off-screen probe remain the
   backbone of every path, AI or not. The deletion is reversed only insofar as AI re-enters as a
-  routing *input*, never as a writer.
+  routing _input_, never as a writer.
 - **Position (3) — "deterministic outranks AI; AI is a repair tier only"** (verified-pipeline
-  #17, D15). HONORED *at the moment of commit* — deterministic machinery commits, AI never
+  #17, D15). HONORED _at the moment of commit_ — deterministic machinery commits, AI never
   writes unverified — but EXPLICITLY OVERRULED on the demotion: **both Q4 models reject
   "AI = repair-only."** AI sits at the TOP of the search as a router/ranker, not as a
   last-resort. **Reverses D15's narrowing** (#17 demoted AI to the repair tier; Q4 promotes it
   back to routing/tie-break, while keeping #17's "never auto-authoritative" invariant intact).
 
-The reconciliation is possible because Q4 separates two axes #9 and #17 conflated: *where AI
-participates in the search* (top — routing/ranking) versus *whether AI has authority to commit*
+The reconciliation is possible because Q4 separates two axes #9 and #17 conflated: _where AI
+participates in the search_ (top — routing/ranking) versus _whether AI has authority to commit_
 (never — the probe + deterministic builders are the only commit path). #9 was wrong to grant
 the second; #17 was wrong to deny the first.
 
 ### 10.2 The precedence ladder (one ladder, two entry behaviors)
 
 The composition is a **single ladder**, Tiers 0-5, with exactly one branch point: Tier 1's
-*entry behavior* differs between no-AI and AI-configured mode. Everything below Tier 1 is
+_entry behavior_ differs between no-AI and AI-configured mode. Everything below Tier 1 is
 identical in both modes — this is what makes AI mode "always at least as capable as
 deterministic mode" (Q4 Agreement [§6](#part-6--to-be-read-the-one-read-merge-model), gemini's stated invariant), because an AI run that
 returns nothing or whose every candidate fails the probe falls through to the same deterministic
@@ -4979,11 +5107,11 @@ ladder a no-AI run would have used. (Source: Q4 Synthesis, "Precedence ladder".)
   highest-confidence, lowest-latency win (gemini's top rung). No AI, no probe needed when the
   source map nails the rule.
 - **Tier 1 — Candidate set (the ONLY mode-divergent tier).**
-  - *no-AI entry:* deterministic AST enumeration over the component file + immediate dependency
+  - _no-AI entry:_ deterministic AST enumeration over the component file + immediate dependency
     graph — same-JSX className/style, local consts, `cva()`/variant maps, CSS-module selectors,
     CSS variables, imported master-component props, traceable parent props, statically-resolvable
     design tokens. This is the existing System-B candidate machinery ([Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)'s planner), unchanged.
-  - *AI-configured entry ("Auto"):* AI semantic routing produces a **ranked structured proposal**
+  - _AI-configured entry ("Auto"):_ AI semantic routing produces a **ranked structured proposal**
     over the same scope (component + direct imports). **Deterministic enumeration runs
     CONCURRENTLY** (codex's concurrency — which also yields a free A/B arm and often resolves
     before the AI round-trip returns) and the two merge into ONE candidate pool, with the AI rank
@@ -4997,28 +5125,29 @@ ladder a no-AI run would have used. (Source: Q4 Synthesis, "Precedence ladder".)
   test; the source-AST candidate enumeration Alex wants is the unbuilt Tier-2-"where-in-source",
   D8/D27, detailed in [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies). This ladder assumes that Tier-2 source enumeration exists; on
   `main` only the empirical DOM probe + the Tailwind path exist.)
-- **Tier 3 — Rank / tie-break.** When *multiple* candidates probe-positive: the deterministic
+- **Tier 3 — Rank / tie-break.** When _multiple_ candidates probe-positive: the deterministic
   **priority chain** decides ([Part 7.1](#71-the-priority-chain-per-project-per-property-per-state) — trusted incumbent owner > design-system token/variant >
   Tailwind utility > CSS module > scoped/plain CSS > verified inline; cva variant > local
   style/const > same-file CSS-var def > imported token > literal; component-local over shared
   unless the instance is the imported contract). **When the chain is genuinely ambiguous AND an
   AI key exists, AI breaks the tie semantically** — codex's named tier, "the strongest proper use
   of AI" (a primary-variant token beats a one-off call-site override). No key → the deterministic
-  chain alone decides. AI tie-break only ever *selects among already-probe-positive candidates*;
+  chain alone decides. AI tie-break only ever _selects among already-probe-positive candidates_;
   it can never introduce an unverified one.
-- **Tier 4 — Repair (AI, explicit, diff-confirmed).** Fires ONLY if Tiers 1-3 produced *no*
-  probe-positive candidate. AI may (a) propose a *new* candidate path → reify it to an AST
-  candidate → re-probe it, or (b) propose a component *refactor* to make the style editable
+- **Tier 4 — Repair (AI, explicit, diff-confirmed).** Fires ONLY if Tiers 1-3 produced _no_
+  probe-positive candidate. AI may (a) propose a _new_ candidate path → reify it to an AST
+  candidate → re-probe it, or (b) propose a component _refactor_ to make the style editable
   (e.g. lift an inline style into a `cva` variant). Either way the result is **shown as a diff,
   requires explicit approval, and is never silent.** This is the only place position-(3)'s
-  "repair tier" survives — as the *last* rung, not the *only* role.
+  "repair tier" survives — as the _last_ rung, not the _only_ role.
 - **Tier 5 — Explicit fallback.** Still nothing probe-positive after repair: offer the user an
   explicit choice — edit the nearest local class/style, create a local token, add a **visibly
   marked** inline override as a last resort, or cancel. This rung hands off to the VTSWR fallback
-  doctrine ([Part 8](#part-8--to-be-fallback-doctrine-vtswr)): inline here is a *verified, transactional, rolled-back-on-failure* floor, not
+  doctrine ([Part 8](#part-8--to-be-fallback-doctrine-vtswr)): inline here is a _verified, transactional, rolled-back-on-failure_ floor, not
   the silent universal floor #9 specced (retracted per D12).
 
 ![AI's three legitimate roles (router / tie-break / repair) feeding the deterministic probe gate — the sole path to any write.](./assets/fig-10-2-ai-deterministic-ladder.svg)
+
 <!-- ASSET-SPEC fig-10-2-ai-deterministic-ladder | KIND=svg | A vertical ladder with the no-AI and AI-configured entry behaviors shown side-by-side at Tier 1, the probe gate highlighted at Tier 2 as the only path to a write, and AI's three legitimate roles (router/tie-break/repair) tagged. -->
 
 ### 10.3 AI output is a structured proposal, constrained to an allowlist
@@ -5029,18 +5158,24 @@ of shape:
 ```ts
 interface AiCandidateProposal {
   targetKind:
-    | 'className-literal' | 'cva-variant-token' | 'css-module-rule'
-    | 'css-variable-def'  | 'inline-style-prop' | 'design-system-prop'
-    | 'local-const'       | 'imported-master-prop';
+    | 'className-literal'
+    | 'cva-variant-token'
+    | 'css-module-rule'
+    | 'css-variable-def'
+    | 'inline-style-prop'
+    | 'design-system-prop'
+    | 'local-const'
+    | 'imported-master-prop';
   // The model NEVER names a file / symbol / selector / range. It returns ONLY `candidateId` — an index
   // into the resolver's enumerated, project-root-validated, safety-scored allowlist. The collapse to a
   // single candidateId is INTENTIONAL and stronger than Q4's original allowlist: there is no free-text
   // field for the model to author a target into, so prompt-injection / out-of-project exfiltration is
   // structurally impossible, not merely validated away.
-  candidateId: string;          // index into the resolver's enumerated candidate set
-  confidence: number;           // 0..1, the model's self-reported prior
-  rationale: string;            // human-readable, for the route-evidence log only
-  expectedRenderedEffect: {     // what the model claims will change in computed style
+  candidateId: string; // index into the resolver's enumerated candidate set
+  confidence: number; // 0..1, the model's self-reported prior
+  rationale: string; // human-readable, for the route-evidence log only
+  expectedRenderedEffect: {
+    // what the model claims will change in computed style
     property: string;
     fromApprox?: string;
     to: string;
@@ -5050,8 +5185,8 @@ interface AiCandidateProposal {
 
 The CRITICAL safety constraint (Q6 claude-fable trust model, folded into Q4's safety set):
 **AI picks a channel only from an ENUM allowlist that the deterministic resolver built first.**
-The model is handed the *enumerated* candidate set (Tier 1's deterministic pool) and asked to
-*rank* it — it never sets `targetFile`, never authors a free-text selector, never points at a
+The model is handed the _enumerated_ candidate set (Tier 1's deterministic pool) and asked to
+_rank_ it — it never sets `targetFile`, never authors a free-text selector, never points at a
 path the resolver did not already surface. This closes two attack surfaces at once: (a)
 **prompt-injection** — project source in the model's context cannot steer a write to an
 attacker-chosen file, because the write target space is the resolver's allowlist, not the
@@ -5080,14 +5215,14 @@ Q4 Synthesis, "Safety / reproducibility — commit invariants".)
    location it cannot prove. (No probe path exists for a candidate? It does not reach the write —
    it bottoms out at Tier 5 explicit fallback.)
 2. **Stable AST node/range + file-hash match.** The candidate must resolve to a stable AST
-   node/range at the *current* file revision; the file's content hash must match the hash captured
+   node/range at the _current_ file revision; the file's content hash must match the hash captured
    when the candidate was enumerated. A mismatch (the file changed under us) → abort, re-resolve;
    never write against a stale range. This is the same per-file content-hash / per-AST-node
    fingerprint precondition the frozen `BatchPlan` carries ([Part 7.4](#74-frozen-plan-dumb-dispatch)).
 3. **Deterministic edit-builders only.** The actual mutation is emitted by a deterministic
    edit-builder (update-string-literal / set-object-property / write-CSS-declaration /
-   set-cva-token / set-CSS-var-value), **never raw model text.** The model selected *which*
-   builder and *which* target; the builder produces the bytes. This is why an AI route cannot
+   set-cva-token / set-CSS-var-value), **never raw model text.** The model selected _which_
+   builder and _which_ target; the builder produces the bytes. This is why an AI route cannot
    corrupt syntax even if the model's `rationale` is nonsense.
 4. **Parse/type-check + rendered-verify after edit, else auto-rollback.** Post-edit, the file must
    parse and type-check, and the selected element's computed style must equal the requested change
@@ -5096,7 +5231,7 @@ Q4 Synthesis, "Safety / reproducibility — commit invariants".)
    for AI and non-AI writes — AI gets no verification discount.
 5. **Strict structured output (AI path).** Per [§10.3](#103-ai-output-is-a-structured-proposal-constrained-to-an-allowlist): malformed AI output is discarded, not
    coerced; the resolution falls through to deterministic.
-6. **Blast-radius disclosure + route-evidence logging.** For *shared* source (a `cva` variant, an
+6. **Blast-radius disclosure + route-evidence logging.** For _shared_ source (a `cva` variant, an
    imported master-component token, a CSS-module rule used by N elements) the write must disclose
    its blast radius ("edits shared `buttonVariants.primary.background` — affects all primary
    buttons") and require a confirmation affordance before applying. Every resolution logs full
@@ -5120,7 +5255,7 @@ Three apply behaviors, by confidence × shared-ness:
 
 - **High-confidence, verified, non-shared edit** → may apply immediately, provided the target
   breadcrumb and an undo affordance are visible. (The write was already probe-positive +
-  rendered-verified; the only requirement is *visibility*, not a modal.)
+  rendered-verified; the only requirement is _visibility_, not a modal.)
 - **AI-only / lower-confidence / unproven-before-write edit** → requires an explicit confirmation
   affordance.
 - **Shared-source edit** → requires confirmation PLUS the blast-radius note ("Affects all primary
@@ -5128,6 +5263,7 @@ Three apply behaviors, by confidence × shared-ness:
 - **Repair (Tier 4)** → always shows a diff for approval, regardless of confidence.
 
 ![Auto-tab resolved-target disclosure with a blast-radius note and inline confirm for shared source.](./assets/fig-10-5-auto-tab-target-disclosure.png)
+
 <!-- ASSET-SPEC fig-10-5-auto-tab-target-disclosure | KIND=mockup | The inspector showing the resolved write target breadcrumb after AI routing, with a blast-radius note ('Affects all primary buttons') and an inline confirm affordance for shared source. -->
 
 **A/B design.** Bucket same-key (LLM-configured) users into two ladders, then run a within-cohort
@@ -5137,9 +5273,9 @@ sub-experiment on the AI arm:
   choice (no AI tie-break, no AI repair).
 - **Test: AI Router ladder** — Tier 1 = AI proposes first (with concurrent deterministic
   enumeration), AI tie-break at Tier 3, AI repair at Tier 4.
-- **Within the AI cohort: AI Router vs AI Ranker** — *Router* = AI proposes the ranked candidates
-  first; *Ranker* = deterministic enumerates first and AI only breaks Tier-3 ties (codex's
-  legitimate A/B arm). This isolates the value of AI *routing* from AI *ranking*. **Deciding metric +
+- **Within the AI cohort: AI Router vs AI Ranker** — _Router_ = AI proposes the ranked candidates
+  first; _Ranker_ = deterministic enumerates first and AI only breaks Tier-3 ties (codex's
+  legitimate A/B arm). This isolates the value of AI _routing_ from AI _ranking_. **Deciding metric +
   stopping rule (OD-2(a) exit condition):** the sub-experiment decides on **success rate** (primary),
   with **AI-fallback rate** and **immediate-undo rate** as tie-breakers; it STOPS when one arm's
   success rate is significantly higher (or the difference's confidence interval excludes a meaningful
@@ -5150,23 +5286,23 @@ sub-experiment on the AI arm:
 Metrics (Q4 Agreement [§9](#part-9--to-be-verify--transaction--undo), near-identical across both models):
 
 - **Success rate (PRIMARY)** — % of attempts ending in a successful, verified source-file write.
-- **AI-fallback rate** — how often AI candidates *fail the probe* (the probe rejecting an AI
+- **AI-fallback rate** — how often AI candidates _fail the probe_ (the probe rejecting an AI
   candidate is a direct accuracy proxy: a high fallback rate means the model is routing wrong).
-- **Immediate-undo rate** — Ctrl+Z right after apply, the proxy for a *technically-correct but
-  semantically-wrong* location (the probe passed but the edit was the wrong abstraction layer).
+- **Immediate-undo rate** — Ctrl+Z right after apply, the proxy for a _technically-correct but
+  semantically-wrong_ location (the probe passed but the edit was the wrong abstraction layer).
 - **Secondary:** average latency, number of confirmation dialogs, post-edit rendered-verify
   success rate, parse-failure/corruption rate, shared-source-surprise rate.
 
 **Reproducibility note** (both models, recorded so it is not relitigated): LLM nondeterminism
-perturbs only the *candidate list*, never the *outcome* — the probe is a deterministic filter on a
-nondeterministic input, and the deterministic-fallback ladder bounds the result. The *route
-search* is not bit-reproducible; the *write* is consistent. This is why AI in the routing role is
+perturbs only the _candidate list_, never the _outcome_ — the probe is a deterministic filter on a
+nondeterministic input, and the deterministic-fallback ladder bounds the result. The _route
+search_ is not bit-reproducible; the _write_ is consistent. This is why AI in the routing role is
 safe to ship while AI in the authority role never was.
 
 > **Carried to [Part 13.3](#133-od-2--ai-authority-d4d15--ratified) (OD-2) — RATIFIED true (this revision):** this ladder is now RATIFIED, not
 > a pending recommendation. It contradicts
 > the unification-plan's over-grant (D4) and the verified-pipeline's repair-only demotion (D15) —
-> *both, partially*. Two implementation sub-knobs remain inside the ratified ladder (not re-openings):
+> _both, partially_. Two implementation sub-knobs remain inside the ratified ladder (not re-openings):
 > (a) whether **AI Router** or **AI Ranker** is the default `Auto` behavior at GA, and (b) whether to
 > rebuild the deleted `analyzeClassNameWithAI` locator (`929aa1c4`) or build the routing fresh against
 > the new allowlist contract ([§10.3](#103-ai-output-is-a-structured-proposal-constrained-to-an-allowlist)). Everything else in this part is settled by Q4 consensus
@@ -5184,7 +5320,7 @@ safe to ship while AI in the authority role never was.
 This part details the `plan (WHERE) → write` stage when the selection holds N≥1 subjects.
 It does NOT re-derive read ([Part 6](#part-6--to-be-read-the-one-read-merge-model)), the priority chain ([Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)), the fallback doctrine
 ([Part 8](#part-8--to-be-fallback-doctrine-vtswr)), verify/undo ([Part 9](#part-9--to-be-verify--transaction--undo)), or AI routing ([Part 10](#part-10--to-be-ai-assisted-vs-deterministic-paths)) — it consumes them. The single new
-thing here is the *vectorization*: how N independent single-element resolutions aggregate into
+thing here is the _vectorization_: how N independent single-element resolutions aggregate into
 one frozen plan, one undo step, and one transparent result surface, with wrapper promotion held
 off to the side as a structurally-separate artifact.
 
@@ -5210,7 +5346,7 @@ interface StyleWriteEngine {
 logic. Single-select is `length === 1`, evaluated by the same per-element/per-property
 resolver, frozen into the same plan shape, dispatched by the same dumb executor, and committed
 under the same transaction. This is the literal realization of the CTO's "генерализация а не
-отдельная система" — a multi-select write is a *vector of single-element resolutions*, and the
+отдельная система" — a multi-select write is a _vector of single-element resolutions_, and the
 batch plan is nothing but the aggregation of those independent decisions.
 
 **This reverses what is on main (D7).** Today the inspector is single-element-only by an
@@ -5229,7 +5365,7 @@ two places to fix a bug, two places for a security regression, and the certainty
 single-select and multi-select diverge in behavior the first time someone patches one and
 forgets the other (Q6 claude-fable: "If dispatch re-decides anything, you have a second engine
 and a hole at the same time"). The vectorized engine has exactly one resolution algorithm, so
-single-select correctness *is* multi-select correctness for N=1, and the migration can shadow
+single-select correctness _is_ multi-select correctness for N=1, and the migration can shadow
 single-select before ever enabling N>1 ([Part 14.3](#143-the-shadow-diff-rollout-for-single-select-semantics) rollout).
 
 **Heterogeneous (Mixed) write semantics — the product decision "same code path" must not dodge.**
@@ -5262,12 +5398,12 @@ for an off-spec property the design system does not model. The ladder is the run
 function that the per-element resolver ([Part 7.2](#72-per-element-resolution-under-heterogeneous-multi-select)) runs after the priority chain has chosen a
 channel. Source: Q6 Agreement [§5](#part-5--to-be-unified-architecture); Synthesis [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain).
 
-| Rung | Name | Meaning | Channel it yields |
-|---|---|---|---|
-| **L0** | native design-system prop | the property maps onto a first-class design-system (DS) prop/variant of THIS component | `designSystemProp` (e.g. `<Button textColor="red">`) |
-| **L1** | generic className / style | no DS prop, but the element forwards `className`/`style`, so a utility class, CSS-module rule, or inline declaration can carry it | `className` / `cssModule` / `inlineStyle` |
-| **L2** | partial | the channel exists but only SOME of the patched properties are expressible on this element (e.g. an SVG `<icon>` accepts `fill`/`stroke` but not `padding`) | `className`/`inlineStyle` for the applicable subset; the inapplicable subset is a structured skip |
-| **L3** | not stylable in place | no direct channel can express the value on this element as it stands — it forwards neither style nor className, or it is a DS leaf with no matching prop | NONE directly → **wrapper-promotion candidate** (lift or create) |
+| Rung   | Name                      | Meaning                                                                                                                                                     | Channel it yields                                                                                 |
+| ------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **L0** | native design-system prop | the property maps onto a first-class design-system (DS) prop/variant of THIS component                                                                      | `designSystemProp` (e.g. `<Button textColor="red">`)                                              |
+| **L1** | generic className / style | no DS prop, but the element forwards `className`/`style`, so a utility class, CSS-module rule, or inline declaration can carry it                           | `className` / `cssModule` / `inlineStyle`                                                         |
+| **L2** | partial                   | the channel exists but only SOME of the patched properties are expressible on this element (e.g. an SVG `<icon>` accepts `fill`/`stroke` but not `padding`) | `className`/`inlineStyle` for the applicable subset; the inapplicable subset is a structured skip |
+| **L3** | not stylable in place     | no direct channel can express the value on this element as it stands — it forwards neither style nor className, or it is a DS leaf with no matching prop    | NONE directly → **wrapper-promotion candidate** (lift or create)                                  |
 
 **The CTO law, stated correctly (D18).** The literal directive ("полностью исключить
 возможность нестилизуемых кейсов" — eliminate the very possibility of a non-stylable case,
@@ -5280,8 +5416,8 @@ automatically"). Therefore:
 
 > **L3 ≠ impossible. L3 = "needs promotion before this value can apply."**
 
-A stylable route always *exists* for every element (in the limit, wrap it in an element that
-forwards the channel). What is forbidden is reaching that route *automatically* as a side effect
+A stylable route always _exists_ for every element (in the limit, wrap it in an element that
+forwards the channel). What is forbidden is reaching that route _automatically_ as a side effect
 of editing a value. L3 is a deferred, opt-in, explicitly-confirmed, separately-undoable action
 ([§11.4](#114-wrapper-promotion-decision-procedure--guards), [§11.5](#115-the-opt-in-boundary--ux)) — never a silent consequence of typing into a color field. This directly
 supersedes the reading of the directive that treats wrapper creation as an automatic part of
@@ -5289,6 +5425,7 @@ the value write (D18; the literal-directive-vs-invariant tension that the spec l
 one a master "cannot dodge").
 
 ![Stylability ladder L0–L3 resolving a single 'color: red' edit across three heterogeneous subjects into one batch plan](./assets/fig-11-2-stylability-ladder.svg)
+
 <!-- ASSET-SPEC fig-11-2-stylability-ladder | KIND=svg | Three elements (button → L0 prop, SVG icon → L2 fill-only, legacy component → L3 needs-wrapper) resolving to different channels under one 'color: red' edit, feeding one batch plan. -->
 
 ---
@@ -5313,32 +5450,35 @@ unrepresentable in the type system to put a tree mutation into a value plan.
 // `subjectId` is the addressing key for one of N subjects (N=1 for a single-element gesture). NEITHER
 // ResolvedWrite NOR ResolvedSkip drops or renames a field versus §6.8 / §7.4; the only thing the
 // multi-select wording adds is the per-block reminder that N can exceed 1.
-interface BatchPlan {                      // = the §6.8 canonical BatchPlan
-  readonly writeId: WriteId;             // §6.8 branded; one B0-saga id (Part 9.1)
+interface BatchPlan {
+  // = the §6.8 canonical BatchPlan
+  readonly writeId: WriteId; // §6.8 branded; one B0-saga id (Part 9.1)
   readonly intents: readonly StylePatch[]; // the user gesture(s) — one per (property, condition) — frozen
   readonly writes: readonly ResolvedWrite[]; // L0–L2 + L3-lift channels only
-  readonly skips: readonly ResolvedSkip[];   // first-class output, structured reasons
+  readonly skips: readonly ResolvedSkip[]; // first-class output, structured reasons
   readonly preconditions: readonly Precondition[]; // per-file content hash + per-AST-node fingerprint
   // NOTE: no `mutations`, no `treeOps`, no `wrapperCreates` — the absence is the invariant.
 }
 
-interface ResolvedWrite {                // = the §6.8 canonical ResolvedWrite (also the §7.4 frozen view)
-  readonly subjectId: SubjectId;         // which of the N subjects this write addresses (N=1 ⇒ the lone subject)
-  readonly identity: StyleIdentity;      // §7.3 structured tuple — carries `channel` (tailwindUtility,
-                                         //   NOT className; liftedToExistingWrapper, NOT liftedToWrapper)
-                                         //   AND `property`; single source, never re-listed
-  readonly condition?: StyleCondition;   // §6.8 — base | :hover | @media ... (Part 8.3 expressibility)
-  readonly newValue: string;             // already sanitized + grammar-validated (Part 6.7)
+interface ResolvedWrite {
+  // = the §6.8 canonical ResolvedWrite (also the §7.4 frozen view)
+  readonly subjectId: SubjectId; // which of the N subjects this write addresses (N=1 ⇒ the lone subject)
+  readonly identity: StyleIdentity; // §7.3 structured tuple — carries `channel` (tailwindUtility,
+  //   NOT className; liftedToExistingWrapper, NOT liftedToWrapper)
+  //   AND `property`; single source, never re-listed
+  readonly condition?: StyleCondition; // §6.8 — base | :hover | @media ... (Part 8.3 expressibility)
+  readonly newValue: string; // already sanitized + grammar-validated (Part 6.7)
   readonly previousValue: string | null; // for the journal inverse-patch (Part 9.5)
 }
 
-interface ResolvedSkip {            // = the §6.8 canonical ResolvedSkip (also the §7.4 frozen view)
-  readonly subjectId: SubjectId;    // which of the N subjects was skipped (N=1 ⇒ the lone subject)
-  readonly property: string;        // the skipped CSS property — pairs with subjectId for addressing
-  readonly reason: SkipReason;      // §6.8 canonical union, never a free-string
+interface ResolvedSkip {
+  // = the §6.8 canonical ResolvedSkip (also the §7.4 frozen view)
+  readonly subjectId: SubjectId; // which of the N subjects was skipped (N=1 ⇒ the lone subject)
+  readonly property: string; // the skipped CSS property — pairs with subjectId for addressing
+  readonly reason: SkipReason; // §6.8 canonical union, never a free-string
   readonly routingRationale: RoutingRationale; // what the resolver saw (badges, ladder rung, guard verdict) —
-                                    //   §6.8; renamed from `evidence`/`SkipEvidence` so `evidence`
-                                    //   stays read-time provenance only
+  //   §6.8; renamed from `evidence`/`SkipEvidence` so `evidence`
+  //   stays read-time provenance only
   readonly promotion?: TreeMutationDraft; // present iff reason === 'requires-wrapper'; a READY draft, NOT executed
 }
 // SkipReason is the single §6.8 union (requires-wrapper | inexpressible | no-writable-source |
@@ -5363,8 +5503,8 @@ Two consequences:
 
 ### 11.4 Wrapper-promotion decision procedure & guards
 
-Wrapper promotion is the L3 escape hatch. Its decision procedure prefers *lifting* an edit onto
-an already-present wrapper (a normal value apply, no tree change) and treats *creating* a new
+Wrapper promotion is the L3 escape hatch. Its decision procedure prefers _lifting_ an edit onto
+an already-present wrapper (a normal value apply, no tree change) and treats _creating_ a new
 wrapper as the last resort. It produces a **candidate**, never a mutation. Source: Q6 Synthesis
 [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain)–8; Agreement [§6](#part-6--to-be-read-the-one-read-merge-model).
 
@@ -5388,7 +5528,7 @@ no such wrapper exists and the project has opted in via the feature flag.
 
 **Wrapper-eligibility guards** — a wrapper candidate (lift or create) is eligible ONLY if ALL of
 the following hold. These are codex's 10 static guards PLUS claude-fable's four additions; the
-short-circuit chain returns a *candidate*, not a mutation. Source: Q6 Synthesis [§8](#part-8--to-be-fallback-doctrine-vtswr).
+short-circuit chain returns a _candidate_, not a mutation. Source: Q6 Synthesis [§8](#part-8--to-be-fallback-doctrine-vtswr).
 
 ```ts
 // Returns a TreeMutationDraft candidate (or null). It NEVER inserts a node — eligibility only.
@@ -5396,7 +5536,7 @@ short-circuit chain returns a *candidate*, not a mutation. Source: Q6 Synthesis 
 function wrapperEligibility(el: SubjectRef, sel: SubjectRef[], flag: FeatureFlags): TreeMutationDraft | null {
   // --- codex's 10 ---
   // 1. exactly one selected element is wrapped (no multi-element wrapper)
-  if (sel.filter(s => wrapperWouldContain(s, el)).length !== 1) return null;
+  if (sel.filter((s) => wrapperWouldContain(s, el)).length !== 1) return null;
   // 2. candidate wrapper contains exactly that element ...
   if (!candidateWrapsExactly(el)) return null;
   // 3. ... and contains NO other element, selected or not (no sibling capture)
@@ -5428,7 +5568,7 @@ function wrapperEligibility(el: SubjectRef, sel: SubjectRef[], flag: FeatureFlag
   if (selectorHijackScan(el).hasRisk) return null;
 
   // All 12 static guards passed — NOW construct the draft (it did not exist until this point).
-  const draft = buildTreeMutationDraft(el);  // empty preconditions/postconditions, ready to fill
+  const draft = buildTreeMutationDraft(el); // empty preconditions/postconditions, ready to fill
 
   // 13. feature flag re-read at DISPATCH time too (guard #9 is build-time; a plan built with the
   //     flag on must NOT execute after the flag is turned off) — wired as a dispatch precondition
@@ -5448,7 +5588,7 @@ safe" check misses (Q6 Disagreement, claude-fable's additions over codex):
 - **AST-not-DOM child check (guard 11).** The DOM is a runtime snapshot. Under conditional
   rendering the DOM may show exactly one child while the JSX source has two. The "wraps exactly
   one element" invariant must be proven against the source AST, not the live tree.
-- **Post-insert auto-revert (guard 14).** The wrapper *itself* perturbs layout — margin
+- **Post-insert auto-revert (guard 14).** The wrapper _itself_ perturbs layout — margin
   collapse, a new block formatting context, flex/grid-item participation. A pre-insert dimension
   match cannot prove the post-insert layout is unchanged. The candidate carries a post-condition
   that re-measures after insertion and auto-reverts (rolling the wrapper out via the transaction,
@@ -5468,9 +5608,9 @@ Sequence on apply of a multi-select edit where L3-needs-new-wrapper subjects are
 1. **Immediately apply** to all L0/L1/L2 subjects AND all L3 subjects that lift onto an existing
    wrapper. This is one `BatchPlan`, one `writeId`, one undo step ([Part 9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)/9.5). The user gets
    the bulk of their intent instantly.
-2. **Non-modal notification** for the create-candidates: *"Style applied to X elements. Y
+2. **Non-modal notification** for the create-candidates: _"Style applied to X elements. Y
    elements could not be styled directly (`<Icon>`, `<MyLegacyComponent>`). Create wrappers for
-   these Y?"* — non-modal, dismissible, grouping similar skips into one notice ([§11.6](#116-observability--badges-diff-preview-aggregated-status)) so a
+   these Y?"_ — non-modal, dismissible, grouping similar skips into one notice ([§11.6](#116-observability--badges-diff-preview-aggregated-status)) so a
    50-element selection does not spawn 50 toasts. A "Skip these elements" option is always
    present.
 3. **Dedicated Create-Wrappers workflow** on accept: a per-element **Preflight Report** ("OK to
@@ -5495,6 +5635,7 @@ addition, never the default. The two-step model is the conservative floor; the c
 ergonomic optimization layered on top once the two-step path is proven.
 
 ![Multi-select heterogeneous result with the wrapper opt-in notification and per-element preflight report](./assets/fig-11-5-multiselect-wrapper-optin.png)
+
 <!-- ASSET-SPEC fig-11-5-multiselect-wrapper-optin | KIND=mockup | Inspector showing per-element resolved-channel badges, the aggregated status ('8/10 applied: 3 DS prop, 5 CSS module; 2 skipped: needs wrapper'), the non-modal 'Create wrappers?' notification, and the per-element Preflight Report with a dimension-preserved / layout-warning verdict. -->
 
 ---
@@ -5515,8 +5656,8 @@ The transparency surface comprises:
 - **"Show Code Changes" diff preview** across all affected files BEFORE commit — the user sees
   the exact mutations to every file the batch touches, building trust before a multi-file write
   lands.
-- **Aggregated status indicators** — e.g. *"Applied to 8/10: 3 via DS prop, 5 via CSS module; 2
-  skipped: needs wrapper"* — one summary line that makes a partial-by-design result legible at a
+- **Aggregated status indicators** — e.g. _"Applied to 8/10: 3 via DS prop, 5 via CSS module; 2
+  skipped: needs wrapper"_ — one summary line that makes a partial-by-design result legible at a
   glance.
 - **On-canvas highlighting of skipped elements** after the action, so a skip is visible spatially
   and not just in a status string.
@@ -5721,6 +5862,7 @@ probe), so the color is visually correct but the project's real CSS is not edite
 "developer-authored source edit" is therefore PARTIAL, gated on [§12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies).
 
 ![Color round-trip loop from inspector hex through source channel, DOM render, computed read-back and nearest-token match, with Tier-1 and the unbuilt Tier-2 marked on the source-to-DOM edge.](./assets/fig-12-3-color-round-trip.svg)
+
 <!-- ASSET-SPEC fig-12-3-color-round-trip | KIND=svg | A loop: inspector hex → generator → source (TW class / $token / inline) → DOM render → getComputedStyle → rgbToHex → nearest-token match → back to inspector; Tier-1 'what drives' and the unbuilt Tier-2 'where in source' marked on the source→DOM edge. -->
 
 ---
@@ -5736,8 +5878,8 @@ solve it. Sources: D8, D27, discovery-intent [§3.1](#31-top-level-topology-two-
 DOM candidate (tailwind-class / inline / css-var / module) DRIVES the color. Alex was explicit
 that this is NOT what Tier-1 was meant to be (discovery-intent [§3.3](#33-adapters--system-b-libstyle-adapters),
 [2026-06-11]): the agent "fundamentally misunderstood Tier-1." The intended algorithm is
-**source-AST-candidate-enumeration FIRST**, not DOM-probe-first. The hard problem is *where in
-the SOURCE*, because the DOM location is already obvious (we read the live value from
+**source-AST-candidate-enumeration FIRST**, not DOM-probe-first. The hard problem is _where in
+the SOURCE_, because the DOM location is already obvious (we read the live value from
 `computed`):
 
 > "в смысле in dom? Тут никак не оптимизировать так, в том то и суть что в коде мест может
@@ -5786,7 +5928,7 @@ approach:
 
 - **CSS Modules** — candidates are rules in the `*.module.css` keyed by the element's composed
   class set; the var-indirection (`composes:`, `var(--x)`) must be followed to the definition.
-- **CSS variables** — the candidate is the `--token` *definition site* (`:root` / a theme
+- **CSS variables** — the candidate is the `--token` _definition site_ (`:root` / a theme
   scope / an inline `style` cascade), not the use site; editing the use site is wrong if the
   intent is to change the token.
 - **Plain / scoped CSS** — selector-specificity must be replayed to find which rule actually
@@ -5797,7 +5939,7 @@ None of these are designed on `main`; [HYP-704](https://linear.app/glide-vc/issu
 forward-detector / honest facts; [HYP-706](https://linear.app/glide-vc/issue/HYP-706) = the CSS-file findRule-miss inline floor). This is
 an open design problem, NOT a settled spec — it feeds **OD-7 ([Part 13.7](#137-od-6-through-od-11--the-second-tier-opens))**.
 
-**Direction (B-before-A).** Alex accepted the framing that Tier-2's *direction* — how to
+**Direction (B-before-A).** Alex accepted the framing that Tier-2's _direction_ — how to
 compute the source location — has two builds: **A = compute in the browser**; **B = compute
 ext-side (read project files, AST, sourcemaps)** (discovery-intent [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain)). The brainstorm
 recommendation he accepted: **build B first (safer, file/AST/sourcemap-driven), defer A.**
@@ -5845,7 +5987,7 @@ would prevent re-drift — a cleanup item, not a behavior bug.)
 
 **The thin coverage (D30) — PARTIAL.** The picker's hooks are well-tested in isolation
 (`use-color-search.test.ts` et al.), but the **component-level composition** is thin:
-`color-combobox.test.tsx` is a SINGLE test, and it is a *theme-regression* test only ("uses
+`color-combobox.test.tsx` is a SINGLE test, and it is a _theme-regression_ test only ("uses
 semantic theme classes for the unlinked state" — asserts no `dark:` / `amber` classes leak,
 `color-combobox.test.tsx:14-30`). There is NO component-level test for the actual interaction:
 open/close, select a swatch, keyboard nav, recent-colors selection, opacity edit, or
@@ -5862,6 +6004,7 @@ the select; both are addressed on the unmerged [#453](https://github.com/hyperid
 separate design.
 
 ![ColorCombobox open, showing the saturation strip, opacity slider, search field, recent-colors row, token swatches, the resolved-token tooltip, and the unlinked hex-input state.](./assets/fig-12-5-color-picker.png)
+
 <!-- ASSET-SPEC fig-12-5-color-picker | KIND=mockup | The combobox open with the saturation strip, opacity slider, search field, recent-colors row, and the resolved-token tooltip; the unlink/hex-input state shown. -->
 
 ## PART 13 — DECISION REGISTER (OD-1..OD-5 RATIFIED BY CTO; OD-6..OD-11 OPEN)
@@ -5925,6 +6068,7 @@ express the edit, does the editor write inline as the terminal floor, or does it
 "can't style here" banner?
 
 **Positions.**
+
 - **Alex (D24, explicit intent).** Inline-as-terminal-floor is fine. There is a per-project priority
   order of styling systems; the editor cascades down it and inline is the legitimate bottom. An
   unknown source on a single element is NOT a reason to skip — the PROJECT has a styling system, and
@@ -5956,28 +6100,28 @@ landing-verification.
 - **(a) Inline as the project's DEFAULT/POLICY sink is ratified ONLY for the no-styling-system case;
   inline as a per-(property,state) fallthrough rung stays available on any project.** Two distinct
   senses must not be conflated:
-  - *Inline as policy / the project's styling system.* This is what OD-1(a) gates: inline becomes the
+  - _Inline as policy / the project's styling system._ This is what OD-1(a) gates: inline becomes the
     project's standing default ONLY when the project has NO other styling system. When the project HAS a
     styling system, the chain prefers it (Tailwind on a Tailwind element, a CSS-module rule, etc.) and
-    inline never becomes the *policy* — so the editor never silently treats a styled project as an
+    inline never becomes the _policy_ — so the editor never silently treats a styled project as an
     inline project.
-  - *Inline as a per-(property,state) terminal rung of the [§7.1](#71-the-priority-chain-per-project-per-property-per-state) chain.* This is NOT forbidden on a
+  - _Inline as a per-(property,state) terminal rung of the [§7.1](#71-the-priority-chain-per-project-per-property-per-state) chain._ This is NOT forbidden on a
     styled project. The chain is resolved independently per (property, state) ([§7.1](#71-the-priority-chain-per-project-per-property-per-state), [§8.3](#83-inline-is-a-base-state-floor-not-a-universal-floor)): if a styled
     project's higher channels are all `inexpressible` for THIS specific base-state property on THIS
     element, inline is still a legitimate verified rung — it does not contradict the project having a
     styling system, because the chain only reaches inline for the slice no higher channel can express.
     That write is one-off and verified; it does not make inline the project policy.
-  **The popup is the policy hook, not a per-edit gate.** In the no-styling-system case the editor does
-  NOT silently settle for inline forever: it surfaces a **PERSISTENT popup offering to install Tailwind
-  and switch to it — for THIS edit and all future ones** (the [§8.5](#85-token-system-none-and-project-bootstrap) `none`-bootstrap card, strengthened
-  from a passive three-button card into an active install-Tailwind offer; the recommended action
-  installs Tailwind + sets it as the project `styleTarget`; the inline write still lands now via VTSWR
-  so the current edit is never blocked, and "for THIS edit" is honored by a follow-up VTSWR **re-home
-  transaction** that migrates the just-landed inline value into Tailwind once installed — [§8.5](#85-token-system-none-and-project-bootstrap) — not by
-  blocking the edit or leaving it orphaned inline). The popup persists until the user picks a target — it is the
-  doctrine's escape from "inline becomes a silent project-wide sink." So [§7.1](#71-the-priority-chain-per-project-per-property-per-state)/[§8.1](#81-the-core-rule--verified-transactional-style-writes-with-rollback)'s inline rung and
-  OD-1(a) are consistent: the rung is a per-(property,state) fallthrough that always exists; OD-1(a)
-  only governs when inline is allowed to become the project's *policy* (no-system → popup-then-policy).
+    **The popup is the policy hook, not a per-edit gate.** In the no-styling-system case the editor does
+    NOT silently settle for inline forever: it surfaces a **PERSISTENT popup offering to install Tailwind
+    and switch to it — for THIS edit and all future ones** (the [§8.5](#85-token-system-none-and-project-bootstrap) `none`-bootstrap card, strengthened
+    from a passive three-button card into an active install-Tailwind offer; the recommended action
+    installs Tailwind + sets it as the project `styleTarget`; the inline write still lands now via VTSWR
+    so the current edit is never blocked, and "for THIS edit" is honored by a follow-up VTSWR **re-home
+    transaction** that migrates the just-landed inline value into Tailwind once installed — [§8.5](#85-token-system-none-and-project-bootstrap) — not by
+    blocking the edit or leaving it orphaned inline). The popup persists until the user picks a target — it is the
+    doctrine's escape from "inline becomes a silent project-wide sink." So [§7.1](#71-the-priority-chain-per-project-per-property-per-state)/[§8.1](#81-the-core-rule--verified-transactional-style-writes-with-rollback)'s inline rung and
+    OD-1(a) are consistent: the rung is a per-(property,state) fallthrough that always exists; OD-1(a)
+    only governs when inline is allowed to become the project's _policy_ (no-system → popup-then-policy).
 - **(b) The "component forwards nothing" case is NOT inline-floor — it is the WRAPPER case, a distinct
   path.** If NO styling is applicable at all because the selected component forwards neither
   `className` nor `style` (the swallowing-`<Button>` of D12), inline cannot land there either, so it is
@@ -6031,6 +6175,7 @@ source-locator?
 
 **Positions (three, historical).** The project's own history holds three incompatible answers, which
 is why this needs a ratification and not just a build (Source: Q4 framing, three positions):
+
 - **(1) First-class router** — unification-plan #9 permits AI semantic routing on the Computed tab;
   Alex's intent ([§6](#part-6--to-be-read-the-one-read-merge-model)) wants the default Auto tab = AI when configured.
 - **(2) Deleted** — `analyzeClassNameWithAI` was removed as dead code (`929aa1c4`); the executor
@@ -6198,6 +6343,7 @@ accordingly.
 do we do it big-bang or incrementally behind an alias?
 
 **Positions.**
+
 - **Alex (D26, explicit intent).** Fully separate orthogonal axes: cssFramework, designSystem,
   jsFramework, router, bundler, packageManager (and "что-то ещё?"). shadcn is a DESIGN SYSTEM, not a
   CSS system. Rename `uiKit → designSystem` everywhere. bun is a package-manager axis — a lockfile
@@ -6227,9 +6373,9 @@ migration, not a patch.
   writer + detection for each — tailwind-v3, tailwind-v4, css-modules, plain-css, inline-style, emotion,
   styled-components, vanilla-extract, mui-system, chakra-ui, mantine, tamagui), and the **ProjectDetector
   ([§5.6](#56-all-dimensions-detection--the-projectdetector-responsibility)) detects what the project uses across ALL dimensions** (the complete set of style systems in use
-  + every axis value), not a single best-guess. This is scheduled under the **[HYP-600](https://linear.app/glide-vc/issue/HYP-600) umbrella** as the
-  build-all-twelve track ([Part 14.2](#142-phase-map-with-the-live-tickets)) and closes D5 fully; a system is not "built" until it is also
-  DETECTED. (This is the "item 3" cited by [§3.3](#33-adapters--system-b-libstyle-adapters), [§5.5](#55-the-capability-taxonomy-orthogonal-axes), [§5.6](#56-all-dimensions-detection--the-projectdetector-responsibility), and the [Part 14](#part-14--migration-path-as-is--to-be) build-all-twelve row.)
+  - every axis value), not a single best-guess. This is scheduled under the **[HYP-600](https://linear.app/glide-vc/issue/HYP-600) umbrella** as the
+    build-all-twelve track ([Part 14.2](#142-phase-map-with-the-live-tickets)) and closes D5 fully; a system is not "built" until it is also
+    DETECTED. (This is the "item 3" cited by [§3.3](#33-adapters--system-b-libstyle-adapters), [§5.5](#55-the-capability-taxonomy-orthogonal-axes), [§5.6](#56-all-dimensions-detection--the-projectdetector-responsibility), and the [Part 14](#part-14--migration-path-as-is--to-be) build-all-twelve row.)
 
 **Sub-decision left as migration ergonomics.** Big-bang rename vs incrementally behind an alias. The recommendation is
 incremental-behind-an-alias: introduce `designSystem` and the split axes, alias `projectUIKit` to the
@@ -6255,71 +6401,71 @@ every later phase reads the renamed axes.
 One row each. These are real open forks, but narrower than OD-1–5: each has a recommendation, and
 none gates a whole build phase the way the headline five do.
 
-**OD-6 — Master-component binding-kind taxonomy (D25).** *Question:* when a color arrives at an
+**OD-6 — Master-component binding-kind taxonomy (D25).** _Question:_ when a color arrives at an
 element as a PROP FROM A PARENT, is it "external → twMerge" (treat like an imported master component)
-or "probe-able → candidate search" (enumerate where in source it resolves)? *Positions:* Alex left
+or "probe-able → candidate search" (enumerate where in source it resolves)? _Positions:_ Alex left
 this explicitly open ([§3.5](#35-read-pipeline--shared-read-manager--vs-code-read-service)); twMerge is meant ONLY for external master-components imported from
 another file, a same-file `const` is find-replace at definition ([§3.1](#31-top-level-topology-two-parallel-engines)), and prop-from-parent is
-unclassified. *Recommendation:* classify by where the binding RESOLVES, not by syntax — a prop traced
+unclassified. _Recommendation:_ classify by where the binding RESOLVES, not by syntax — a prop traced
 to a same-file definition is probe-able (candidate search at the definition site); a prop traced to
 an imported master component crosses the file boundary and is external (twMerge). The binding-kind is
 a property of the resolved source, computed by the Tier-0 provenance pass ([Part 10.2](#102-the-precedence-ladder-one-ladder-two-entry-behaviors)), not a guess at
-the call site. *Blast radius:* gets the wrong write target for prop-drilled colors if left
+the call site. _Blast radius:_ gets the wrong write target for prop-drilled colors if left
 unclassified — the editor either twMerges a value that should have been find-replaced at the
-definition (orphaning the source) or searches for a candidate that lives in another file. *Unblocks:*
+definition (orphaning the source) or searches for a candidate that lives in another file. _Unblocks:_
 Tier-2 source resolution ([Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies)) for prop-bound values.
 
-**OD-7 — Schedule per-CSS-approach Tier-2 design into Phase 3 (D27).** *Question (signable):* do we
+**OD-7 — Schedule per-CSS-approach Tier-2 design into Phase 3 (D27).** _Question (signable):_ do we
 schedule the per-CSS-approach Tier-2 source-candidate-enumeration design (CSS-modules, CSS-vars,
 plain-CSS) into Phase 3, AFTER B0/B1, as a priority-ratification — yes/no? (This is a
 priority-ratification, not a design fork: the design PROBLEM itself is framed in [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies), which the
-CTO is not asked to solve here.) *Positions:* Alex ([§3.1](#31-top-level-topology-two-parallel-engines)): "если другие подходы только, надо выработать
+CTO is not asked to solve here.) _Positions:_ Alex ([§3.1](#31-top-level-topology-two-parallel-engines)): "если другие подходы только, надо выработать
 применимые для них решения." Only the Tailwind path + the empirical probe exist; [HYP-704](https://linear.app/glide-vc/issue/HYP-704) is the start
-but the per-approach strategies are UNDESIGNED. *Recommendation:* YES — design these per-approach
+but the per-approach strategies are UNDESIGNED. _Recommendation:_ YES — design these per-approach
 strategies as part of Phase 3's Tier-2 work, after B0/B1 (the verification net catches a wrong
-enumeration), not before; the design-problem framing itself lives in [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies), not here. *Blast
-radius:* without per-approach strategies, Tier-2 "where in source" works only for Tailwind projects;
+enumeration), not before; the design-problem framing itself lives in [Part 12.4](#124-tier-2-where-in-source--the-per-css-approach-candidate-strategies), not here. _Blast
+radius:_ without per-approach strategies, Tier-2 "where in source" works only for Tailwind projects;
 CSS-modules/vars/plain-CSS projects fall back to the probe's "what drives" (Tier-1) and cannot answer
-"where written." *Unblocks:* full Tier-2 coverage beyond Tailwind.
+"where written." _Unblocks:_ full Tier-2 coverage beyond Tailwind.
 
-**OD-8 — Badges / Auto-default-tab / override-chip-vs-hide-tabs (D28).** *Question:* under
+**OD-8 — Badges / Auto-default-tab / override-chip-vs-hide-tabs (D28).** _Question:_ under
 homogeneous multi-select, do we show a safe override-chip (reviewers' default) or always hide the
-tabs, and is the default tab Auto when AI is configured? *Positions:* Alex ([§8](#part-8--to-be-fallback-doctrine-vtswr)) wants all capability
+tabs, and is the default tab Auto when AI is configured? _Positions:_ Alex ([§8](#part-8--to-be-fallback-doctrine-vtswr)) wants all capability
 badges shown and Auto as the default tab with AI; the override-chip-vs-hide-tabs choice he flagged as
-needing a real-code mockup before deciding. *Recommendation:* this is a product micro-decision Alex
+needing a real-code mockup before deciding. _Recommendation:_ this is a product micro-decision Alex
 explicitly gated on a mockup, so the spec does NOT decide it in prose — it is deferred to the visual
 pass ([Part 10.5](#105-auto-ux--ab), [Part 11.6](#116-observability--badges-diff-preview-aggregated-status) mockups) and re-presented to Alex against a real-code rendering, per his
 acceptance bar. Show all badges (settled); Auto-default-with-AI (settled, follows OD-2); override-chip
-vs hide-tabs (open, needs the mockup). *Blast radius:* UI-only; getting it wrong wastes a design
-iteration, corrupts no source. *Unblocks:* the inspector multi-select UX ([Part 11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion)), but only the chip
+vs hide-tabs (open, needs the mockup). _Blast radius:_ UI-only; getting it wrong wastes a design
+iteration, corrupts no source. _Unblocks:_ the inspector multi-select UX ([Part 11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion)), but only the chip
 detail — the engine underneath is independent.
 
-**OD-9 — Merge the shared-PropsEditor PR (D29).** *Question:* do we merge **PR [#453](https://github.com/hyperide/hyper-saas/pull/453) (ex-[#435](https://github.com/hyperide/hyper-saas/pull/435)), which
-lands [HYP-709](https://linear.app/glide-vc/issue/HYP-709)/[HYP-716](https://linear.app/glide-vc/issue/HYP-716)**, so the ext shares the SaaS PropsEditor + Tamagui tokens? *Positions:* Alex
+**OD-9 — Merge the shared-PropsEditor PR (D29).** _Question:_ do we merge **PR [#453](https://github.com/hyperide/hyper-saas/pull/453) (ex-[#435](https://github.com/hyperide/hyper-saas/pull/435)), which
+lands [HYP-709](https://linear.app/glide-vc/issue/HYP-709)/[HYP-716](https://linear.app/glide-vc/issue/HYP-716)**, so the ext shares the SaaS PropsEditor + Tamagui tokens? _Positions:_ Alex
 ([§8](#part-8--to-be-fallback-doctrine-vtswr)): "в ext должен использоваться этот код тоже … и PropsEditor.tsx и токены." The work is DONE
 ([HYP-709](https://linear.app/glide-vc/issue/HYP-709)/[HYP-716](https://linear.app/glide-vc/issue/HYP-716) — shared `lib/tamagui/extract-tokens.ts`, `TokenCombobox`, 5 green Docker e2e) but
-PR [#453](https://github.com/hyperide/hyper-saas/pull/453) (ex-[#435](https://github.com/hyperide/hyper-saas/pull/435)) is UNMERGED, so on main the ext does not yet share the PropsEditor. *Recommendation:* merge it — this is not an architectural fork, it is a finished branch
+PR [#453](https://github.com/hyperide/hyper-saas/pull/453) (ex-[#435](https://github.com/hyperide/hyper-saas/pull/435)) is UNMERGED, so on main the ext does not yet share the PropsEditor. _Recommendation:_ merge it — this is not an architectural fork, it is a finished branch
 waiting on a sign-off, and it directly serves the document's "one engine, three realms" invariant (the
 inspector projection should be shared, not realm-forked). The only open detail on the branch is the
 Tamagui datalist (321 options) Alex called "лишнее" and the dropdown width-match, both already
-addressed there. *Blast radius:* low — merging completed, e2e-green work; the cost of NOT merging is
+addressed there. _Blast radius:_ low — merging completed, e2e-green work; the cost of NOT merging is
 that the **ext webview has no PropsEditor UI at all** — `CanvasEngine` is `null` in that webview
 context, so the props section (an invariant section BELOW the styles form, [§6.5](#65-surface-decision--per-property-editability)) never renders on the
-ext realm — which is exactly the System-A/System-B duplication OD-3 exists to eliminate. *Unblocks:*
+ext realm — which is exactly the System-A/System-B duplication OD-3 exists to eliminate. _Unblocks:_
 shared inspector projection ([Part 5.3](#53-the-convergence-target--system-a-and-system-b-become-one), [Part 6.5](#65-surface-decision--per-property-editability), [Part 12.2](#122-token-providers--the-project-palette-gap)) on the ext realm — the three props-editor
 invariants in [§6.5](#65-surface-decision--per-property-editability) (props editing is universal, not Tamagui-gated; props always below the styles form;
 the ext gap is the only open one) hold for SaaS today and reach the ext realm only once this merges.
 
-**OD-10 — Eager vs lazy `contributors[]` (Q2 D1, unreconciled).** *Question:* does the merged style
+**OD-10 — Eager vs lazy `contributors[]` (Q2 D1, unreconciled).** _Question:_ does the merged style
 field carry a frozen `contributors[]` authorization context (eager), or does the write planner derive
-the plan lazily from immutable snapshots with a freshness check (lazy)? *Positions:* this is the ONE
+the plan lazily from immutable snapshots with a freshness check (lazy)? _Positions:_ this is the ONE
 Q2 fork a model never conceded (Q2 Disagreement D1). gemini holds that a lazy planner reading mutable
 snapshots is a tampering surface and wants a frozen `contributors[]` as a validated authorization
 context. Fable + codex-by-R3 hold that `contributors` and snapshots live in the SAME client trust
 domain, so a copy adds zero security and only O(N×P) memory — and is MORE stale at write time than a
 lazy plan re-derived with a `sourceVersion` check immediately before commit; security comes from
 freshness + authoritative server-side re-validation (which gemini itself demands), not a client copy.
-gemini never conceded the trust-domain argument. *Recommendation:* adopt the lazy plan ([Part 6.7](#67-sanitization-as-a-gate--resolved-q2-disagreements)) —
+gemini never conceded the trust-domain argument. _Recommendation:_ adopt the lazy plan ([Part 6.7](#67-sanitization-as-a-gate--resolved-q2-disagreements)) —
 drop eager `contributors[]`, keep a `subjectId ∈ subjects(selectionEpoch)` Set check and authoritative
 re-validation. **But the security framing must be corrected: "lazy plan + epoch Set check +
 server re-validation" as a PREFLIGHT before a client-supplied patch does NOT close the tampering
@@ -6330,26 +6476,26 @@ intent and perform the write ATOMICALLY, so re-validation IS the write transacti
 preflight and a client-influenced patch); the client never hands the server a patch to trust. (b)
 **VS Code local** needs its OWN trust model, since the "server re-validation" defense is absent: runtime
 schema validation of the edit, path allowlists + project-root-escape rejection ([Part 7.3](#73-style-identity-is-a-structured-tuple)), the
-workspace-trust gate, and the B0 journal ([§9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)) are the local trust floor. *Blast radius:* the choice
+workspace-trust gate, and the B0 journal ([§9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)) are the local trust floor. _Blast radius:_ the choice
 between eager/lazy is memory/staleness, not security — BUT the security floor is "server derives + writes
 atomically" (SaaS) and "schema-validate + allowlist + workspace-trust + journal" (VS Code), NOT the
 preflight either storage form implied. Getting THAT wrong is a real tampering hole; getting eager-vs-lazy
-wrong is only a memory cost. *Unblocks:* the write-back plan shape ([Part 6.7](#67-sanitization-as-a-gate--resolved-q2-disagreements), [Part 7.4](#74-frozen-plan-dumb-dispatch)) and the
+wrong is only a memory cost. _Unblocks:_ the write-back plan shape ([Part 6.7](#67-sanitization-as-a-gate--resolved-q2-disagreements), [Part 7.4](#74-frozen-plan-dumb-dispatch)) and the
 server-derives-plan write contract ([Part 9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)).
 
-**OD-11 — `exact + not-landed` disposition: hold-pending vs immediate rollback (Q3).** *Question:*
+**OD-11 — `exact + not-landed` disposition: hold-pending vs immediate rollback (Q3).** _Question:_
 when a write is `exact`-confidence but B1 reports `not-landed` (a real settle edge fired, the value
 is still ≈ before), does the engine HOLD the source edit pending under the open `writeId` and offer
 B2 repair (rolling back only on decline/TTL), or roll it back IMMEDIATELY like the `probable` case?
-*Positions:* this is the one verify-matrix cell Q3 explicitly left as a design fork ([§9.4](#94-fail-closed-the-confidence--verifiability-matrix)). Hold-pending
+_Positions:_ this is the one verify-matrix cell Q3 explicitly left as a design fork ([§9.4](#94-fail-closed-the-confidence--verifiability-matrix)). Hold-pending
 keeps an `exact` edit alive for a repair offer (the planner was certain before the write); immediate
-rollback treats any `not-landed` as debris regardless of confidence. *Recommendation:* hold-pending
+rollback treats any `not-landed` as debris regardless of confidence. _Recommendation:_ hold-pending
 under the open `writeId`, offer B2, roll back on decline or TTL — an `exact` write earned a repair
 attempt, and the hold is bounded by the same TTL knob as OD-4 ([§13.5](#135-od-4--the-verify-everywhere-transaction-cost-q3--ratified-adopt)), so it never becomes silent
-debris. *Blast radius:* small and self-correcting — getting it wrong toward "hold" risks an
+debris. _Blast radius:_ small and self-correcting — getting it wrong toward "hold" risks an
 unrolled-back `not-landed` edit if the TTL is mis-tuned (the OD-4 knob already governs this); getting
 it wrong toward "immediate rollback" throws away repairable `exact` edits and fires more reverts.
-*Unblocks:* the B2 repair-offer trigger ([Part 9.4](#94-fail-closed-the-confidence--verifiability-matrix)/9.6) — the matrix cell cannot finalize until the
+_Unblocks:_ the B2 repair-offer trigger ([Part 9.4](#94-fail-closed-the-confidence--verifiability-matrix)/9.6) — the matrix cell cannot finalize until the
 disposition is signed.
 
 ### 13.8 Decisions already converged (record so they don't re-litigate)
@@ -6382,7 +6528,7 @@ a new decision with a new ID, not a reopening — the brainstorm reasoning behin
   in every realm — serverless NodePod/OPFS has a preview iframe too ([§5.4](#54-realm-model--three-first-class-realms-as-transport-rows-over-one-contract) row 1) — so B1 verify is NOT
   a per-realm degradation; the residual `unverifiable` cases are transient/as-is (settle-TTL expiry, or
   the legacy ext-host path reading without the panel — [§2.3](#23-the-six-resolution-state-words-rigorous)), not "serverless can't verify." The one
-  capability that *legitimately and per-realm* degrades on serverless is the LSP/type backstop, when
+  capability that _legitimately and per-realm_ degrades on serverless is the LSP/type backstop, when
   the in-pod `tsserver` is down ([§9.8](#98-type-intelligence-lsp--applications--realm-boundary)) — that is a separate axis from B1 verify. Source: Q3 Synthesis
   [§2](#part-2--glossary--term-decode); [Part 9.2](#92-verify-everywhere-via-the-preview-iframe-b1).
 - **Correlated-settle, dual-signal.** Settle is a render handshake version-stamped via `writeId`
@@ -6411,7 +6557,7 @@ a new decision with a new ID, not a reopening — the brainstorm reasoning behin
   A stylable PATH always exists; "no non-stylable" lives at the level of the PROPOSAL, not the ACTION.
   Resolves the D18 literal-vs-invariant tension. Source: Q6 Synthesis [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain); [Part 11.2](#112-the-stylability-ladder-l0l3).
 - **Structured-tuple identity.** Style identity is `{canonicalProjectRelPath, nodeId,
-  occurrenceIndex, channel, property}`, never a `"path#selector"` string (delimiter injection,
+occurrenceIndex, channel, property}`, never a `"path#selector"` string (delimiter injection,
   collisions); same class name from two files is NOT the same style. Source: Q6 Synthesis [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines); [Part 7.3](#73-style-identity-is-a-structured-tuple).
 - **Write-ahead journal undo.** A multi-element/multi-file write is ONE atomic undo via inverse
   patches persisted to disk BEFORE forward patches (the upgrade over an in-memory record or a
@@ -6439,10 +6585,10 @@ expands it):
 > wrapper). Never widen write authority ahead of verification.** (Source: Q3 "Synthesized
 > recommendation" + "Trade-offs (honest)".)
 
-The rationale is mechanical, not stylistic. Every later capability is a *new way the system can
-write to source*, and a new write target is a new way to silently fail. Today the system already
+The rationale is mechanical, not stylistic. Every later capability is a _new way the system can
+write to source_, and a new write target is a new way to silently fail. Today the system already
 writes targets it cannot prove landed (D1, D6) — adding Tier-2 CSS-file resolution ([HYP-704](https://linear.app/glide-vc/issue/HYP-704)),
-cva-variant resolution ([HYP-705](https://linear.app/glide-vc/issue/HYP-705)), or multi-element batch dispatch ([HYP-271](https://linear.app/glide-vc/issue/HYP-271)) *before* the verify
+cva-variant resolution ([HYP-705](https://linear.app/glide-vc/issue/HYP-705)), or multi-element batch dispatch ([HYP-271](https://linear.app/glide-vc/issue/HYP-271)) _before_ the verify
 half exists multiplies the silent-no-op surface across every new channel. The safety net is what
 converts each later widening from "another place we write and hope" into "another place we write,
 verify, and roll back on failure." Concretely:
@@ -6453,9 +6599,9 @@ verify, and roll back on failure." Concretely:
   promotion ([Part 11.4](#114-wrapper-promotion-decision-procedure--guards)) which mutates the tree. Without B0, "roll back the value" can leave a B2
   wrapper behind or revert only one of several touched files. (Source: Q3 transaction §.)
 - **B1 (verify everywhere)** must exist before VTSWR ([Part 8](#part-8--to-be-fallback-doctrine-vtswr)), because VTSWR's "keep only verified
-  writes, surgically roll back the rest" rule is *defined in terms of* B1's landing verdict. The
+  writes, surgically roll back the rest" rule is _defined in terms of_ B1's landing verdict. The
   inline floor without B1 is exactly the destructive hole the reviewers feared (D12/D14); the
-  inline floor *with* B1 is the doctrine Alex wanted (D24). Verification is the pivot that
+  inline floor _with_ B1 is the doctrine Alex wanted (D24). Verification is the pivot that
   dissolves the headline disagreement, so it cannot come after the fallback it makes safe.
 - **A1 (forward-detector)** gates the multi-select ladder. The D2/D3 batch core is already merged
   on the [#270](https://github.com/hyperide/hyper-saas/pull/270) branch ([HYP-271](https://linear.app/glide-vc/issue/HYP-271)) but is **starved**: it reads `acceptsClassName:true` and
@@ -6463,8 +6609,8 @@ verify, and roll back on failure." Concretely:
   blind. A1 replaces those garbage facts with real per-channel forwarding evidence — until it
   lands, generalizing to N>1 only generalizes the blindness.
 
-This is why the phase map below front-loads infrastructure that produces *no new user-visible
-capability* (Phase 0-1) and defers the most-requested feature (multi-select, Phase 4) and the
+This is why the phase map below front-loads infrastructure that produces _no new user-visible
+capability_ (Phase 0-1) and defers the most-requested feature (multi-select, Phase 4) and the
 most-aggressive one (wrapper promotion, Phase 5) to the end. The cost order is intentional: pay
 the safety tax up front, collect the capability dividend afterward, never in reverse.
 
@@ -6478,16 +6624,16 @@ snapshot, NOT a permanent state); **Phase 0 drafts those tickets** so the founda
 home, after which the tag is stale. (Phase 6's AI-vision layer on top of B3 is already tickered —
 [HYP-734](https://linear.app/glide-vc/issue/HYP-734)/735/737/739.)
 
-| Phase | Capability (TO-BE) | Building ticket(s) | Hard dependency | Spec part |
-|---|---|---|---|---|
-| **0 — Hygiene & taxonomy** | Kill stale-fact claims (D19); rename `uiKit→designSystem`, split `projectUIKit` into orthogonal axes (D26); draft the (as-of-writing untickered) B0/B1/A1/B2/B3 foundation tickets | [HYP-299](https://linear.app/glide-vc/issue/HYP-299) (umbrella), D26 rename (NEEDS-LINEAR), foundation-ticket creation | none — pure prep | 4.3, 5.5, 13.6 |
-| **1 — Safety net + unified read** | B0 transaction (`writeId`, snapshot-all-touched, one-undo rollback); SelectionStyleRead read-merge (normalized IR, runtime-overlay, Mixed-as-display) behind a flag with shadow-diff | B0 (untickered, build FIRST), [HYP-299](https://linear.app/glide-vc/issue/HYP-299), [HYP-535](https://linear.app/glide-vc/issue/HYP-535) read-transport | B0 → nothing; read-merge → B0 (so a shadow write is recoverable) | 6, 9.1 |
-| **2 — Verify + fallback doctrine** | B1 verify-everywhere (dual settle, read-frame guards, ext via preview-iframe RPC); VTSWR fallback; fail-closed confidence×verifiability matrix; flip findRule-miss hard-fail → gated inline floor ([HYP-706](https://linear.app/glide-vc/issue/HYP-706) pulled FORWARD here — see the note below) | B1 (untickered, dep B0), [HYP-706](https://linear.app/glide-vc/issue/HYP-706) (findRule-miss → inline floor), [HYP-553](https://linear.app/glide-vc/issue/HYP-553) (per-class confidence) | B1 → B0; VTSWR → B1; [HYP-706](https://linear.app/glide-vc/issue/HYP-706) → B1 only (the floor is *gated* on B1-verify per [HYP-544](https://linear.app/glide-vc/issue/HYP-544) §A3; it does NOT depend on A1) | 8, 9.2-9.4 |
-| **3 — AI ladder + Tier-2 source resolution + color UI** | A1 forward-detector (real per-channel forwarding facts, [§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home)); Tiers 0-5 AI/deterministic ladder (AI routes/ranks, probe is the gate); host-side Tier-2 CSS write-target resolution; static cva-variant resolver; **the project-independent ColorCombobox composition test that picks a color and asserts the source edit landed (D30)** | A1 (untickered, dep B1, [§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home)), [HYP-704](https://linear.app/glide-vc/issue/HYP-704) (CSS/var/module exact-only + floor), [HYP-705](https://linear.app/glide-vc/issue/HYP-705) (cva resolver), [HYP-686](https://linear.app/glide-vc/issue/HYP-686) (intent→token, later), [HYP-349](https://linear.app/glide-vc/issue/HYP-349)-followup (color composition test, D30) | A1 → B1; [HYP-704](https://linear.app/glide-vc/issue/HYP-704)/705 → A1 + B1 (DO NOT start 704/705 before B0/B1 exist — discovery-tickets §[HYP-544](https://linear.app/glide-vc/issue/HYP-544)); D30 test → B1 (asserts landing) | 7, 9.2a, 10, 12.4, 12.5 |
-| **4 — Multi-select generalization + journal undo** | `StyleWriteEngine.apply(selection[], patch)` with single = `length===1`; frozen BatchPlan; write-ahead journal undo (one atomic step across files); per-element resolved-channel observability | [HYP-271](https://linear.app/glide-vc/issue/HYP-271) (rebase off A1), [HYP-596](https://linear.app/glide-vc/issue/HYP-596) (proper N>1 rebuild), [HYP-664](https://linear.app/glide-vc/issue/HYP-664) (wire frozen BatchPlan into the flush), [HYP-427](https://linear.app/glide-vc/issue/HYP-427)/422 (ext parity + post-batch refresh), [HYP-661](https://linear.app/glide-vc/issue/HYP-661)/663 (audit + counters) | all → A1 (un-starve the ladder) + B0 (the journal) | 11.1-11.3, 9.5 |
-| **5 — Wrapper promotion + visual-regression guard (opt-in, flagged)** | B2 opt-in L3 wrapper promotion (14-guard chain, lift-over-create, separate undo step); B3 in-session screenshot large-diff guard | B2 (untickered), [HYP-660](https://linear.app/glide-vc/issue/HYP-660) (L3 escalation, flag OFF + kill switch + blocking preflight), B3 (untickered) | B2 → B1 + B0 (re-run B1 after wrapper; rollback under the same writeId); B3 → B1 | 11.4-11.6, 9.6 |
-| **6 — AI-vision verification (required primary visual judge)** | `callAIVision` multimodal client + per-provider image adapters + capability flags; cvGate fast pre-filter; external policy engine (model = witness, policy = judge); verification queue + cache; shadow → assist → enforce rollout with a false-positive budget | [HYP-734](https://linear.app/glide-vc/issue/HYP-734) (epic), [HYP-735](https://linear.app/glide-vc/issue/HYP-735) (`callAIVision` + multimodal client), [HYP-737](https://linear.app/glide-vc/issue/HYP-737) (cvGate + policy engine), [HYP-739](https://linear.app/glide-vc/issue/HYP-739) (verification queue + rollout) | all → B3 (it is a B3 *stage*, [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline)) → B1 + B0; the policy engine gates publish/export | 9.7 |
-| **Cross-phase — build ALL 12 CssSystemIds** (RATIFIED target, OD-5/item 3) | Implement reader + writer + detection for the 8 currently-typed-only systems so ALL twelve are built: tailwind-v3, tailwind-v4, css-modules, plain-css, inline-style, emotion, styled-components, vanilla-extract, mui-system, chakra-ui, mantine, tamagui (four already shipped) | [HYP-600](https://linear.app/glide-vc/issue/HYP-600) (umbrella), [HYP-606](https://linear.app/glide-vc/issue/HYP-606)/607/608/609/610/619/620 (the per-system adapters); detection extends `getCssSystems` past its 3-system AS-IS (D5) | each adapter → B0/B1/A1 rails (do not ship an adapter ahead of the safety net); parallelizes across Phases 3-6, gates none of them | 3.3, 5.5, 14 |
+| Phase                                                                      | Capability (TO-BE)                                                                                                                                                                                                                                                                                                                                                                                | Building ticket(s)                                                                                                                                                                                                                                                                                                                                                                                                             | Hard dependency                                                                                                                                                                                                                  | Spec part               |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| **0 — Hygiene & taxonomy**                                                 | Kill stale-fact claims (D19); rename `uiKit→designSystem`, split `projectUIKit` into orthogonal axes (D26); draft the (as-of-writing untickered) B0/B1/A1/B2/B3 foundation tickets                                                                                                                                                                                                                | [HYP-299](https://linear.app/glide-vc/issue/HYP-299) (umbrella), D26 rename (NEEDS-LINEAR), foundation-ticket creation                                                                                                                                                                                                                                                                                                         | none — pure prep                                                                                                                                                                                                                 | 4.3, 5.5, 13.6          |
+| **1 — Safety net + unified read**                                          | B0 transaction (`writeId`, snapshot-all-touched, one-undo rollback); SelectionStyleRead read-merge (normalized IR, runtime-overlay, Mixed-as-display) behind a flag with shadow-diff                                                                                                                                                                                                              | B0 (untickered, build FIRST), [HYP-299](https://linear.app/glide-vc/issue/HYP-299), [HYP-535](https://linear.app/glide-vc/issue/HYP-535) read-transport                                                                                                                                                                                                                                                                        | B0 → nothing; read-merge → B0 (so a shadow write is recoverable)                                                                                                                                                                 | 6, 9.1                  |
+| **2 — Verify + fallback doctrine**                                         | B1 verify-everywhere (dual settle, read-frame guards, ext via preview-iframe RPC); VTSWR fallback; fail-closed confidence×verifiability matrix; flip findRule-miss hard-fail → gated inline floor ([HYP-706](https://linear.app/glide-vc/issue/HYP-706) pulled FORWARD here — see the note below)                                                                                                 | B1 (untickered, dep B0), [HYP-706](https://linear.app/glide-vc/issue/HYP-706) (findRule-miss → inline floor), [HYP-553](https://linear.app/glide-vc/issue/HYP-553) (per-class confidence)                                                                                                                                                                                                                                      | B1 → B0; VTSWR → B1; [HYP-706](https://linear.app/glide-vc/issue/HYP-706) → B1 only (the floor is _gated_ on B1-verify per [HYP-544](https://linear.app/glide-vc/issue/HYP-544) §A3; it does NOT depend on A1)                   | 8, 9.2-9.4              |
+| **3 — AI ladder + Tier-2 source resolution + color UI**                    | A1 forward-detector (real per-channel forwarding facts, [§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home)); Tiers 0-5 AI/deterministic ladder (AI routes/ranks, probe is the gate); host-side Tier-2 CSS write-target resolution; static cva-variant resolver; **the project-independent ColorCombobox composition test that picks a color and asserts the source edit landed (D30)** | A1 (untickered, dep B1, [§9.2a](#92a-a1--the-forward-detector-its-one-canonical-home)), [HYP-704](https://linear.app/glide-vc/issue/HYP-704) (CSS/var/module exact-only + floor), [HYP-705](https://linear.app/glide-vc/issue/HYP-705) (cva resolver), [HYP-686](https://linear.app/glide-vc/issue/HYP-686) (intent→token, later), [HYP-349](https://linear.app/glide-vc/issue/HYP-349)-followup (color composition test, D30) | A1 → B1; [HYP-704](https://linear.app/glide-vc/issue/HYP-704)/705 → A1 + B1 (DO NOT start 704/705 before B0/B1 exist — discovery-tickets §[HYP-544](https://linear.app/glide-vc/issue/HYP-544)); D30 test → B1 (asserts landing) | 7, 9.2a, 10, 12.4, 12.5 |
+| **4 — Multi-select generalization + journal undo**                         | `StyleWriteEngine.apply(selection[], patch)` with single = `length===1`; frozen BatchPlan; write-ahead journal undo (one atomic step across files); per-element resolved-channel observability                                                                                                                                                                                                    | [HYP-271](https://linear.app/glide-vc/issue/HYP-271) (rebase off A1), [HYP-596](https://linear.app/glide-vc/issue/HYP-596) (proper N>1 rebuild), [HYP-664](https://linear.app/glide-vc/issue/HYP-664) (wire frozen BatchPlan into the flush), [HYP-427](https://linear.app/glide-vc/issue/HYP-427)/422 (ext parity + post-batch refresh), [HYP-661](https://linear.app/glide-vc/issue/HYP-661)/663 (audit + counters)          | all → A1 (un-starve the ladder) + B0 (the journal)                                                                                                                                                                               | 11.1-11.3, 9.5          |
+| **5 — Wrapper promotion + visual-regression guard (opt-in, flagged)**      | B2 opt-in L3 wrapper promotion (14-guard chain, lift-over-create, separate undo step); B3 in-session screenshot large-diff guard                                                                                                                                                                                                                                                                  | B2 (untickered), [HYP-660](https://linear.app/glide-vc/issue/HYP-660) (L3 escalation, flag OFF + kill switch + blocking preflight), B3 (untickered)                                                                                                                                                                                                                                                                            | B2 → B1 + B0 (re-run B1 after wrapper; rollback under the same writeId); B3 → B1                                                                                                                                                 | 11.4-11.6, 9.6          |
+| **6 — AI-vision verification (required primary visual judge)**             | `callAIVision` multimodal client + per-provider image adapters + capability flags; cvGate fast pre-filter; external policy engine (model = witness, policy = judge); verification queue + cache; shadow → assist → enforce rollout with a false-positive budget                                                                                                                                   | [HYP-734](https://linear.app/glide-vc/issue/HYP-734) (epic), [HYP-735](https://linear.app/glide-vc/issue/HYP-735) (`callAIVision` + multimodal client), [HYP-737](https://linear.app/glide-vc/issue/HYP-737) (cvGate + policy engine), [HYP-739](https://linear.app/glide-vc/issue/HYP-739) (verification queue + rollout)                                                                                                     | all → B3 (it is a B3 _stage_, [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline)) → B1 + B0; the policy engine gates publish/export                                             | 9.7                     |
+| **Cross-phase — build ALL 12 CssSystemIds** (RATIFIED target, OD-5/item 3) | Implement reader + writer + detection for the 8 currently-typed-only systems so ALL twelve are built: tailwind-v3, tailwind-v4, css-modules, plain-css, inline-style, emotion, styled-components, vanilla-extract, mui-system, chakra-ui, mantine, tamagui (four already shipped)                                                                                                                 | [HYP-600](https://linear.app/glide-vc/issue/HYP-600) (umbrella), [HYP-606](https://linear.app/glide-vc/issue/HYP-606)/607/608/609/610/619/620 (the per-system adapters); detection extends `getCssSystems` past its 3-system AS-IS (D5)                                                                                                                                                                                        | each adapter → B0/B1/A1 rails (do not ship an adapter ahead of the safety net); parallelizes across Phases 3-6, gates none of them                                                                                               | 3.3, 5.5, 14            |
 
 Seven sequenced phases above (0-6) plus the cross-phase build-all-twelve track; **Phase 6 is the last
 sequenced phase and makes AI-vision the REQUIRED primary visual judge** — it is
@@ -6500,12 +6646,12 @@ enforce-mode authority to act on the model's witness verdict (auto-rollback / au
 through the shadow → assist → enforce rollout, never switched on at full power — the model itself is only
 ever the witness.
 
-Two umbrella tickets sit *across* all phases and close last: **[HYP-299](https://linear.app/glide-vc/issue/HYP-299)** ("Unify style write
-architecture across VS Code and SaaS", *In Progress*) is the convergence target of [Part 5.3](#53-the-convergence-target--system-a-and-system-b-become-one) — it
+Two umbrella tickets sit _across_ all phases and close last: **[HYP-299](https://linear.app/glide-vc/issue/HYP-299)** ("Unify style write
+architecture across VS Code and SaaS", _In Progress_) is the convergence target of [Part 5.3](#53-the-convergence-target--system-a-and-system-b-become-one) — it
 is satisfied when System A's client adapters are **DELETED** (reduced to a styling-logic-free realm
 transport shell), the `ParsedStyles` shape is removed, and the duplicate converter
 (`classNameToStyles` vs `TailwindV4Reader`, D23/D37) is dissolved — per OD-3 (ratified DELETE, not
-@deprecate). **[HYP-600](https://linear.app/glide-vc/issue/HYP-600)** ("Build Phase 2: All CSS Frameworks", *Backlog*, parent of
+@deprecate). **[HYP-600](https://linear.app/glide-vc/issue/HYP-600)** ("Build Phase 2: All CSS Frameworks", _Backlog_, parent of
 [HYP-606](https://linear.app/glide-vc/issue/HYP-606)/607/608/609/610/619/620) is the **build-all-twelve track**: per OD-5 / item 3, the ratified
 goal is that ALL TWELVE `CssSystemId`s are IMPLEMENTED (reader + writer + detection), not just the four
 shipped today — so [HYP-600](https://linear.app/glide-vc/issue/HYP-600) schedules building the eight currently-typed-only systems (tailwind-v3,
@@ -6528,11 +6674,12 @@ exists; 704/705 are A1-gated and cannot. This is the one place the phase map dep
 grouping, and it is the reason A1 appears in Phase 3 while one of its nominal siblings is in Phase 2.
 
 ![Migration phase dependency graph showing B0/B1 gating all downstream phases](./assets/fig-14-2-migration-phase-dependency-graph.svg)
+
 <!-- ASSET-SPEC fig-14-2-migration-phase-dependency-graph | KIND=svg | Phases 0-6 as nodes with dependency edges, showing B0/B1 gating everything downstream, the shadow-diff rollout on Phase 1, the feature flags on Phase 5, and Phase 6 (AI-vision) binding to B3 as the required final visual judge. -->
 
 A note on the false "feature pressure" this map resists: multi-select (Phase 4) and Tier-2 color
 resolution (Phase 3) are the two most-asked-for capabilities, and the merged-but-starved [#270](https://github.com/hyperide/hyper-saas/pull/270)
-branch creates a standing temptation to ship them *now* on top of the garbage-facts read. The map
+branch creates a standing temptation to ship them _now_ on top of the garbage-facts read. The map
 refuses this. Shipping batch write or Tier-2 resolution before A1 + B1 exist means shipping a
 feature that writes targets it cannot verify and routes on facts it knows are wrong — the exact
 failure class (D1/D3/D14) the master spec exists to retire. The dependency edges are not
@@ -6541,11 +6688,11 @@ suggestions; they are the difference between widening the engine and widening th
 ### 14.3 The shadow-diff rollout for single-select semantics
 
 The most dangerous migration step is counter-intuitive: it is **not** the new multi-select
-feature, it is the silent replacement of *single-select read semantics* underneath the existing,
+feature, it is the silent replacement of _single-select read semantics_ underneath the existing,
 working inspector. (Source: Q2 rollout, codex-SRE position §"the risky migration is single-select
 semantics".) Today N=1 read flows through the `classNameToStyles → ParsedStyles` pipeline
 (`useElementStyleData.ts:113/444`); Phase 1 replaces that with `SelectionStyleRead`'s normalized
-IR + a *projection* back to `ParsedStyles` for the inspector during migration ([Part 6.2](#62-normalized-ir--declaration-rows-not-raw-parsedstyles)). If the
+IR + a _projection_ back to `ParsedStyles` for the inspector during migration ([Part 6.2](#62-normalized-ir--declaration-rows-not-raw-parsedstyles)). If the
 projection drifts from the current output on any field, every single-element edit — the one path
 that genuinely works today — silently regresses. Multi-select, by contrast, is greenfield: there
 is nothing to regress because there is nothing on main (D7).
@@ -6597,19 +6744,19 @@ artifacts is green. (Source: discrepancies §E, AS-IS [§9](#part-9--to-be-verif
 **Test-coverage acceptance gate (closes D30-D38).** Each gap is tied to the phase that must close
 it, so the gate is incremental, not a big-bang at the end:
 
-| Gap | Behavior to cover | Closing phase | Currently |
-|---|---|---|---|
-| D30 | `ColorCombobox` component-level composition (open/close, select, keyboard nav, recent-colors) — not just theme classes | 3 (color UI work) | 1 test, theme-classes only |
-| D31/D36 | styled-components & Emotion **writer** adapters (+ dirs that don't exist) | [HYP-600](https://linear.app/glide-vc/issue/HYP-600) tail (parallel) | no dirs, no writer tests |
-| D32 | unit-level **read** coverage for styled-components / Emotion / pseudo-selectors (today only project-gated e2e that skips) | [HYP-600](https://linear.app/glide-vc/issue/HYP-600) tail (parallel) | i18n-dominated `StyleReadService.test.ts` |
-| D33 | pseudo-selector / responsive-variant **WRITE** — untested *anywhere* on main | 2-3 (after B1 can verify a `:hover` edit), [HYP-300](https://linear.app/glide-vc/issue/HYP-300) unblocks | only `md:` order-write tested |
-| D34 | multi-select batch write (`ast:updateStylesBatch`) unit + e2e | 4 | no test (feature not on main) |
-| D35 | opacity/alpha write round-trip (today skip-guarded on most CSS systems) | 2 (verify makes the round-trip assertable) | one fixture, silently skips |
-| D37 | dedupe the duplicate client TW parser (`tailwindParser.test.ts` 2 tests vs [`lib/tailwind/parser.test.ts`](https://github.com/hyperide/hyper-saas/blob/main/lib/tailwind/parser.test.ts) 95) — converges with D23 | 1 (convergence) → 3 | 2 client tests, divergence risk |
-| D38 | `getTamaguiTokens` happy-path token *usage* in inspector (today one indirect fixture) | 3 (token providers) | one indirect e2e |
+| Gap     | Behavior to cover                                                                                                                                                                                                 | Closing phase                                                                                            | Currently                                 |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| D30     | `ColorCombobox` component-level composition (open/close, select, keyboard nav, recent-colors) — not just theme classes                                                                                            | 3 (color UI work)                                                                                        | 1 test, theme-classes only                |
+| D31/D36 | styled-components & Emotion **writer** adapters (+ dirs that don't exist)                                                                                                                                         | [HYP-600](https://linear.app/glide-vc/issue/HYP-600) tail (parallel)                                     | no dirs, no writer tests                  |
+| D32     | unit-level **read** coverage for styled-components / Emotion / pseudo-selectors (today only project-gated e2e that skips)                                                                                         | [HYP-600](https://linear.app/glide-vc/issue/HYP-600) tail (parallel)                                     | i18n-dominated `StyleReadService.test.ts` |
+| D33     | pseudo-selector / responsive-variant **WRITE** — untested _anywhere_ on main                                                                                                                                      | 2-3 (after B1 can verify a `:hover` edit), [HYP-300](https://linear.app/glide-vc/issue/HYP-300) unblocks | only `md:` order-write tested             |
+| D34     | multi-select batch write (`ast:updateStylesBatch`) unit + e2e                                                                                                                                                     | 4                                                                                                        | no test (feature not on main)             |
+| D35     | opacity/alpha write round-trip (today skip-guarded on most CSS systems)                                                                                                                                           | 2 (verify makes the round-trip assertable)                                                               | one fixture, silently skips               |
+| D37     | dedupe the duplicate client TW parser (`tailwindParser.test.ts` 2 tests vs [`lib/tailwind/parser.test.ts`](https://github.com/hyperide/hyper-saas/blob/main/lib/tailwind/parser.test.ts) 95) — converges with D23 | 1 (convergence) → 3                                                                                      | 2 client tests, divergence risk           |
+| D38     | `getTamaguiTokens` happy-path token _usage_ in inspector (today one indirect fixture)                                                                                                                             | 3 (token providers)                                                                                      | one indirect e2e                          |
 
 The hard gate is **D33 + D34**: pseudo-selector/responsive write and multi-select batch write are
-the two behaviors with *zero* test coverage anywhere on main, and both are core TO-BE promises.
+the two behaviors with _zero_ test coverage anywhere on main, and both are core TO-BE promises.
 Neither can be claimed "done" on assertion — they require new e2e fixtures that exercise the actual
 write-and-verify round-trip (D33 is also blocked on the [HYP-300](https://linear.app/glide-vc/issue/HYP-300) object-valued-JSX-prop AST infra,
 so it gates on that prerequisite landing). The Docker e2e harness is the only working visual-proof
@@ -6620,25 +6767,26 @@ test runs there.
 TO-BE handler. This is the consolidated reference the migration closes against — each row's "TO-BE
 handling" is a testable assertion, not a hope:
 
-| AS-IS condition ([Part 3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)) | Status today | TO-BE handling | Owner |
-|---|---|---|---|
-| CSS-file write, `findRule` miss | **BROKEN** (hard-fail = dead click, [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)c) | gated inline floor (gate on A1-forward OR B1-verify), reported | [HYP-706](https://linear.app/glide-vc/issue/HYP-706), Phase 2 |
-| Dynamic Tailwind plan w/ explicit locations | **PARTIAL** ("not supported yet", [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)e) | resolve via Tier-2 planner seam → write or report; never the silent throw | [HYP-704](https://linear.app/glide-vc/issue/HYP-704), Phase 3 |
-| Tamagui responsive variants ($md/$gtSm) | **PARTIAL** (`order-not-supported`, [§1](#part-1--executive-summary)) | object-valued JSX prop write (hoverStyle/pressStyle); else skip with structured reason | [HYP-300](https://linear.app/glide-vc/issue/HYP-300), Phase 3+ |
-| Tamagui grid layout | **PARTIAL** (grid→View, [§1](#part-1--executive-summary)) | skip(unsupported-layout) with a named reason, not a silent View coercion | [HYP-300](https://linear.app/glide-vc/issue/HYP-300), Phase 3+ |
-| Tamagui `borderStyle` | **PARTIAL** (silently dropped, RN solid-only) | skip with `reason: rn-solid-only`, surfaced — never silent | Phase 4 (observability) |
-| VS Code ElementFacts (sourceOwners/propMappers) | **PARTIAL** (hardcoded empty/true, [§2](#part-2--glossary--term-decode)c) | A1 forward-detector replaces hardcoded `acceptsClassName:true` with real evidence | A1, Phase 3 |
-| `StyleReadResult.properties` as editable source | **BROKEN/UNUSED** ([§2](#part-2--glossary--term-decode)a) | normalized IR (`StyleDeclaration[]`); `ParsedStyles` is DELETED once sections migrate (OD-3 — not a `@deprecated` projection) | Phase 1 |
-| `stale` selection (post-HMR lost) | handled ad-hoc (`empty`) | re-resolve once → blocking sync-banner if still stale (the only pre-write stop) | Phase 2 ([Part 8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence) feedback Level 3 / sync-banner) |
-| `inexpressible` (`:hover` via inline, theme edit) | not distinguished | route to lowest stylesheet-capable target; else can't-style banner naming the cause | Phase 2 ([Part 8.3](#83-inline-is-a-base-state-floor-not-a-universal-floor)) |
-| `unlanded` (write landed in source, ≈before in DOM) | not detected (no verify) | B1 `not-landed` → B2 offer (exact: held-pending; probable: rollback) | Phase 2 (matrix) |
-| `unverifiable` (timeout/no-edge/realm can't read) | not distinguished from landed | NEVER promote to landed (`?? false`); `probable+unverifiable` rolls back, `exact` keeps+reports | Phase 2 (9.4) |
-| HMR-timeout false-negative | would read as not-landed | correlated dual settle + `timeout⇒unverifiable` (never repair a slow build) | Phase 2 (9.3) |
-| Source-map miss (SaaS) | **WORKS** (suffix-match + elementLoc) | unchanged; preserved through the read-merge migration | (baseline) |
-| SaaS i18n key read | **BROKEN/MISSING** ([§2](#part-2--glossary--term-decode)c, [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain)) | port `_tryDetectI18n` to a SaaS route + keys route + wire browser path | [HYP-372](https://linear.app/glide-vc/issue/HYP-372), Phase 0-1 (adjacent) |
-| Swallowed prop (component forwards neither className nor style) | written blind (silent no-op) | A1 high-confidence NEGATIVE → pre-write exclusion; never attempt | A1, Phase 3 |
+| AS-IS condition ([Part 3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)) | Status today                                                                                                                   | TO-BE handling                                                                                                                | Owner                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| CSS-file write, `findRule` miss                                                                                | **BROKEN** (hard-fail = dead click, [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)c) | gated inline floor (gate on A1-forward OR B1-verify), reported                                                                | [HYP-706](https://linear.app/glide-vc/issue/HYP-706), Phase 2                                                     |
+| Dynamic Tailwind plan w/ explicit locations                                                                    | **PARTIAL** ("not supported yet", [§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)e)   | resolve via Tier-2 planner seam → write or report; never the silent throw                                                     | [HYP-704](https://linear.app/glide-vc/issue/HYP-704), Phase 3                                                     |
+| Tamagui responsive variants ($md/$gtSm)                                                                        | **PARTIAL** (`order-not-supported`, [§1](#part-1--executive-summary))                                                          | object-valued JSX prop write (hoverStyle/pressStyle); else skip with structured reason                                        | [HYP-300](https://linear.app/glide-vc/issue/HYP-300), Phase 3+                                                    |
+| Tamagui grid layout                                                                                            | **PARTIAL** (grid→View, [§1](#part-1--executive-summary))                                                                      | skip(unsupported-layout) with a named reason, not a silent View coercion                                                      | [HYP-300](https://linear.app/glide-vc/issue/HYP-300), Phase 3+                                                    |
+| Tamagui `borderStyle`                                                                                          | **PARTIAL** (silently dropped, RN solid-only)                                                                                  | skip with `reason: rn-solid-only`, surfaced — never silent                                                                    | Phase 4 (observability)                                                                                           |
+| VS Code ElementFacts (sourceOwners/propMappers)                                                                | **PARTIAL** (hardcoded empty/true, [§2](#part-2--glossary--term-decode)c)                                                      | A1 forward-detector replaces hardcoded `acceptsClassName:true` with real evidence                                             | A1, Phase 3                                                                                                       |
+| `StyleReadResult.properties` as editable source                                                                | **BROKEN/UNUSED** ([§2](#part-2--glossary--term-decode)a)                                                                      | normalized IR (`StyleDeclaration[]`); `ParsedStyles` is DELETED once sections migrate (OD-3 — not a `@deprecated` projection) | Phase 1                                                                                                           |
+| `stale` selection (post-HMR lost)                                                                              | handled ad-hoc (`empty`)                                                                                                       | re-resolve once → blocking sync-banner if still stale (the only pre-write stop)                                               | Phase 2 ([Part 8.4](#84-the-four-level-feedback-model-replaces-banner-vs-silence) feedback Level 3 / sync-banner) |
+| `inexpressible` (`:hover` via inline, theme edit)                                                              | not distinguished                                                                                                              | route to lowest stylesheet-capable target; else can't-style banner naming the cause                                           | Phase 2 ([Part 8.3](#83-inline-is-a-base-state-floor-not-a-universal-floor))                                      |
+| `unlanded` (write landed in source, ≈before in DOM)                                                            | not detected (no verify)                                                                                                       | B1 `not-landed` → B2 offer (exact: held-pending; probable: rollback)                                                          | Phase 2 (matrix)                                                                                                  |
+| `unverifiable` (timeout/no-edge/realm can't read)                                                              | not distinguished from landed                                                                                                  | NEVER promote to landed (`?? false`); `probable+unverifiable` rolls back, `exact` keeps+reports                               | Phase 2 (9.4)                                                                                                     |
+| HMR-timeout false-negative                                                                                     | would read as not-landed                                                                                                       | correlated dual settle + `timeout⇒unverifiable` (never repair a slow build)                                                   | Phase 2 (9.3)                                                                                                     |
+| Source-map miss (SaaS)                                                                                         | **WORKS** (suffix-match + elementLoc)                                                                                          | unchanged; preserved through the read-merge migration                                                                         | (baseline)                                                                                                        |
+| SaaS i18n key read                                                                                             | **BROKEN/MISSING** ([§2](#part-2--glossary--term-decode)c, [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain))  | port `_tryDetectI18n` to a SaaS route + keys route + wire browser path                                                        | [HYP-372](https://linear.app/glide-vc/issue/HYP-372), Phase 0-1 (adjacent)                                        |
+| Swallowed prop (component forwards neither className nor style)                                                | written blind (silent no-op)                                                                                                   | A1 high-confidence NEGATIVE → pre-write exclusion; never attempt                                                              | A1, Phase 3                                                                                                       |
 
 ![Error and edge-case state map routing each error condition to its TO-BE handling](./assets/fig-14-4-error-edge-case-state-map.svg)
+
 <!-- ASSET-SPEC fig-14-4-error-edge-case-state-map | KIND=svg | Each error condition (stale, inexpressible, unlanded, unverifiable, findRule-miss, swallowed-prop, source-map-miss, HMR-timeout) → its TO-BE handling (re-resolve / skip / rollback / banner / inline-floor), as a single reference diagram. -->
 
 ### 14.5 Spec consolidation & deprecation
@@ -6651,11 +6799,11 @@ them as current. Closing the migration includes closing the spec landscape per
 - **FOLD-IN (11 specs)** — content merges into this master; the old file gets a one-line
   `> SUPERSEDED BY 2026-styles-master-spec §X` banner at the top and is otherwise frozen for git
   history, not for reading. These ARE the master's body: the unification-plan ([§1](#part-1--executive-summary), the anchor
-  source — fold its mechanism, *retract its universal-inline language* in [Part 8](#part-8--to-be-fallback-doctrine-vtswr) per D12), the
+  source — fold its mechanism, _retract its universal-inline language_ in [Part 8](#part-8--to-be-fallback-doctrine-vtswr) per D12), the
   source-owner taxonomy ([§2](#part-2--glossary--term-decode)), source-confidence ([§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines) → [Part 9.4](#94-fail-closed-the-confidence--verifiability-matrix)), theme-resolution ([§4](#part-4--discrepancy-ledger) → [Part 7](#part-7--to-be-planner-where-the-value-lives-priority-chain)/8),
   the verified-pipeline TO-BE head ([§5](#part-5--to-be-unified-architecture) → Parts 5/9), the hyp544-color-replace spec ([§6](#part-6--to-be-read-the-one-read-merge-model) → Parts
   3.8/3.12/12), the two [#270](https://github.com/hyperide/hyper-saas/pull/270) D2/D3 build-ready specs ([§7](#part-7--to-be-planner-where-the-value-lives-priority-chain)/[§8](#part-8--to-be-fallback-doctrine-vtswr) → Parts 7.2/11), the transport-findings
-  read correction ([§9](#part-9--to-be-verify--transaction--undo) → Parts 3.4/6.1), phase2 ([§10](#part-10--to-be-ai-assisted-vs-deterministic-paths), fold the framework *enumeration*, mark the
+  read correction ([§9](#part-9--to-be-verify--transaction--undo) → Parts 3.4/6.1), phase2 ([§10](#part-10--to-be-ai-assisted-vs-deterministic-paths), fold the framework _enumeration_, mark the
   flat-dispatch architecture retired in [Part 4.2](#42-specspec-reversals-d12-d18)), and the two original universal-adapters docs
   ([§11](#part-11--to-be-multi-select-model--stylability-ladder--wrapper-promotion)). (Source: consolidation-plan §A.)
 - **KEEP-SEPARATE-AND-UPDATE (5 core + the adjacent set)** — stays its own document because it is a
@@ -6690,31 +6838,31 @@ table is the authoritative record of exactly which prior spec folded, was kept, 
 master is unambiguously THE source of truth for the styles pipeline. "Master §" is the part(s) that
 absorbed or summarizes the content.
 
-| # | Spec file ([`docs/specs/`](https://github.com/hyperide/hyper-saas/tree/main/docs/specs)) | Disposition | Master § | Banner applied |
-|---|---|---|---|---|
-| 1 | `2026-04-14-style-write-unification-plan.md` | FOLD-IN (anchor) | 3.7, 5.3, 7, 8 | SUPERSEDED |
-| 2 | `2026-04-14-style-source-owner.md` | FOLD-IN | 2.1, 3.3, 7.3 | SUPERSEDED |
-| 3 | `2026-04-14-style-source-confidence.md` | FOLD-IN | 9.4 | SUPERSEDED |
-| 4 | `2026-04-15-style-theme-resolution.md` | FOLD-IN | 7, 8 | SUPERSEDED |
-| 5 | `2026-06-11-style-write-verified-pipeline.md` | FOLD-IN (TO-BE head) | 5.2, 9 | SUPERSEDED |
-| 6 | `2026-06-09-hyp544-color-replace-rework.md` | FOLD-IN | 3.8, 3.12, 12.3–12.4 | SUPERSEDED |
-| 7 | `2026-06-11-270-d2-source-routing.md` | FOLD-IN | 7.2, 11 | SUPERSEDED |
-| 8 | `2026-06-11-270-d3-stylability-ladder.md` | FOLD-IN | 8.4, 11.2–11.3 | SUPERSEDED |
-| 9 | `2026-06-04-hyp535-270-read-write-transport-findings.md` | FOLD-IN | 3.4, 6.1 | SUPERSEDED |
-| 10 | `2026-03-11-phase2-all-css-frameworks-design.md` | FOLD-IN (superseded history) | 3.3, 4.2 | SUPERSEDED |
-| 11a | `2026-03-10-universal-styling-adapters.md` | FOLD-IN (origin) | 3.2 | SUPERSEDED |
-| 11b | `2026-03-10-universal-styling-adapters-plan.md` | FOLD-IN (origin) | 3.2 | SUPERSEDED |
-| 12 | `2026-03-13-color-picker-enhancements-design.md` | KEEP-SEPARATE-AND-UPDATE | 12.5 | Companion |
-| 13 | `2026-03-24-decompose-color-combobox.md` | KEEP-SEPARATE-AND-UPDATE | 12.5 | Companion |
-| 14 | `2026-04-17-style-write-foundation-plan.md` | KEEP-SEPARATE-AND-UPDATE (appendix) | 7–9 | Companion |
-| 15 | `2026-04-18-style-adapters-phase3-4-plan.md` | KEEP-SEPARATE-AND-UPDATE | 3.3 | Companion |
-| 16 | `2026-04-14-style-write-unification-workprocess.md` | KEEP-SEPARATE (frozen log) | 5.3, 7 | Companion (non-authoritative log) |
-| 17 | `2026-06-04-crossrealm-webview-bridge.md` | ARCHIVE ([§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b wrong, D22) | 6 | ARCHIVED |
-| 18 | `2026-06-04-salvage-extension-wiring-HANDOFF.md` | ARCHIVE (handoff) | — | ARCHIVED |
-| 19 | `2026-06-02-salvage-adapter-first-rework.md` | ARCHIVE (D21, overtaken) | — | ARCHIVED |
-| 20 | `2026-06-02-phase1-visual-foundation-salvage.md` | ARCHIVE (salvage analysis) | — | ARCHIVED |
-| 21a | `2026-06-02-f-ast-drag-rebuild.md` | ARCHIVE (early sketch) | 11 | ARCHIVED |
-| 21b | `2026-06-02-g-multi-select-batch-rebuild.md` | ARCHIVE (early sketch) | 11 | ARCHIVED |
+| #   | Spec file ([`docs/specs/`](https://github.com/hyperide/hyper-saas/tree/main/docs/specs)) | Disposition                                                                                                    | Master §             | Banner applied                    |
+| --- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------- | --------------------------------- |
+| 1   | `2026-04-14-style-write-unification-plan.md`                                             | FOLD-IN (anchor)                                                                                               | 3.7, 5.3, 7, 8       | SUPERSEDED                        |
+| 2   | `2026-04-14-style-source-owner.md`                                                       | FOLD-IN                                                                                                        | 2.1, 3.3, 7.3        | SUPERSEDED                        |
+| 3   | `2026-04-14-style-source-confidence.md`                                                  | FOLD-IN                                                                                                        | 9.4                  | SUPERSEDED                        |
+| 4   | `2026-04-15-style-theme-resolution.md`                                                   | FOLD-IN                                                                                                        | 7, 8                 | SUPERSEDED                        |
+| 5   | `2026-06-11-style-write-verified-pipeline.md`                                            | FOLD-IN (TO-BE head)                                                                                           | 5.2, 9               | SUPERSEDED                        |
+| 6   | `2026-06-09-hyp544-color-replace-rework.md`                                              | FOLD-IN                                                                                                        | 3.8, 3.12, 12.3–12.4 | SUPERSEDED                        |
+| 7   | `2026-06-11-270-d2-source-routing.md`                                                    | FOLD-IN                                                                                                        | 7.2, 11              | SUPERSEDED                        |
+| 8   | `2026-06-11-270-d3-stylability-ladder.md`                                                | FOLD-IN                                                                                                        | 8.4, 11.2–11.3       | SUPERSEDED                        |
+| 9   | `2026-06-04-hyp535-270-read-write-transport-findings.md`                                 | FOLD-IN                                                                                                        | 3.4, 6.1             | SUPERSEDED                        |
+| 10  | `2026-03-11-phase2-all-css-frameworks-design.md`                                         | FOLD-IN (superseded history)                                                                                   | 3.3, 4.2             | SUPERSEDED                        |
+| 11a | `2026-03-10-universal-styling-adapters.md`                                               | FOLD-IN (origin)                                                                                               | 3.2                  | SUPERSEDED                        |
+| 11b | `2026-03-10-universal-styling-adapters-plan.md`                                          | FOLD-IN (origin)                                                                                               | 3.2                  | SUPERSEDED                        |
+| 12  | `2026-03-13-color-picker-enhancements-design.md`                                         | KEEP-SEPARATE-AND-UPDATE                                                                                       | 12.5                 | Companion                         |
+| 13  | `2026-03-24-decompose-color-combobox.md`                                                 | KEEP-SEPARATE-AND-UPDATE                                                                                       | 12.5                 | Companion                         |
+| 14  | `2026-04-17-style-write-foundation-plan.md`                                              | KEEP-SEPARATE-AND-UPDATE (appendix)                                                                            | 7–9                  | Companion                         |
+| 15  | `2026-04-18-style-adapters-phase3-4-plan.md`                                             | KEEP-SEPARATE-AND-UPDATE                                                                                       | 3.3                  | Companion                         |
+| 16  | `2026-04-14-style-write-unification-workprocess.md`                                      | KEEP-SEPARATE (frozen log)                                                                                     | 5.3, 7               | Companion (non-authoritative log) |
+| 17  | `2026-06-04-crossrealm-webview-bridge.md`                                                | ARCHIVE ([§3](#part-3-as-is-sections-3137--current-state-topology-adapters-read--write-pipelines)b wrong, D22) | 6                    | ARCHIVED                          |
+| 18  | `2026-06-04-salvage-extension-wiring-HANDOFF.md`                                         | ARCHIVE (handoff)                                                                                              | —                    | ARCHIVED                          |
+| 19  | `2026-06-02-salvage-adapter-first-rework.md`                                             | ARCHIVE (D21, overtaken)                                                                                       | —                    | ARCHIVED                          |
+| 20  | `2026-06-02-phase1-visual-foundation-salvage.md`                                         | ARCHIVE (salvage analysis)                                                                                     | —                    | ARCHIVED                          |
+| 21a | `2026-06-02-f-ast-drag-rebuild.md`                                                       | ARCHIVE (early sketch)                                                                                         | 11                   | ARCHIVED                          |
+| 21b | `2026-06-02-g-multi-select-batch-rebuild.md`                                             | ARCHIVE (early sketch)                                                                                         | 11                   | ARCHIVED                          |
 
 **Totals: 12 files folded (11 logical specs, #11 is two files), 5 kept-separate, 6 archived** (#17–20 plus
 the two #21 sketches). The style-ADJACENT set the master only LINKS (does not fold and does not banner —
@@ -6743,7 +6891,7 @@ It is recorded here, in the migration part, only to mark the boundary and the to
 spec, not folded into this one:
 
 - **Shares the verify substrate, does not duplicate it.** Layout-editing's "drop landed correctly"
-  check is a CONSUMER of the same B0 saga ([§9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)), the [§9.3](#93-the-settle-handshake--never-compile-success-or-timeout) correlated settle, and — for its *visual* drop
+  check is a CONSUMER of the same B0 saga ([§9.1](#91-transaction-first-b0--one-writeid-snapshot-all-touched-files)), the [§9.3](#93-the-settle-handshake--never-compile-success-or-timeout) correlated settle, and — for its _visual_ drop
   verification — the [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline) AI-vision pipeline (a drag/move/insert `VisualExpectation`, [§9.7](#97-ai-vision-verification--the-capture--cvgate--visionclient--policyengine--queue-pipeline)(e), is exactly
   the contract a drop produces). It does NOT get its own transaction or its own screenshot path.
 - **Sits beside, not inside, the styles planner.** A grid/flex edit that ends up writing a CSS
@@ -6779,12 +6927,12 @@ apply → verify → report` flow (the [§9.1](#91-transaction-first-b0--one-wri
 package is a downstream consequence of drawing that boundary, never the goal.
 
 **Why this is the headline win (the kill-or-pursue test, claude's framing).** Today the trust boundary
-between the pure engine and the dirty realm (DOM, file IO, source maps, settle) is drawn *nowhere*, so it
+between the pure engine and the dirty realm (DOM, file IO, source maps, settle) is drawn _nowhere_, so it
 is never reviewed. The count of un-audited trust boundaries today is `realm × engine` — every
 {SaaS, VS Code ext, NodePod-OPFS} crossed with every read/plan/write path. After extraction behind ONE
 shared port contract that count collapses to **one**. That reduction IS the justification. The inverse is
-the kill signal: *the boundary is drawn correctly iff it reduces the number of un-auditable trust
-boundaries and no port accepts code, an expression, or an arbitrary URL.* If a proposed extraction does
+the kill signal: _the boundary is drawn correctly iff it reduces the number of un-auditable trust
+boundaries and no port accepts code, an expression, or an arbitrary URL._ If a proposed extraction does
 not reduce that count — or a port starts taking a config path, an eval-able expression, or a URL — the
 boundary is in the wrong place; that is a reason to stop, not to add another port.
 
@@ -6801,7 +6949,7 @@ product behind a small, shared **port** set.
 **lib (the pure package core) — owns:**
 
 - Read TYPES + `StyleReadManager` **pure-parse** ([`lib/style-read/`](https://github.com/hyperide/hyper-saas/tree/main/lib/style-read) — parsing source into declaration
-  facts, no DOM, no computed-style; the computed-style *collection* is a port, see below).
+  facts, no DOM, no computed-style; the computed-style _collection_ is a port, see below).
 - The **planner** ([`lib/style-write/style-write-planner.ts`](https://github.com/hyperide/hyper-saas/blob/main/lib/style-write/style-write-planner.ts)) — the [§7](#part-7--to-be-planner-where-the-value-lives-priority-chain) priority chain, per-property /
   per-state value resolution, channel selection → a frozen `StyleTransactionPlan` (around today's
   `StyleWritePlan`).
@@ -6834,7 +6982,7 @@ Three layers, each strictly atop the one below, no layer reaching past the port 
 - **lib** — the pure core of [§15.2](#152-the-boundary--facts-in-plans-out-lib-vs-ports). `read(file) → facts`; `plan(facts, intent) → StyleTransactionPlan`;
   `preflight(plan) → Diagnostic[]`. No side effects.
 - **cli** — headless, deterministic, scriptable: `style plan`, `style preflight`, `style apply
-  --dry-run`, `style apply`, for CI and local scripts. It is also living documentation of the plan
+--dry-run`, `style apply`, for CI and local scripts. It is also living documentation of the plan
   contract. (`style verify` arrives later via the shared verify runner — [§15.5](#155-synergy-with-visual-verify--converge-by-contract-not-by-merge) / [§15.7](#157-honest-trade-offs).)
 - **mcp** — separate `read` / `plan` / `apply` / `verify` / `revert` tools for agents, each with its own
   policy layer (privilege separation per tool). **This is where the product's EXISTING MCP styling tools
