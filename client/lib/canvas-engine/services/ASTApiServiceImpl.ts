@@ -14,6 +14,8 @@ import type {
   EditConditionResult,
   InsertElementParams,
   InsertElementResult,
+  MapLiteralArrayOpParams,
+  MapLiteralArrayOpResult,
   MapSampleArrayOpParams,
   MapSampleArrayOpResult,
   ParseComponentResult,
@@ -90,6 +92,15 @@ export class ASTApiServiceImpl implements ASTApiService {
 
   async mapSampleArrayOp(params: MapSampleArrayOpParams): Promise<MapSampleArrayOpResult> {
     const response = await authFetch('/api/map-sample-array-op', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    return response.json();
+  }
+
+  async mapLiteralArrayOp(params: MapLiteralArrayOpParams): Promise<MapLiteralArrayOpResult> {
+    const response = await authFetch('/api/map-literal-array-op', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),

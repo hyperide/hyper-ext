@@ -14,6 +14,8 @@ import type {
   EditConditionResult,
   InsertElementParams,
   InsertElementResult,
+  MapLiteralArrayOpParams,
+  MapLiteralArrayOpResult,
   MapSampleArrayOpParams,
   MapSampleArrayOpResult,
   ParseComponentResult,
@@ -63,6 +65,9 @@ export class MockASTApiService implements ASTApiService {
   mapSampleArrayOpResult: MapSampleArrayOpResult = { success: true, snapshotId: 7 };
   /** Gate to keep the sample-array write in-flight (mirrors reorderElementGate). */
   mapSampleArrayOpGate?: Promise<void>;
+  mapLiteralArrayOpResult: MapLiteralArrayOpResult = { success: true, snapshotId: 9 };
+  /** Gate to keep the literal-array write in-flight (mirrors mapSampleArrayOpGate). */
+  mapLiteralArrayOpGate?: Promise<void>;
   updateStylesResult: UpdateStylesResult = {
     success: true,
     snapshotId: 1,
@@ -113,6 +118,12 @@ export class MockASTApiService implements ASTApiService {
     this.calls.push({ method: 'mapSampleArrayOp', args: [params] });
     if (this.mapSampleArrayOpGate) await this.mapSampleArrayOpGate;
     return { ...this.mapSampleArrayOpResult };
+  }
+
+  async mapLiteralArrayOp(params: MapLiteralArrayOpParams): Promise<MapLiteralArrayOpResult> {
+    this.calls.push({ method: 'mapLiteralArrayOp', args: [params] });
+    if (this.mapLiteralArrayOpGate) await this.mapLiteralArrayOpGate;
+    return { ...this.mapLiteralArrayOpResult };
   }
 
   async updateStyles(params: UpdateStylesParams): Promise<UpdateStylesResult> {
@@ -166,6 +177,7 @@ export class MockASTApiService implements ASTApiService {
     this.snapshotCounter = 10;
     this.reorderElementGate = undefined;
     this.mapSampleArrayOpGate = undefined;
+    this.mapLiteralArrayOpGate = undefined;
   }
 
   getCallsFor(method: string): MockCall[] {

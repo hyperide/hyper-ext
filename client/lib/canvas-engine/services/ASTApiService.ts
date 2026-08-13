@@ -74,6 +74,32 @@ export interface MapSampleArrayOpResult {
   error?: string;
 }
 
+export interface MapLiteralArrayOpParams {
+  /**
+   * Component file containing BOTH the `.map()` and the in-component `const x = [...]`
+   * literal. It is the classifier gate source AND the mutation/snapshot target (category 3
+   * has no separate sample file), so `fileSnapshotMiddleware` snapshots it via the
+   * `componentFilePath` fallback.
+   */
+  componentFilePath: string;
+  /** Active sample export, used only to reload the canvas after the mutation. */
+  sampleName?: string;
+  /** Raw `.map()` receiver source (from getSelectedMapContext); must classify as literal-array. */
+  mapExpression: string;
+  /** Array-element index (== rendered itemIndex for a bare map). */
+  itemIndex: number;
+  operation: 'delete' | 'duplicate' | 'reorder';
+  /** Destination index for `reorder`. */
+  targetIndex?: number;
+}
+
+export interface MapLiteralArrayOpResult {
+  success: boolean;
+  /** Pre-mutation file snapshot id (from fileSnapshotMiddleware) — used for undo. */
+  snapshotId?: number;
+  error?: string;
+}
+
 export interface DuplicateElementResult {
   success: boolean;
   newId?: string;
@@ -172,6 +198,7 @@ export interface ASTApiService {
   duplicateElement(params: DuplicateElementParams): Promise<DuplicateElementResult>;
   reorderElement(params: ReorderElementParams): Promise<ReorderElementResult>;
   mapSampleArrayOp(params: MapSampleArrayOpParams): Promise<MapSampleArrayOpResult>;
+  mapLiteralArrayOp(params: MapLiteralArrayOpParams): Promise<MapLiteralArrayOpResult>;
   pasteElement(params: PasteElementParams): Promise<PasteElementResult>;
   updateStyles(params: UpdateStylesParams): Promise<UpdateStylesResult>;
   updateProp(params: UpdatePropParams): Promise<ApiResult>;
