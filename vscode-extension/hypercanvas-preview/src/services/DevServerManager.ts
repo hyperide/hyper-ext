@@ -481,13 +481,13 @@ export class DevServerManager {
     this._hasErrors = false;
     this._portDetected = false;
 
-    // Reap our own orphaned dev server from a previous session BEFORE picking a
+    // Reap our own orphaned dev servers from previous sessions BEFORE picking a
     // port. On a VS Code window reload, deactivate()'s fire-and-forget stop() does
-    // not complete before the extension host is torn down, so the detached child
-    // survives and keeps its port. A port-ignoring server (Bun hardcodes :3000)
-    // then loses the next start to that orphan with EADDRINUSE and the preview
-    // never appears. We attribute the kill ONLY via the pid WE recorded for THIS
-    // project — never "whoever holds the port" (occupancy is not ownership).
+    // not complete before the extension host is torn down, so detached children can
+    // survive and keep their ports. A port-ignoring server (Bun hardcodes :3000)
+    // then loses the next start to an orphan with EADDRINUSE and the preview never
+    // appears. We attribute each kill ONLY via a pid WE recorded for THIS project —
+    // never "whoever holds the port" (occupancy is not ownership).
     // See devServerOrphanRegistry (orphan-reap-on-reload).
     this._reapOrphanedDevServer();
 
@@ -687,7 +687,9 @@ export class DevServerManager {
         this._outputChannel.appendLine(`[DevServer] Process exited with code ${code}`);
         // The child is gone — drop its orphan record so the next start does not try
         // to reap an already-dead pid (or, worse, a recycled one).
-        clearOwnedDevServer(this._projectPath);
+        if (child.pid) {
+          clearOwnedDevServer(this._projectPath, child.pid);
+        }
         this._process = null;
         this._port = null;
         this._stopProxy();
@@ -763,10 +765,12 @@ export class DevServerManager {
       this._outputChannel.appendLine('[DevServer] Stopping server...');
     }
 
-    // Clear the orphan record up front: a clean stop() means this child is no
-    // longer something the next start should reap. (The exit handler also clears
-    // it, but stop() may resolve via the 5s force-kill timeout before exit fires.)
-    clearOwnedDevServer(this._projectPath);
+    // Clear this child's orphan record up front: a clean stop() means this child is
+    // no longer something the next start should reap. Other recorded generations
+    // for the same project may still be real orphans, so clearing is pid-specific.
+    if (proc?.pid) {
+      clearOwnedDevServer(this._projectPath, proc.pid);
+    }
 
     this._process = null;
     this._port = null;
@@ -1171,9 +1175,9 @@ export class DevServerManager {
   }
 
   /**
-   * Reap an orphaned dev server from a previous session for the current project,
-   * if our recorded pid is still alive. Delegates ownership/aliveness checks to the
-   * registry and the actual termination to _reapOrphanPid (the shared kill ladder).
+   * Reap orphaned dev servers from previous sessions for the current project.
+   * Delegates ownership/aliveness checks to the registry and the actual termination
+   * to _reapOrphanPid (the shared kill ladder).
    * Fully best-effort — reapStaleOwnedDevServer never throws.
    */
   private _reapOrphanedDevServer(): void {
@@ -1181,7 +1185,11 @@ export class DevServerManager {
       onLog: (message) => this._outputChannel.appendLine(message),
     });
     if (reaped !== null) {
-      console.log(`[HyperIDE] DevServer reaped orphaned pid ${reaped} from previous session`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+      // Summary line for the VS Code Output channel (the per-pid detail already
+      // went through onLog above) — appendLine only, not console.log: this is a
+      // rarely-hit best-effort cleanup path, not a hot loop worth a dev-console
+      // trace, and the output channel is what a user/agent actually inspects.
+      this._outputChannel.appendLine(`[DevServer] Reaped orphaned pids ${reaped.join(', ')} from previous sessions`);
     }
   }
 

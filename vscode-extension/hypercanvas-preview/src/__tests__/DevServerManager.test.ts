@@ -4,6 +4,7 @@ import {
   clearOwnedDevServer,
   isProcessAlive,
   readOwnedDevServer,
+  readOwnedDevServers,
   recordOwnedDevServer,
 } from '../services/devServerOrphanRegistry';
 import type { DevServerStatus } from '../types';
@@ -1106,9 +1107,20 @@ describe('DevServerManager', () => {
       (mgr as unknown as { _reapOrphanedDevServer(): void })._reapOrphanedDevServer();
     }
 
+    // Test hygiene only: the registry is now a bounded HISTORY per project, so
+    // there is no single "the" record to clear — sweep every entry currently on
+    // file for REAP_PROJECT. Production code never needs this (each caller clears
+    // its own specific pid; see DevServerManager.ts), this is purely to keep tests
+    // isolated from each other's leftover records.
+    function clearAllReapProjectRecords(): void {
+      for (const record of readOwnedDevServers(REAP_PROJECT)) {
+        clearOwnedDevServer(REAP_PROJECT, record.pid);
+      }
+    }
+
     afterEach(() => {
       for (const pid of spawnedPids.splice(0)) hardKill(pid);
-      clearOwnedDevServer(REAP_PROJECT);
+      clearAllReapProjectRecords();
     });
 
     it('_reapOrphanedDevServer kills a live recorded child for this project', async () => {
@@ -1130,19 +1142,41 @@ describe('DevServerManager', () => {
 
     it('_reapOrphanedDevServer is a no-op when no record exists (best-effort, no throw)', () => {
       const reapManager = new DevServerManager(REAP_PROJECT);
-      clearOwnedDevServer(REAP_PROJECT);
+      clearAllReapProjectRecords();
       expect(() => callReap(reapManager)).not.toThrow();
       reapManager.dispose();
     });
 
-    it('stop() clears the orphan record for the project', async () => {
-      const reapManager = new DevServerManager(REAP_PROJECT);
+    it("stop() clears only this manager's own tracked pid, leaving an unrelated recorded generation for the same project intact", async () => {
+      // AC: clearOwnedDevServer is pid-specific now — a clean stop() must not wipe
+      // OTHER still-pending generations recorded for the same project (e.g. a real
+      // orphan left over from an earlier session). Simulate that by recording an
+      // unrelated pid FIRST, then giving this manager its own fake tracked child
+      // (mirroring the existing "no orphan" test's fakeChild pattern) before
+      // stopping it.
       recordOwnedDevServer({ pid: 999999, projectPath: REAP_PROJECT, command: 'bun run dev', startedAt: Date.now() });
-      expect(readOwnedDevServer(REAP_PROJECT)).not.toBeNull();
+
+      const reapManager = new DevServerManager(REAP_PROJECT);
+      const fakeChild = {
+        pid: 424242,
+        killed: false,
+        kill: mock(() => true),
+        once: mock((event: string, cb: () => void) => {
+          if (event === 'exit') queueMicrotask(cb);
+        }),
+      };
+      recordOwnedDevServer({
+        pid: fakeChild.pid,
+        projectPath: REAP_PROJECT,
+        command: 'bun run dev',
+        startedAt: Date.now(),
+      });
+      (reapManager as unknown as { _process: unknown })._process = fakeChild;
 
       await reapManager.stop();
 
-      expect(readOwnedDevServer(REAP_PROJECT)).toBeNull();
+      const remaining = readOwnedDevServers(REAP_PROJECT).map((r) => r.pid);
+      expect(remaining).toEqual([999999]); // this manager's own pid cleared, sibling intact
       reapManager.dispose();
     });
 

@@ -1,15 +1,18 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import {
   clearOwnedDevServer,
+  groupMembersLookLikeRecordedTool,
   isProcessAlive,
+  isProcessGroupAlive,
   liveProcessLooksLikeRecord,
   type OwnedDevServerRecord,
   orphanRecordPath,
   readOwnedDevServer,
+  readOwnedDevServers,
   reapStaleOwnedDevServer,
   recordOwnedDevServer,
 } from '../devServerOrphanRegistry';
@@ -57,6 +60,49 @@ function spawnNode(): number {
   return pid;
 }
 
+/**
+ * Reproduces the REAL incident topology: a detached WRAPPER process (the pid
+ * DevServerManager records) backgrounds a leaf child and exits almost immediately,
+ * leaving the leaf alive in the SAME process group (reparented to init once the
+ * wrapper is gone). The shell backgrounds a `node` sleep-loop (which inherits the
+ * shell's pgid — it is never itself re-detached) then exits — so the recorded
+ * leader pid dies almost instantly while the group survives via the node process.
+ * Verified empirically against the real orphaned `bun run dev` / nx / bun --hot
+ * dev-server.tsx trees found live on the dev machine during this investigation:
+ * the wrapper leader dies first, a descendant in the same pgid outlives it and
+ * keeps the port. Uses `node` (not plain `sleep`) as the surviving leaf so its
+ * `ps` command line carries a recognizable dev-tool token — required by
+ * `groupMembersLookLikeRecordedTool`'s identity check.
+ */
+function spawnOrphanedGroupSurvivor(): number {
+  const child = spawn('sh', ['-c', 'node -e "setTimeout(() => {}, 30000)" & exit 0'], {
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
+  const pid = child.pid;
+  if (!pid) throw new Error('failed to spawn orphan-survivor group');
+  spawnedPids.push(pid);
+  return pid;
+}
+
+/**
+ * Same leader-dies-before-child topology as `spawnOrphanedGroupSurvivor`, but the
+ * surviving leaf is a plain `sleep` — a command line with NO recognizable dev-tool
+ * token. Used to exercise `groupMembersLookLikeRecordedTool`'s positive-mismatch
+ * (suppress) path: a fully-exited group's pgid number could, in principle, later
+ * be reissued to an unrelated process with this same shape, and the reaper must
+ * not kill it on group membership alone.
+ */
+function spawnOrphanedGroupSurvivorUnrecognizable(): number {
+  const child = spawn('sh', ['-c', 'sleep 30 & exit 0'], { detached: true, stdio: 'ignore' });
+  child.unref();
+  const pid = child.pid;
+  if (!pid) throw new Error('failed to spawn unrecognizable orphan-survivor group');
+  spawnedPids.push(pid);
+  return pid;
+}
+
 /** SIGTERM→SIGKILL group-kill ladder mirroring DevServerManager._reapOrphanPid. */
 function killGroup(pid: number): void {
   try {
@@ -77,6 +123,33 @@ async function waitForDeath(pid: number, timeoutMs = 2000): Promise<boolean> {
     await new Promise((r) => setTimeout(r, 25));
   }
   return !isProcessAlive(pid);
+}
+
+/**
+ * A SIGKILL delivered to a group is not synchronously reflected in
+ * `isProcessGroupAlive` — the kernel briefly still reports the target as alive
+ * until it is actually reaped (confirmed empirically: immediately after
+ * `process.kill(-pgid, 'SIGKILL')` the group can still read as alive for tens of
+ * milliseconds). Poll instead of asserting immediately after a kill.
+ */
+async function waitForGroupDeath(pgid: number, timeoutMs = 2000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!isProcessGroupAlive(pgid)) return true;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  return !isProcessGroupAlive(pgid);
+}
+
+/** Waits for the leader-dead / group-alive topology to settle (the shell exits
+ * almost instantly, but poll rather than assume timing). */
+async function waitForLeaderDeadGroupAlive(leaderPid: number, timeoutMs = 2000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!isProcessAlive(leaderPid) && isProcessGroupAlive(leaderPid)) return true;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  return !isProcessAlive(leaderPid) && isProcessGroupAlive(leaderPid);
 }
 
 function makeRecord(pid: number, projectPath = '/proj/a'): OwnedDevServerRecord {
@@ -112,32 +185,66 @@ describe('record / read / clear round-trip', () => {
     expect(readOwnedDevServer(record.projectPath, baseDir)).toEqual(record);
   });
 
-  it('writes valid JSON with the documented shape', () => {
+  it('writes valid JSON as a bounded history array, not a single overwritten object', () => {
     const record = makeRecord(222);
     recordOwnedDevServer(record, baseDir);
     const onDisk = JSON.parse(readFileSync(orphanRecordPath(record.projectPath, baseDir), 'utf8'));
-    expect(onDisk).toEqual({ pid: 222, projectPath: '/proj/a', command: 'bun run dev', startedAt: record.startedAt });
+    expect(onDisk).toEqual([{ pid: 222, projectPath: '/proj/a', command: 'bun run dev', startedAt: record.startedAt }]);
   });
 
-  it('clear deletes the record file', () => {
+  it('appends rather than overwrites when the same project spawns again', () => {
+    // This is the direct proof of the single-slot bug: a second spawn for the SAME
+    // project used to clobber the first spawn's record, permanently losing any
+    // orphan from an earlier generation. Now both generations persist.
+    recordOwnedDevServer(makeRecord(101), baseDir);
+    recordOwnedDevServer(makeRecord(102), baseDir);
+    expect(readOwnedDevServers('/proj/a', baseDir).map((r) => r.pid)).toEqual([101, 102]);
+  });
+
+  it('caps history at 20 entries, dropping the oldest generation first', () => {
+    for (let i = 0; i < 25; i++) {
+      recordOwnedDevServer(makeRecord(1000 + i), baseDir);
+    }
+    const pids = readOwnedDevServers('/proj/a', baseDir).map((r) => r.pid);
+    expect(pids.length).toBe(20);
+    expect(pids[0]).toBe(1005); // oldest 5 (1000-1004) evicted
+    expect(pids.at(-1)).toBe(1024);
+  });
+
+  it('clear removes only the matching pid, leaving a sibling record for the same project intact', () => {
+    recordOwnedDevServer(makeRecord(111), baseDir);
+    recordOwnedDevServer(makeRecord(222), baseDir);
+
+    clearOwnedDevServer('/proj/a', 111, baseDir);
+
+    expect(readOwnedDevServers('/proj/a', baseDir).map((r) => r.pid)).toEqual([222]);
+  });
+
+  it('clear deletes the record file once the last entry for the project is cleared', () => {
     const record = makeRecord(333);
     recordOwnedDevServer(record, baseDir);
-    clearOwnedDevServer(record.projectPath, baseDir);
+    clearOwnedDevServer(record.projectPath, 333, baseDir);
     expect(existsSync(orphanRecordPath(record.projectPath, baseDir))).toBe(false);
     expect(readOwnedDevServer(record.projectPath, baseDir)).toBeNull();
   });
 
   it('clear is a no-op (no throw) when no record exists', () => {
-    expect(() => clearOwnedDevServer('/never/recorded', baseDir)).not.toThrow();
+    expect(() => clearOwnedDevServer('/never/recorded', 1, baseDir)).not.toThrow();
   });
 
   it('returns null for a record whose projectPath does not match the key', () => {
     // Tamper: a record file whose stored projectPath differs from the lookup key
-    // (defensive against hash collision / manual corruption). Write under /proj/a's
-    // path but with a mismatched body.
-    recordOwnedDevServer({ ...makeRecord(444), projectPath: '/proj/OTHER' }, baseDir);
-    // Reading under the body's own key works; reading under a different key is null.
-    expect(readOwnedDevServer('/proj/OTHER', baseDir)?.pid).toBe(444);
+    // (defensive against hash collision / manual corruption). Write RAW JSON
+    // directly under /proj/a's own file path, with a body claiming /proj/OTHER —
+    // recordOwnedDevServer always writes under record.projectPath's own hash, so
+    // it cannot construct this mismatch; only a direct file write can.
+    const tamperedBody = JSON.stringify([
+      { pid: 444, projectPath: '/proj/OTHER', command: 'bun run dev', startedAt: Date.now() },
+    ]);
+    // codeql[js/insecure-temporary-file] -- same predictable-per-project-path pattern as recordOwnedDevServer's own suppression (devServerOrphanRegistry.ts); this is a per-test mkdtemp'd baseDir (see beforeEach above), not a shared/guessable path, and the body holds only non-sensitive pid/project-path test fixture data
+    writeFileSync(orphanRecordPath('/proj/a', baseDir), tamperedBody, 'utf8');
+    expect(readOwnedDevServers('/proj/a', baseDir)).toEqual([]);
+    expect(readOwnedDevServer('/proj/a', baseDir)).toBeNull();
   });
 });
 
@@ -154,6 +261,32 @@ describe('isProcessAlive', () => {
     expect(isProcessAlive(0)).toBe(false);
     expect(isProcessAlive(-1)).toBe(false);
     expect(isProcessAlive(2 ** 31)).toBe(false); // not a live pid
+  });
+});
+
+describe('isProcessGroupAlive', () => {
+  it('returns true for a live detached group and false once fully killed', async () => {
+    const pid = spawnSleeper();
+    expect(isProcessGroupAlive(pid)).toBe(true);
+    killGroup(pid);
+    expect(await waitForDeath(pid)).toBe(true);
+    expect(isProcessGroupAlive(pid)).toBe(false);
+  });
+
+  it('returns false for an obviously invalid pgid', () => {
+    expect(isProcessGroupAlive(0)).toBe(false);
+    expect(isProcessGroupAlive(-1)).toBe(false);
+    expect(isProcessGroupAlive(2 ** 31)).toBe(false);
+  });
+
+  it('returns true even after the recorded leader pid itself has exited, when a group member survives', async () => {
+    // The exact gap this fix closes: isProcessAlive(leaderPid) is false (the
+    // wrapper already exited), but the group — reachable only via the pid we
+    // recorded at spawn time — still has a live member.
+    const leaderPid = spawnOrphanedGroupSurvivor();
+    expect(await waitForLeaderDeadGroupAlive(leaderPid)).toBe(true);
+    expect(isProcessAlive(leaderPid)).toBe(false);
+    expect(isProcessGroupAlive(leaderPid)).toBe(true);
   });
 });
 
@@ -176,6 +309,31 @@ describe('liveProcessLooksLikeRecord (real ps path)', () => {
   });
 });
 
+describe('groupMembersLookLikeRecordedTool (real ps path, leader-dead case)', () => {
+  it('returns true when a surviving group member looks like a known dev tool', async () => {
+    // The recorded command ("npm run dev") and the surviving node process share no
+    // token, but "node" is itself a recognized dev-tool token — the generic
+    // fallback signal this function adds beyond a strict command match.
+    const leaderPid = spawnOrphanedGroupSurvivor();
+    expect(await waitForLeaderDeadGroupAlive(leaderPid)).toBe(true);
+    expect(groupMembersLookLikeRecordedTool(leaderPid, 'npm run dev')).toBe(true);
+  });
+
+  it('returns false when no surviving group member looks like any known dev tool', async () => {
+    // Review finding (HYP-926): without this check, a leader-dead group would be
+    // killed on group membership ALONE with zero positive identity signal. A
+    // plain `sleep` survivor matches neither the recorded command's own tokens
+    // nor any KNOWN_DEV_TOOL_TOKENS — a positive mismatch, must suppress.
+    const leaderPid = spawnOrphanedGroupSurvivorUnrecognizable();
+    expect(await waitForLeaderDeadGroupAlive(leaderPid)).toBe(true);
+    expect(groupMembersLookLikeRecordedTool(leaderPid, 'npm run dev')).toBe(false);
+  });
+
+  it("returns null (can't tell) for a pgid with no listable member", () => {
+    expect(groupMembersLookLikeRecordedTool(2 ** 31, 'npm run dev')).toBeNull();
+  });
+});
+
 describe('reapStaleOwnedDevServer', () => {
   it('kills a live recorded process we own and deletes the record', async () => {
     const pid = spawnSleeper();
@@ -189,11 +347,82 @@ describe('reapStaleOwnedDevServer', () => {
       onLog: (m) => logs.push(m),
     });
 
-    expect(reaped).toBe(pid);
+    expect(reaped).toEqual([pid]);
     expect(await waitForDeath(pid)).toBe(true);
     // Record removed so a later start does not re-target a dead/recycled pid.
     expect(readOwnedDevServer('/proj/a', baseDir)).toBeNull();
     expect(logs.some((m) => m.includes(String(pid)))).toBe(true);
+  });
+
+  it('REGRESSION (real incident repro): kills a surviving group member even though the recorded leader pid already exited', async () => {
+    // This is the dominant bug this ticket fixes. Confirmed live on the dev machine:
+    // a recorded wrapper leader (npm run dev / bun run dev) dies before its nested
+    // dev-server child, leaving the child alive in the SAME process group holding
+    // the port. The OLD code checked only isProcessAlive(record.pid) (the leader),
+    // saw it dead, deleted the record, and returned WITHOUT ever attempting the
+    // kill — even though process.kill(-pgid, signal) would have reached the
+    // survivor. This test reproduces that exact topology with real processes.
+    const leaderPid = spawnOrphanedGroupSurvivor();
+    expect(await waitForLeaderDeadGroupAlive(leaderPid)).toBe(true);
+    recordOwnedDevServer({ ...makeRecord(leaderPid), command: 'npm run dev' }, baseDir);
+
+    const logs: string[] = [];
+    const reaped = reapStaleOwnedDevServer('/proj/a', killGroup, {
+      baseDir,
+      onLog: (m) => logs.push(m),
+    });
+
+    expect(reaped).toEqual([leaderPid]);
+    // The surviving descendant shared the leader's pgid — a real group kill must
+    // have reached it, so the group has no live member left at all. SIGKILL is not
+    // reflected synchronously (the kernel briefly still reports the target alive
+    // until reaped), so poll rather than assert immediately.
+    expect(await waitForGroupDeath(leaderPid)).toBe(true);
+    expect(readOwnedDevServers('/proj/a', baseDir)).toEqual([]);
+  });
+
+  it('does NOT kill a leader-dead group whose surviving member looks like nothing we recognize', async () => {
+    // Review finding (HYP-926): the leader-dead/group-alive path must still require
+    // a positive identity signal, not group membership alone — otherwise a fully-
+    // exited group's pgid number being reissued later to an unrelated process with
+    // the same shape (wrapper dies, child survives) would get killed with zero
+    // check at all. A plain `sleep` survivor is the unrecognizable case.
+    const leaderPid = spawnOrphanedGroupSurvivorUnrecognizable();
+    expect(await waitForLeaderDeadGroupAlive(leaderPid)).toBe(true);
+    recordOwnedDevServer({ ...makeRecord(leaderPid), command: 'npm run dev' }, baseDir);
+
+    let killed = false;
+    const reaped = reapStaleOwnedDevServer(
+      '/proj/a',
+      () => {
+        killed = true;
+      },
+      { baseDir },
+    );
+
+    expect(reaped).toBeNull();
+    expect(killed).toBe(false); // never asked to kill the unrecognizable survivor
+    expect(isProcessGroupAlive(leaderPid)).toBe(true); // survivor — not ours to kill
+    expect(readOwnedDevServers('/proj/a', baseDir)).toEqual([]); // stale record still swept
+  });
+
+  it('reaps two separately-recorded generations for the same project in one call', async () => {
+    // Direct proof the single-slot bug is fixed: TWO spawns for the same project,
+    // recorded in sequence without an intervening reap, must BOTH still be
+    // reapable — the old single-slot registry would have silently discarded the
+    // first generation's record the moment the second was written.
+    const pidA = spawnSleeper();
+    const pidB = spawnSleeper();
+    recordOwnedDevServer({ ...makeRecord(pidA), command: 'sleep 30' }, baseDir);
+    recordOwnedDevServer({ ...makeRecord(pidB), command: 'sleep 30' }, baseDir);
+    expect(readOwnedDevServers('/proj/a', baseDir).map((r) => r.pid)).toEqual([pidA, pidB]);
+
+    const reaped = reapStaleOwnedDevServer('/proj/a', killGroup, { baseDir });
+
+    expect(reaped?.slice().sort((a, b) => a - b)).toEqual([pidA, pidB].sort((a, b) => a - b));
+    expect(await waitForDeath(pidA)).toBe(true);
+    expect(await waitForDeath(pidB)).toBe(true);
+    expect(readOwnedDevServers('/proj/a', baseDir)).toEqual([]);
   });
 
   it('returns null and does NOT call killGroup when there is no record', () => {
@@ -269,7 +498,7 @@ describe('reapStaleOwnedDevServer', () => {
 
     const reaped = reapStaleOwnedDevServer('/proj/a', killGroup, { baseDir });
 
-    expect(reaped).toBe(pid);
+    expect(reaped).toEqual([pid]);
     expect(await waitForDeath(pid)).toBe(true);
     expect(readOwnedDevServer('/proj/a', baseDir)).toBeNull();
   });
