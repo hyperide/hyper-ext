@@ -138,6 +138,11 @@ export class PreviewPanel {
   // Component-missing callback (triggers self-healing ensureComponent in extension host)
   private _onComponentMissingCallback: ((componentPath: string) => void) | null = null;
 
+  // Component-error callback (HYP-487): forwarded render errors from the iframe
+  // ErrorBoundary. Extension host inspects the message for a provider-context
+  // pattern and auto-generates .hyperide/preview.tsx (isolated mode) when matched.
+  private _onComponentErrorCallback: ((componentPath: string, error: string) => void) | null = null;
+
   // Console capture callback (from iframe console intercept)
   private _onConsoleCaptureCallback:
     | ((entries: Array<{ level: string; args: string[]; timestamp: number }>) => void)
@@ -470,6 +475,13 @@ export class PreviewPanel {
       const componentPath = (msg as { componentPath?: string }).componentPath;
       if (componentPath) {
         this._onComponentMissingCallback?.(componentPath);
+      }
+      return;
+    }
+    if (msg.type === 'hypercanvas:componentError') {
+      const { componentPath, error } = msg as { componentPath?: string; error?: string };
+      if (componentPath && error) {
+        this._onComponentErrorCallback?.(componentPath, error);
       }
       return;
     }
@@ -1820,6 +1832,16 @@ export class PreviewPanel {
    */
   public onComponentMissing(callback: (componentPath: string) => void): void {
     this._onComponentMissingCallback = callback;
+  }
+
+  /**
+   * Set callback for render errors caught by the iframe ErrorBoundary (HYP-487).
+   * Extension host inspects `error` for a provider-context pattern and, when it
+   * matches, auto-generates `.hyperide/preview.tsx` so the component renders
+   * inside its providers (isolated mode).
+   */
+  public onComponentError(callback: (componentPath: string, error: string) => void): void {
+    this._onComponentErrorCallback = callback;
   }
 
   /**

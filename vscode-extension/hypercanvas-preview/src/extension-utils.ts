@@ -36,6 +36,29 @@ export function isForeignExtensionError(reason: unknown): boolean {
   return /[/\\]\.vscode(?:-server)?[/\\]extensions[/\\]/.test(stack);
 }
 
+/**
+ * Returns true when an error message is a React context-provider error —
+ * the kind a hook like `useAuth` / `useFeatureFlags` throws when the
+ * component renders OUTSIDE its provider tree.
+ *
+ * HYP-487: no-router Vite apps patch the entry file to mount the previewed
+ * component via its own `createRoot`, bypassing `<App>` where the providers
+ * live. The context hooks then throw and the preview is blank. Matching this
+ * pattern lets the extension auto-generate the `.hyperide/preview.tsx`
+ * wrapper (isolated mode) so the component renders inside its providers.
+ *
+ * Matches both real phrasings observed in conloca-app:
+ *   "useAuth must be used inside <AuthProvider>"        (angle brackets)
+ *   "useFeatureFlags must be used inside FeatureFlagsProvider"  (bare)
+ * and the common "within (a) XProvider" variant. The `\w*Provider` anchor
+ * keeps it from firing on generic "must be used" errors that don't name a
+ * Provider (e.g. "useId must be used during render").
+ */
+export function isProviderContextError(message: string | null | undefined): boolean {
+  if (!message) return false;
+  return /must be used (?:inside|within)\s+(?:an?\s+)?<?\w*Provider>?/.test(message);
+}
+
 export type SerializedReason = { name: string; message: string; stack?: string; [key: string]: unknown } | string;
 
 /**

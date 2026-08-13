@@ -15,11 +15,9 @@ import * as vscode from 'vscode';
 /**
  * Generate .hyperide/preview.tsx content using the project's entry files as context.
  * Returns null when API key is not configured or generation fails.
+ * Module-internal — callers use {@link ensureIsolationWrapper}.
  */
-export async function generatePreviewWrapper(
-  workspaceRoot: string,
-  context: vscode.ExtensionContext,
-): Promise<string | null> {
+async function generatePreviewWrapper(workspaceRoot: string, context: vscode.ExtensionContext): Promise<string | null> {
   const apiKey =
     (await context.secrets.get('hypercanvas.ai.apiKey')) ||
     vscode.workspace.getConfiguration('hypercanvas.ai').get<string>('apiKey');
@@ -47,11 +45,53 @@ export async function generatePreviewWrapper(
   }
 }
 
-/** Write generated content to .hyperide/preview.tsx, creating the directory if needed. */
-export async function writePreviewWrapper(workspaceRoot: string, content: string): Promise<void> {
+/** Write generated content to .hyperide/preview.tsx, creating the directory if needed. Module-internal. */
+async function writePreviewWrapper(workspaceRoot: string, content: string): Promise<void> {
   const dir = path.join(workspaceRoot, '.hyperide');
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, 'preview.tsx'), content, 'utf8');
+}
+
+/**
+ * Generate + write `.hyperide/preview.tsx` if it doesn't already exist,
+ * flipping the preview into isolated mode (the FSWatch in PreviewModeManager
+ * picks the file up → onWrapperCreated → setIsolatedMode(true)).
+ *
+ * Shared by the manual scope toggle (`setScopeChangeHandler`) and the
+ * automatic provider-context-error recovery path (HYP-487), so the no-AI-key
+ * fallback message and the "don't clobber a manual wrapper" guard live in one
+ * place.
+ *
+ * Returns the outcome so callers can decide whether to surface their own
+ * messaging:
+ * - 'exists'   — a wrapper was already present, nothing written.
+ * - 'written'  — a wrapper was generated and written.
+ * - 'no-key'   — generation skipped (no AI key configured); a guidance
+ *                message was already shown to the user.
+ */
+export async function ensureIsolationWrapper(
+  workspaceRoot: string,
+  context: vscode.ExtensionContext,
+): Promise<'exists' | 'written' | 'no-key'> {
+  const wrapperPath = path.join(workspaceRoot, '.hyperide', 'preview.tsx');
+  const exists = await fs
+    .access(wrapperPath)
+    .then(() => true)
+    .catch(() => false);
+  if (exists) return 'exists';
+
+  const content = await generatePreviewWrapper(workspaceRoot, context);
+  if (content) {
+    await writePreviewWrapper(workspaceRoot, content);
+    return 'written';
+  }
+
+  void vscode.window.showInformationMessage(
+    'HyperIDE: this component reads a React context whose provider lives in your app shell. ' +
+      'Configure an AI key to auto-generate .hyperide/preview.tsx, toggle the preview scope to ' +
+      'component-only, or create .hyperide/preview.tsx manually with the needed providers.',
+  );
+  return 'no-key';
 }
 
 // ============================================================================

@@ -241,6 +241,18 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         } else if (msg.type === 'hypercanvas:componentError') {
           // ErrorBoundary caught a render error — show overlay in webview layer.
           // Always update (bump errorSeq) so overlay can detect re-fires and reset state.
+          //
+          // Also forward to the extension host (HYP-487): a provider-context error
+          // ("useAuth must be used inside <AuthProvider>") in a no-router Vite app
+          // means the previewed component rendered OUTSIDE its provider tree. The
+          // host inspects the message and, if it matches, auto-generates the
+          // .hyperide/preview.tsx wrapper (isolated mode). Same forward pattern as
+          // hypercanvas:componentMissing below — the local overlay stays as-is.
+          canvas.sendEvent({
+            type: 'hypercanvas:componentError',
+            componentPath: msg.componentPath,
+            error: msg.error,
+          } as unknown as PlatformMessage);
           setComponentError((prev) => {
             const sameComponent = prev && prev.componentPath === msg.componentPath;
             if (!sameComponent) {

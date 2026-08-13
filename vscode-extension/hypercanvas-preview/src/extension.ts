@@ -38,6 +38,7 @@ import { goToCode } from './EditorBridge';
 import {
   createSequencedReroot,
   isForeignExtensionError,
+  isProviderContextError,
   resolveComponentIdentifier,
   resolveSelfHealComponentParams,
   serializeRejectionReason,
@@ -66,7 +67,7 @@ import {
   resolveRunnableTargets,
 } from './services/ProjectDetector';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
-import { generatePreviewWrapper, writePreviewWrapper } from './services/WrapperGenerator';
+import { ensureIsolationWrapper } from './services/WrapperGenerator';
 import { VSCodeFileIO } from './vscode-file-io';
 import { loadTamaguiPalette } from '@lib/tamagui/load-palette';
 import { setTamaguiPalette } from '@lib/tamagui/values';
@@ -671,6 +672,14 @@ export function activate(context: vscode.ExtensionContext) {
   // either closure would create a TDZ risk if activate() ever short-circuits.
   const componentMissingRetries = new Map<string, number>();
 
+  // HYP-487: components for which we already auto-attempted isolation-wrapper
+  // generation after a provider-context error. The iframe ErrorBoundary re-fires
+  // (bumps errorSeq) rapidly, so the guard is set synchronously BEFORE the async
+  // generate to avoid launching concurrent AI calls / write storms. Cleared on
+  // component switch (same lifecycle as componentMissingRetries) so switching away
+  // and back can retry.
+  const providerErrorAttempts = new Set<string>();
+
   if (devServerManager) {
     aiChatProvider.setDevServerManager(devServerManager);
 
@@ -758,6 +767,31 @@ export function activate(context: vscode.ExtensionContext) {
         .catch((err) => {
           console.error('[HyperIDE] componentMissing ensureComponent failed:', err);
         });
+    });
+
+    // HYP-487: auto-recover from provider-context render errors. No-router Vite
+    // apps (e.g. conloca-app) patch the entry file to mount the previewed
+    // component via its own createRoot, bypassing <App> where the context
+    // providers (AuthProvider, FeatureFlagsProvider, …) live. The component's
+    // context hooks then throw ("useAuth must be used inside <AuthProvider>")
+    // and the preview is blank. When the forwarded error matches the
+    // provider-context pattern, auto-generate .hyperide/preview.tsx (the same
+    // wrapper the manual scope→component-only toggle produces), which flips the
+    // preview into isolated mode so the component renders inside its providers.
+    previewPanel.onComponentError((componentPath, error) => {
+      if (!isProviderContextError(error)) return;
+      // Guard set synchronously BEFORE the async generate — the ErrorBoundary
+      // re-fires rapidly, and we must not launch concurrent AI calls. Cleared on
+      // component switch (providerErrorAttempts.clear()) so a switch-away-and-back retries.
+      if (providerErrorAttempts.has(componentPath)) return;
+      providerErrorAttempts.add(componentPath);
+      const currentWorkspaceRoot = syncWorkspaceRuntime();
+      // ensureIsolationWrapper is a no-op when a wrapper already exists (manual or
+      // prior auto-gen), and shows the no-AI-key guidance message when generation
+      // is skipped — so the "not already isolated" gate and the fallback both live there.
+      void ensureIsolationWrapper(currentWorkspaceRoot, context).catch((err) => {
+        console.error('[HyperIDE] componentError auto-wrapper generation failed:', err);
+      });
     });
 
     // Activate newly created SampleDefault: force-regen preview file (bypasses fast-path that
@@ -1033,23 +1067,12 @@ export function activate(context: vscode.ExtensionContext) {
     const currentWorkspaceRoot = syncWorkspaceRuntime();
     const wrapperPath = join(currentWorkspaceRoot, '.hyperide/preview.tsx');
     if (scope === 'component-only') {
-      // Check if wrapper already exists (user may have written it manually)
-      const exists = await vsCodeIO
-        .access(wrapperPath)
-        .then(() => true)
-        .catch(() => false);
-      if (!exists) {
-        const content = await generatePreviewWrapper(currentWorkspaceRoot, context);
-        if (content) {
-          await writePreviewWrapper(currentWorkspaceRoot, content);
-          // FSWatch picks up the file and calls modeManager.onWrapperCreated() → setIsolatedMode(true)
-        } else {
-          void vscode.window.showInformationMessage(
-            'HyperIDE: configure an AI key to auto-generate .hyperide/preview.tsx, or create it manually.',
-          );
-        }
-      }
-      // If file already exists, FSWatch already triggered isolated mode
+      // Generate + write .hyperide/preview.tsx (unless one already exists —
+      // the user may have written it manually). On success the FSWatch in
+      // PreviewModeManager picks the file up → onWrapperCreated → setIsolatedMode(true).
+      // The no-AI-key fallback message lives inside ensureIsolationWrapper so the
+      // manual toggle and the HYP-487 auto-recovery path stay consistent.
+      await ensureIsolationWrapper(currentWorkspaceRoot, context);
     } else {
       // Switch back to App Shell: delete the wrapper
       await vsCodeIO.deleteFile?.(wrapperPath);
@@ -1154,6 +1177,7 @@ export function activate(context: vscode.ExtensionContext) {
     const ac = new AbortController();
     previewAbortController = ac;
     componentMissingRetries.clear();
+    providerErrorAttempts.clear();
 
     // Two roots coexist (HYP-420):
     //  - relativePath: relative to the active sub-project root → drives previewManager
