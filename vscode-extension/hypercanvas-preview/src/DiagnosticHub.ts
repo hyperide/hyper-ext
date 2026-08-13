@@ -17,6 +17,11 @@ import { DiagnosticPersistenceService } from './services/DiagnosticPersistenceSe
 // No module-level ERROR_SINK_PATH — read at call time so startDiagnosticCapture
 // can set the env var after module load and reach this path.
 
+const ANSI_STRIP = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[A-Z\\[\]^_@]/g;
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_STRIP, '');
+}
+
 /** Max server log entries included in AI diagnostic context */
 const SERVER_LOG_AI_CONTEXT_LIMIT = 50;
 /** Max console log entries included in AI diagnostic context */
@@ -171,14 +176,14 @@ export class DiagnosticHub {
     const serverLogs = this._logs.filter((l) => l.source === 'server').slice(-SERVER_LOG_AI_CONTEXT_LIMIT);
     if (serverLogs.length > 0) {
       parts.push(
-        `Server logs (last ${serverLogs.length}):\n\`\`\`\n${serverLogs.map((l) => l.line).join('\n')}\n\`\`\``,
+        `Server logs (last ${serverLogs.length}):\n\`\`\`\n${serverLogs.map((l) => stripAnsi(l.line)).join('\n')}\n\`\`\``,
       );
     }
 
     const consoleLogs = this._logs.filter((l) => l.source === 'console').slice(-CONSOLE_LOG_AI_CONTEXT_LIMIT);
     if (consoleLogs.length > 0) {
       parts.push(
-        `Console output (last ${consoleLogs.length}):\n\`\`\`\n${consoleLogs.map((l) => `[${l.level ?? 'log'}] ${l.line}`).join('\n')}\n\`\`\``,
+        `Console output (last ${consoleLogs.length}):\n\`\`\`\n${consoleLogs.map((l) => `[${l.level ?? 'log'}] ${stripAnsi(l.line)}`).join('\n')}\n\`\`\``,
       );
     }
 
@@ -212,7 +217,7 @@ export class DiagnosticHub {
               ts: e.timestamp,
               kind: 'diagnosticEntry',
               source: e.source ?? '',
-              line: (e.line ?? '').replace(/\n/g, ' '),
+              line: stripAnsi(e.line ?? '').replace(/\n/g, ' '),
             }),
           )
           .join('\n');

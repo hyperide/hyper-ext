@@ -280,7 +280,7 @@ export class DevServerManager {
         // codes that pollute the VS Code output channel and split keywords.
         const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
-        this._appendLog(clean);
+        this._appendLog(text); // raw ANSI — webview renders via ansi_up
 
         this._maybeUpdatePortFromOutput(clean);
 
@@ -299,7 +299,7 @@ export class DevServerManager {
         const text = data.toString();
         const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
-        this._appendLog(clean);
+        this._appendLog(text); // raw ANSI — webview renders via ansi_up
 
         this._maybeUpdatePortFromOutput(clean);
 
@@ -612,15 +612,17 @@ export class DevServerManager {
       });
 
       child.stdout?.on('data', (data: Buffer) => {
-        const clean = data.toString().replace(ANSI_ESCAPE_PATTERN, '');
+        const text = data.toString();
+        const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
-        this._appendLog(clean);
+        this._appendLog(text); // raw ANSI — webview renders via ansi_up
       });
 
       child.stderr?.on('data', (data: Buffer) => {
-        const clean = data.toString().replace(ANSI_ESCAPE_PATTERN, '');
+        const text = data.toString();
+        const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
-        this._appendLog(clean);
+        this._appendLog(text); // raw ANSI — webview renders via ansi_up
       });
 
       child.on('error', (error) => reject(error));
@@ -778,10 +780,11 @@ export class DevServerManager {
     const newEntries: LogEntry[] = [];
 
     for (const line of lines) {
-      const isError = ERROR_PATTERNS.some((pattern) => pattern.test(line));
+      const cleanLine = line.replace(ANSI_ESCAPE_PATTERN, '');
+      const isError = ERROR_PATTERNS.some((pattern) => pattern.test(cleanLine));
       // Both checks are needed independently: isSuccess clears _hasErrors even for non-error lines.
       // Short-circuiting on isError would skip success detection for error-free log lines.
-      const isSuccess = SUCCESS_PATTERNS.some((pattern) => pattern.test(line));
+      const isSuccess = SUCCESS_PATTERNS.some((pattern) => pattern.test(cleanLine));
       const entry: LogEntry = { line, timestamp: now, isError };
       this._logs.push(entry);
       newEntries.push(entry);
@@ -806,7 +809,7 @@ export class DevServerManager {
       // Notify about new errors
       const errorEntries = newEntries.filter((e) => e.isError);
       if (errorEntries.length > 0) {
-        this._onError?.(errorEntries.map((e) => e.line).join('\n'));
+        this._onError?.(errorEntries.map((e) => e.line.replace(ANSI_ESCAPE_PATTERN, '')).join('\n'));
       }
     }
   }
