@@ -110,15 +110,24 @@ export async function detectPreviewProviders(root: string): Promise<ProviderWrap
       }
     }
 
+    // The isolated preview entry REPLACES main.tsx, so a library app's base
+    // stylesheet — loaded only as a bare side-effect import in the entry
+    // (`import '@mantine/core/styles.css'`, `import './index.css'`) — was
+    // dropped. Both wrap paths below render the previewed component, so both
+    // must carry these stylesheets or the preview paints UNSTYLED (the
+    // blank-looking canvas behind HYP-782). Collected once from the entry file
+    // and prepended to whichever wrap is returned.
+    const styleImports = collectEntryStyleImports(root, previewDir, contextFiles);
+
     if (imports.length === 0) {
       // None of the known providers above matched. Fall back to replicating
       // whatever provider element(s) wrap <App/> in the entry render tree so a
       // component-library app (mantine / nextui / a local ThemeProvider, …)
       // renders inside its real providers instead of crashing on a missing one
       // (HYP-782 — the blank-preview wedge for provider-heavy unsupported-CSS apps).
-      return detectAppEntryProviderWrap(root, previewDir, contextFiles);
+      return prependStyleImports(detectAppEntryProviderWrap(root, previewDir, contextFiles), styleImports);
     }
-    return { imports, wrapOpen, wrapClose };
+    return prependStyleImports({ imports, wrapOpen, wrapClose }, styleImports);
   } catch {
     return undefined;
   }
@@ -209,6 +218,66 @@ function extractEntryProviderWrap(
     if (wrap) return wrap;
   }
   return undefined;
+}
+
+/**
+ * Stylesheet extensions whose side-effect import we carry into the preview.
+ * A trailing `?query` / `#hash` is tolerated (e.g. cache-busting `?v=1`); a
+ * value-form import (`import css from './x.css?inline'`) has a specifier and is
+ * excluded by the side-effect-only guard in collectSideEffectStyleImports.
+ */
+const STYLESHEET_IMPORT = /\.(css|scss|sass|less|styl|stylus|pcss|postcss)(?:[?#].*)?$/i;
+
+/**
+ * Prepend the entry's base stylesheet imports to a wrap (undefined stays
+ * undefined). Stylesheets go first so the base styles are present before the
+ * components mount. Lines already present in the wrap (never, in practice —
+ * provider imports are never bare CSS) are not duplicated.
+ */
+function prependStyleImports(
+  wrap: ProviderWrapConfig | undefined,
+  styleImports: string[],
+): ProviderWrapConfig | undefined {
+  if (!wrap || styleImports.length === 0) return wrap;
+  const fresh = styleImports.filter((line) => !wrap.imports.includes(line));
+  if (fresh.length === 0) return wrap;
+  return { ...wrap, imports: [...fresh, ...wrap.imports] };
+}
+
+/**
+ * Side-effect STYLESHEET imports of the entry file (the one that mounts the app
+ * via a ReactDOM render call). The previewed component's OWN css side-effects
+ * already load through its component import; only the entry's GLOBAL stylesheets
+ * are dropped when the preview replaces main.tsx, so we collect just those.
+ * Stops at the first render-entry file so a non-entry file's CSS isn't pulled in.
+ * Local paths are rebased to the preview dir; package paths are kept verbatim.
+ */
+function collectEntryStyleImports(root: string, previewDir: string, contextFiles: ProviderContextFile[]): string[] {
+  for (const file of contextFiles) {
+    let ast: t.File;
+    try {
+      ast = babelParse(file.content, { sourceType: 'module', plugins: ['typescript', 'jsx'], errorRecovery: true });
+    } catch {
+      continue;
+    }
+    if (collectRenderJSXArguments(ast).length === 0) continue; // not the entry — no render call
+    return collectSideEffectStyleImports({ ast, root, previewDir, sourceRelativePath: file.relativePath });
+  }
+  return [];
+}
+
+/** Bare-import lines for every side-effect STYLESHEET imported by `ctx.ast` (local paths rebased, deduped). */
+function collectSideEffectStyleImports(ctx: RebaseContext): string[] {
+  const lines: string[] = [];
+  for (const stmt of ctx.ast.program.body) {
+    if (stmt.type !== 'ImportDeclaration' || stmt.specifiers.length > 0) continue; // side-effect import only
+    const source = stmt.source.value;
+    if (!STYLESHEET_IMPORT.test(source)) continue;
+    const rebased = rebaseImportPath(ctx.root, ctx.previewDir, ctx.sourceRelativePath, source);
+    const line = `import '${rebased}';`;
+    if (!lines.includes(line)) lines.push(line);
+  }
+  return lines;
 }
 
 function isReplicableProviderElement(element: t.JSXElement): boolean {

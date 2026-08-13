@@ -417,6 +417,175 @@ createRoot(document.getElementById('root')!).render(
     expect(wrap).toBeUndefined();
   });
 
+  it('replicates the entry side-effect STYLESHEET imports so the provider-wrapped preview PAINTS (HYP-782)', async () => {
+    // The isolated preview entry replaces main.tsx, so a library app's base
+    // stylesheet — loaded only as a side-effect import (`import '@mantine/core/
+    // styles.css'`) — was dropped. The provider wrap landed and <App/> rendered
+    // STRUCTURALLY, but completely UNSTYLED (a blank-looking canvas), so the
+    // e2e readonly-stub screenshot never showed a painted preview. Carry the
+    // entry's stylesheet side-effects into the wrap so the preview paints.
+    // Only stylesheets are carried — a JS side-effect (`./polyfills`) is NOT,
+    // since it can run arbitrary setup / re-register globals.
+    const root = await writeProject({
+      'src/main.tsx': `import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { MantineProvider } from '@mantine/core';
+import { theme } from './theme';
+import App from './App';
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import './index.css';
+import './polyfills';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <MantineProvider theme={theme}>
+      <App />
+    </MantineProvider>
+  </StrictMode>,
+);
+`,
+      'src/App.tsx': `export default function App() { return <div>discord</div>; }`,
+      'src/theme.ts': `export const theme = {};`,
+    });
+    roots.push(root);
+
+    const wrap = await detectPreviewProviders(root);
+    expect(wrap).toBeDefined();
+    // Package stylesheet side-effects are carried verbatim (no rebase).
+    expect(wrap?.imports).toContain("import '@mantine/core/styles.css';");
+    expect(wrap?.imports).toContain("import '@mantine/notifications/styles.css';");
+    // A local stylesheet is rebased to the preview dir (src/ → same dir here).
+    expect(wrap?.imports.some((l) => /^import '\.\/index\.css';$/.test(l))).toBe(true);
+    // A non-stylesheet JS side-effect must NOT be replicated.
+    expect(wrap?.imports.some((l) => l.includes('polyfills'))).toBe(false);
+    // Stylesheets are emitted BEFORE the provider/component imports so the base
+    // styles are present by the time the components mount.
+    const styleIdx = wrap!.imports.findIndex((l) => l.includes('styles.css'));
+    const providerIdx = wrap!.imports.findIndex((l) => l.includes('MantineProvider'));
+    expect(styleIdx).toBeGreaterThanOrEqual(0);
+    expect(styleIdx).toBeLessThan(providerIdx);
+  });
+
+  it('carries the entry stylesheet alongside a HARDCODED-provider wrap too (emotion ThemeProvider)', async () => {
+    // The stylesheet replication is not limited to the generic fallback — an app
+    // matching a KNOWN provider (here @emotion/react's ThemeProvider) that also
+    // loads a base stylesheet via a side-effect import must paint as well.
+    const root = await writeProject({
+      'src/main.tsx': `import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { ThemeProvider } from '@emotion/react';
+import { theme } from './theme';
+import App from './App';
+import './reset.css';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <ThemeProvider theme={theme}>
+      <App />
+    </ThemeProvider>
+  </StrictMode>,
+);
+`,
+      'src/App.tsx': `export default function App() { return <div>x</div>; }`,
+      'src/theme.ts': `export const theme = {};`,
+    });
+    roots.push(root);
+
+    const wrap = await detectPreviewProviders(root);
+    // Hardcoded emotion path still wins (EmotionThemeProvider), AND the base
+    // stylesheet rides along (was dropped before — emotion path never carried CSS).
+    expect(wrap?.imports.some((l) => l.includes('EmotionThemeProvider'))).toBe(true);
+    expect(wrap?.imports.some((l) => /^import '\.\/reset\.css';$/.test(l))).toBe(true);
+  });
+
+  it('carries .scss / subdir / query / hash stylesheets but NOT a value-form CSS import (?inline)', async () => {
+    // A bare cache-busted (`?v=1`) / hashed (`#v1`) / non-css-extension (.scss) /
+    // subdir stylesheet is a side-effect injection → carried. A value-form import
+    // (`import s from './x.css?inline'`) has a binding and is NOT a style
+    // injection → must be excluded.
+    const root = await writeProject({
+      'src/main.tsx': `import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { MantineProvider } from '@mantine/core';
+import App from './App';
+import './theme.css?v=1';
+import './reset.css#v1';
+import './styles/global.scss';
+import inlineCss from './tokens.css?inline';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <MantineProvider>
+      <App />
+    </MantineProvider>
+  </StrictMode>,
+);
+`,
+      'src/App.tsx': `export default function App() { return <div>x</div>; }`,
+    });
+    roots.push(root);
+
+    const wrap = await detectPreviewProviders(root);
+    expect(wrap?.imports).toContain("import './theme.css?v=1';");
+    expect(wrap?.imports).toContain("import './reset.css#v1';");
+    // .scss in a subdir, rebased relative to the preview dir (src/ → ./styles/global.scss).
+    expect(wrap?.imports).toContain("import './styles/global.scss';");
+    expect(wrap?.imports.some((l) => l.includes('tokens.css'))).toBe(false);
+  });
+
+  it('collects stylesheets from the file that actually mounts the app (App.web.tsx entry)', async () => {
+    // collectEntryStyleImports returns on the FIRST context file with a render
+    // call. Here main.tsx is not the entry (no render); App.web.tsx mounts the
+    // app and owns the base stylesheet — its CSS must be the one carried.
+    const root = await writeProject({
+      'src/App.web.tsx': `import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { MantineProvider } from '@mantine/core';
+import App from './App';
+import './native-web.css';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <MantineProvider>
+      <App />
+    </MantineProvider>
+  </StrictMode>,
+);
+`,
+      'src/App.tsx': `export default function App() { return <div>x</div>; }`,
+    });
+    roots.push(root);
+
+    const wrap = await detectPreviewProviders(root);
+    expect(wrap?.imports).toContain("import './native-web.css';");
+    expect(wrap?.imports.some((l) => l.includes('MantineProvider'))).toBe(true);
+  });
+
+  it('does NOT add stylesheet imports when there is no provider to wrap (CSS rides only with a wrap)', async () => {
+    // Stylesheet replication rides only with a provider wrap — when there is no
+    // provider to replicate we return undefined (unchanged), so we never inject
+    // global CSS into an app the preview wasn't going to wrap.
+    const root = await writeProject({
+      'src/main.tsx': `import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
+`,
+      'src/App.tsx': `export default function App() { return <div>x</div>; }`,
+    });
+    roots.push(root);
+
+    const wrap = await detectPreviewProviders(root);
+    expect(wrap).toBeUndefined();
+  });
+
   it('returns undefined when main.tsx renders <App/> with no wrapping provider (unchanged behavior)', async () => {
     const root = await writeProject({
       'src/main.tsx': `import { StrictMode } from 'react';

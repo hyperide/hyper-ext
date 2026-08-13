@@ -25,7 +25,22 @@
  */
 
 import type { CssSystem, ProjectType, SupportDimension, SupportEvidence, SupportStatus } from '../types';
-import { WRITABLE_CSS_SYSTEMS } from '../types';
+
+/**
+ * CSS systems that have a real native writer in the adapter registry. Kept as a
+ * module-local const (NOT imported from the registry) so this pure module stays
+ * browser-safe — importing from @lib/style-adapters/registry pulls in the adapter
+ * implementations and breaks the webview bundle. Must be kept in sync with the
+ * adapters registered in @lib/style-adapters/registry DEFAULT_STYLE_ADAPTERS when
+ * new adapters are added.
+ */
+const WRITABLE_CSS_SYSTEMS: ReadonlySet<CssSystem> = new Set<CssSystem>([
+  'tailwind',
+  'cssmodules',
+  'tamagui',
+  'shadcn', // design system on Tailwind → Tailwind writer
+  'daisyui', // design system on Tailwind → Tailwind writer
+]);
 
 /** Framework render-gate kinds, independent of the RN needs-setup signal. */
 export type FrameworkRenderKind = 'react' | 'vue' | 'svelte' | 'angular' | 'react-native' | 'none';
@@ -44,18 +59,31 @@ export interface SupportFacts {
   packageManager: 'npm' | 'yarn' | 'pnpm' | 'bun';
 }
 
-/** CSS-in-JS / component-library systems that render+inspect but are not yet AST-editable. */
+/**
+ * CSS-in-JS / component-library systems that render+inspect but are not yet AST-editable.
+ * These include emotion and styled-components (formerly in the old WRITABLE_CSS_SYSTEMS
+ * but honoured as non-writable by HYP-796) and sass (className/stylesheet channel with
+ * no write adapter). All must render 'inspect-only', never 'unsupported' (standing
+ * product directive: they render and inspect today; full edit is in progress).
+ */
 const INSPECT_ONLY_CSS_SYSTEMS: ReadonlySet<CssSystem> = new Set<CssSystem>([
+  // CSS-in-JS with no write adapter yet (HYP-796 / Phase C+)
+  'emotion',
+  'styled-components',
+  'vanilla-extract',
+  // Component libraries (design systems)
   'mui',
   'antd',
   'chakra',
   'mantine',
   'fluentui',
   'nextui',
-  'vanilla-extract',
+  // Atomic/utility CSS (no JSX-object channel)
   'pandacss',
   'unocss',
   'stylex',
+  // Preprocessor: className/stylesheet with no .scss writer today
+  'sass',
 ]);
 
 /** Bundlers the extension can drive (dev server + HMR round-trip). */
@@ -161,7 +189,7 @@ function classifyStyleSystem(cssSystems: CssSystem[]): SupportDimension {
     };
   }
 
-  const editable = cssSystems.filter((s) => WRITABLE_CSS_SYSTEMS.includes(s));
+  const editable = cssSystems.filter((s) => WRITABLE_CSS_SYSTEMS.has(s));
   const inspectOnly = cssSystems.filter((s) => INSPECT_ONLY_CSS_SYSTEMS.has(s));
   const detail = { label: 'Detected', detail: cssSystems.join(', ') };
 
@@ -245,9 +273,7 @@ function isBlocking(status: SupportStatus): boolean {
  * worst-first. inspect-only / unknown / supported never tab.
  */
 export function selectDimensionTabs(dims: SupportDimension[]): SupportDimension[] {
-  return dims
-    .filter((d) => isBlocking(d.status))
-    .sort((a, b) => STATUS_SEVERITY[b.status] - STATUS_SEVERITY[a.status]);
+  return dims.filter((d) => isBlocking(d.status)).sort((a, b) => STATUS_SEVERITY[b.status] - STATUS_SEVERITY[a.status]);
 }
 
 /** Overall status = the worst of the dimensions. */

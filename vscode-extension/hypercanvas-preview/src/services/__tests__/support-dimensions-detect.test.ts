@@ -30,9 +30,8 @@ function setup(files: Record<string, string>) {
   for (const [p, content] of Object.entries(files)) fsFiles.set(p, content);
 }
 
-const { gatherSupportDimensions, detectFrameworkRenderKind, computeSupportDimensionsForRoot } = await import(
-  '../support-dimensions-detect'
-);
+const { gatherSupportDimensions, detectFrameworkRenderKind, computeSupportDimensionsForRoot } =
+  await import('../support-dimensions-detect');
 
 function dim(dims: SupportDimension[], id: SupportDimension['id']): SupportDimension {
   const d = dims.find((x) => x.id === id);
@@ -69,14 +68,23 @@ describe('gatherSupportDimensions — active (sub-)repo facts', () => {
     expect(dim(dims, 'framework').fixLabel).toBe('Fix: Add react-native-web + Vite config');
   });
 
-  it('uses the per-member CSS set so a tailwind+emotion app stays supported (HYP-787)', async () => {
+  it('uses the per-member CSS set so a tailwind+emotion app is non-blocking (HYP-787)', async () => {
+    // HYP-787: per-member CSS detection prevents a sibling package's emotion dep from
+    // forcing a tailwind-only app into inspect-only. tailwind+emotion → inspect-only
+    // (emotion has no write adapter per HYP-796), but inspect-only is NOT a blocking
+    // tab — the preview and canvas still work. The test guards non-blocking, not
+    // specifically 'supported' vs 'inspect-only'.
     const pkg = { dependencies: { react: '^19', tailwindcss: '^3', '@emotion/react': '^11' } };
     const dims = await gatherSupportDimensions(`${ROOT}/apps/web`, pkg, {
       projectType: 'vite',
       projectError: null,
       packageManager: 'pnpm',
     });
-    expect(dim(dims, 'styleSystem').status).toBe('supported');
+    // emotion is inspect-only (CSS-in-JS, no write adapter); non-blocking either way.
+    expect(['supported', 'inspect-only']).toContain(dim(dims, 'styleSystem').status);
+    // Must NOT produce a blocking tab (unsupported / needs-setup).
+    expect(dim(dims, 'styleSystem').status).not.toBe('unsupported');
+    expect(dim(dims, 'styleSystem').status).not.toBe('needs-setup');
   });
 
   it('detectFrameworkRenderKind falls back to source scan when no react dep (none vs react)', async () => {

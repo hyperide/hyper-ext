@@ -90,9 +90,22 @@ describe('bundler dimension', () => {
 });
 
 describe('styleSystem dimension (EDIT gate, never a hard unsupported)', () => {
-  it('all-editable set (tailwind + emotion) → supported', () => {
+  it('pure editable set (tailwind only) → supported', () => {
+    expect(dim(classifySupportDimensions(facts({ cssSystems: ['tailwind'] })), 'styleSystem').status).toBe('supported');
+  });
+
+  it('emotion (CSS-in-JS, no write adapter post-HYP-796) → inspect-only, NOT supported', () => {
+    // emotion was formerly in WRITABLE_CSS_SYSTEMS but has no native write adapter (HYP-796).
+    // Per standing product directive CSS-in-JS must be inspect-only, never unsupported.
+    expect(dim(classifySupportDimensions(facts({ cssSystems: ['emotion'] })), 'styleSystem').status).toBe(
+      'inspect-only',
+    );
+  });
+
+  it('tailwind + emotion → inspect-only (inspect-only wins when mixed with editable)', () => {
+    // Any inspect-only system in the set makes the whole dimension inspect-only.
     expect(dim(classifySupportDimensions(facts({ cssSystems: ['tailwind', 'emotion'] })), 'styleSystem').status).toBe(
-      'supported',
+      'inspect-only',
     );
   });
 
