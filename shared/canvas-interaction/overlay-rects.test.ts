@@ -235,6 +235,84 @@ describe('computeOverlayRects', () => {
     expect(result.placeholderRects).toHaveLength(0);
   });
 
+  /* ─── HYP-691: composite-instance multi-select needs itemIndex ────────── */
+
+  describe('composite-instance multi-select (HYP-691)', () => {
+    /**
+     * Resolver mimicking a composite component instance: the nodeRef ONLY
+     * resolves to a DOM element when a valid itemIndex is supplied.
+     * findElements(id, null) returns [] (the silent-death path that produced
+     * "3 selected, 0 frames").
+     */
+    function createItemIndexRequiringResolver(elements: Map<string, HTMLElement[]>): OverlayElementResolver {
+      return {
+        findElements(nodeRef: string, itemIndex: number | null): HTMLElement[] {
+          if (itemIndex === null) return [];
+          const els = elements.get(nodeRef) ?? [];
+          return els[itemIndex] ? [els[itemIndex]] : [];
+        },
+        findEmptyContainers() {
+          return [];
+        },
+      };
+    }
+
+    it('draws 3 frames for 3 distinct selected ids each carrying its itemIndex', () => {
+      const elA = mockElement({ left: 0, top: 0, width: 50, height: 50 });
+      const elB = mockElement({ left: 60, top: 0, width: 50, height: 50 });
+      const elC = mockElement({ left: 120, top: 0, width: 50, height: 50 });
+      const resolver = createItemIndexRequiringResolver(
+        new Map([
+          ['ref-a', [elA]],
+          ['ref-b', [elB]],
+          ['ref-c', [elC]],
+        ]),
+      );
+
+      const result = computeOverlayRects(
+        {
+          selectedIds: ['ref-a', 'ref-b', 'ref-c'],
+          hoveredId: null,
+          selectedItemIndices: new Map([
+            ['ref-a', 0],
+            ['ref-b', 0],
+            ['ref-c', 0],
+          ]),
+        },
+        resolver,
+      );
+
+      const selectionRects = result.overlayRects.filter((r) => r.type === 'selection');
+      expect(selectionRects).toHaveLength(3);
+      expect(selectionRects.every((r) => r.width > 0 && r.height > 0)).toBe(true);
+      expect(new Set(selectionRects.map((r) => r.elementId))).toEqual(new Set(['ref-a', 'ref-b', 'ref-c']));
+    });
+
+    it('contrapositive: dropping the itemIndex (null) yields 0 frames — the original bug', () => {
+      const elA = mockElement({ left: 0, top: 0, width: 50, height: 50 });
+      const elB = mockElement({ left: 60, top: 0, width: 50, height: 50 });
+      const elC = mockElement({ left: 120, top: 0, width: 50, height: 50 });
+      const resolver = createItemIndexRequiringResolver(
+        new Map([
+          ['ref-a', [elA]],
+          ['ref-b', [elB]],
+          ['ref-c', [elC]],
+        ]),
+      );
+
+      // No selectedItemIndices -> every id resolves with itemIndex=null -> []
+      const result = computeOverlayRects(
+        {
+          selectedIds: ['ref-a', 'ref-b', 'ref-c'],
+          hoveredId: null,
+        },
+        resolver,
+      );
+
+      expect(result.overlayRects.filter((r) => r.type === 'selection')).toHaveLength(0);
+    });
+  });
+
   it('sets resizable on selection rect for element with w-12 h-12 className', () => {
     const el = mockElement({ left: 0, top: 0, width: 48, height: 48 }, 'w-12 h-12');
     const resolver = createResolver(new Map([['ref-1', [el]]]));

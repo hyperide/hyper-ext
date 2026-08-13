@@ -71,9 +71,12 @@ export function useElementInteraction({
       if (event.metaKey || event.ctrlKey) {
         const currentSelection = engine.getSelection();
         if (currentSelection.selectedIds.includes(nodeRef)) {
+          // removeFromSelection also drops the id's selectedItemIndices entry (HYP-691).
           engine.removeFromSelection(nodeRef);
         } else {
-          engine.addToSelection(nodeRef);
+          // Preserve itemIndex on add — without it a composite-component instance
+          // resolves with findElements(id, null) -> [] and draws no overlay (HYP-691).
+          engine.addToSelectionWithItemIndex(nodeRef, itemIndex);
         }
       } else {
         // Normal click — replace selection with item index support

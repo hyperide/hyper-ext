@@ -159,6 +159,10 @@ export class CanvasEngine {
     this.selectionManager.addToSelection(id);
   }
 
+  addToSelectionWithItemIndex(id: string, itemIndex: number | null): void {
+    this.selectionManager.addToSelectionWithItemIndex(id, itemIndex);
+  }
+
   removeFromSelection(id: string): void {
     this.selectionManager.removeFromSelection(id);
   }
