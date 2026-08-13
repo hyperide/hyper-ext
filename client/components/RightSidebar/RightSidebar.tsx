@@ -41,6 +41,7 @@ import {
   LayoutSection,
   MarginSection,
   PositionSection,
+  PropsSection,
   StateSelectorSection,
   StrokeSection,
   StyleSourceTabsSection,
@@ -1596,6 +1597,30 @@ export default function RightSidebar({
           </div>
         </>
       )}
+
+      {/* Component Props — edits typed props of the selected source element via
+          engine.updateASTProp (source-AST write path). Mounted as a sibling of the
+          style-inspector fragment (gated on parsedStyles) so it still shows for
+          component instances whose styles aren't inspectable — matching the original
+          standalone <PropsEditor /> callsite (commit 869760ad^), which did NOT depend
+          on parsedStyles and was NOT inside the readonly/style-sync wrapper.
+          Gated on `engine` presence: PropsEditor calls the throwing useCanvasEngine()
+          hook, which requires a CanvasEngineProvider. That provider exists only on the
+          SaaS path; the VS Code webview renders RightSidebar without it (hence the
+          useCanvasEngineOptional above), so mounting unguarded would crash the sidebar.
+          The original monolithic callsite was SaaS-only for the same reason.
+          Self-gates further: renders nothing unless the selection has a file path +
+          a typed props schema. */}
+      {engine &&
+        selectedIds.length === 1 &&
+        (canvasMode !== 'multi' || activeInstanceId) && (
+          // Readonly guard mirrors the style sections (isReadonly → no edits). Unlike
+          // them it is NOT blocked during style-sync: prop edits go through a separate
+          // AST path and the original standalone callsite was never style-sync-gated.
+          <div className={cn(isReadonly && 'opacity-50 pointer-events-none')}>
+            <PropsSection />
+          </div>
+        )}
     </div>
   );
 }

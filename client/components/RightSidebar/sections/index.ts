@@ -8,6 +8,7 @@ export { I18nTextInspector } from './I18nTextInspector';
 export { LayoutSection } from './LayoutSection';
 export { MarginSection } from './MarginSection';
 export { PositionSection } from './PositionSection';
+export { PropsSection } from './PropsSection';
 export { StateSelectorSection } from './StateSelectorSection';
 export { StrokeSection } from './StrokeSection';
 export { StyleSourceTabsSection } from './StyleSourceTabsSection';

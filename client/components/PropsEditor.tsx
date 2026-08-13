@@ -35,7 +35,6 @@ export function PropsEditor() {
 
     // For iframe components: check root.metadata.filePath
     if (root.metadata?.filePath) {
-      console.log('[PropsEditor] Found filePath in root:', root.metadata.filePath);
       return root.metadata.filePath as string;
     }
 
@@ -44,7 +43,6 @@ export function PropsEditor() {
     for (const childId of rootChildren) {
       const inst = engine.getInstance(childId);
       if (inst?.metadata?.filePath) {
-        console.log('[PropsEditor] Found filePath in child:', inst.metadata.filePath);
         return inst.metadata.filePath as string;
       }
     }
@@ -101,16 +99,21 @@ export function PropsEditor() {
   // Load props schema from API
   /* eslint-disable react-hooks/exhaustive-deps -- selectedIds and engine are intentional triggers; getFilePath/getSelectedElementType/getSelectedElementFromAST are derived from them and not memoized stably */
   useEffect(() => {
-    console.log('[PropsEditor] useEffect triggered');
+    // Guards against a stale in-flight response applying to a newer selection:
+    // if the user selects another element while the fetch is pending, the cleanup
+    // flips `cancelled` so the old response is dropped instead of populating the
+    // schema/values for the now-current element.
+    let cancelled = false;
+
     const filePath = getFilePath();
     const elementType = getSelectedElementType();
-
-    console.log('[PropsEditor] FilePath:', filePath);
-    console.log('[PropsEditor] ElementType:', elementType);
 
     if (!filePath || !elementType) {
       setSchema(null);
       setError(null);
+      // Clear any stale loading left by a prior in-flight fetch whose `finally`
+      // is now suppressed by the cancellation guard for this selection change.
+      setLoading(false);
       return;
     }
 
@@ -118,18 +121,22 @@ export function PropsEditor() {
     // React components start with uppercase, HTML elements with lowercase
     const isHtmlElement = elementType[0] === elementType[0].toLowerCase();
     if (isHtmlElement) {
-      console.log('[PropsEditor] Skipping HTML element:', elementType);
       setSchema(null);
       setError(null);
+      setLoading(false);
       return;
     }
 
     setLoading(true);
     setError(null);
+    // Clear the previous selection's schema/values before the new lookup so a
+    // silent miss (400/404) or a slow response can't leave the prior component's
+    // props visible — and thus editable — for the now-selected element.
+    setSchema(null);
+    setPropsValues({});
 
     // Fetch component props - server will follow imports if needed
     const url = `/api/component-props-types?filePath=${encodeURIComponent(filePath)}&componentName=${encodeURIComponent(elementType)}`;
-    console.log('[PropsEditor] Fetching schema from:', url);
 
     authFetch(url)
       .then((res) => {
@@ -144,6 +151,7 @@ export function PropsEditor() {
         return res.json();
       })
       .then((data) => {
+        if (cancelled) return;
         if (data.success) {
           setSchema({
             componentName: data.componentName,
@@ -152,8 +160,6 @@ export function PropsEditor() {
 
           // Initialize props values from AST node
           const astNode = getSelectedElementFromAST();
-          console.log('[PropsEditor] AST node:', astNode);
-          console.log('[PropsEditor] AST node props:', astNode?.props);
           if (astNode?.props) {
             setPropsValues(astNode.props);
           }
@@ -162,12 +168,18 @@ export function PropsEditor() {
         }
       })
       .catch((err) => {
+        if (cancelled) return;
         console.error('[PropsEditor] Error loading schema:', err);
         setError('Failed to load props schema');
       })
       .finally(() => {
+        if (cancelled) return;
         setLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedIds, engine]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
