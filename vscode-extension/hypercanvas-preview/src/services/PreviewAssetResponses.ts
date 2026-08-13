@@ -110,3 +110,76 @@ export function shouldSwallowStaleBundleResponse(proxyPath: string, statusCode: 
 export function testPreviewRetryBudget(isRemixProject: boolean): number {
   return isRemixProject ? 60 : 16;
 }
+
+/**
+ * True once the `/test-preview` retry budget (testPreviewRetryBudget) is exhausted and the
+ * dev server is STILL answering 404/403/503 for the preview document itself.
+ *
+ * HYP-903 (live-verified against conloca's cms-spa): a dev server with no catch-all/SPA
+ * fallback route for `/test-preview` — e.g. Bun's `Bun.serve({ routes: { '/': index } })`,
+ * which serves only `/` — 404s forever; curling it directly returns status 404 with a
+ * completely empty body and no content-type. Before this predicate existed, that raw
+ * empty body fell straight through PreviewProxy's non-HTML pass-through to the iframe: a
+ * genuinely blank canvas with zero indication of why. Gates showing an explicit
+ * "dev server unreachable" page instead of that silent pass-through.
+ */
+export function shouldShowDevServerUnreachable(
+  proxyPath: string,
+  statusCode: number | undefined,
+  retryCount: number,
+  retryBudget: number,
+): boolean {
+  return (
+    (statusCode === 404 || statusCode === 403 || statusCode === 503) &&
+    proxyPath.startsWith('/test-preview') &&
+    retryCount >= retryBudget
+  );
+}
+
+const HTML_ESCAPE_MAP: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char] ?? char);
+}
+
+/**
+ * Self-contained HTML page shown INSIDE the preview iframe in place of the raw (usually
+ * empty-bodied) error response, once shouldShowDevServerUnreachable is true. Styled to match
+ * the extension's own dark-theme warning tone (SupportDimensionsTabs' "needs setup" amber,
+ * #d29922) so it reads as a HyperIDE diagnostic, not a generic browser error page. Served
+ * with a 200 status (see PreviewProxy) so no browser "friendly error page" heuristic can
+ * ever replace this body.
+ */
+export function buildDevServerUnreachableHtml(
+  proxyPath: string,
+  statusCode: number | undefined,
+  targetPort: number,
+): string {
+  const escapedPath = escapeHtml(proxyPath);
+  const statusText = statusCode === undefined ? 'no response' : String(statusCode);
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>HyperCanvas: preview unreachable</title></head>
+<body style="margin:0;padding:48px 32px;background:#1e1e1e;color:#cccccc;font:14px -apple-system,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:0 auto;">
+    <div style="color:#d29922;font-weight:600;font-size:16px;margin-bottom:8px;">
+      &#9888; HyperCanvas can't reach this preview route
+    </div>
+    <p style="line-height:1.5;margin:0 0 12px;">
+      The dev server on <code>localhost:${targetPort}</code> returned <b>${statusText}</b> for
+      <code>${escapedPath}</code> and never started serving it.
+    </p>
+    <p style="line-height:1.5;margin:0;color:#8b949e;">
+      This usually means the dev server has no fallback/catch-all route for this path (it only
+      serves its own root URL) — not a temporary glitch, so retrying will not help.
+    </p>
+  </div>
+</body>
+</html>`;
+}

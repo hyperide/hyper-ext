@@ -32,13 +32,19 @@ mock.module('node:fs', () => ({
 
 const { PreviewProxy } = await import('../PreviewProxy');
 
-/** Minimal upstream "dev server" that always answers 200 with a marker body. */
-function startUpstream(): Promise<{ port: number; close: () => Promise<void> }> {
+/**
+ * Minimal upstream "dev server". Defaults to always answering 200 with a marker body;
+ * pass `handler` to simulate a different topology (e.g. a dev server with no /test-preview
+ * route, matching the live-verified conloca cms-spa case).
+ */
+function startUpstream(
+  handler: (req: http.IncomingMessage, res: http.ServerResponse) => void = (_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('UPSTREAM_OK');
+  },
+): Promise<{ port: number; close: () => Promise<void> }> {
   return new Promise((resolve, reject) => {
-    const server = http.createServer((_req, res) => {
-      res.writeHead(200, { 'content-type': 'text/plain' });
-      res.end('UPSTREAM_OK');
-    });
+    const server = http.createServer(handler);
     server.once('error', reject);
     server.listen(0, 'localhost', () => {
       const addr = server.address();
@@ -171,4 +177,66 @@ describe('PreviewProxy process-shim', () => {
     expect(res.body).toContain("typeof g.process === 'undefined'");
     expect(res.body).toContain("typeof g.process.env.NODE_ENV === 'undefined'");
   });
+});
+
+/**
+ * /test-preview retry-exhaustion warning (HYP-903/HYP-914).
+ *
+ * Exercises the REAL wiring end-to-end (not just the pure predicate/builder unit tests in
+ * PreviewAssetResponses.test.ts): an upstream that never serves /test-preview (matching the
+ * live-verified conloca cms-spa topology — `Bun.serve({ routes: { '/': index } })`, 404 with
+ * an empty body) must, after the retry budget is exhausted, get an explicit 200 HTML warning
+ * through the proxy instead of the raw empty pass-through.
+ *
+ * The real backoff sums to ~46s (16 retries, non-Remix) — too slow for a unit test. Fast-
+ * forward it by capping every setTimeout delay at 1ms; this preserves the exact retry COUNT
+ * and control flow (same recursion depth, same terminal branch) while collapsing wall-clock
+ * time to milliseconds. Restored in afterEach so it can't leak into other test files.
+ */
+describe('PreviewProxy /test-preview retry exhaustion (HYP-903/HYP-914)', () => {
+  let upstream: { port: number; close: () => Promise<void> };
+  let proxy: InstanceType<typeof PreviewProxy>;
+  let realSetTimeout: typeof setTimeout;
+
+  beforeEach(async () => {
+    upstream = await startUpstream();
+    realSetTimeout = globalThis.setTimeout;
+    // Forward extra args unchanged (Bun's own internals, e.g. http.Server.listen's
+    // nextTick-style emit, schedule setTimeout(fn, delay, ...extraArgsForFn) — dropping
+    // them breaks unrelated Bun-internal callbacks, not just PreviewProxy's own retries).
+    // @ts-expect-error -- deliberately narrowed signature for this test's own retry calls only
+    globalThis.setTimeout = (fn: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) =>
+      realSetTimeout(fn, Math.min(delay ?? 0, 1), ...args);
+  });
+
+  afterEach(async () => {
+    globalThis.setTimeout = realSetTimeout;
+    proxy?.stop();
+    await upstream.close();
+  });
+
+  it('serves the explicit warning page once retries are exhausted, not the raw empty 404', async () => {
+    // Replace the default-200 marker upstream with one shaped like cms-spa's real Bun dev
+    // server: /test-preview 404s with an empty body, everything else (root) serves 200 HTML.
+    await upstream.close();
+    upstream = await startUpstream((req, res) => {
+      if ((req.url ?? '').startsWith('/test-preview')) {
+        res.writeHead(404, { 'content-length': '0' });
+        res.end();
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end('<html><body>root</body></html>');
+    });
+
+    proxy = new PreviewProxy(upstream.port);
+    proxy.setIsServing(() => true);
+    await proxy.start();
+
+    const res = await get(proxy.port ?? 0, '/test-preview?component=src%2Fcomponents%2Fui%2FButton.tsx');
+    expect(res.status).toBe(200);
+    expect(res.body).toContain("HyperCanvas can't reach this preview route");
+    expect(res.body).toContain(`localhost:${upstream.port}`);
+    expect(res.body).toContain('404');
+  }, 10_000);
 });

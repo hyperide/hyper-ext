@@ -14,9 +14,11 @@ import * as net from 'node:net';
 import * as path from 'node:path';
 import { listenLoopback } from './netProbe';
 import {
+  buildDevServerUnreachableHtml,
   getPreviewAssetContentType,
   shouldRetryAssetResponse,
   shouldReturnEmptyAssetResponse,
+  shouldShowDevServerUnreachable,
   shouldSwallowStaleBundleResponse,
   testPreviewRetryBudget,
 } from './PreviewAssetResponses';
@@ -323,6 +325,30 @@ export class PreviewProxy {
         return;
       }
 
+      // Retry budget above is exhausted and the dev server is STILL 404/403/503-ing
+      // /test-preview (HYP-903): a dev server with no catch-all/SPA-fallback route (e.g.
+      // Bun's `Bun.serve({ routes: { '/': index } })`) 404s forever with an empty body.
+      // Without this branch that empty body pipes straight through below — a genuinely
+      // blank canvas with no indication why. Surface an explicit warning page instead.
+      if (
+        shouldShowDevServerUnreachable(
+          proxyPath,
+          proxyRes.statusCode,
+          retryCount,
+          testPreviewRetryBudget(this._isRemixProject),
+        )
+      ) {
+        proxyRes.resume();
+        if (!clientReq.destroyed && !clientRes.headersSent) {
+          clientRes.writeHead(200, {
+            'content-type': 'text/html; charset=utf-8',
+            'cache-control': 'no-cache, no-store, must-revalidate',
+          });
+          clientRes.end(buildDevServerUnreachableHtml(proxyPath, proxyRes.statusCode, this._targetPort));
+        }
+        return;
+      }
+
       const contentTypeHeader = proxyRes.headers['content-type'];
       const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader.join(';') : (contentTypeHeader ?? '');
       const isHtml = contentType.includes('text/html');
@@ -447,9 +473,22 @@ export class PreviewProxy {
       }
     });
 
-    // On retry, clientReq body stream is already consumed. For GET requests there is
-    // no body anyway — end the proxy request directly to trigger the upstream send.
-    if (retryCount > 0 && clientReq.method === 'GET') {
+    // GET requests never carry a body, so there is nothing to forward — end the proxy
+    // request directly rather than piping clientReq into it.
+    //
+    // HYP-914 root-cause fix: this used to gate on `retryCount > 0 && GET` (piping only on
+    // the FIRST attempt, retryCount === 0), on the assumption that only later retries needed
+    // this shortcut ("body already consumed"). That was backwards: `clientReq.pipe(proxyReq)`
+    // puts clientReq's (empty, for GET) readable side into flowing mode, which reaches 'end'
+    // and triggers Node's stream autoDestroy almost immediately — well before any real
+    // network round-trip to the target completes. By the time the FIRST 404/403/503/504
+    // response arrives and the retry-scheduling checks read `clientReq.destroyed`, it is
+    // already `true`, so `!clientReq.destroyed` fails and NO retry ever gets scheduled — the
+    // very first failure just hangs the client forever (empirically verified: reproduced with
+    // a minimal upstream + proxy pair, retries only proceeded past attempt #1 once GET
+    // categorically never piped). Piping was only ever needed for request bodies (POST/PUT
+    // etc.); using `.end()` for every GET — first attempt included — removes the race.
+    if (clientReq.method === 'GET') {
       proxyReq.end();
     } else {
       clientReq.pipe(proxyReq);

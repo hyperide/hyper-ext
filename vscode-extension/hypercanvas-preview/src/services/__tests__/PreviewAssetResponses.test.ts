@@ -8,9 +8,11 @@
 
 import { describe, expect, it } from 'bun:test';
 import {
+  buildDevServerUnreachableHtml,
   getPreviewAssetContentType,
   shouldRetryAssetResponse,
   shouldReturnEmptyAssetResponse,
+  shouldShowDevServerUnreachable,
   shouldSwallowStaleBundleResponse,
   testPreviewRetryBudget,
 } from '../PreviewAssetResponses';
@@ -108,5 +110,46 @@ describe('testPreviewRetryBudget (HYP-370 Phase 5 walk-back)', () => {
     const remixMs = totalRetryBudgetMs(testPreviewRetryBudget(true));
     expect(remixMs).toBeLessThan(totalRetryBudgetMs(90));
     expect(remixMs).toBeGreaterThan(totalRetryBudgetMs(16)); // still covers SSR cold-start
+  });
+});
+
+describe('shouldShowDevServerUnreachable (HYP-903 — dev server with no /test-preview route)', () => {
+  it('fires only once the retry budget is exhausted for /test-preview 404/403/503', () => {
+    expect(shouldShowDevServerUnreachable('/test-preview?component=App', 404, 16, 16)).toBe(true);
+    expect(shouldShowDevServerUnreachable('/test-preview?component=App', 403, 20, 16)).toBe(true);
+    expect(shouldShowDevServerUnreachable('/test-preview?component=App', 503, 16, 16)).toBe(true);
+  });
+
+  it('does not fire while retries remain', () => {
+    expect(shouldShowDevServerUnreachable('/test-preview?component=App', 404, 5, 16)).toBe(false);
+  });
+
+  it('does not fire for other status codes or other paths', () => {
+    expect(shouldShowDevServerUnreachable('/test-preview?component=App', 200, 16, 16)).toBe(false);
+    expect(shouldShowDevServerUnreachable('/test-preview?component=App', 500, 16, 16)).toBe(false);
+    expect(shouldShowDevServerUnreachable('/src/App.tsx', 404, 16, 16)).toBe(false);
+    expect(shouldShowDevServerUnreachable('/', 404, 16, 16)).toBe(false);
+  });
+});
+
+describe('buildDevServerUnreachableHtml (HYP-903)', () => {
+  it('renders the target port, status, and requested path into a visible HTML page', () => {
+    const html = buildDevServerUnreachableHtml('/test-preview?component=src%2FApp.tsx', 404, 3000);
+    expect(html).toContain('<!DOCTYPE html>');
+    expect(html).toContain('localhost:3000');
+    expect(html).toContain('404');
+    expect(html).toContain('/test-preview?component=src%2FApp.tsx');
+    expect(html).toContain("can't reach this preview route");
+  });
+
+  it('escapes the path so it cannot break out of the HTML/attribute context', () => {
+    const html = buildDevServerUnreachableHtml('/test-preview?x="><script>alert(1)</script>', 404, 3000);
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('falls back to a plain-language status when none was received', () => {
+    const html = buildDevServerUnreachableHtml('/test-preview', undefined, 3000);
+    expect(html).toContain('no response');
   });
 });
