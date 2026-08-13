@@ -402,7 +402,6 @@ export class PreviewPanel {
         msg.componentPath as string | undefined,
         msg.propValues as Record<string, unknown> | undefined,
         msg.sampleName as string | undefined,
-        { suggestAIKey: true },
       );
       return;
     }
@@ -564,12 +563,7 @@ export class PreviewPanel {
     componentPath: string | undefined,
     propValues?: Record<string, unknown>,
     sampleName?: string,
-    options?: {
-      componentName?: string;
-      notifySampleCreated?: boolean;
-      revealInEditor?: boolean;
-      suggestAIKey?: boolean;
-    },
+    options?: { componentName?: string; notifySampleCreated?: boolean; revealInEditor?: boolean },
   ): Promise<boolean> {
     if (!componentPath) return false;
 
@@ -639,41 +633,22 @@ export class PreviewPanel {
       return true;
     }
 
-    // AI generation is a fallback only for components with required props (complex case).
-    // For simple components (no required props), the deterministic scaffold is sufficient.
-    // When propDefs is null (parse error), we conservatively skip AI — we can't fill unknown props.
+    // When no prop values were provided, try AI generation first (BUG-6: auto-generate props).
+    // Falls through to the deterministic scaffold if AI is not configured or returns null.
     const hasPropValues = propValues && Object.keys(propValues).length > 0;
     if (!hasPropValues) {
-      const propDefs = await this._panelRouter.componentService
-        ?.getComponentDefinitions(componentPath)
-        .catch(() => null);
-      const hasRequiredProps = propDefs?.some((p) => p.required) ?? false;
-
-      if (hasRequiredProps) {
-        const apiKey = await this._context.secrets.get('hypercanvas.ai.apiKey');
-        if (apiKey) {
-          const aiGenerated = await ensureSample({
-            io: new VSCodeFileIO(),
-            absolutePath: absPath,
-            componentName,
-            sampleName: exportName,
-            generate: createExtensionSampleGenerator(this._context),
-          });
-          if (aiGenerated.exists) {
-            if (notifySampleCreated) {
-              await this._onSampleCreatedCallback?.(componentPath);
-            }
-            return true;
-          }
-        } else if (options?.suggestAIKey) {
-          const action = await vscode.window.showInformationMessage(
-            `"${componentName}" has required props. Configure an AI key to auto-fill them.`,
-            'Configure AI Key',
-          );
-          if (action === 'Configure AI Key') {
-            void vscode.commands.executeCommand('hypercanvas.configureAIKey');
-          }
+      const aiGenerated = await ensureSample({
+        io: new VSCodeFileIO(),
+        absolutePath: absPath,
+        componentName,
+        sampleName: exportName,
+        generate: createExtensionSampleGenerator(this._context),
+      });
+      if (aiGenerated.exists) {
+        if (notifySampleCreated) {
+          await this._onSampleCreatedCallback?.(componentPath);
         }
+        return true;
       }
     }
 
