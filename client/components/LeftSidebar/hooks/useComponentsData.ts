@@ -4,15 +4,15 @@
  * VS Code: canvasRPC({ type: 'component:listGroups' }).
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { useCanvasEngineOptional } from "@/lib/canvas-engine";
-import { usePlatformCanvas } from "@/lib/platform";
-import { canvasRPC } from "@/lib/platform/PlatformContext";
-import { useProjectActivationStore } from "@/stores/projectActivationStore";
-import { cancelComponentsFetch, fetchComponentsJSON } from "@/utils/fetchComponents";
-import type { ComponentsData } from "../../../../lib/component-scanner/types";
+import { useCallback, useEffect, useState } from 'react';
+import { useCanvasEngineOptional } from '@/lib/canvas-engine';
+import { usePlatformCanvas } from '@/lib/platform';
+import { canvasRPC } from '@/lib/platform/PlatformContext';
+import { useProjectActivationStore } from '@/stores/projectActivationStore';
+import { cancelComponentsFetch, fetchComponentsJSON } from '@/utils/fetchComponents';
+import type { ComponentsData } from '../../../../lib/component-scanner/types';
 
-type SetupReason = "no-ai-config" | "no-paths" | "empty-scan";
+type SetupReason = 'no-ai-config' | 'no-paths' | 'empty-scan';
 
 interface UseComponentsDataResult {
   data: ComponentsData;
@@ -58,13 +58,13 @@ export function useComponentsData(): UseComponentsDataResult {
             });
             setLoadedOnce(true);
           } else {
-            console.warn("[useComponentsData] Server error:", result.error);
+            console.warn('[useComponentsData] Server error:', result.error);
             // Don't set loadedOnce — allow retry on next event
           }
         })
         .catch((err) => {
-          if (err.name === "AbortError") return;
-          console.error("[useComponentsData] Failed to load components:", err);
+          if (err.name === 'AbortError') return;
+          console.error('[useComponentsData] Failed to load components:', err);
           setError(String(err));
         })
         .finally(() => {
@@ -74,8 +74,8 @@ export function useComponentsData(): UseComponentsDataResult {
       // VS Code path: RPC
       canvasRPC<ComponentsData>(
         canvas,
-        { type: "component:listGroups", requestId: crypto.randomUUID() },
-        "component:response",
+        { type: 'component:listGroups', requestId: crypto.randomUUID() },
+        'component:response',
       )
         .then((result) => {
           if (result.success && result.data) {
@@ -83,10 +83,10 @@ export function useComponentsData(): UseComponentsDataResult {
             setLoadedOnce(true);
             const msg = result as { needsSetup?: boolean; setupReason?: SetupReason };
             if (msg.needsSetup) {
-              setSetupReason(msg.setupReason ?? "empty-scan");
+              setSetupReason(msg.setupReason ?? 'empty-scan');
             }
           } else {
-            setError(result.error || "Failed to load components");
+            setError(result.error || 'Failed to load components');
           }
         })
         .catch((err) => {
@@ -111,10 +111,10 @@ export function useComponentsData(): UseComponentsDataResult {
 
     // components_updated fires when component files change on disk
     const handleReload = () => loadComponents();
-    window.addEventListener("components_updated", handleReload);
+    window.addEventListener('components_updated', handleReload);
 
     return () => {
-      window.removeEventListener("components_updated", handleReload);
+      window.removeEventListener('components_updated', handleReload);
       cancelComponentsFetch();
     };
   }, [loadComponents, engine, activatedProjectId]);

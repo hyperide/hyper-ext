@@ -1,4 +1,4 @@
-import { TID } from "@shared/data-testid-map";
+import { TID } from '@shared/data-testid-map';
 import {
   IconAdjustmentsHorizontal,
   IconAspectRatio,
@@ -8,36 +8,36 @@ import {
   IconLayoutGrid,
   IconSortDescending2,
   IconX,
-} from "@tabler/icons-react";
-import cn from "clsx";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import IconFlexRow from "../../icons/IconFlexRow";
-import IconHorizontalPadding from "../../icons/IconHorizontalPadding";
-import IconLayoutChart from "../../icons/IconLayoutChart";
-import IconPaddingBottom from "../../icons/IconPaddingBottom";
-import IconPaddingLeft from "../../icons/IconPaddingLeft";
-import IconPaddingRight from "../../icons/IconPaddingRight";
-import IconPaddingTop from "../../icons/IconPaddingTop";
-import IconSpacingHorizontal from "../../icons/IconSpacingHorizontal";
-import IconVerticalPadding from "../../icons/IconVerticalPadding";
-import { Input } from "../../ui/input";
-import { LAYOUT_OPTIONS } from "../constants";
-import type { LayoutType, UIKitType } from "../types";
+} from '@tabler/icons-react';
+import cn from 'clsx';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import IconFlexRow from '../../icons/IconFlexRow';
+import IconHorizontalPadding from '../../icons/IconHorizontalPadding';
+import IconLayoutChart from '../../icons/IconLayoutChart';
+import IconPaddingBottom from '../../icons/IconPaddingBottom';
+import IconPaddingLeft from '../../icons/IconPaddingLeft';
+import IconPaddingRight from '../../icons/IconPaddingRight';
+import IconPaddingTop from '../../icons/IconPaddingTop';
+import IconSpacingHorizontal from '../../icons/IconSpacingHorizontal';
+import IconVerticalPadding from '../../icons/IconVerticalPadding';
+import { Input } from '../../ui/input';
+import { LAYOUT_OPTIONS } from '../constants';
+import type { LayoutType, UIKitType } from '../types';
 
 /**
  * Normalizes CSS justify-content/align-items values to flex equivalents
  * for matching against the 9-point grid.
  */
 function normalizeFlexValue(value: string | undefined): string {
-  if (!value || value === "normal") {
-    return "flex-start";
+  if (!value || value === 'normal') {
+    return 'flex-start';
   }
   // space-between, space-around, space-evenly distribute items - no single position
-  if (value.startsWith("space-")) {
-    return "center";
+  if (value.startsWith('space-')) {
+    return 'center';
   }
-  if (value === "start") return "flex-start";
-  if (value === "end") return "flex-end";
+  if (value === 'start') return 'flex-start';
+  if (value === 'end') return 'flex-end';
   return value;
 }
 
@@ -133,7 +133,7 @@ export const LayoutSection = memo(function LayoutSection({
 }: LayoutSectionProps) {
   const focusInput = (e: React.MouseEvent) => {
     e.preventDefault();
-    (e.currentTarget as HTMLElement).parentElement?.querySelector("input")?.focus();
+    (e.currentTarget as HTMLElement).parentElement?.querySelector('input')?.focus();
   };
 
   const [aspectRatioLocked, setAspectRatioLocked] = useState(false);
@@ -148,8 +148,8 @@ export const LayoutSection = memo(function LayoutSection({
 
   // Show grid tooltip on first grid layout view
   useEffect(() => {
-    if (selectedLayout === "grid") {
-      const dismissed = localStorage.getItem("gridStretchTooltipDismissed");
+    if (selectedLayout === 'grid') {
+      const dismissed = localStorage.getItem('gridStretchTooltipDismissed');
       if (!dismissed) {
         setShowGridTooltip(true);
       }
@@ -160,7 +160,7 @@ export const LayoutSection = memo(function LayoutSection({
 
   const dismissGridTooltip = useCallback(() => {
     setShowGridTooltip(false);
-    localStorage.setItem("gridStretchTooltipDismissed", "true");
+    localStorage.setItem('gridStretchTooltipDismissed', 'true');
   }, []);
 
   const handleAspectRatioToggle = useCallback(() => {
@@ -207,25 +207,25 @@ export const LayoutSection = memo(function LayoutSection({
 
   const handleLayoutGridClick = useCallback(
     (pos: (typeof LAYOUT_OPTIONS)[0]) => {
-      const isSpaceBetween = justifyContent === "space-between";
+      const isSpaceBetween = justifyContent === 'space-between';
 
       if (isSpaceBetween) {
-        if (selectedLayout === "row") {
-          syncStyleChange("alignItems", pos.align, DB);
+        if (selectedLayout === 'row') {
+          syncStyleChange('alignItems', pos.align, DB);
           onAlignItemsChange(pos.align);
         } else {
-          syncStyleChange("alignItems", pos.justify, DB);
+          syncStyleChange('alignItems', pos.justify, DB);
           onAlignItemsChange(pos.justify);
         }
       } else {
-        if (selectedLayout === "row") {
-          syncStyleChange("justifyContent", pos.justify, DB);
-          syncStyleChange("alignItems", pos.align, DB);
+        if (selectedLayout === 'row') {
+          syncStyleChange('justifyContent', pos.justify, DB);
+          syncStyleChange('alignItems', pos.align, DB);
           onJustifyContentChange(pos.justify);
           onAlignItemsChange(pos.align);
         } else {
-          syncStyleChange("justifyContent", pos.align, DB);
-          syncStyleChange("alignItems", pos.justify, DB);
+          syncStyleChange('justifyContent', pos.align, DB);
+          syncStyleChange('alignItems', pos.justify, DB);
           onJustifyContentChange(pos.align);
           onAlignItemsChange(pos.justify);
         }
@@ -236,28 +236,28 @@ export const LayoutSection = memo(function LayoutSection({
 
   const handleLayoutGridDoubleClick = useCallback(
     (pos: (typeof LAYOUT_OPTIONS)[0]) => {
-      const isSpaceBetween = justifyContent === "space-between";
+      const isSpaceBetween = justifyContent === 'space-between';
 
       if (isSpaceBetween) {
-        if (selectedLayout === "row") {
-          syncStyleChange("justifyContent", pos.justify, DB);
-          syncStyleChange("alignItems", pos.align, DB);
+        if (selectedLayout === 'row') {
+          syncStyleChange('justifyContent', pos.justify, DB);
+          syncStyleChange('alignItems', pos.align, DB);
           onJustifyContentChange(pos.justify);
           onAlignItemsChange(pos.align);
         } else {
-          syncStyleChange("justifyContent", pos.align, DB);
-          syncStyleChange("alignItems", pos.justify, DB);
+          syncStyleChange('justifyContent', pos.align, DB);
+          syncStyleChange('alignItems', pos.justify, DB);
           onJustifyContentChange(pos.align);
           onAlignItemsChange(pos.justify);
         }
       } else {
-        syncStyleChange("justifyContent", "space-between", DB);
-        onJustifyContentChange("space-between");
-        if (selectedLayout === "row") {
-          syncStyleChange("alignItems", pos.align, DB);
+        syncStyleChange('justifyContent', 'space-between', DB);
+        onJustifyContentChange('space-between');
+        if (selectedLayout === 'row') {
+          syncStyleChange('alignItems', pos.align, DB);
           onAlignItemsChange(pos.align);
         } else {
-          syncStyleChange("alignItems", pos.justify, DB);
+          syncStyleChange('alignItems', pos.justify, DB);
           onAlignItemsChange(pos.justify);
         }
       }
@@ -267,20 +267,20 @@ export const LayoutSection = memo(function LayoutSection({
 
   const handleHorizontalPaddingChange = useCallback(
     (value: string) => {
-      onPaddingChange("paddingLeft", value);
-      onPaddingChange("paddingRight", value);
-      syncStyleChange("paddingLeft", value, DB);
-      syncStyleChange("paddingRight", value, DB);
+      onPaddingChange('paddingLeft', value);
+      onPaddingChange('paddingRight', value);
+      syncStyleChange('paddingLeft', value, DB);
+      syncStyleChange('paddingRight', value, DB);
     },
     [onPaddingChange, syncStyleChange],
   );
 
   const handleVerticalPaddingChange = useCallback(
     (value: string) => {
-      onPaddingChange("paddingTop", value);
-      onPaddingChange("paddingBottom", value);
-      syncStyleChange("paddingTop", value, DB);
-      syncStyleChange("paddingBottom", value, DB);
+      onPaddingChange('paddingTop', value);
+      onPaddingChange('paddingBottom', value);
+      syncStyleChange('paddingTop', value, DB);
+      syncStyleChange('paddingBottom', value, DB);
     },
     [onPaddingChange, syncStyleChange],
   );
@@ -288,17 +288,17 @@ export const LayoutSection = memo(function LayoutSection({
   const handleClipContentToggle = useCallback(() => {
     const newValue = !clipContent;
     onClipContentChange(newValue);
-    syncStyleChange("overflow", newValue ? "hidden" : "visible");
+    syncStyleChange('overflow', newValue ? 'hidden' : 'visible');
   }, [clipContent, onClipContentChange, syncStyleChange]);
 
   return (
     <div
-      data-testid={TID.inspector.sectionHeader("layout")}
+      data-testid={TID.inspector.sectionHeader('layout')}
       className="w-full px-4 py-3 border-t border-border overflow-hidden"
     >
       <div className="mb-3">
         <span className="text-xs font-semibold text-foreground">
-          {selectedLayout === "col" || selectedLayout === "row" ? "Auto layout" : "Layout"}
+          {selectedLayout === 'col' || selectedLayout === 'row' ? 'Auto layout' : 'Layout'}
         </span>
       </div>
 
@@ -307,10 +307,10 @@ export const LayoutSection = memo(function LayoutSection({
         <button
           type="button"
           data-testid={TID.inspector.layoutDisplaySelect}
-          onClick={() => onLayoutChange("layout")}
+          onClick={() => onLayoutChange('layout')}
           className={cn(
-            "flex-1 h-6 px-1 rounded-l flex items-center justify-center",
-            selectedLayout === "layout" && "toggle-active",
+            'flex-1 h-6 px-1 rounded-l flex items-center justify-center',
+            selectedLayout === 'layout' && 'toggle-active',
           )}
         >
           <IconLayout className="w-4 h-4" stroke={1.5} />
@@ -318,34 +318,34 @@ export const LayoutSection = memo(function LayoutSection({
         <button
           type="button"
           data-testid={TID.inspector.layoutFlexDirection}
-          onClick={() => onLayoutChange("col")}
+          onClick={() => onLayoutChange('col')}
           className={cn(
-            "flex-1 h-6 px-1 flex items-center justify-center",
-            selectedLayout === "col" && "toggle-active",
+            'flex-1 h-6 px-1 flex items-center justify-center',
+            selectedLayout === 'col' && 'toggle-active',
           )}
         >
           <IconSortDescending2 className="w-5 h-5" stroke={1.5} />
         </button>
         <button
           type="button"
-          data-testid={TID.inspector.viewToggle("row")}
-          onClick={() => onLayoutChange("row")}
+          data-testid={TID.inspector.viewToggle('row')}
+          onClick={() => onLayoutChange('row')}
           className={cn(
-            "flex-1 h-6 px-1 flex items-center justify-center",
-            projectUIKit === "tamagui" ? "rounded-r" : "",
-            selectedLayout === "row" && "toggle-active",
+            'flex-1 h-6 px-1 flex items-center justify-center',
+            projectUIKit === 'tamagui' ? 'rounded-r' : '',
+            selectedLayout === 'row' && 'toggle-active',
           )}
         >
           <IconFlexRow className="w-5 h-5" />
         </button>
-        {projectUIKit !== "tamagui" && (
+        {projectUIKit !== 'tamagui' && (
           <button
             type="button"
-            data-testid={TID.inspector.viewToggle("grid")}
-            onClick={() => onLayoutChange("grid")}
+            data-testid={TID.inspector.viewToggle('grid')}
+            onClick={() => onLayoutChange('grid')}
             className={cn(
-              "flex-1 h-6 px-1 rounded-r flex items-center justify-center",
-              selectedLayout === "grid" && "toggle-active",
+              'flex-1 h-6 px-1 rounded-r flex items-center justify-center',
+              selectedLayout === 'grid' && 'toggle-active',
             )}
           >
             <IconLayoutGrid className="w-5 h-5" stroke={1.5} />
@@ -361,19 +361,19 @@ export const LayoutSection = memo(function LayoutSection({
             <Input
               type="text"
               testId={TID.inspector.layoutWidth}
-              value={width.replace(" Auto", "")}
+              value={width.replace(' Auto', '')}
               onChange={(e) => handleWidthInputChange(e.target.value)}
               onBlur={onWidthBlur}
-              onKeyDown={(e) => onNumericKeyDown(e, width, (v) => onWidthChange(v), "width")}
+              onKeyDown={(e) => onNumericKeyDown(e, width, (v) => onWidthChange(v), 'width')}
               placeholder="auto"
               className={cn(
-                "h-auto border-0 bg-transparent !text-[11px] p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1",
-                width.includes("Auto") ? "text-muted-foreground" : "text-foreground",
+                'h-auto border-0 bg-transparent !text-[11px] p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1',
+                width.includes('Auto') ? 'text-muted-foreground' : 'text-foreground',
               )}
             />
-            {width.includes("Auto") && (
+            {width.includes('Auto') && (
               <span className="text-[11px] font-medium text-foreground">
-                {selectedLayout === "col" || selectedLayout === "row" ? "Hug" : "Auto"}
+                {selectedLayout === 'col' || selectedLayout === 'row' ? 'Hug' : 'Auto'}
               </span>
             )}
           </div>
@@ -382,19 +382,19 @@ export const LayoutSection = memo(function LayoutSection({
             <Input
               type="text"
               testId={TID.inspector.layoutHeight}
-              value={height.replace(" Auto", "")}
+              value={height.replace(' Auto', '')}
               onChange={(e) => handleHeightInputChange(e.target.value)}
               onBlur={onHeightBlur}
-              onKeyDown={(e) => onNumericKeyDown(e, height, (v) => onHeightChange(v), "height")}
+              onKeyDown={(e) => onNumericKeyDown(e, height, (v) => onHeightChange(v), 'height')}
               placeholder="auto"
               className={cn(
-                "h-auto border-0 bg-transparent !text-[11px] p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1",
-                height.includes("Auto") ? "text-muted-foreground" : "text-foreground",
+                'h-auto border-0 bg-transparent !text-[11px] p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1',
+                height.includes('Auto') ? 'text-muted-foreground' : 'text-foreground',
               )}
             />
-            {height.includes("Auto") && (
+            {height.includes('Auto') && (
               <span className="text-[11px] font-medium text-foreground">
-                {selectedLayout === "col" || selectedLayout === "row" ? "Hug" : "Auto"}
+                {selectedLayout === 'col' || selectedLayout === 'row' ? 'Hug' : 'Auto'}
               </span>
             )}
           </div>
@@ -403,16 +403,16 @@ export const LayoutSection = memo(function LayoutSection({
           type="button"
           onClick={handleAspectRatioToggle}
           className={cn(
-            "w-6 h-6 rounded flex items-center justify-center",
-            aspectRatioLocked ? "inspector-btn-active" : "bg-transparent",
+            'w-6 h-6 rounded flex items-center justify-center',
+            aspectRatioLocked ? 'inspector-btn-active' : 'bg-transparent',
           )}
         >
-          <IconAspectRatio className={cn("w-4 h-4", !aspectRatioLocked && "text-foreground")} stroke={1.5} />
+          <IconAspectRatio className={cn('w-4 h-4', !aspectRatioLocked && 'text-foreground')} stroke={1.5} />
         </button>
       </div>
 
       {/* Flex layout controls */}
-      {(selectedLayout === "col" || selectedLayout === "row") && (
+      {(selectedLayout === 'col' || selectedLayout === 'row') && (
         <>
           <div className="flex items-start gap-1.5 mb-3">
             <div className="w-[97px] h-14 rounded-md bg-muted relative">
@@ -420,19 +420,19 @@ export const LayoutSection = memo(function LayoutSection({
                 {LAYOUT_OPTIONS.map((pos) => {
                   const normalizedJustify = normalizeFlexValue(justifyContent);
                   const normalizedAlign = normalizeFlexValue(alignItems);
-                  const isSpaceBetween = justifyContent === "space-between";
+                  const isSpaceBetween = justifyContent === 'space-between';
 
                   // For space-between (justify-content: space-between):
                   // row + space-between: vertical dashes arranged horizontally (same row based on alignItems)
                   // col + space-between: horizontal dashes arranged vertically (same column based on alignItems)
                   const isSpaceBetweenActive =
                     isSpaceBetween &&
-                    ((selectedLayout === "row" && pos.align === normalizedAlign) ||
-                      (selectedLayout === "col" && pos.justify === normalizedAlign));
+                    ((selectedLayout === 'row' && pos.align === normalizedAlign) ||
+                      (selectedLayout === 'col' && pos.justify === normalizedAlign));
 
                   const isActive =
-                    (selectedLayout === "row" && normalizedJustify === pos.justify && normalizedAlign === pos.align) ||
-                    (selectedLayout === "col" && normalizedJustify === pos.align && normalizedAlign === pos.justify);
+                    (selectedLayout === 'row' && normalizedJustify === pos.justify && normalizedAlign === pos.align) ||
+                    (selectedLayout === 'col' && normalizedJustify === pos.align && normalizedAlign === pos.justify);
                   return (
                     <button
                       key={`${pos.col}-${pos.row}`}
@@ -441,16 +441,16 @@ export const LayoutSection = memo(function LayoutSection({
                       onClick={() => handleLayoutGridClick(pos)}
                       onDoubleClick={() => handleLayoutGridDoubleClick(pos)}
                       className={cn(
-                        "flex items-center justify-center",
-                        isStyleSyncing && "opacity-50 cursor-not-allowed",
+                        'flex items-center justify-center',
+                        isStyleSyncing && 'opacity-50 cursor-not-allowed',
                       )}
                     >
                       {isSpaceBetweenActive ? (
                         // Space-between: vertical dashes for row, horizontal dashes for col
                         <div
                           className={cn(
-                            "bg-[#027BE5] rounded-full",
-                            selectedLayout === "row" ? "w-0.5 h-3" : "w-3 h-0.5",
+                            'bg-[#027BE5] rounded-full',
+                            selectedLayout === 'row' ? 'w-0.5 h-3' : 'w-3 h-0.5',
                           )}
                         />
                       ) : isActive ? (
@@ -466,8 +466,8 @@ export const LayoutSection = memo(function LayoutSection({
 
             <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
               <IconSpacingHorizontal
-                className={cn("w-3 h-3 text-muted-foreground transition-transform", {
-                  "rotate-90": selectedLayout === "col",
+                className={cn('w-3 h-3 text-muted-foreground transition-transform', {
+                  'rotate-90': selectedLayout === 'col',
                 })}
               />
               <Input
@@ -476,9 +476,9 @@ export const LayoutSection = memo(function LayoutSection({
                 value={gap}
                 onChange={(e) => {
                   onGapChange(e.target.value);
-                  syncStyleChange("gap", e.target.value);
+                  syncStyleChange('gap', e.target.value);
                 }}
-                onKeyDown={(e) => onNumericKeyDown(e, gap, onGapChange, "gap")}
+                onKeyDown={(e) => onNumericKeyDown(e, gap, onGapChange, 'gap')}
                 className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                 placeholder="0px"
               />
@@ -501,14 +501,14 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "left")}
+                      testId={TID.inspector.spacingInput('padding', 'left')}
                       value={paddingLeft}
                       onChange={(e) => {
-                        onPaddingChange("paddingLeft", e.target.value);
-                        syncStyleChange("paddingLeft", e.target.value);
+                        onPaddingChange('paddingLeft', e.target.value);
+                        syncStyleChange('paddingLeft', e.target.value);
                       }}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange("paddingLeft", v), "paddingLeft")
+                        onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange('paddingLeft', v), 'paddingLeft')
                       }
                       placeholder="0px"
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -518,14 +518,14 @@ export const LayoutSection = memo(function LayoutSection({
                     <IconPaddingTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "top")}
+                      testId={TID.inspector.spacingInput('padding', 'top')}
                       value={paddingTop}
                       onChange={(e) => {
-                        onPaddingChange("paddingTop", e.target.value);
-                        syncStyleChange("paddingTop", e.target.value);
+                        onPaddingChange('paddingTop', e.target.value);
+                        syncStyleChange('paddingTop', e.target.value);
                       }}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingTop, (v) => onPaddingChange("paddingTop", v), "paddingTop")
+                        onNumericKeyDown(e, paddingTop, (v) => onPaddingChange('paddingTop', v), 'paddingTop')
                       }
                       placeholder="0px"
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -538,14 +538,14 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "right")}
+                      testId={TID.inspector.spacingInput('padding', 'right')}
                       value={paddingRight}
                       onChange={(e) => {
-                        onPaddingChange("paddingRight", e.target.value);
-                        syncStyleChange("paddingRight", e.target.value);
+                        onPaddingChange('paddingRight', e.target.value);
+                        syncStyleChange('paddingRight', e.target.value);
                       }}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingRight, (v) => onPaddingChange("paddingRight", v), "paddingRight")
+                        onNumericKeyDown(e, paddingRight, (v) => onPaddingChange('paddingRight', v), 'paddingRight')
                       }
                       placeholder="0px"
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -558,14 +558,14 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "bottom")}
+                      testId={TID.inspector.spacingInput('padding', 'bottom')}
                       value={paddingBottom}
                       onChange={(e) => {
-                        onPaddingChange("paddingBottom", e.target.value);
-                        syncStyleChange("paddingBottom", e.target.value);
+                        onPaddingChange('paddingBottom', e.target.value);
+                        syncStyleChange('paddingBottom', e.target.value);
                       }}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange("paddingBottom", v), "paddingBottom")
+                        onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange('paddingBottom', v), 'paddingBottom')
                       }
                       placeholder="0px"
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -581,7 +581,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "horizontal")}
+                      testId={TID.inspector.spacingInput('padding', 'horizontal')}
                       value={paddingLeft || paddingRight}
                       onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
@@ -589,7 +589,7 @@ export const LayoutSection = memo(function LayoutSection({
                           e,
                           paddingLeft || paddingRight,
                           (v) => handleHorizontalPaddingChange(v),
-                          "paddingLeft",
+                          'paddingLeft',
                         )
                       }
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -603,7 +603,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "vertical")}
+                      testId={TID.inspector.spacingInput('padding', 'vertical')}
                       value={paddingTop || paddingBottom}
                       onChange={(e) => handleVerticalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
@@ -611,7 +611,7 @@ export const LayoutSection = memo(function LayoutSection({
                           e,
                           paddingTop || paddingBottom,
                           (v) => handleVerticalPaddingChange(v),
-                          "paddingTop",
+                          'paddingTop',
                         )
                       }
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -623,21 +623,21 @@ export const LayoutSection = memo(function LayoutSection({
             </div>
             <button
               type="button"
-              data-testid={TID.inspector.spacingLink("padding")}
+              data-testid={TID.inspector.spacingLink('padding')}
               onClick={() => setPaddingExpanded(!paddingExpanded)}
               className={cn(
-                "w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors",
-                paddingExpanded ? "inspector-btn-active" : "bg-transparent",
+                'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
+                paddingExpanded ? 'inspector-btn-active' : 'bg-transparent',
               )}
             >
-              <IconBorderSides className={cn("w-4 h-4", !paddingExpanded && "text-foreground")} stroke={1.5} />
+              <IconBorderSides className={cn('w-4 h-4', !paddingExpanded && 'text-foreground')} stroke={1.5} />
             </button>
           </div>
         </>
       )}
 
       {/* Grid layout controls */}
-      {selectedLayout === "grid" && (
+      {selectedLayout === 'grid' && (
         <>
           {/* Grid cols/rows inputs */}
           <div className="flex items-center gap-1.5 mb-3">
@@ -645,13 +645,13 @@ export const LayoutSection = memo(function LayoutSection({
               <span className="text-xs text-muted-foreground">Cols</span>
               <Input
                 type="text"
-                testId={TID.inspector.numericInput("gridCols")}
+                testId={TID.inspector.numericInput('gridCols')}
                 value={gridCols}
                 onChange={(e) => {
                   onGridColsChange(e.target.value);
-                  syncStyleChange("gridTemplateColumns", e.target.value);
+                  syncStyleChange('gridTemplateColumns', e.target.value);
                 }}
-                onKeyDown={(e) => onNumericKeyDown(e, gridCols, onGridColsChange, "gridTemplateColumns")}
+                onKeyDown={(e) => onNumericKeyDown(e, gridCols, onGridColsChange, 'gridTemplateColumns')}
                 className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                 placeholder="auto"
               />
@@ -660,13 +660,13 @@ export const LayoutSection = memo(function LayoutSection({
               <span className="text-xs text-muted-foreground">Rows</span>
               <Input
                 type="text"
-                testId={TID.inspector.numericInput("gridRows")}
+                testId={TID.inspector.numericInput('gridRows')}
                 value={gridRows}
                 onChange={(e) => {
                   onGridRowsChange(e.target.value);
-                  syncStyleChange("gridTemplateRows", e.target.value);
+                  syncStyleChange('gridTemplateRows', e.target.value);
                 }}
-                onKeyDown={(e) => onNumericKeyDown(e, gridRows, onGridRowsChange, "gridTemplateRows")}
+                onKeyDown={(e) => onNumericKeyDown(e, gridRows, onGridRowsChange, 'gridTemplateRows')}
                 className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                 placeholder="auto"
               />
@@ -718,21 +718,21 @@ export const LayoutSection = memo(function LayoutSection({
                 {(() => {
                   // Normalize grid values: empty, 'normal', 'stretch' all mean stretch (CSS default)
                   const normalizedGridJustifyItems =
-                    !gridJustifyItems || gridJustifyItems === "normal" || gridJustifyItems === "stretch"
-                      ? "stretch"
+                    !gridJustifyItems || gridJustifyItems === 'normal' || gridJustifyItems === 'stretch'
+                      ? 'stretch'
                       : gridJustifyItems;
                   const normalizedGridAlignItems =
-                    !gridAlignItems || gridAlignItems === "normal" || gridAlignItems === "stretch"
-                      ? "stretch"
+                    !gridAlignItems || gridAlignItems === 'normal' || gridAlignItems === 'stretch'
+                      ? 'stretch'
                       : gridAlignItems;
 
                   // Stretch modes: normal -> horStretch -> vertStretch -> bothStretch -> normal
                   const isHorStretch =
-                    normalizedGridJustifyItems === "stretch" && normalizedGridAlignItems !== "stretch";
+                    normalizedGridJustifyItems === 'stretch' && normalizedGridAlignItems !== 'stretch';
                   const isVertStretch =
-                    normalizedGridJustifyItems !== "stretch" && normalizedGridAlignItems === "stretch";
+                    normalizedGridJustifyItems !== 'stretch' && normalizedGridAlignItems === 'stretch';
                   const isBothStretch =
-                    normalizedGridJustifyItems === "stretch" && normalizedGridAlignItems === "stretch";
+                    normalizedGridJustifyItems === 'stretch' && normalizedGridAlignItems === 'stretch';
                   const isAnyStretch = isHorStretch || isVertStretch || isBothStretch;
 
                   // Determine which row/col should show stretch indicators
@@ -740,24 +740,24 @@ export const LayoutSection = memo(function LayoutSection({
                   // For vertStretch: show in the column matching justifyItems
                   // For bothStretch: show only center cell
                   const stretchRow =
-                    normalizedGridAlignItems === "flex-end" || normalizedGridAlignItems === "end"
+                    normalizedGridAlignItems === 'flex-end' || normalizedGridAlignItems === 'end'
                       ? 2
-                      : normalizedGridAlignItems === "center"
+                      : normalizedGridAlignItems === 'center'
                         ? 1
                         : 0;
                   const stretchCol =
-                    normalizedGridJustifyItems === "flex-end" || normalizedGridJustifyItems === "end"
+                    normalizedGridJustifyItems === 'flex-end' || normalizedGridJustifyItems === 'end'
                       ? 2
-                      : normalizedGridJustifyItems === "center"
+                      : normalizedGridJustifyItems === 'center'
                         ? 1
                         : 0;
 
                   return LAYOUT_OPTIONS.map((pos) => {
                     // Convert flex values to grid values
                     const alignValue =
-                      pos.align === "flex-start" ? "start" : pos.align === "flex-end" ? "end" : pos.align;
+                      pos.align === 'flex-start' ? 'start' : pos.align === 'flex-end' ? 'end' : pos.align;
                     const justifyValue =
-                      pos.justify === "flex-start" ? "start" : pos.justify === "flex-end" ? "end" : pos.justify;
+                      pos.justify === 'flex-start' ? 'start' : pos.justify === 'flex-end' ? 'end' : pos.justify;
 
                     // For grid: justify-items is horizontal, align-items is vertical
                     const isActive = !isAnyStretch && gridJustifyItems === pos.justify && gridAlignItems === pos.align;
@@ -791,7 +791,7 @@ export const LayoutSection = memo(function LayoutSection({
                             // On second click, show tooltip only if > 500ms passed (not a double click)
                             if (bothStretchClickCountRef.current >= 2 && timeSinceLastClick > 500) {
                               setShowGridTooltip(true);
-                              localStorage.removeItem("gridStretchTooltipDismissed");
+                              localStorage.removeItem('gridStretchTooltipDismissed');
                               bothStretchClickCountRef.current = 0;
                             } else {
                               // Reset after delay if no second click
@@ -801,16 +801,16 @@ export const LayoutSection = memo(function LayoutSection({
                             }
                           } else if (isHorStretch) {
                             // In horStretch: single click changes vertical alignment
-                            syncStyleChange("alignItems", alignValue, DB);
+                            syncStyleChange('alignItems', alignValue, DB);
                             onGridAlignItemsChange(pos.align);
                           } else if (isVertStretch) {
                             // In vertStretch: single click changes horizontal alignment
-                            syncStyleChange("justifyItems", justifyValue, DB);
+                            syncStyleChange('justifyItems', justifyValue, DB);
                             onGridJustifyItemsChange(pos.justify);
                           } else {
                             // In normal mode: single click sets both values
-                            syncStyleChange("justifyItems", justifyValue, DB);
-                            syncStyleChange("alignItems", alignValue, DB);
+                            syncStyleChange('justifyItems', justifyValue, DB);
+                            syncStyleChange('alignItems', alignValue, DB);
                             onGridJustifyItemsChange(pos.justify);
                             onGridAlignItemsChange(pos.align);
                           }
@@ -825,33 +825,33 @@ export const LayoutSection = memo(function LayoutSection({
                           // Cycle: normal -> horStretch -> vertStretch -> bothStretch -> normal
                           if (isBothStretch) {
                             // bothStretch -> normal (at clicked position)
-                            syncStyleChange("justifyItems", justifyValue, DB);
-                            syncStyleChange("alignItems", alignValue, DB);
+                            syncStyleChange('justifyItems', justifyValue, DB);
+                            syncStyleChange('alignItems', alignValue, DB);
                             onGridJustifyItemsChange(pos.justify);
                             onGridAlignItemsChange(pos.align);
                           } else if (isVertStretch) {
                             // vertStretch -> bothStretch
-                            syncStyleChange("justifyItems", "stretch", DB);
-                            syncStyleChange("alignItems", "stretch", DB);
-                            onGridJustifyItemsChange("stretch");
-                            onGridAlignItemsChange("stretch");
+                            syncStyleChange('justifyItems', 'stretch', DB);
+                            syncStyleChange('alignItems', 'stretch', DB);
+                            onGridJustifyItemsChange('stretch');
+                            onGridAlignItemsChange('stretch');
                           } else if (isHorStretch) {
                             // horStretch -> vertStretch (keep current justify position)
-                            syncStyleChange("justifyItems", justifyValue, DB);
-                            syncStyleChange("alignItems", "stretch", DB);
+                            syncStyleChange('justifyItems', justifyValue, DB);
+                            syncStyleChange('alignItems', 'stretch', DB);
                             onGridJustifyItemsChange(pos.justify);
-                            onGridAlignItemsChange("stretch");
+                            onGridAlignItemsChange('stretch');
                           } else {
                             // normal -> horStretch (at this row)
-                            syncStyleChange("justifyItems", "stretch", DB);
-                            syncStyleChange("alignItems", alignValue, DB);
-                            onGridJustifyItemsChange("stretch");
+                            syncStyleChange('justifyItems', 'stretch', DB);
+                            syncStyleChange('alignItems', alignValue, DB);
+                            onGridJustifyItemsChange('stretch');
                             onGridAlignItemsChange(pos.align);
                           }
                         }}
                         className={cn(
-                          "flex items-center justify-center",
-                          isStyleSyncing && "opacity-50 cursor-not-allowed",
+                          'flex items-center justify-center',
+                          isStyleSyncing && 'opacity-50 cursor-not-allowed',
                         )}
                       >
                         {showBothStretchCross ? (
@@ -891,13 +891,13 @@ export const LayoutSection = memo(function LayoutSection({
                 <IconSpacingHorizontal className="w-3 h-3 text-muted-foreground" />
                 <Input
                   type="text"
-                  testId={TID.inspector.numericInput("columnGap")}
+                  testId={TID.inspector.numericInput('columnGap')}
                   value={columnGap}
                   onChange={(e) => {
                     onColumnGapChange(e.target.value);
-                    syncStyleChange("columnGap", e.target.value);
+                    syncStyleChange('columnGap', e.target.value);
                   }}
-                  onKeyDown={(e) => onNumericKeyDown(e, columnGap, onColumnGapChange, "columnGap")}
+                  onKeyDown={(e) => onNumericKeyDown(e, columnGap, onColumnGapChange, 'columnGap')}
                   className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                   placeholder="0px"
                 />
@@ -907,13 +907,13 @@ export const LayoutSection = memo(function LayoutSection({
                 <IconSpacingHorizontal className="w-3 h-3 text-muted-foreground rotate-90" />
                 <Input
                   type="text"
-                  testId={TID.inspector.numericInput("rowGap")}
+                  testId={TID.inspector.numericInput('rowGap')}
                   value={rowGap}
                   onChange={(e) => {
                     onRowGapChange(e.target.value);
-                    syncStyleChange("rowGap", e.target.value);
+                    syncStyleChange('rowGap', e.target.value);
                   }}
-                  onKeyDown={(e) => onNumericKeyDown(e, rowGap, onRowGapChange, "rowGap")}
+                  onKeyDown={(e) => onNumericKeyDown(e, rowGap, onRowGapChange, 'rowGap')}
                   className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                   placeholder="0px"
                 />
@@ -936,14 +936,14 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "left")}
+                      testId={TID.inspector.spacingInput('padding', 'left')}
                       value={paddingLeft}
                       onChange={(e) => {
-                        onPaddingChange("paddingLeft", e.target.value);
-                        syncStyleChange("paddingLeft", e.target.value);
+                        onPaddingChange('paddingLeft', e.target.value);
+                        syncStyleChange('paddingLeft', e.target.value);
                       }}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange("paddingLeft", v), "paddingLeft")
+                        onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange('paddingLeft', v), 'paddingLeft')
                       }
                       placeholder="0px"
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -953,14 +953,14 @@ export const LayoutSection = memo(function LayoutSection({
                     <IconPaddingTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "top")}
+                      testId={TID.inspector.spacingInput('padding', 'top')}
                       value={paddingTop}
                       onChange={(e) => {
-                        onPaddingChange("paddingTop", e.target.value);
-                        syncStyleChange("paddingTop", e.target.value);
+                        onPaddingChange('paddingTop', e.target.value);
+                        syncStyleChange('paddingTop', e.target.value);
                       }}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingTop, (v) => onPaddingChange("paddingTop", v), "paddingTop")
+                        onNumericKeyDown(e, paddingTop, (v) => onPaddingChange('paddingTop', v), 'paddingTop')
                       }
                       placeholder="0px"
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -973,14 +973,14 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "right")}
+                      testId={TID.inspector.spacingInput('padding', 'right')}
                       value={paddingRight}
                       onChange={(e) => {
-                        onPaddingChange("paddingRight", e.target.value);
-                        syncStyleChange("paddingRight", e.target.value);
+                        onPaddingChange('paddingRight', e.target.value);
+                        syncStyleChange('paddingRight', e.target.value);
                       }}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingRight, (v) => onPaddingChange("paddingRight", v), "paddingRight")
+                        onNumericKeyDown(e, paddingRight, (v) => onPaddingChange('paddingRight', v), 'paddingRight')
                       }
                       placeholder="0px"
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -993,14 +993,14 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "bottom")}
+                      testId={TID.inspector.spacingInput('padding', 'bottom')}
                       value={paddingBottom}
                       onChange={(e) => {
-                        onPaddingChange("paddingBottom", e.target.value);
-                        syncStyleChange("paddingBottom", e.target.value);
+                        onPaddingChange('paddingBottom', e.target.value);
+                        syncStyleChange('paddingBottom', e.target.value);
                       }}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange("paddingBottom", v), "paddingBottom")
+                        onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange('paddingBottom', v), 'paddingBottom')
                       }
                       placeholder="0px"
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -1016,7 +1016,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "horizontal")}
+                      testId={TID.inspector.spacingInput('padding', 'horizontal')}
                       value={paddingLeft || paddingRight}
                       onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
@@ -1024,7 +1024,7 @@ export const LayoutSection = memo(function LayoutSection({
                           e,
                           paddingLeft || paddingRight,
                           (v) => handleHorizontalPaddingChange(v),
-                          "paddingLeft",
+                          'paddingLeft',
                         )
                       }
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -1038,7 +1038,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
-                      testId={TID.inspector.spacingInput("padding", "vertical")}
+                      testId={TID.inspector.spacingInput('padding', 'vertical')}
                       value={paddingTop || paddingBottom}
                       onChange={(e) => handleVerticalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
@@ -1046,7 +1046,7 @@ export const LayoutSection = memo(function LayoutSection({
                           e,
                           paddingTop || paddingBottom,
                           (v) => handleVerticalPaddingChange(v),
-                          "paddingTop",
+                          'paddingTop',
                         )
                       }
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -1058,21 +1058,21 @@ export const LayoutSection = memo(function LayoutSection({
             </div>
             <button
               type="button"
-              data-testid={TID.inspector.spacingLink("padding")}
+              data-testid={TID.inspector.spacingLink('padding')}
               onClick={() => setPaddingExpanded(!paddingExpanded)}
               className={cn(
-                "w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors",
-                paddingExpanded ? "inspector-btn-active" : "bg-transparent",
+                'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
+                paddingExpanded ? 'inspector-btn-active' : 'bg-transparent',
               )}
             >
-              <IconBorderSides className={cn("w-4 h-4", !paddingExpanded && "text-foreground")} stroke={1.5} />
+              <IconBorderSides className={cn('w-4 h-4', !paddingExpanded && 'text-foreground')} stroke={1.5} />
             </button>
           </div>
         </>
       )}
 
       {/* Padding controls for block layout */}
-      {selectedLayout === "layout" && (
+      {selectedLayout === 'layout' && (
         <div className="flex items-start gap-2 mb-3">
           <div className="grid grid-cols-2 gap-2 flex-1">
             {paddingExpanded ? (
@@ -1081,14 +1081,14 @@ export const LayoutSection = memo(function LayoutSection({
                   <IconPaddingLeft className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                   <Input
                     type="text"
-                    testId={TID.inspector.spacingInput("padding", "left")}
+                    testId={TID.inspector.spacingInput('padding', 'left')}
                     value={paddingLeft}
                     onChange={(e) => {
-                      onPaddingChange("paddingLeft", e.target.value);
-                      syncStyleChange("paddingLeft", e.target.value);
+                      onPaddingChange('paddingLeft', e.target.value);
+                      syncStyleChange('paddingLeft', e.target.value);
                     }}
                     onKeyDown={(e) =>
-                      onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange("paddingLeft", v), "paddingLeft")
+                      onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange('paddingLeft', v), 'paddingLeft')
                     }
                     placeholder="0px"
                     className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -1098,14 +1098,14 @@ export const LayoutSection = memo(function LayoutSection({
                   <IconPaddingTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                   <Input
                     type="text"
-                    testId={TID.inspector.spacingInput("padding", "top")}
+                    testId={TID.inspector.spacingInput('padding', 'top')}
                     value={paddingTop}
                     onChange={(e) => {
-                      onPaddingChange("paddingTop", e.target.value);
-                      syncStyleChange("paddingTop", e.target.value);
+                      onPaddingChange('paddingTop', e.target.value);
+                      syncStyleChange('paddingTop', e.target.value);
                     }}
                     onKeyDown={(e) =>
-                      onNumericKeyDown(e, paddingTop, (v) => onPaddingChange("paddingTop", v), "paddingTop")
+                      onNumericKeyDown(e, paddingTop, (v) => onPaddingChange('paddingTop', v), 'paddingTop')
                     }
                     placeholder="0px"
                     className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -1115,14 +1115,14 @@ export const LayoutSection = memo(function LayoutSection({
                   <IconPaddingRight className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                   <Input
                     type="text"
-                    testId={TID.inspector.spacingInput("padding", "right")}
+                    testId={TID.inspector.spacingInput('padding', 'right')}
                     value={paddingRight}
                     onChange={(e) => {
-                      onPaddingChange("paddingRight", e.target.value);
-                      syncStyleChange("paddingRight", e.target.value);
+                      onPaddingChange('paddingRight', e.target.value);
+                      syncStyleChange('paddingRight', e.target.value);
                     }}
                     onKeyDown={(e) =>
-                      onNumericKeyDown(e, paddingRight, (v) => onPaddingChange("paddingRight", v), "paddingRight")
+                      onNumericKeyDown(e, paddingRight, (v) => onPaddingChange('paddingRight', v), 'paddingRight')
                     }
                     placeholder="0px"
                     className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -1135,14 +1135,14 @@ export const LayoutSection = memo(function LayoutSection({
                   />
                   <Input
                     type="text"
-                    testId={TID.inspector.spacingInput("padding", "bottom")}
+                    testId={TID.inspector.spacingInput('padding', 'bottom')}
                     value={paddingBottom}
                     onChange={(e) => {
-                      onPaddingChange("paddingBottom", e.target.value);
-                      syncStyleChange("paddingBottom", e.target.value);
+                      onPaddingChange('paddingBottom', e.target.value);
+                      syncStyleChange('paddingBottom', e.target.value);
                     }}
                     onKeyDown={(e) =>
-                      onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange("paddingBottom", v), "paddingBottom")
+                      onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange('paddingBottom', v), 'paddingBottom')
                     }
                     placeholder="0px"
                     className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -1158,7 +1158,7 @@ export const LayoutSection = memo(function LayoutSection({
                   />
                   <Input
                     type="text"
-                    testId={TID.inspector.spacingInput("padding", "horizontal")}
+                    testId={TID.inspector.spacingInput('padding', 'horizontal')}
                     value={paddingLeft || paddingRight}
                     onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
                     onKeyDown={(e) =>
@@ -1166,7 +1166,7 @@ export const LayoutSection = memo(function LayoutSection({
                         e,
                         paddingLeft || paddingRight,
                         (v) => handleHorizontalPaddingChange(v),
-                        "paddingLeft",
+                        'paddingLeft',
                       )
                     }
                     className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -1180,7 +1180,7 @@ export const LayoutSection = memo(function LayoutSection({
                   />
                   <Input
                     type="text"
-                    testId={TID.inspector.spacingInput("padding", "vertical")}
+                    testId={TID.inspector.spacingInput('padding', 'vertical')}
                     value={paddingTop || paddingBottom}
                     onChange={(e) => handleVerticalPaddingChange(e.target.value)}
                     onKeyDown={(e) =>
@@ -1188,7 +1188,7 @@ export const LayoutSection = memo(function LayoutSection({
                         e,
                         paddingTop || paddingBottom,
                         (v) => handleVerticalPaddingChange(v),
-                        "paddingTop",
+                        'paddingTop',
                       )
                     }
                     className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -1200,13 +1200,13 @@ export const LayoutSection = memo(function LayoutSection({
           </div>
           <button
             type="button"
-            data-testid={TID.inspector.spacingLink("padding")}
+            data-testid={TID.inspector.spacingLink('padding')}
             onClick={() => setPaddingExpanded(!paddingExpanded)}
             className={cn(
-              "w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors",
+              'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
               paddingExpanded
-                ? "bg-accent text-accent-foreground"
-                : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >
             <IconBorderSides className="w-4 h-4" stroke={1.5} />
@@ -1223,8 +1223,8 @@ export const LayoutSection = memo(function LayoutSection({
       >
         <div
           className={cn(
-            "w-4 h-4 rounded border border-border flex items-center justify-center",
-            clipContent ? "bg-muted" : "bg-background",
+            'w-4 h-4 rounded border border-border flex items-center justify-center',
+            clipContent ? 'bg-muted' : 'bg-background',
           )}
         >
           {clipContent && <IconCheck className="w-3 h-3" stroke={1.5} />}

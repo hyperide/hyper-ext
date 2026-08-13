@@ -8,11 +8,11 @@
  * Architecture: https://hyperide.github.io/reports/preview-routing
  */
 
-import { basename, dirname, join, relative, resolve } from "node:path";
-import { parse } from "@babel/parser";
-import { builders as b, namedTypes } from "ast-types";
-import * as recast from "recast";
-import type { FileIO } from "../ast/file-io";
+import { basename, dirname, join, relative, resolve } from 'node:path';
+import { parse } from '@babel/parser';
+import { builders as b, namedTypes } from 'ast-types';
+import * as recast from 'recast';
+import type { FileIO } from '../ast/file-io';
 import {
   type DetectionResult,
   detectFramework,
@@ -20,7 +20,7 @@ import {
   generateIsolatedLayoutContent,
   generateRouteFileContent,
   getRouteFilePaths,
-} from "./framework-routing";
+} from './framework-routing';
 import {
   entryHasRenderableSample,
   generatePreviewContent,
@@ -29,8 +29,8 @@ import {
   type PreviewComponentEntry,
   type ProviderWrapConfig,
   type SSRMockConfig,
-} from "./generator";
-import { buildContainerSampleJsxBody } from "./sample-scaffold";
+} from './generator';
+import { buildContainerSampleJsxBody } from './sample-scaffold';
 import {
   detectExportStyle,
   detectRouterShell,
@@ -40,7 +40,7 @@ import {
   hasComponentExport,
   scanRenderableExportNames,
   scanSampleExports,
-} from "./scanner";
+} from './scanner';
 
 interface BuildEntryOptions {
   allowRouterShell?: boolean;
@@ -52,20 +52,20 @@ interface BuildEntryOptions {
  * that conflict with being imported as Client Components.
  */
 const NEXTJS_APP_ROUTER_RESERVED = new Set([
-  "layout.tsx",
-  "layout.ts",
-  "layout.jsx",
-  "layout.js",
-  "error.tsx",
-  "error.jsx",
-  "loading.tsx",
-  "loading.jsx",
-  "not-found.tsx",
-  "not-found.jsx",
-  "template.tsx",
-  "template.jsx",
-  "default.tsx",
-  "default.jsx",
+  'layout.tsx',
+  'layout.ts',
+  'layout.jsx',
+  'layout.js',
+  'error.tsx',
+  'error.jsx',
+  'loading.tsx',
+  'loading.jsx',
+  'not-found.tsx',
+  'not-found.jsx',
+  'template.tsx',
+  'template.jsx',
+  'default.tsx',
+  'default.jsx',
 ]);
 
 /**
@@ -75,12 +75,12 @@ const NEXTJS_APP_ROUTER_RESERVED = new Set([
  * - `entry.client.tsx` / `entry.server.tsx` are hydration/SSR entry points, not components.
  */
 const REMIX_RESERVED = new Set([
-  "root.tsx",
-  "root.jsx",
-  "entry.client.tsx",
-  "entry.client.jsx",
-  "entry.server.tsx",
-  "entry.server.jsx",
+  'root.tsx',
+  'root.jsx',
+  'entry.client.tsx',
+  'entry.client.jsx',
+  'entry.server.tsx',
+  'entry.server.jsx',
 ]);
 
 /** Check if a filename is a framework-reserved file that must not appear in the preview. */
@@ -103,19 +103,19 @@ function isFrameworkReserved(fileName: string): boolean {
  */
 function isPreviewIneligibleByName(fileName: string): boolean {
   // Strip terminal .tsx/.ts/.jsx/.js to inspect any inner segment (e.g. `.native`, `.css`).
-  const base = fileName.replace(/\.(tsx?|jsx?)$/, "");
-  if (!base.includes(".")) return false;
-  const segments = base.split(".");
+  const base = fileName.replace(/\.(tsx?|jsx?)$/, '');
+  if (!base.includes('.')) return false;
+  const segments = base.split('.');
   // Last segment after the leading PascalCase name (e.g. `native` in `Foo.native`).
   const tail = segments.slice(1);
   // '.web' is intentionally excluded: App.web.tsx is the web entry and must be
   // previewable. Alias collision with App.tsx is resolved in deriveUniquePrefix.
-  const PLATFORM_SUFFIXES = new Set(["native", "ios", "android"]);
-  const STYLE_SUFFIXES = new Set(["css", "styles", "style", "module"]);
-  const TEST_SUFFIXES = new Set(["test", "spec", "stories"]);
+  const PLATFORM_SUFFIXES = new Set(['native', 'ios', 'android']);
+  const STYLE_SUFFIXES = new Set(['css', 'styles', 'style', 'module']);
+  const TEST_SUFFIXES = new Set(['test', 'spec', 'stories']);
   // Co-located sample files (Component.samples.tsx) are not previewable components —
   // they're render helpers discovered separately by ensureStandaloneEntry injection.
-  const SAMPLES_SUFFIXES = new Set(["samples"]);
+  const SAMPLES_SUFFIXES = new Set(['samples']);
   return tail.some(
     (seg) =>
       PLATFORM_SUFFIXES.has(seg) || STYLE_SUFFIXES.has(seg) || TEST_SUFFIXES.has(seg) || SAMPLES_SUFFIXES.has(seg),
@@ -139,7 +139,7 @@ export interface PreviewFileManagerConfig {
 export class PreviewGenerationError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "PreviewGenerationError";
+    this.name = 'PreviewGenerationError';
   }
 }
 
@@ -147,8 +147,8 @@ export class PreviewGenerationError extends Error {
 export function isValidTypeScript(code: string): boolean {
   try {
     parse(code, {
-      sourceType: "module",
-      plugins: ["typescript", "jsx"],
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
     });
     return true;
   } catch {
@@ -165,8 +165,8 @@ export function parseExistingPreview(content: string): PreviewComponentEntry[] {
   let ast: ReturnType<typeof parse>;
   try {
     ast = parse(content, {
-      sourceType: "module",
-      plugins: ["typescript", "jsx"],
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
       errorRecovery: true,
     });
   } catch {
@@ -179,13 +179,13 @@ export function parseExistingPreview(content: string): PreviewComponentEntry[] {
 
   // 1. Extract data from top-level variable declarations
   for (const decl of iterateVarDeclarators(ast.program.body)) {
-    if (decl.id.type !== "Identifier") continue;
+    if (decl.id.type !== 'Identifier') continue;
     const varName = decl.id.name;
 
     const obj = unwrapToObject(decl.init);
     if (!obj) continue;
 
-    if (varName === "componentRegistry") {
+    if (varName === 'componentRegistry') {
       for (const prop of iterateObjectProperties(obj)) {
         const key = getStringValue(prop.key);
         const value = getIdentName(prop.value);
@@ -193,7 +193,7 @@ export function parseExistingPreview(content: string): PreviewComponentEntry[] {
       }
     }
 
-    if (varName === "SampleDefaultMap" || varName === "sampleRenderMap") {
+    if (varName === 'SampleDefaultMap' || varName === 'sampleRenderMap') {
       for (const prop of iterateObjectProperties(obj)) {
         const key = getStringValue(prop.key);
         if (!key) continue;
@@ -217,7 +217,7 @@ export function parseExistingPreview(content: string): PreviewComponentEntry[] {
       }
     }
 
-    if (varName === "sampleRenderersMap") {
+    if (varName === 'sampleRenderersMap') {
       for (const prop of iterateObjectProperties(obj)) {
         const compPath = getStringValue(prop.key);
         if (!compPath) continue;
@@ -239,7 +239,7 @@ export function parseExistingPreview(content: string): PreviewComponentEntry[] {
   for (const [, compPath] of sampleAliasToPath) {
     const existing = pathToSamples.get(compPath);
     if (!existing || existing.length === 0) {
-      pathToSamples.set(compPath, ["SampleDefault"]);
+      pathToSamples.set(compPath, ['SampleDefault']);
     }
   }
 
@@ -250,15 +250,15 @@ export function parseExistingPreview(content: string): PreviewComponentEntry[] {
   const defaultImportNames = new Set<string>();
 
   for (const node of ast.program.body) {
-    if (node.type !== "ImportDeclaration") continue;
+    if (node.type !== 'ImportDeclaration') continue;
     const importPath = node.source.value;
-    if (importPath === "react" || importPath.startsWith("next/")) continue;
+    if (importPath === 'react' || importPath.startsWith('next/')) continue;
 
     for (const spec of node.specifiers) {
-      if (spec.type === "ImportDefaultSpecifier") {
+      if (spec.type === 'ImportDefaultSpecifier') {
         aliasToImportPath.set(spec.local.name, importPath);
         defaultImportNames.add(spec.local.name);
-      } else if (spec.type === "ImportSpecifier") {
+      } else if (spec.type === 'ImportSpecifier') {
         aliasToImportPath.set(spec.local.name, importPath);
       }
     }
@@ -269,7 +269,7 @@ export function parseExistingPreview(content: string): PreviewComponentEntry[] {
 
   for (const [compPath, compName] of pathToName) {
     // Try direct match via component name alias
-    let importPath = aliasToImportPath.get(compName) ?? "";
+    let importPath = aliasToImportPath.get(compName) ?? '';
 
     // Try match via basename
     if (!importPath) {
@@ -286,14 +286,14 @@ export function parseExistingPreview(content: string): PreviewComponentEntry[] {
     if (!importPath) {
       for (const [alias, samplePath] of sampleAliasToPath) {
         if (samplePath === compPath) {
-          importPath = aliasToImportPath.get(alias) ?? "";
+          importPath = aliasToImportPath.get(alias) ?? '';
           if (importPath) break;
         }
       }
     }
 
     const sampleExports = pathToSamples.get(compPath) ?? [];
-    const exportStyle = defaultImportNames.has(compName) ? "default-named" : "named";
+    const exportStyle = defaultImportNames.has(compName) ? 'default-named' : 'named';
 
     entries.push({
       componentPath: compPath,
@@ -309,15 +309,15 @@ export function parseExistingPreview(content: string): PreviewComponentEntry[] {
 
 // --- AST helpers for parseExistingPreview ---
 
-import type { Expression, Node, ObjectExpression, ObjectProperty, PatternLike, VariableDeclarator } from "@babel/types";
+import type { Expression, Node, ObjectExpression, ObjectProperty, PatternLike, VariableDeclarator } from '@babel/types';
 
 /** Yield VariableDeclarators from top-level statements (exported or not) */
-function* iterateVarDeclarators(body: ReturnType<typeof parse>["program"]["body"]): Generator<VariableDeclarator> {
+function* iterateVarDeclarators(body: ReturnType<typeof parse>['program']['body']): Generator<VariableDeclarator> {
   for (const node of body) {
     const varDecl =
-      node.type === "VariableDeclaration"
+      node.type === 'VariableDeclaration'
         ? node
-        : node.type === "ExportNamedDeclaration" && node.declaration?.type === "VariableDeclaration"
+        : node.type === 'ExportNamedDeclaration' && node.declaration?.type === 'VariableDeclaration'
           ? node.declaration
           : null;
     if (varDecl) yield* varDecl.declarations;
@@ -327,44 +327,44 @@ function* iterateVarDeclarators(body: ReturnType<typeof parse>["program"]["body"
 /** Yield ObjectProperty nodes from an ObjectExpression, skipping spread elements */
 function* iterateObjectProperties(obj: ObjectExpression): Generator<ObjectProperty> {
   for (const prop of obj.properties) {
-    if (prop.type === "ObjectProperty") yield prop;
+    if (prop.type === 'ObjectProperty') yield prop;
   }
 }
 
 /** Unwrap TSAsExpression / TSSatisfiesExpression / LogicalExpression to ObjectExpression */
 function unwrapToObject(node: Expression | PatternLike | null | undefined): ObjectExpression | null {
   if (!node) return null;
-  if (node.type === "ObjectExpression") return node;
-  if (node.type === "TSAsExpression" || node.type === "TSSatisfiesExpression") {
+  if (node.type === 'ObjectExpression') return node;
+  if (node.type === 'TSAsExpression' || node.type === 'TSSatisfiesExpression') {
     return unwrapToObject(node.expression);
   }
   // SomeRenderers || {} — try the right operand (the fallback {})
-  if (node.type === "LogicalExpression") {
+  if (node.type === 'LogicalExpression') {
     return unwrapToObject(node.right);
   }
   return null;
 }
 
 function getStringValue(node: Node | null | undefined): string | null {
-  return node?.type === "StringLiteral" ? node.value : null;
+  return node?.type === 'StringLiteral' ? node.value : null;
 }
 
 function getIdentName(node: Node | null | undefined): string | null {
   if (!node) return null;
-  if (node.type === "Identifier") return node.name;
-  if (node.type === "CallExpression") {
+  if (node.type === 'Identifier') return node.name;
+  if (node.type === 'CallExpression') {
     const firstArg = node.arguments[0];
-    return firstArg?.type === "Identifier" ? firstArg.name : null;
+    return firstArg?.type === 'Identifier' ? firstArg.name : null;
   }
   return null;
 }
 
 function stripExtension(name: string): string {
-  return name.replace(/\.\w+$/, "");
+  return name.replace(/\.\w+$/, '');
 }
 
 function pathCaseKey(path: string): string {
-  return path.replace(/\\/g, "/").toLowerCase();
+  return path.replace(/\\/g, '/').toLowerCase();
 }
 
 /** Attribute shape of a recast JSX element (used in revertRouterPatch) */
@@ -377,8 +377,8 @@ type RouteEl = { openingElement: { name: { name?: string }; attributes: RouteAtt
 const RECAST_PARSER = {
   parse: (source: string) =>
     parse(source, {
-      sourceType: "module",
-      plugins: ["typescript", "jsx"],
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
       tokens: true,
     }),
 };
@@ -430,8 +430,8 @@ export class PreviewFileManager {
   async getPreviewFilePath(): Promise<string> {
     // Try Next.js monorepo structure first
     try {
-      await this.io.access(join(this.projectRoot, "apps/next")); // nosemgrep: path-join-resolve-traversal
-      return join(this.projectRoot, "apps/next/__canvas_preview__.tsx"); // nosemgrep: path-join-resolve-traversal
+      await this.io.access(join(this.projectRoot, 'apps/next')); // nosemgrep: path-join-resolve-traversal
+      return join(this.projectRoot, 'apps/next/__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
     } catch {
       // Not a monorepo
     }
@@ -440,17 +440,17 @@ export class PreviewFileManager {
     // This must come BEFORE the src/ check so projects with src/ in root but client/ as
     // the actual frontend entrypoint (e.g. bulka-the-dog) are handled correctly.
     try {
-      const html = await this.io.readFile(join(this.projectRoot, "index.html")); // nosemgrep: path-join-resolve-traversal
+      const html = await this.io.readFile(join(this.projectRoot, 'index.html')); // nosemgrep: path-join-resolve-traversal
       const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/main\.[jt]sx?["']/);
-      if (match && match[1] !== "src") {
-        return join(this.projectRoot, match[1], "__canvas_preview__.tsx"); // nosemgrep: path-join-resolve-traversal
+      if (match && match[1] !== 'src') {
+        return join(this.projectRoot, match[1], '__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
       }
     } catch {
       // No index.html or no matching script tag
     }
 
     // Fallback: src/ — most common Vite/CRA layout (also used when src/ doesn't exist yet)
-    return join(this.projectRoot, "src/__canvas_preview__.tsx"); // nosemgrep: path-join-resolve-traversal
+    return join(this.projectRoot, 'src/__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
   }
 
   /**
@@ -496,7 +496,7 @@ export class PreviewFileManager {
       const needsProviderUpdate =
         this.providerWrap?.imports.length && !this.providerWrap.imports.every((imp) => existingContent.includes(imp));
       const hasCurrentGeneratorMarker = existingContent
-        .split("\n")
+        .split('\n')
         .some((line) => line.trim() === `// ${PREVIEW_GENERATOR_SCHEMA_MARKER}`);
       const needsGeneratorUpdate = !hasCurrentGeneratorMarker;
       // Validate the existing file for stale entries: non-PascalCase names, Next.js App Router
@@ -648,7 +648,7 @@ export class PreviewFileManager {
       try {
         return await this.io.readFile(previewPath);
       } catch {
-        throw new PreviewGenerationError("No valid components to include in preview");
+        throw new PreviewGenerationError('No valid components to include in preview');
       }
     }
 
@@ -660,7 +660,7 @@ export class PreviewFileManager {
 
     const valid = await isValidTypeScript(content);
     if (!valid) {
-      throw new PreviewGenerationError("Generated preview code failed TypeScript validation");
+      throw new PreviewGenerationError('Generated preview code failed TypeScript validation');
     }
 
     // Skip write if content is identical — avoids unnecessary Vite HMR that can
@@ -700,7 +700,7 @@ export class PreviewFileManager {
     for (const root of roots) {
       const dir = join(this.projectRoot, root);
       try {
-        const files = await this.io.listFiles(dir, [".tsx", ".ts"]);
+        const files = await this.io.listFiles(dir, ['.tsx', '.ts']);
         for (const f of files) {
           if (!seen.has(f)) {
             seen.add(f);
@@ -716,9 +716,9 @@ export class PreviewFileManager {
       .filter((f) => {
         const name = basename(f);
         return (
-          !name.startsWith("__") &&
-          !name.startsWith("index.") &&
-          (f.endsWith(".tsx") || f.endsWith(".ts")) &&
+          !name.startsWith('__') &&
+          !name.startsWith('index.') &&
+          (f.endsWith('.tsx') || f.endsWith('.ts')) &&
           !isPreviewIneligibleByName(name)
         );
       })
@@ -731,10 +731,10 @@ export class PreviewFileManager {
    * includes static candidate roots so nothing is missed.
    */
   private async _detectScanRoots(): Promise<string[]> {
-    const candidates = new Set(["src", "app", "client"]);
+    const candidates = new Set(['src', 'app', 'client']);
 
     try {
-      const html = await this.io.readFile(join(this.projectRoot, "index.html"));
+      const html = await this.io.readFile(join(this.projectRoot, 'index.html'));
       const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/main\.[jt]sx?["']/);
       if (match?.[1]) {
         // Put detected root first so it's scanned before generic candidates
@@ -773,12 +773,12 @@ export class PreviewFileManager {
    */
   async _hasImport(previewFilePath: string, importPath: string): Promise<boolean> {
     const source = await this.io.readFile(previewFilePath);
-    const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"], errorRecovery: true });
+    const ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'], errorRecovery: true });
     const previewDir = dirname(previewFilePath);
     const normalizedTarget = this._normalizeImportPath(previewDir, importPath);
 
     for (const node of ast.program.body) {
-      if (node.type !== "ImportDeclaration") continue;
+      if (node.type !== 'ImportDeclaration') continue;
       const normalized = this._normalizeImportPath(previewDir, node.source.value);
       if (normalized === normalizedTarget) return true;
     }
@@ -786,8 +786,8 @@ export class PreviewFileManager {
   }
 
   private _normalizeImportPath(fromDir: string, importPath: string): string {
-    if (importPath.startsWith(".")) {
-      return resolve(fromDir, importPath).replace(/\.(tsx?|jsx?)$/, "");
+    if (importPath.startsWith('.')) {
+      return resolve(fromDir, importPath).replace(/\.(tsx?|jsx?)$/, '');
     }
     return importPath;
   }
@@ -810,7 +810,7 @@ export class PreviewFileManager {
     }
 
     if (entries.length === 0) {
-      throw new PreviewGenerationError("No valid components to include in preview");
+      throw new PreviewGenerationError('No valid components to include in preview');
     }
 
     const content = generatePreviewContent(entries, {
@@ -821,7 +821,7 @@ export class PreviewFileManager {
 
     const valid = await isValidTypeScript(content);
     if (!valid) {
-      throw new PreviewGenerationError("Generated preview code failed TypeScript validation");
+      throw new PreviewGenerationError('Generated preview code failed TypeScript validation');
     }
 
     await this.io.writeFile(previewPath, content);
@@ -835,7 +835,7 @@ export class PreviewFileManager {
     options: BuildEntryOptions = {},
   ): Promise<PreviewComponentEntry | null> {
     // Guard against path traversal — componentPath must stay within projectRoot
-    if (componentPath.includes("..")) {
+    if (componentPath.includes('..')) {
       console.warn(`[PreviewFileManager] Skipping suspicious path: ${componentPath}`);
       return null;
     }
@@ -867,7 +867,7 @@ export class PreviewFileManager {
 
     // Also skip extension-managed files (e.g. app/test-preview/page.tsx) to prevent
     // self-referential imports that cause circular Client Component chains.
-    if (sourceCode.includes("@hyperide-managed")) {
+    if (sourceCode.includes('@hyperide-managed')) {
       return null;
     }
 
@@ -890,7 +890,7 @@ export class PreviewFileManager {
       }
       sampleExports = scanSampleExports(sourceCode);
       exportStyle = detectExportStyle(sourceCode, componentName);
-      if (this.ssrMock?.framework === "remix") {
+      if (this.ssrMock?.framework === 'remix') {
         isSSRRoute = detectSSRHooks(sourceCode).size > 0;
       }
     } catch {
@@ -915,9 +915,9 @@ export class PreviewFileManager {
     // try to synthesize one from the named exports so the preview can render
     // <Carousel><CarouselContent>…</CarouselContent></Carousel> instead of
     // showing a blank "Loading…" forever (HYP — auto-sample for shadcn/ui).
-    let syntheticSampleDefault: PreviewComponentEntry["syntheticSampleDefault"];
+    let syntheticSampleDefault: PreviewComponentEntry['syntheticSampleDefault'];
     let detectedExports: string[] | undefined;
-    if (!sampleExports.includes("SampleDefault")) {
+    if (!sampleExports.includes('SampleDefault')) {
       try {
         detectedExports = scanRenderableExportNames(sourceCode);
       } catch {
@@ -953,10 +953,10 @@ export class PreviewFileManager {
     // Regular relative path
     // componentPath is validated in buildEntry (no '..' segments)
     const absoluteComponent = join(this.projectRoot, componentPath);
-    const relativePath = relative(previewDir, absoluteComponent).replace(/\.\w+$/, "");
+    const relativePath = relative(previewDir, absoluteComponent).replace(/\.\w+$/, '');
 
     // Ensure it starts with ./
-    if (!relativePath.startsWith(".")) {
+    if (!relativePath.startsWith('.')) {
       return `./${relativePath}`;
     }
     return relativePath;
@@ -974,12 +974,12 @@ export class PreviewFileManager {
     const [, packageDir, relativePath] = match;
 
     // Guard against path traversal — packageDir must be a plain directory name
-    if (packageDir === ".." || packageDir === "." || packageDir.includes("\\")) return null;
+    if (packageDir === '..' || packageDir === '.' || packageDir.includes('\\')) return null;
 
-    const cleanPath = relativePath.replace(/^src\//, "").replace(/\.\w+$/, "");
+    const cleanPath = relativePath.replace(/^src\//, '').replace(/\.\w+$/, '');
 
     // Try to read package.json for real package name (supports @scoped/packages)
-    const pkgJsonPath = join(this.projectRoot, "packages", packageDir, "package.json");
+    const pkgJsonPath = join(this.projectRoot, 'packages', packageDir, 'package.json');
     try {
       const pkgContent = await this.io.readFile(pkgJsonPath);
       const pkg = JSON.parse(pkgContent) as { name?: string };
@@ -1000,27 +1000,27 @@ export class PreviewFileManager {
    * Returns 'ok' | 'ok-files-written' | 'unsupported' | 'needs-patch'.
    * 'ok-files-written' means new/updated files were written (HMR will fire).
    */
-  async ensurePreviewFiles(): Promise<"ok" | "ok-files-written" | "unsupported" | "needs-patch"> {
+  async ensurePreviewFiles(): Promise<'ok' | 'ok-files-written' | 'unsupported' | 'needs-patch'> {
     const detection = await detectFramework(this.projectRoot, this.io);
     const { framework } = detection;
 
-    if (framework === "unknown") return "unsupported";
+    if (framework === 'unknown') return 'unsupported';
 
-    if (framework === "webpack" || framework === "vite-spa-jsx-router" || framework === "bun") {
+    if (framework === 'webpack' || framework === 'vite-spa-jsx-router' || framework === 'bun') {
       // No file-based routing convention — router is defined in JSX code.
       // PreviewModeManager.onComponentSelected patches the entry/router file directly.
-      return "needs-patch";
+      return 'needs-patch';
     }
 
     const previewPath = await this.getPreviewFilePath();
     const paths = getRouteFilePaths(detection, this.projectRoot);
 
-    if (!paths.routeFile) return "ok";
+    if (!paths.routeFile) return 'ok';
 
     // Compute import path from route file to preview file
     const routeDir = dirname(paths.routeFile);
-    let importPath = relative(routeDir, previewPath).replace(/\.\w+$/, "");
-    if (!importPath.startsWith(".")) importPath = `./${importPath}`;
+    let importPath = relative(routeDir, previewPath).replace(/\.\w+$/, '');
+    if (!importPath.startsWith('.')) importPath = `./${importPath}`;
 
     let wrote = await this._writeIfSafe(paths.routeFile, generateRouteFileContent(framework, importPath));
 
@@ -1030,7 +1030,7 @@ export class PreviewFileManager {
 
     await this.ensureGitExclude();
 
-    return wrote ? "ok-files-written" : "ok";
+    return wrote ? 'ok-files-written' : 'ok';
   }
 
   /**
@@ -1042,7 +1042,7 @@ export class PreviewFileManager {
     let current = startDir;
     while (true) {
       try {
-        await this.io.access(join(current, ".git"));
+        await this.io.access(join(current, '.git'));
         return current;
       } catch {
         const parent = dirname(current);
@@ -1063,19 +1063,19 @@ export class PreviewFileManager {
     const gitRoot = await this.findGitRoot(this.projectRoot);
     if (!gitRoot) return;
 
-    const excludePath = join(gitRoot, ".git/info/exclude");
+    const excludePath = join(gitRoot, '.git/info/exclude');
     const entries = [
-      "# HyperIDE — generated preview files",
-      "__canvas_preview__.tsx",
-      "__canvas_preview_standalone__.tsx",
-      "__canvas_samples__.tsx",
-      "*.samples.tsx",
-      ".hyperide/",
-      "**/test-preview/",
-      "**/test-preview.tsx",
+      '# HyperIDE — generated preview files',
+      '__canvas_preview__.tsx',
+      '__canvas_preview_standalone__.tsx',
+      '__canvas_samples__.tsx',
+      '*.samples.tsx',
+      '.hyperide/',
+      '**/test-preview/',
+      '**/test-preview.tsx',
     ];
 
-    let existing = "";
+    let existing = '';
     try {
       existing = await this.io.readFile(excludePath);
     } catch {
@@ -1085,9 +1085,9 @@ export class PreviewFileManager {
     const toAdd = entries.filter((line) => !existing.includes(line));
     if (toAdd.length === 0) return;
 
-    const separator = existing && !existing.endsWith("\n") ? "\n" : "";
+    const separator = existing && !existing.endsWith('\n') ? '\n' : '';
     try {
-      await this.io.writeFile(excludePath, `${existing}${separator}${toAdd.join("\n")}\n`);
+      await this.io.writeFile(excludePath, `${existing}${separator}${toAdd.join('\n')}\n`);
     } catch {
       // .git is a file in linked worktrees — silently skip
     }
@@ -1102,7 +1102,7 @@ export class PreviewFileManager {
   async ensureStandaloneEntry(): Promise<void> {
     const previewPath = await this.getPreviewFilePath();
     const previewDir = dirname(previewPath);
-    const standaloneEntryPath = join(previewDir, "__canvas_preview_standalone__.tsx");
+    const standaloneEntryPath = join(previewDir, '__canvas_preview_standalone__.tsx');
 
     let baseContent: string;
     try {
@@ -1112,14 +1112,14 @@ export class PreviewFileManager {
     }
 
     // Relative path from src/__canvas_preview_standalone__.tsx to .hyperide/preview
-    const wrapperImportPath = join(relative(previewDir, this.projectRoot), ".hyperide/preview").replace(/\\/g, "/");
+    const wrapperImportPath = join(relative(previewDir, this.projectRoot), '.hyperide/preview').replace(/\\/g, '/');
 
     // Detect the app's root element ID from index.html. Many projects use 'app-root',
     // 'main', or similar instead of the React default 'root'. Fall back to 'root' if
     // index.html is absent or doesn't contain a recognizable mount point.
-    let rootElementId = "root";
+    let rootElementId = 'root';
     try {
-      const indexHtml = await this.io.readFile(join(this.projectRoot, "index.html"));
+      const indexHtml = await this.io.readFile(join(this.projectRoot, 'index.html'));
       const divMatch = indexHtml.match(/<div\s+id="([^"]+)"/);
       if (divMatch?.[1]) rootElementId = divMatch[1];
     } catch {
@@ -1127,30 +1127,30 @@ export class PreviewFileManager {
     }
 
     const bootstrap = [
-      "",
-      "// @hyperide-managed",
+      '',
+      '// @hyperide-managed',
       "import { createRoot } from 'react-dom/client';",
       `import { PreviewWrapper } from '${wrapperImportPath}';`,
-      "",
+      '',
       `const _rootEl = document.getElementById('${rootElementId}');`,
-      "if (_rootEl) {",
-      "  // Reuse root across HMR to avoid calling createRoot on the same container twice.",
-      "  // Cast to any so TypeScript in Webpack/Parcel projects (no Vite types) does not error.",
-      "  const _hot = (import.meta as any).hot as { data: Record<string, unknown>; accept: () => void } | undefined;",
-      "  const _existingRoot = _hot?.data?.root as ReturnType<typeof createRoot> | undefined;",
-      "  const _root = _existingRoot ?? createRoot(_rootEl);",
-      "  if (_hot) {",
-      "    _hot.data.root = _root;",
-      "    _hot.accept();",
-      "  }",
-      "  _root.render(",
-      "    <PreviewWrapper>",
-      "      <CanvasPreview />",
-      "    </PreviewWrapper>",
-      "  );",
-      "}",
-      "",
-    ].join("\n");
+      'if (_rootEl) {',
+      '  // Reuse root across HMR to avoid calling createRoot on the same container twice.',
+      '  // Cast to any so TypeScript in Webpack/Parcel projects (no Vite types) does not error.',
+      '  const _hot = (import.meta as any).hot as { data: Record<string, unknown>; accept: () => void } | undefined;',
+      '  const _existingRoot = _hot?.data?.root as ReturnType<typeof createRoot> | undefined;',
+      '  const _root = _existingRoot ?? createRoot(_rootEl);',
+      '  if (_hot) {',
+      '    _hot.data.root = _root;',
+      '    _hot.accept();',
+      '  }',
+      '  _root.render(',
+      '    <PreviewWrapper>',
+      '      <CanvasPreview />',
+      '    </PreviewWrapper>',
+      '  );',
+      '}',
+      '',
+    ].join('\n');
 
     const newContent = `${baseContent.trimEnd()}\n${bootstrap}`;
 
@@ -1184,16 +1184,16 @@ export class PreviewFileManager {
     if (!paths.routeFile) return;
 
     const routeDir = dirname(paths.routeFile);
-    let previewImportPath = relative(routeDir, previewPath).replace(/\.\w+$/, "");
-    if (!previewImportPath.startsWith(".")) previewImportPath = `./${previewImportPath}`;
+    let previewImportPath = relative(routeDir, previewPath).replace(/\.\w+$/, '');
+    if (!previewImportPath.startsWith('.')) previewImportPath = `./${previewImportPath}`;
 
     await this._writeIfSafe(paths.routeFile, generateRouteFileContent(detection_.framework, previewImportPath));
 
     if (paths.layoutFile) {
       // Compute path from layout dir to .hyperide/preview
       const layoutDir = dirname(paths.layoutFile);
-      let wrapperImportPath = join(relative(layoutDir, this.projectRoot), ".hyperide/preview").replace(/\\/g, "/");
-      if (!wrapperImportPath.startsWith(".")) wrapperImportPath = `./${wrapperImportPath}`;
+      let wrapperImportPath = join(relative(layoutDir, this.projectRoot), '.hyperide/preview').replace(/\\/g, '/');
+      if (!wrapperImportPath.startsWith('.')) wrapperImportPath = `./${wrapperImportPath}`;
 
       await this._writeIfSafe(paths.layoutFile, generateIsolatedLayoutContent(wrapperImportPath));
     }
@@ -1213,7 +1213,7 @@ export class PreviewFileManager {
     for (const filePath of [paths.routeFile, paths.layoutFile].filter(Boolean) as string[]) {
       try {
         const content = await this.io.readFile(filePath);
-        if (content.includes("@hyperide-managed")) {
+        if (content.includes('@hyperide-managed')) {
           await this.io.deleteFile?.(filePath);
         }
       } catch {
@@ -1235,7 +1235,7 @@ export class PreviewFileManager {
       // File doesn't exist — safe to write
     }
     if (existing !== undefined) {
-      if (!existing.includes("@hyperide-managed")) {
+      if (!existing.includes('@hyperide-managed')) {
         console.warn(`[PreviewFileManager] Skipping ${filePath} — exists without @hyperide-managed marker`);
         return false;
       }
@@ -1258,14 +1258,14 @@ export class PreviewFileManager {
     const isRouteWithPath = (child: namedTypes.Node, routePath: string): boolean => {
       if (!namedTypes.JSXElement.check(child)) return false;
       return (
-        child.openingElement.name.type === "JSXIdentifier" &&
-        child.openingElement.name.name === "Route" &&
+        child.openingElement.name.type === 'JSXIdentifier' &&
+        child.openingElement.name.name === 'Route' &&
         (child.openingElement.attributes ?? []).some(
           (attr) =>
-            attr.type === "JSXAttribute" &&
-            attr.name.type === "JSXIdentifier" &&
-            attr.name.name === "path" &&
-            attr.value?.type === "StringLiteral" &&
+            attr.type === 'JSXAttribute' &&
+            attr.name.type === 'JSXIdentifier' &&
+            attr.name.name === 'path' &&
+            attr.value?.type === 'StringLiteral' &&
             attr.value.value === routePath,
         )
       );
@@ -1275,10 +1275,10 @@ export class PreviewFileManager {
     recast.visit(ast, {
       visitJSXElement(path) {
         const el = path.node;
-        if (el.openingElement.name.type === "JSXIdentifier" && el.openingElement.name.name === "Routes") {
+        if (el.openingElement.name.type === 'JSXIdentifier' && el.openingElement.name.name === 'Routes') {
           if (!el.children) el.children = [];
-          const existingPreviewRouteIndex = el.children.findIndex((child) => isRouteWithPath(child, "/test-preview"));
-          const existingCatchAllIndex = el.children.findIndex((child) => isRouteWithPath(child, "*"));
+          const existingPreviewRouteIndex = el.children.findIndex((child) => isRouteWithPath(child, '/test-preview'));
+          const existingCatchAllIndex = el.children.findIndex((child) => isRouteWithPath(child, '*'));
 
           if (
             existingPreviewRouteIndex >= 0 &&
@@ -1289,13 +1289,13 @@ export class PreviewFileManager {
 
           const newRoute = b.jsxElement(
             b.jsxOpeningElement(
-              b.jsxIdentifier("Route"),
+              b.jsxIdentifier('Route'),
               [
-                b.jsxAttribute(b.jsxIdentifier("path"), b.stringLiteral("/test-preview")),
+                b.jsxAttribute(b.jsxIdentifier('path'), b.stringLiteral('/test-preview')),
                 b.jsxAttribute(
-                  b.jsxIdentifier("element"),
+                  b.jsxIdentifier('element'),
                   b.jsxExpressionContainer(
-                    b.jsxElement(b.jsxOpeningElement(b.jsxIdentifier("CanvasPreview"), [], true), null, []),
+                    b.jsxElement(b.jsxOpeningElement(b.jsxIdentifier('CanvasPreview'), [], true), null, []),
                   ),
                 ),
               ],
@@ -1307,8 +1307,8 @@ export class PreviewFileManager {
           if (existingPreviewRouteIndex >= 0) {
             el.children = el.children.filter((_, index) => index !== existingPreviewRouteIndex);
           }
-          const routeNodes = [b.jsxText("\n        "), newRoute, b.jsxText("\n      ")];
-          const catchAllIndex = el.children.findIndex((child) => isRouteWithPath(child, "*"));
+          const routeNodes = [b.jsxText('\n        '), newRoute, b.jsxText('\n      ')];
+          const catchAllIndex = el.children.findIndex((child) => isRouteWithPath(child, '*'));
           if (catchAllIndex >= 0) {
             el.children.splice(catchAllIndex, 0, ...routeNodes);
           } else {
@@ -1322,15 +1322,15 @@ export class PreviewFileManager {
     });
 
     if (!patched) {
-      console.warn("[PreviewFileManager] Could not find <Routes> in", routerFilePath);
+      console.warn('[PreviewFileManager] Could not find <Routes> in', routerFilePath);
       return false;
     }
 
     // Add CanvasPreview import at top — path relative to router file directory
     const previewPath = await this.getPreviewFilePath();
     const routerDir = dirname(routerFilePath);
-    let importPath = relative(routerDir, previewPath).replace(/\.\w+$/, "");
-    if (!importPath.startsWith(".")) importPath = `./${importPath}`;
+    let importPath = relative(routerDir, previewPath).replace(/\.\w+$/, '');
+    if (!importPath.startsWith('.')) importPath = `./${importPath}`;
 
     const previewImport = `import CanvasPreview from '${importPath}'; // @hyperide-managed\n`;
     const output = recast.print(ast).code;
@@ -1346,13 +1346,13 @@ export class PreviewFileManager {
    */
   async revertRouterPatch(filePath: string): Promise<void> {
     const source = await this.io.readFile(filePath);
-    if (!source.includes("@hyperide-managed")) return;
+    if (!source.includes('@hyperide-managed')) return;
 
     // Remove @hyperide-managed lines (import and inline comment lines)
     const filteredSource = source
-      .split("\n")
-      .filter((line) => !line.includes("@hyperide-managed"))
-      .join("\n");
+      .split('\n')
+      .filter((line) => !line.includes('@hyperide-managed'))
+      .join('\n');
 
     const ast = recast.parse(filteredSource, { parser: RECAST_PARSER });
 
@@ -1360,14 +1360,14 @@ export class PreviewFileManager {
     recast.visit(ast, {
       visitJSXElement(path) {
         const el = path.node;
-        if (el.openingElement.name.type === "JSXIdentifier" && el.openingElement.name.name === "Routes") {
+        if (el.openingElement.name.type === 'JSXIdentifier' && el.openingElement.name.name === 'Routes') {
           el.children = (el.children ?? []).filter((child) => {
-            if (child.type !== "JSXElement") return true;
+            if (child.type !== 'JSXElement') return true;
             // Remove Route elements with path="/test-preview"
             const childEl = child as RouteEl;
-            if (childEl.openingElement.name.name !== "Route") return true;
+            if (childEl.openingElement.name.name !== 'Route') return true;
             return !childEl.openingElement.attributes.some(
-              (attr) => attr.name?.name === "path" && attr.value?.value === "/test-preview",
+              (attr) => attr.name?.name === 'path' && attr.value?.value === '/test-preview',
             );
           });
           return false;
@@ -1393,11 +1393,11 @@ export class PreviewFileManager {
    */
   async patchEntryFile(
     entryFilePath: string,
-    importTarget = "./__canvas_preview__",
+    importTarget = './__canvas_preview__',
     onBeforeWrite?: () => void,
   ): Promise<boolean> {
     const source = await this.io.readFile(entryFilePath);
-    if (source.includes("@hyperide-managed")) return false;
+    if (source.includes('@hyperide-managed')) return false;
 
     const ast = recast.parse(source, { parser: RECAST_PARSER });
     let patched = false;
@@ -1406,10 +1406,10 @@ export class PreviewFileManager {
       visitExpressionStatement(path) {
         const expr = path.node.expression;
         const isCreateRoot =
-          expr.type === "CallExpression" &&
-          expr.callee.type === "MemberExpression" &&
-          expr.callee.property.type === "Identifier" &&
-          expr.callee.property.name === "render";
+          expr.type === 'CallExpression' &&
+          expr.callee.type === 'MemberExpression' &&
+          expr.callee.property.type === 'Identifier' &&
+          expr.callee.property.name === 'render';
 
         if (!isCreateRoot || patched) {
           this.traverse(path);
@@ -1419,28 +1419,28 @@ export class PreviewFileManager {
         // Check both ?component= and /test-preview path to avoid hijacking app URLs
         // that legitimately use ?component= as their own query param.
         const condition = b.logicalExpression(
-          "&&",
+          '&&',
           b.callExpression(
             b.memberExpression(
-              b.newExpression(b.identifier("URLSearchParams"), [
-                b.memberExpression(b.identifier("location"), b.identifier("search")),
+              b.newExpression(b.identifier('URLSearchParams'), [
+                b.memberExpression(b.identifier('location'), b.identifier('search')),
               ]),
-              b.identifier("get"),
+              b.identifier('get'),
             ),
-            [b.stringLiteral("component")],
+            [b.stringLiteral('component')],
           ),
           b.callExpression(
             b.memberExpression(
-              b.memberExpression(b.identifier("location"), b.identifier("pathname")),
-              b.identifier("includes"),
+              b.memberExpression(b.identifier('location'), b.identifier('pathname')),
+              b.identifier('includes'),
             ),
-            [b.stringLiteral("test-preview")],
+            [b.stringLiteral('test-preview')],
           ),
         );
 
         // Standalone entries render themselves on import (module has top-level createRoot call).
         // App shell __canvas_preview__ only exports a component — must render it explicitly.
-        const isStandalone = importTarget.includes("standalone");
+        const isStandalone = importTarget.includes('standalone');
         let previewConsequent: ReturnType<typeof b.blockStatement>;
         if (isStandalone) {
           previewConsequent = b.blockStatement([
@@ -1454,32 +1454,32 @@ export class PreviewFileManager {
           const createRootExpr = JSON.parse(
             JSON.stringify(callExpr.callee.object, (key, value) => {
               // Strip position metadata that creates circular references (loc -> tokens -> loc)
-              if (key === "tokens" || key === "comments") return undefined;
+              if (key === 'tokens' || key === 'comments') return undefined;
               return value;
             }),
           );
           // JSX is only valid in .tsx/.jsx files. For plain .ts/.js entry files, use
           // React.createElement — these projects must have React in scope anyway.
-          const allowJsx = entryFilePath.endsWith(".tsx") || entryFilePath.endsWith(".jsx");
+          const allowJsx = entryFilePath.endsWith('.tsx') || entryFilePath.endsWith('.jsx');
           const renderArg = allowJsx
-            ? b.jsxElement(b.jsxOpeningElement(b.jsxIdentifier("CanvasPreviewComp"), [], true), null, [])
-            : b.callExpression(b.memberExpression(b.identifier("React"), b.identifier("createElement")), [
-                b.identifier("CanvasPreviewComp"),
+            ? b.jsxElement(b.jsxOpeningElement(b.jsxIdentifier('CanvasPreviewComp'), [], true), null, [])
+            : b.callExpression(b.memberExpression(b.identifier('React'), b.identifier('createElement')), [
+                b.identifier('CanvasPreviewComp'),
                 b.nullLiteral(),
               ]);
           const thenCallback = b.arrowFunctionExpression(
-            [b.identifier("m")],
+            [b.identifier('m')],
             b.blockStatement([
-              b.variableDeclaration("var", [
+              b.variableDeclaration('var', [
                 b.variableDeclarator(
-                  b.identifier("CanvasPreviewComp"),
-                  b.memberExpression(b.identifier("m"), b.identifier("default")),
+                  b.identifier('CanvasPreviewComp'),
+                  b.memberExpression(b.identifier('m'), b.identifier('default')),
                 ),
               ]),
               b.ifStatement(
-                b.identifier("CanvasPreviewComp"),
+                b.identifier('CanvasPreviewComp'),
                 b.expressionStatement(
-                  b.callExpression(b.memberExpression(createRootExpr, b.identifier("render")), [renderArg]),
+                  b.callExpression(b.memberExpression(createRootExpr, b.identifier('render')), [renderArg]),
                 ),
               ),
             ]),
@@ -1489,10 +1489,10 @@ export class PreviewFileManager {
           const importThenCatch = b.callExpression(
             b.memberExpression(
               b.callExpression(
-                b.memberExpression(b.callExpression(b.import(), [b.stringLiteral(importTarget)]), b.identifier("then")),
+                b.memberExpression(b.callExpression(b.import(), [b.stringLiteral(importTarget)]), b.identifier('then')),
                 [thenCallback],
               ),
-              b.identifier("catch"),
+              b.identifier('catch'),
             ),
             [b.arrowFunctionExpression([], b.blockStatement([]))],
           );
@@ -1502,7 +1502,7 @@ export class PreviewFileManager {
         const ifStmt = b.ifStatement(condition, previewConsequent, b.blockStatement([path.node]));
 
         (ifStmt as { comments?: unknown[] }).comments = [
-          { type: "CommentLine", value: " @hyperide-managed", leading: true, trailing: false },
+          { type: 'CommentLine', value: ' @hyperide-managed', leading: true, trailing: false },
         ];
 
         path.replace(ifStmt);
@@ -1515,7 +1515,7 @@ export class PreviewFileManager {
       // Fallback for non-standard entries (ViteReactSSG, custom bootstraps): append conditional
       // import at end of file. The AST-based path only handles createRoot().render() calls.
       const condition = `typeof location !== "undefined" && new URLSearchParams(location.search).get("component") && location.pathname.includes("test-preview")`;
-      const isStandalone = importTarget.includes("standalone");
+      const isStandalone = importTarget.includes('standalone');
       let importBody: string;
       if (isStandalone) {
         // Standalone module has its own createRoot() call — just importing it is enough.
@@ -1545,19 +1545,19 @@ export class PreviewFileManager {
    */
   async revertEntryFile(filePath: string): Promise<void> {
     const source = await this.io.readFile(filePath);
-    if (!source.includes("@hyperide-managed")) return;
+    if (!source.includes('@hyperide-managed')) return;
 
     const ast = recast.parse(source, { parser: RECAST_PARSER });
 
     recast.visit(ast, {
       visitIfStatement(path) {
         const node = path.node;
-        const isManaged = node.comments?.some((c: { value?: string }) => c.value?.includes("@hyperide-managed"));
+        const isManaged = node.comments?.some((c: { value?: string }) => c.value?.includes('@hyperide-managed'));
         if (!isManaged) {
           this.traverse(path);
           return;
         }
-        const elseBody = node.alternate?.type === "BlockStatement" ? node.alternate.body : [];
+        const elseBody = node.alternate?.type === 'BlockStatement' ? node.alternate.body : [];
         path.replace(...elseBody);
         return false;
       },
@@ -1565,8 +1565,8 @@ export class PreviewFileManager {
 
     const reverted = recast.print(ast).code;
     // If @hyperide-managed is still present (appended form without else-branch), truncate it
-    if (reverted.includes("@hyperide-managed")) {
-      const idx = reverted.lastIndexOf("\n// @hyperide-managed");
+    if (reverted.includes('@hyperide-managed')) {
+      const idx = reverted.lastIndexOf('\n// @hyperide-managed');
       await this.io.writeFile(filePath, idx >= 0 ? reverted.slice(0, idx) : reverted);
       return;
     }

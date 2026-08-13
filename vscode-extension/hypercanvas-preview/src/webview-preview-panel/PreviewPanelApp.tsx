@@ -5,27 +5,27 @@
  * Manages iframe preview, overlay rendering, and context menu.
  */
 
-import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from "@tabler/icons-react";
-import cn from "clsx";
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CanvasElementContextMenu } from "@/components/CanvasElementContextMenu";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { PlatformProvider, usePlatformCanvas } from "@/lib/platform";
+import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
+import cn from 'clsx';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import {
   createSharedDispatch,
   useCanvasMode,
   useEngineMode,
   useSharedEditorState,
   useSharedEditorStateSync,
-} from "@/lib/platform/shared-editor-state";
-import type { PlatformMessage } from "@/lib/platform/types";
-import { TID } from "../shared/data-testid-map";
-import type { UnsupportedProjectError } from "../types";
-import { PreviewLoadErrorOverlay } from "./PreviewLoadErrorOverlay";
-import { PreviewLoadTimeoutOverlay } from "./PreviewLoadTimeoutOverlay";
-import { PropsForm } from "./PropsForm";
-import { useCanvasInteraction } from "./useCanvasInteraction";
-import { usePreviewBridge } from "./usePreviewBridge";
+} from '@/lib/platform/shared-editor-state';
+import type { PlatformMessage } from '@/lib/platform/types';
+import { TID } from '../shared/data-testid-map';
+import type { UnsupportedProjectError } from '../types';
+import { PreviewLoadErrorOverlay } from './PreviewLoadErrorOverlay';
+import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
+import { PropsForm } from './PropsForm';
+import { useCanvasInteraction } from './useCanvasInteraction';
+import { usePreviewBridge } from './usePreviewBridge';
 
 // ============================================================================
 // Constants
@@ -56,9 +56,9 @@ export function PreviewPanelApp() {
 export function getPreviewShellScreen(
   devServerRunning: boolean,
   disconnected: boolean,
-): "preview" | "start" | "disconnected" {
-  if (devServerRunning) return "preview";
-  return disconnected ? "disconnected" : "start";
+): 'preview' | 'start' | 'disconnected' {
+  if (devServerRunning) return 'preview';
+  return disconnected ? 'disconnected' : 'start';
 }
 
 // ============================================================================
@@ -151,18 +151,18 @@ function PreviewContent() {
     setIframeLoaded(true);
     setIframeLoadTimedOut(false);
     setIframeError(null);
-    canvas.sendEvent({ type: "previewLoaded" });
+    canvas.sendEvent({ type: 'previewLoaded' });
   }, [canvas]);
 
   const handleIframeError = useCallback(
     (e: React.SyntheticEvent<HTMLIFrameElement, Event>) => {
-      const message = (e.nativeEvent as ErrorEvent).message || "iframe load error";
+      const message = (e.nativeEvent as ErrorEvent).message || 'iframe load error';
       // Surface the error in the webview UI — without this the only signal
       // was a console.error in the extension host, which the user can't
       // see. Keep the canvas event for downstream telemetry/listeners.
       setIframeError(message);
       canvas.sendEvent({
-        type: "previewError",
+        type: 'previewError',
         error: message,
       });
     },
@@ -175,8 +175,8 @@ function PreviewContent() {
 
   const handleOpenOutput = useCallback(() => {
     canvas.sendEvent({
-      type: "command:execute",
-      command: "hypercanvas.showDevServerOutput",
+      type: 'command:execute',
+      command: 'hypercanvas.showDevServerOutput',
     } as unknown as PlatformMessage);
   }, [canvas]);
 
@@ -184,7 +184,7 @@ function PreviewContent() {
   // These projects CAN'T render at all — full blocking screen.
   if (projectError) {
     const handleFix = () => {
-      canvas.sendEvent({ type: "command:fixUnsupportedProject" });
+      canvas.sendEvent({ type: 'command:fixUnsupportedProject' });
     };
     return <UnsupportedProjectScreen error={projectError} onFix={handleFix} />;
   }
@@ -193,7 +193,7 @@ function PreviewContent() {
 
   // Dev server stopped after a successful connection — keep a dedicated disconnected
   // shell instead of relying on a transient blend of banner + stale iframe content.
-  if (shellScreen === "disconnected") {
+  if (shellScreen === 'disconnected') {
     return (
       <>
         <ReconnectingBanner />
@@ -203,7 +203,7 @@ function PreviewContent() {
   }
 
   // Dev server not running before any successful connection — show initial start screen.
-  if (shellScreen === "start") {
+  if (shellScreen === 'start') {
     return (
       <StartDevServerScreen
         onStart={handleStartDevServer}
@@ -222,13 +222,13 @@ function PreviewContent() {
           // Remount on retry — recreating the element forces a fresh fetch
           // without poking at the URL or relying on iframe.contentWindow
           // APIs that may not exist before first load.
-          key={`${iframeSrc ?? "none"}-${retryNonce}`}
+          key={`${iframeSrc ?? 'none'}-${retryNonce}`}
           ref={iframeCallbackRef}
           data-testid={TID.preview.iframe}
           title="Component Preview"
           style={{
             ...iframeStyle,
-            display: showNoComponentHint ? "none" : undefined,
+            display: showNoComponentHint ? 'none' : undefined,
           }}
           src={iframeSrc}
           sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
@@ -257,16 +257,16 @@ function PreviewContent() {
           propsSchema={componentError.propsSchema}
           onCreateSample={(sampleName: string, propValues?: Record<string, unknown>) => {
             canvas.sendEvent({
-              type: "errorBoundary:createSample",
+              type: 'errorBoundary:createSample',
               componentPath: componentError.componentPath,
               sampleName,
               propValues,
-            } as unknown as import("@/lib/platform/types").PlatformMessage);
+            } as unknown as import('@/lib/platform/types').PlatformMessage);
           }}
           onConfigureAIKey={() => {
             canvas.sendEvent({
-              type: "errorBoundary:configureAIKey",
-            } as unknown as import("@/lib/platform/types").PlatformMessage);
+              type: 'errorBoundary:configureAIKey',
+            } as unknown as import('@/lib/platform/types').PlatformMessage);
           }}
           onClose={clearComponentError}
         />
@@ -278,7 +278,7 @@ function PreviewContent() {
 
       <CanvasElementContextMenu
         selectedIds={contextMenu ? [contextMenu.elementId] : []}
-        externalTarget={contextMenu ? { type: "design-element", x: contextMenu.x, y: contextMenu.y } : null}
+        externalTarget={contextMenu ? { type: 'design-element', x: contextMenu.x, y: contextMenu.y } : null}
         onExternalClose={clearContextMenu}
       />
 
@@ -289,7 +289,7 @@ function PreviewContent() {
           sees proof that the preview works before choosing readonly mode. */}
       {isReadonly && !readonlyDismissed && (
         <ReadonlyStubScreen
-          cssSystem={projectCapabilities?.cssSystem ?? "unknown"}
+          cssSystem={projectCapabilities?.cssSystem ?? 'unknown'}
           projectType={projectCapabilities?.projectType}
           renderSucceeded={devServerRunning && !componentError && !showNoComponentHint}
           onContinueReadonly={() => setReadonlyDismissed(true)}
@@ -326,7 +326,7 @@ function StartDevServerScreen({
           type="checkbox"
           checked={autoStart}
           onChange={(e) => onAutoStartChange(e.target.checked)}
-          style={{ marginRight: 6, cursor: "pointer" }}
+          style={{ marginRight: 6, cursor: 'pointer' }}
         />
         Start server automatically
       </label>
@@ -363,33 +363,33 @@ function NoComponentHint() {
 // ============================================================================
 
 const SUPPORTED_CSS_TABLE: Array<{ name: string; key: string; supported: boolean }> = [
-  { name: "Tailwind CSS", key: "tailwind", supported: true },
-  { name: "CSS Modules", key: "cssmodules", supported: true },
-  { name: "styled-components", key: "styled-components", supported: true },
-  { name: "Emotion", key: "emotion", supported: true },
-  { name: "Tamagui", key: "tamagui", supported: true },
-  { name: "shadcn/ui", key: "shadcn", supported: true },
-  { name: "DaisyUI", key: "daisyui", supported: true },
-  { name: "MUI (Material UI)", key: "mui", supported: false },
-  { name: "Ant Design", key: "antd", supported: false },
-  { name: "Chakra UI", key: "chakra", supported: false },
-  { name: "Mantine", key: "mantine", supported: false },
-  { name: "Fluent UI", key: "fluentui", supported: false },
-  { name: "NextUI", key: "nextui", supported: false },
-  { name: "Vanilla Extract", key: "vanilla-extract", supported: false },
-  { name: "Panda CSS", key: "pandacss", supported: false },
-  { name: "UnoCSS", key: "unocss", supported: false },
-  { name: "StyleX", key: "stylex", supported: false },
+  { name: 'Tailwind CSS', key: 'tailwind', supported: true },
+  { name: 'CSS Modules', key: 'cssmodules', supported: true },
+  { name: 'styled-components', key: 'styled-components', supported: true },
+  { name: 'Emotion', key: 'emotion', supported: true },
+  { name: 'Tamagui', key: 'tamagui', supported: true },
+  { name: 'shadcn/ui', key: 'shadcn', supported: true },
+  { name: 'DaisyUI', key: 'daisyui', supported: true },
+  { name: 'MUI (Material UI)', key: 'mui', supported: false },
+  { name: 'Ant Design', key: 'antd', supported: false },
+  { name: 'Chakra UI', key: 'chakra', supported: false },
+  { name: 'Mantine', key: 'mantine', supported: false },
+  { name: 'Fluent UI', key: 'fluentui', supported: false },
+  { name: 'NextUI', key: 'nextui', supported: false },
+  { name: 'Vanilla Extract', key: 'vanilla-extract', supported: false },
+  { name: 'Panda CSS', key: 'pandacss', supported: false },
+  { name: 'UnoCSS', key: 'unocss', supported: false },
+  { name: 'StyleX', key: 'stylex', supported: false },
 ];
 
 const PROJECT_TYPE_LABELS: Record<string, string> = {
-  vite: "Vite",
-  nextjs: "Next.js",
-  cra: "CRA",
-  remix: "Remix",
-  webpack: "webpack",
-  bun: "Bun",
-  unknown: "Unknown bundler",
+  vite: 'Vite',
+  nextjs: 'Next.js',
+  cra: 'CRA',
+  remix: 'Remix',
+  webpack: 'webpack',
+  bun: 'Bun',
+  unknown: 'Unknown bundler',
 };
 
 function ReadonlyStubScreen({
@@ -403,16 +403,16 @@ function ReadonlyStubScreen({
   renderSucceeded: boolean;
   onContinueReadonly: () => void;
 }) {
-  const projectLabel = projectType ? (PROJECT_TYPE_LABELS[projectType] ?? projectType) : "Unknown bundler";
+  const projectLabel = projectType ? (PROJECT_TYPE_LABELS[projectType] ?? projectType) : 'Unknown bundler';
   return (
     <div
       data-testid="hyper-preview-readonly-stub"
       style={{
         ...centerScreenStyle,
-        position: "absolute",
+        position: 'absolute',
         inset: 0,
         zIndex: 900,
-        background: "rgba(30, 30, 30, 0.95)",
+        background: 'rgba(30, 30, 30, 0.95)',
       }}
     >
       <div style={warningIconStyle}>🔒</div>
@@ -422,15 +422,15 @@ function ReadonlyStubScreen({
         CSS framework <strong>{cssSystem}</strong> is compatible; editing will work once the project uses a supported
         bundler (Vite, webpack, Next.js).
         {renderSucceeded
-          ? " Preview rendered successfully — you can inspect computed styles in readonly mode."
-          : " Waiting for preview to render..."}
+          ? ' Preview rendered successfully — you can inspect computed styles in readonly mode.'
+          : ' Waiting for preview to render...'}
       </p>
 
-      <table style={{ margin: "12px 0", borderCollapse: "collapse", fontSize: 12, color: "#ccc" }}>
+      <table style={{ margin: '12px 0', borderCollapse: 'collapse', fontSize: 12, color: '#ccc' }}>
         <thead>
           <tr>
-            <th style={{ textAlign: "left", padding: "4px 12px", borderBottom: "1px solid #555" }}>CSS Framework</th>
-            <th style={{ textAlign: "center", padding: "4px 12px", borderBottom: "1px solid #555" }}>Editing</th>
+            <th style={{ textAlign: 'left', padding: '4px 12px', borderBottom: '1px solid #555' }}>CSS Framework</th>
+            <th style={{ textAlign: 'center', padding: '4px 12px', borderBottom: '1px solid #555' }}>Editing</th>
           </tr>
         </thead>
         <tbody>
@@ -440,14 +440,14 @@ function ReadonlyStubScreen({
               <tr key={row.name} style={{ opacity: row.supported ? 1 : 0.6 }}>
                 <td
                   style={{
-                    padding: "3px 12px",
+                    padding: '3px 12px',
                     fontWeight: isDetected ? 700 : 400,
-                    color: isDetected ? "#fff" : undefined,
+                    color: isDetected ? '#fff' : undefined,
                   }}
                 >
                   {row.name}
                 </td>
-                <td style={{ textAlign: "center", padding: "3px 12px" }}>{row.supported ? "✅" : "—"}</td>
+                <td style={{ textAlign: 'center', padding: '3px 12px' }}>{row.supported ? '✅' : '—'}</td>
               </tr>
             );
           })}
@@ -473,17 +473,17 @@ function ReadonlyBadge({ cssSystem }: { cssSystem: string }) {
     <div
       data-testid="hyper-preview-readonly-badge"
       style={{
-        position: "absolute",
+        position: 'absolute',
         top: 8,
         right: 8,
         zIndex: 1000,
-        background: "rgba(255, 170, 0, 0.9)",
-        color: "#000",
-        padding: "4px 10px",
+        background: 'rgba(255, 170, 0, 0.9)',
+        color: '#000',
+        padding: '4px 10px',
         borderRadius: 4,
         fontSize: 11,
         fontWeight: 600,
-        pointerEvents: "none",
+        pointerEvents: 'none',
       }}
     >
       READONLY — {cssSystem}
@@ -496,7 +496,7 @@ function ReadonlyBadge({ cssSystem }: { cssSystem: string }) {
 // ============================================================================
 
 function UnsupportedProjectScreen({ error, onFix }: { error: UnsupportedProjectError; onFix: () => void }) {
-  const label = error.type === "react-native" ? "React Native / Tamagui" : error.type;
+  const label = error.type === 'react-native' ? 'React Native / Tamagui' : error.type;
   return (
     <div data-testid={TID.preview.unsupportedRoot} style={centerScreenStyle}>
       <div style={warningIconStyle}>⚠</div>
@@ -532,7 +532,7 @@ interface ComponentErrorOverlayProps {
   componentPath: string;
   errorSeq?: number;
   error: string;
-  propsSchema?: import("./PropsForm").SimplePropInfo[] | null;
+  propsSchema?: import('./PropsForm').SimplePropInfo[] | null;
   onCreateSample: (sampleName: string, propValues?: Record<string, unknown>) => void;
   onConfigureAIKey: () => void;
   onClose: () => void;
@@ -574,9 +574,9 @@ function ComponentErrorOverlay({
 }: ComponentErrorOverlayProps) {
   const componentName =
     componentPath
-      .split("/")
+      .split('/')
       .pop()
-      ?.replace(/\.tsx?$/, "") ?? componentPath;
+      ?.replace(/\.tsx?$/, '') ?? componentPath;
 
   const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
   const cachedValues = useMemo(() => propsCache.get(componentPath), [componentPath]);
@@ -584,19 +584,19 @@ function ComponentErrorOverlay({
   const [allRequiredFilled, setAllRequiredFilled] = useState(false);
   const [sampleCreated, setSampleCreated] = useState(false);
   const [formKey, setFormKey] = useState(0);
-  const [sampleName, setSampleName] = useState("SampleDefault");
+  const [sampleName, setSampleName] = useState('SampleDefault');
 
   const [hasAnyProps, setHasAnyProps] = useState(false);
 
   // Listen for sample deletion from file watcher
   useEffect(() => {
     const handler = (event: MessageEvent) => {
-      if (event.data?.type === "errorOverlay:sampleDeleted") {
+      if (event.data?.type === 'errorOverlay:sampleDeleted') {
         setSampleCreated(false);
       }
     };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
   }, []);
 
   const handlePropsChange = useCallback(
@@ -605,7 +605,7 @@ function ComponentErrorOverlay({
       propsCache.set(componentPath, values);
       const hasFilled = Object.values(values).some((v) => {
         if (v == null) return false;
-        if (typeof v === "string") return v.trim() !== "";
+        if (typeof v === 'string') return v.trim() !== '';
         if (Array.isArray(v)) return v.length > 0;
         return true;
       });
@@ -617,14 +617,14 @@ function ComponentErrorOverlay({
   const handleCreateSample = useCallback(() => {
     const filled = Object.entries(propValuesRef.current).filter(([, v]) => {
       if (v == null) return false;
-      if (typeof v === "string") return v.trim() !== "";
+      if (typeof v === 'string') return v.trim() !== '';
       if (Array.isArray(v)) return v.length > 0;
       return true;
     });
     onCreateSample(sampleName, filled.length > 0 ? Object.fromEntries(filled) : undefined);
     propsCache.delete(componentPath);
     // Auto-close overlay for SampleDefault — preview will re-render with the sample
-    if (sampleName === "SampleDefault") {
+    if (sampleName === 'SampleDefault') {
       onClose();
     } else {
       setSampleCreated(true);
@@ -647,7 +647,7 @@ function ComponentErrorOverlay({
   return (
     <div data-testid={TID.preview.componentErrorOverlay} style={errorOverlayBackdropStyle}>
       <div style={errorOverlayCardStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <h3 style={errorOverlayTitleStyle}>{componentName}</h3>
           {sampleCreated && (
             <button type="button" onClick={onClose} style={errorOverlayCloseButtonStyle} title="Close">
@@ -688,7 +688,7 @@ function ComponentErrorOverlay({
               id="sample-name"
               type="text"
               value={sampleName}
-              onChange={(e) => setSampleName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
+              onChange={(e) => setSampleName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
               placeholder="SampleDefault"
               style={sampleNameInputStyle}
             />
@@ -696,7 +696,7 @@ function ComponentErrorOverlay({
         )}
 
         {sampleCreated ? (
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               type="button"
               data-testid={TID.preview.componentErrorCreateSample}
@@ -710,16 +710,16 @@ function ComponentErrorOverlay({
             </button>
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               type="button"
               data-testid={TID.preview.componentErrorCreateSample}
               style={allRequiredFilled ? errorOverlayPrimaryButtonStyle : errorOverlaySecondaryButtonStyle}
               onClick={handleCreateSample}
             >
-              {hasAnyProps ? "Create Sample" : "Create Empty Sample"}
+              {hasAnyProps ? 'Create Sample' : 'Create Empty Sample'}
             </button>
-            <span style={{ color: "var(--vscode-descriptionForeground, #666)", fontSize: 12 }}>or</span>
+            <span style={{ color: 'var(--vscode-descriptionForeground, #666)', fontSize: 12 }}>or</span>
             <button
               type="button"
               data-testid={TID.preview.componentErrorConfigureAI}
@@ -734,7 +734,7 @@ function ComponentErrorOverlay({
         <p style={errorOverlayAIHintStyle}>
           <button type="button" onClick={onConfigureAIKey} style={errorOverlayAIHintLinkStyle}>
             Configure an AI provider
-          </button>{" "}
+          </button>{' '}
           to auto-generate sample files with realistic data.
         </p>
       </div>
@@ -746,41 +746,41 @@ function ComponentErrorOverlay({
 // Mode Toolbar (floating at bottom of preview, matching SaaS Toolbar)
 // ============================================================================
 
-type ToolbarMode = "board" | "interact" | "design";
+type ToolbarMode = 'board' | 'interact' | 'design';
 
 const TOOLBAR_BUTTONS: {
   mode: ToolbarMode;
   icon: typeof IconLayoutGrid;
   boardOnly?: boolean;
 }[] = [
-  { mode: "board", icon: IconLayoutGrid, boardOnly: true },
-  { mode: "interact", icon: IconPointer },
-  { mode: "design", icon: IconBrush },
+  { mode: 'board', icon: IconLayoutGrid, boardOnly: true },
+  { mode: 'interact', icon: IconPointer },
+  { mode: 'design', icon: IconBrush },
 ];
 
 function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> }) {
   const engineMode = useEngineMode();
   const canvasMode = useCanvasMode();
   const dispatch = useMemo(() => createSharedDispatch(canvas), [canvas]);
-  const previewScope = useSharedEditorState((s) => s.previewScope ?? "full-app");
-  const isIsolated = previewScope === "component-only";
+  const previewScope = useSharedEditorState((s) => s.previewScope ?? 'full-app');
+  const isIsolated = previewScope === 'component-only';
 
-  const isBoardMode = canvasMode === "multi";
-  const activeMode: ToolbarMode = isBoardMode ? "board" : (engineMode as ToolbarMode);
+  const isBoardMode = canvasMode === 'multi';
+  const activeMode: ToolbarMode = isBoardMode ? 'board' : (engineMode as ToolbarMode);
 
   const handleModeChange = useCallback(
     (mode: ToolbarMode) => {
-      if (mode === "board") {
-        dispatch({ engineMode: "design", canvasMode: "multi" });
-      } else if (mode === "interact") {
+      if (mode === 'board') {
+        dispatch({ engineMode: 'design', canvasMode: 'multi' });
+      } else if (mode === 'interact') {
         dispatch({
-          engineMode: "interact",
-          canvasMode: "single",
+          engineMode: 'interact',
+          canvasMode: 'single',
           selectedIds: [],
           hoveredId: null,
         });
       } else {
-        dispatch({ engineMode: "design", canvasMode: "single" });
+        dispatch({ engineMode: 'design', canvasMode: 'single' });
       }
     },
     [dispatch],
@@ -788,8 +788,8 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
 
   const handleScopeToggle = useCallback(() => {
     canvas.sendEvent({
-      type: "preview:setScope",
-      scope: isIsolated ? "full-app" : "component-only",
+      type: 'preview:setScope',
+      scope: isIsolated ? 'full-app' : 'component-only',
     });
   }, [canvas, isIsolated]);
 
@@ -797,7 +797,7 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 h-12 px-2 bg-popover rounded-[14px] shadow-[0_2px_4px_rgba(0,0,0,0.15),0_2px_16px_rgba(0,0,0,0.15)] border border-border z-[1000]">
       {TOOLBAR_BUTTONS.map(({ mode, icon: Icon, boardOnly }) => {
         const isActive = activeMode === mode;
-        const isDisabled = boardOnly && canvasMode === "single";
+        const isDisabled = boardOnly && canvasMode === 'single';
         return (
           <button
             type="button"
@@ -806,13 +806,13 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
             onClick={() => handleModeChange(mode)}
             disabled={isDisabled}
             className={cn(
-              "w-8 h-8 rounded-md flex items-center justify-center transition-colors",
-              isActive && "bg-primary",
-              !isActive && !isDisabled && "hover:bg-accent",
-              isDisabled && "opacity-50 cursor-not-allowed",
+              'w-8 h-8 rounded-md flex items-center justify-center transition-colors',
+              isActive && 'bg-primary',
+              !isActive && !isDisabled && 'hover:bg-accent',
+              isDisabled && 'opacity-50 cursor-not-allowed',
             )}
           >
-            <Icon className={cn("w-6 h-6", isActive && "text-white")} stroke={1.5} />
+            <Icon className={cn('w-6 h-6', isActive && 'text-white')} stroke={1.5} />
           </button>
         );
       })}
@@ -822,18 +822,18 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
         data-testid={TID.preview.toolbarScope}
         title={
           isIsolated
-            ? "Isolated — component only (click for In app)"
-            : "In app — component in full app context (click for Isolated)"
+            ? 'Isolated — component only (click for In app)'
+            : 'In app — component in full app context (click for Isolated)'
         }
         onClick={handleScopeToggle}
         className={cn(
-          "flex items-center gap-1 h-8 px-2 rounded-md text-xs transition-colors",
-          isIsolated && "bg-primary text-primary-foreground",
-          !isIsolated && "hover:bg-accent text-muted-foreground hover:text-foreground",
+          'flex items-center gap-1 h-8 px-2 rounded-md text-xs transition-colors',
+          isIsolated && 'bg-primary text-primary-foreground',
+          !isIsolated && 'hover:bg-accent text-muted-foreground hover:text-foreground',
         )}
       >
         <IconLayoutSidebar className="w-4 h-4" stroke={1.5} />
-        {isIsolated ? "Isolated" : "In app"}
+        {isIsolated ? 'Isolated' : 'In app'}
       </button>
     </div>
   );
@@ -844,34 +844,34 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
 // ============================================================================
 
 const wrapperStyle: React.CSSProperties = {
-  position: "relative",
-  width: "100%",
-  height: "100%",
+  position: 'relative',
+  width: '100%',
+  height: '100%',
 };
 
 const surfaceStyle: React.CSSProperties = {
-  position: "relative",
-  width: "100%",
-  height: "100%",
-  overflow: "visible",
+  position: 'relative',
+  width: '100%',
+  height: '100%',
+  overflow: 'visible',
 };
 
 const iframeStyle: React.CSSProperties = {
-  border: "none",
-  width: "100%",
-  height: "100%",
-  background: "var(--vscode-editor-background, #1e1e1e)",
+  border: 'none',
+  width: '100%',
+  height: '100%',
+  background: 'var(--vscode-editor-background, #1e1e1e)',
 };
 
 const overlayStyle: React.CSSProperties = {
-  position: "absolute",
+  position: 'absolute',
   inset: 0,
-  pointerEvents: "none",
+  pointerEvents: 'none',
   zIndex: 10,
 };
 
 const loadingOverlayStyle: React.CSSProperties = {
-  position: "absolute",
+  position: 'absolute',
   inset: 0,
   // Above the canvas-interaction overlay (z=10) and below the component error
   // overlay (z=100), so a render error replaces the spinner immediately
@@ -880,20 +880,20 @@ const loadingOverlayStyle: React.CSSProperties = {
 };
 
 const centerScreenStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  height: "100%",
-  background: "var(--vscode-editor-background)",
-  color: "var(--vscode-editor-foreground)",
-  fontFamily: "var(--vscode-font-family)",
-  textAlign: "center",
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  height: '100%',
+  background: 'var(--vscode-editor-background)',
+  color: 'var(--vscode-editor-foreground)',
+  fontFamily: 'var(--vscode-font-family)',
+  textAlign: 'center',
   padding: 20,
 };
 
 const absoluteFillStyle: React.CSSProperties = {
-  position: "absolute",
+  position: 'absolute',
   top: 0,
   left: 0,
   right: 0,
@@ -901,66 +901,66 @@ const absoluteFillStyle: React.CSSProperties = {
 };
 
 const headingStyle: React.CSSProperties = {
-  margin: "0 0 10px 0",
+  margin: '0 0 10px 0',
   fontSize: 16,
   fontWeight: 500,
 };
 
 const subtextStyle: React.CSSProperties = {
-  margin: "0 0 20px 0",
+  margin: '0 0 20px 0',
   fontSize: 13,
   opacity: 0.8,
 };
 
 const buttonStyle: React.CSSProperties = {
-  background: "var(--vscode-button-background)",
-  color: "var(--vscode-button-foreground)",
-  border: "none",
-  padding: "8px 16px",
+  background: 'var(--vscode-button-background)',
+  color: 'var(--vscode-button-foreground)',
+  border: 'none',
+  padding: '8px 16px',
   borderRadius: 4,
-  cursor: "pointer",
+  cursor: 'pointer',
   fontSize: 13,
 };
 
 const autoStartLabelStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
+  display: 'flex',
+  alignItems: 'center',
   marginTop: 16,
   fontSize: 12,
   opacity: 0.75,
-  cursor: "pointer",
-  userSelect: "none",
+  cursor: 'pointer',
+  userSelect: 'none',
 };
 
 const settingsLinkStyle: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  color: "var(--vscode-textLink-foreground, #4e94ce)",
+  background: 'none',
+  border: 'none',
+  color: 'var(--vscode-textLink-foreground, #4e94ce)',
   fontSize: 11,
-  cursor: "pointer",
+  cursor: 'pointer',
   marginTop: 6,
   padding: 0,
-  textDecoration: "underline",
+  textDecoration: 'underline',
 };
 
 const reconnectingBannerStyle: React.CSSProperties = {
-  position: "fixed",
+  position: 'fixed',
   top: 0,
   left: 0,
   right: 0,
-  padding: "8px 16px",
-  background: "var(--vscode-editorWarning-foreground, #e5a100)",
-  color: "#fff",
+  padding: '8px 16px',
+  background: 'var(--vscode-editorWarning-foreground, #e5a100)',
+  color: '#fff',
   fontSize: 12,
-  fontFamily: "var(--vscode-font-family)",
-  textAlign: "center",
+  fontFamily: 'var(--vscode-font-family)',
+  textAlign: 'center',
   zIndex: 1001,
 };
 
 const disconnectedScreenStyle: React.CSSProperties = {
   ...centerScreenStyle,
   ...absoluteFillStyle,
-  justifyContent: "flex-start",
+  justifyContent: 'flex-start',
   gap: 12,
   paddingTop: 88,
 };
@@ -968,7 +968,7 @@ const disconnectedScreenStyle: React.CSSProperties = {
 const warningIconStyle: React.CSSProperties = {
   fontSize: 36,
   marginBottom: 12,
-  color: "var(--vscode-editorWarning-foreground, #e5a100)",
+  color: 'var(--vscode-editorWarning-foreground, #e5a100)',
   lineHeight: 1,
 };
 
@@ -977,134 +977,134 @@ const warningIconStyle: React.CSSProperties = {
 // ============================================================================
 
 const errorOverlayBackdropStyle: CSSProperties = {
-  position: "absolute",
+  position: 'absolute',
   inset: 0,
   zIndex: 100,
-  background: "rgba(0, 0, 0, 0.85)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontFamily: "var(--vscode-font-family, system-ui, -apple-system, sans-serif)",
+  background: 'rgba(0, 0, 0, 0.85)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontFamily: 'var(--vscode-font-family, system-ui, -apple-system, sans-serif)',
 };
 
 const errorOverlayCardStyle: CSSProperties = {
   padding: 32,
   maxWidth: 520,
-  width: "90%",
-  background: "var(--vscode-editor-background, #1e1e1e)",
+  width: '90%',
+  background: 'var(--vscode-editor-background, #1e1e1e)',
   borderRadius: 12,
-  border: "1px solid var(--vscode-widget-border, #333)",
+  border: '1px solid var(--vscode-widget-border, #333)',
 };
 
 const errorOverlayTitleStyle: CSSProperties = {
-  color: "var(--vscode-editor-foreground, #e2e8f0)",
-  margin: "0 0 4px",
+  color: 'var(--vscode-editor-foreground, #e2e8f0)',
+  margin: '0 0 4px',
   fontSize: 15,
   fontWeight: 600,
 };
 
 const errorOverlaySubtitleStyle: CSSProperties = {
-  color: "var(--vscode-descriptionForeground, #718096)",
+  color: 'var(--vscode-descriptionForeground, #718096)',
   fontSize: 12,
-  margin: "0 0 20px",
+  margin: '0 0 20px',
 };
 
 const errorOverlayNoPropsHintStyle: CSSProperties = {
-  color: "var(--vscode-descriptionForeground, #718096)",
+  color: 'var(--vscode-descriptionForeground, #718096)',
   fontSize: 12,
-  margin: "0 0 16px",
+  margin: '0 0 16px',
   lineHeight: 1.6,
 };
 
 const sampleNameRowStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
+  display: 'flex',
+  alignItems: 'center',
   gap: 8,
   marginBottom: 12,
 };
 
 const sampleNameLabelStyle: CSSProperties = {
-  color: "var(--vscode-descriptionForeground, #718096)",
+  color: 'var(--vscode-descriptionForeground, #718096)',
   fontSize: 12,
   minWidth: 40,
 };
 
 const sampleNameInputStyle: CSSProperties = {
   flex: 1,
-  padding: "4px 8px",
+  padding: '4px 8px',
   fontSize: 12,
-  background: "var(--vscode-input-background, #1e1e1e)",
-  color: "var(--vscode-input-foreground, #e2e8f0)",
-  border: "1px solid var(--vscode-input-border, #444)",
+  background: 'var(--vscode-input-background, #1e1e1e)',
+  color: 'var(--vscode-input-foreground, #e2e8f0)',
+  border: '1px solid var(--vscode-input-border, #444)',
   borderRadius: 4,
-  outline: "none",
-  fontFamily: "var(--vscode-editor-font-family, monospace)",
+  outline: 'none',
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
 };
 
 const errorOverlayHintStyle: CSSProperties = {
-  color: "var(--vscode-descriptionForeground, #718096)",
+  color: 'var(--vscode-descriptionForeground, #718096)',
   fontSize: 11,
-  margin: "0 0 12px",
+  margin: '0 0 12px',
   lineHeight: 1.5,
 };
 
 const errorOverlayLinkButtonStyle: CSSProperties = {
-  background: "none",
-  border: "none",
-  color: "var(--vscode-textLink-foreground, #3794ff)",
-  cursor: "pointer",
+  background: 'none',
+  border: 'none',
+  color: 'var(--vscode-textLink-foreground, #3794ff)',
+  cursor: 'pointer',
   padding: 0,
   fontSize: 13,
-  textDecoration: "underline",
+  textDecoration: 'underline',
 };
 
 const errorOverlayCloseButtonStyle: CSSProperties = {
-  background: "transparent",
-  border: "none",
-  color: "var(--vscode-descriptionForeground, #718096)",
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--vscode-descriptionForeground, #718096)',
   fontSize: 20,
-  cursor: "pointer",
-  padding: "0 4px",
+  cursor: 'pointer',
+  padding: '0 4px',
   lineHeight: 1,
   borderRadius: 4,
   marginTop: -4,
 };
 
 const errorOverlayAIHintStyle: CSSProperties = {
-  color: "var(--vscode-descriptionForeground, #718096)",
+  color: 'var(--vscode-descriptionForeground, #718096)',
   fontSize: 11,
-  margin: "12px 0 0",
+  margin: '12px 0 0',
   lineHeight: 1.5,
 };
 
 const errorOverlayAIHintLinkStyle: CSSProperties = {
-  background: "none",
-  border: "none",
-  color: "var(--vscode-textLink-foreground, #3794ff)",
-  cursor: "pointer",
+  background: 'none',
+  border: 'none',
+  color: 'var(--vscode-textLink-foreground, #3794ff)',
+  cursor: 'pointer',
   padding: 0,
   fontSize: 11,
-  textDecoration: "underline",
+  textDecoration: 'underline',
 };
 
 const errorOverlayPrimaryButtonStyle: CSSProperties = {
-  padding: "8px 16px",
-  background: "var(--vscode-button-background, #3182ce)",
-  color: "var(--vscode-button-foreground, white)",
-  border: "none",
+  padding: '8px 16px',
+  background: 'var(--vscode-button-background, #3182ce)',
+  color: 'var(--vscode-button-foreground, white)',
+  border: 'none',
   borderRadius: 6,
-  cursor: "pointer",
+  cursor: 'pointer',
   fontSize: 13,
   fontWeight: 500,
 };
 
 const errorOverlaySecondaryButtonStyle: CSSProperties = {
-  padding: "8px 16px",
-  background: "transparent",
-  color: "var(--vscode-textLink-foreground, #a78bfa)",
-  border: "1px solid var(--vscode-textLink-foreground, #a78bfa)",
+  padding: '8px 16px',
+  background: 'transparent',
+  color: 'var(--vscode-textLink-foreground, #a78bfa)',
+  border: '1px solid var(--vscode-textLink-foreground, #a78bfa)',
   borderRadius: 6,
-  cursor: "pointer",
+  cursor: 'pointer',
   fontSize: 13,
   fontWeight: 500,
 };

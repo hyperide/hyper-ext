@@ -4,8 +4,8 @@
  * Accessed via: VS Code extension component selection flow before preview registration
  */
 
-import type { EnsureSampleResult } from "@lib/preview-generator";
-import * as vscode from "vscode";
+import type { EnsureSampleResult } from '@lib/preview-generator';
+import * as vscode from 'vscode';
 
 export function shouldCreateNoPropsSample(
   ensureResult: EnsureSampleResult,
@@ -14,7 +14,7 @@ export function shouldCreateNoPropsSample(
   // Respect the user-facing setting so E2E harnesses can disable the
   // source-file mutation — git checkout between specs would drop the
   // export and trigger Vite "Could not Fast Refresh" + failed reload.
-  const enabled = vscode.workspace.getConfiguration("hypercanvas.preview").get<boolean>("autoSampleGeneration", true);
+  const enabled = vscode.workspace.getConfiguration('hypercanvas.preview').get<boolean>('autoSampleGeneration', true);
   if (!enabled) return false;
 
   // Create a minimal no-props scaffold whenever no sample was generated — regardless of

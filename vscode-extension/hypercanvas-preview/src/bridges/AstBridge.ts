@@ -4,25 +4,25 @@
  * Routes ast:* messages to AstService and sends responses back.
  */
 
-import * as fsSync from "node:fs";
-import path from "node:path";
-import { discoverLayout } from "@shared/i18n-text/resolve-i18n-resource";
-import { writeI18nResource } from "@shared/i18n-text/write-i18n-resource";
-import type * as vscode from "vscode";
+import * as fsSync from 'node:fs';
+import path from 'node:path';
+import { discoverLayout } from '@shared/i18n-text/resolve-i18n-resource';
+import { writeI18nResource } from '@shared/i18n-text/write-i18n-resource';
+import type * as vscode from 'vscode';
 import type {
   AstOperationResult,
   DuplicateElementResult,
   InsertElementResult,
   WrapElementResult,
-} from "../services/AstService";
-import { AstService } from "../services/AstService";
-import { UndoRedoService } from "../services/UndoRedoService";
-import type { AstMessage, AstResponse } from "../types";
-import { VSCodeFileIO } from "../vscode-file-io";
+} from '../services/AstService';
+import { AstService } from '../services/AstService';
+import { UndoRedoService } from '../services/UndoRedoService';
+import type { AstMessage, AstResponse } from '../types';
+import { VSCodeFileIO } from '../vscode-file-io';
 
 // File sink only when explicitly requested or in CI — never in normal production use
 const _BRIDGE_DEBUG_LOG: string | null =
-  process.env.HYPERIDE_AST_DEBUG_LOG ?? (process.env.CI === "true" ? "/artifacts/ast-debug.log" : null);
+  process.env.HYPERIDE_AST_DEBUG_LOG ?? (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : null);
 function _dbgBridge(msg: string) {
   if (!_BRIDGE_DEBUG_LOG) return;
   console.log(msg);
@@ -68,57 +68,57 @@ export class AstBridge {
 
     try {
       switch (message.type) {
-        case "ast:updateStyles":
+        case 'ast:updateStyles':
           response = await this._handleUpdateStyles(message);
           break;
 
-        case "ast:updateProps":
+        case 'ast:updateProps':
           response = await this._handleUpdateProps(message);
           break;
 
-        case "ast:insertElement":
+        case 'ast:insertElement':
           response = await this._handleInsertElement(message);
           break;
 
-        case "ast:deleteElements":
+        case 'ast:deleteElements':
           response = await this._handleDeleteElements(message);
           break;
 
-        case "ast:duplicateElement":
+        case 'ast:duplicateElement':
           response = await this._handleDuplicateElement(message);
           break;
 
-        case "ast:updateText":
+        case 'ast:updateText':
           response = await this._handleUpdateText(message);
           break;
 
-        case "ast:wrapElement":
+        case 'ast:wrapElement':
           response = await this._handleWrapElement(message);
           break;
 
-        case "ast:moveElement":
+        case 'ast:moveElement':
           response = await this._handleMoveElement(message);
           break;
 
-        case "ast:writeI18nResource":
+        case 'ast:writeI18nResource':
           response = await this._handleWriteI18nResource(message);
           break;
 
         default:
           response = {
-            type: "ast:response",
+            type: 'ast:response',
             requestId: (message as { requestId: string }).requestId,
             success: false,
             error: `Unknown AST message type: ${(message as { type: string }).type}`,
           };
       }
     } catch (error) {
-      console.error("[AstBridge] Error handling message:", error);
+      console.error('[AstBridge] Error handling message:', error);
       response = {
-        type: "ast:response",
+        type: 'ast:response',
         requestId: (message as { requestId: string }).requestId,
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
 
@@ -290,12 +290,12 @@ export class AstBridge {
   /**
    * Handle updateStyles message
    */
-  private async _handleUpdateStyles(message: Extract<AstMessage, { type: "ast:updateStyles" }>): Promise<AstResponse> {
+  private async _handleUpdateStyles(message: Extract<AstMessage, { type: 'ast:updateStyles' }>): Promise<AstResponse> {
     _dbgBridge(
       `[AstBridge._handleUpdateStyles] filePath=${message.filePath} elementId=${message.elementId} styles=${JSON.stringify(message.styles)}`,
     );
     // elementId from the client is in nodeRef format ("fileName:line:col") — pass as nodeRef for element resolution
-    const nodeRef = message.elementId?.includes(":") ? message.elementId : undefined;
+    const nodeRef = message.elementId?.includes(':') ? message.elementId : undefined;
     const result = await this._withUndoTracking(message.filePath, () =>
       this._astService.updateStyles(
         message.filePath,
@@ -308,7 +308,7 @@ export class AstBridge {
     );
 
     return {
-      type: "ast:response",
+      type: 'ast:response',
       requestId: message.requestId,
       success: result.success,
       data: result.success ? { className: result.className } : undefined,
@@ -319,17 +319,17 @@ export class AstBridge {
   /**
    * Handle updateProps message
    */
-  private async _handleUpdateProps(message: Extract<AstMessage, { type: "ast:updateProps" }>): Promise<AstResponse> {
+  private async _handleUpdateProps(message: Extract<AstMessage, { type: 'ast:updateProps' }>): Promise<AstResponse> {
     _dbgBridge(
       `[AstBridge._handleUpdateProps] filePath=${message.filePath} elementId=${message.elementId} props=${JSON.stringify(message.props)}`,
     );
-    const nodeRef = message.elementId?.includes(":") ? message.elementId : undefined;
+    const nodeRef = message.elementId?.includes(':') ? message.elementId : undefined;
     const result = await this._withUndoTracking(message.filePath, () =>
       this._astService.updateProps(message.filePath, message.elementId, message.props, nodeRef),
     );
 
     return {
-      type: "ast:response",
+      type: 'ast:response',
       requestId: message.requestId,
       success: result.success,
       error: result.error,
@@ -339,13 +339,13 @@ export class AstBridge {
   /**
    * Handle updateText message
    */
-  private async _handleUpdateText(message: Extract<AstMessage, { type: "ast:updateText" }>): Promise<AstResponse> {
+  private async _handleUpdateText(message: Extract<AstMessage, { type: 'ast:updateText' }>): Promise<AstResponse> {
     const result = await this._withUndoTracking(message.filePath, () =>
       this._astService.updateText(message.filePath, message.elementId, message.text),
     );
 
     return {
-      type: "ast:response",
+      type: 'ast:response',
       requestId: message.requestId,
       success: result.success,
       error: result.error,
@@ -356,7 +356,7 @@ export class AstBridge {
    * Handle insertElement message
    */
   private async _handleInsertElement(
-    message: Extract<AstMessage, { type: "ast:insertElement" }>,
+    message: Extract<AstMessage, { type: 'ast:insertElement' }>,
   ): Promise<AstResponse> {
     const result = await this._withUndoTracking(message.filePath, () =>
       this._astService.insertElement(
@@ -371,7 +371,7 @@ export class AstBridge {
     );
 
     return {
-      type: "ast:response",
+      type: 'ast:response',
       requestId: message.requestId,
       success: result.success,
       data: result.success ? { newId: result.newId, index: result.index } : undefined,
@@ -383,11 +383,11 @@ export class AstBridge {
    * Handle deleteElements message
    */
   private async _handleDeleteElements(
-    message: Extract<AstMessage, { type: "ast:deleteElements" }>,
+    message: Extract<AstMessage, { type: 'ast:deleteElements' }>,
   ): Promise<AstResponse> {
     const result = await this.deleteElements(message.filePath, message.elementIds);
     return {
-      type: "ast:response",
+      type: 'ast:response',
       requestId: message.requestId,
       success: result.success,
       data: result.data,
@@ -399,14 +399,14 @@ export class AstBridge {
    * Handle duplicateElement message
    */
   private async _handleDuplicateElement(
-    message: Extract<AstMessage, { type: "ast:duplicateElement" }>,
+    message: Extract<AstMessage, { type: 'ast:duplicateElement' }>,
   ): Promise<AstResponse> {
     const result = await this._withUndoTracking(message.filePath, () =>
       this._astService.duplicateElement(message.filePath, message.elementId),
     );
 
     return {
-      type: "ast:response",
+      type: 'ast:response',
       requestId: message.requestId,
       success: result.success,
       data: result.success ? { newId: result.newId } : undefined,
@@ -417,13 +417,13 @@ export class AstBridge {
   /**
    * Handle wrapElement message
    */
-  private async _handleWrapElement(message: Extract<AstMessage, { type: "ast:wrapElement" }>): Promise<AstResponse> {
+  private async _handleWrapElement(message: Extract<AstMessage, { type: 'ast:wrapElement' }>): Promise<AstResponse> {
     const result = await this._withUndoTracking(message.filePath, () =>
       this._astService.wrapElement(message.filePath, message.elementId, message.wrapperType, message.wrapperProps),
     );
 
     return {
-      type: "ast:response",
+      type: 'ast:response',
       requestId: message.requestId,
       success: result.success,
       data: result.success ? { wrapperId: result.wrapperId } : undefined,
@@ -445,7 +445,7 @@ export class AstBridge {
    * envelope. From the iframe's standpoint moveElement otherwise always
    * succeeds.
    */
-  private async _handleMoveElement(message: Extract<AstMessage, { type: "ast:moveElement" }>): Promise<AstResponse> {
+  private async _handleMoveElement(message: Extract<AstMessage, { type: 'ast:moveElement' }>): Promise<AstResponse> {
     const absolutePath = this._resolvePath(message.filePath);
     this._undoRedoService.beginTracking();
     try {
@@ -467,14 +467,14 @@ export class AstBridge {
           message.position,
         );
         return {
-          type: "ast:response",
+          type: 'ast:response',
           requestId: message.requestId,
           success: r.success,
           data: r.adjustments ? { adjustments: r.adjustments } : undefined,
         };
       }
 
-      let result: Awaited<ReturnType<AstService["moveElement"]>>;
+      let result: Awaited<ReturnType<AstService['moveElement']>>;
       try {
         result = await this._astService.moveElement(
           message.filePath,
@@ -484,10 +484,10 @@ export class AstBridge {
         );
       } catch (error) {
         return {
-          type: "ast:response",
+          type: 'ast:response',
           requestId: message.requestId,
           success: false,
-          error: error instanceof Error ? error.message : "moveElement failed",
+          error: error instanceof Error ? error.message : 'moveElement failed',
         };
       }
 
@@ -542,7 +542,7 @@ export class AstBridge {
       }
 
       return {
-        type: "ast:response",
+        type: 'ast:response',
         requestId: message.requestId,
         success: true,
         data: result.adjustments ? { adjustments: result.adjustments } : undefined,
@@ -558,38 +558,38 @@ export class AstBridge {
    * If the key itself changes (previousKey provided), also updates the JSX child expression.
    */
   private async _handleWriteI18nResource(
-    message: Extract<AstMessage, { type: "ast:writeI18nResource" }>,
+    message: Extract<AstMessage, { type: 'ast:writeI18nResource' }>,
   ): Promise<AstResponse> {
     // Library whitelist mirrors the SaaS HTTP route. The webview message channel
     // does not enforce the I18nLibrary union at runtime, so a spoofed message
     // could pass any string here — guard before forwarding to writeI18nResource.
     const VALID_LIBRARIES = new Set<string>([
-      "react-i18next",
-      "i18next",
-      "next-intl",
-      "react-intl",
-      "lingui",
-      "custom",
+      'react-i18next',
+      'i18next',
+      'next-intl',
+      'react-intl',
+      'lingui',
+      'custom',
     ]);
     if (!VALID_LIBRARIES.has(message.library)) {
-      return { type: "ast:response", requestId: message.requestId, success: false, error: "Invalid library" };
+      return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid library' };
     }
-    if (typeof message.newText !== "string" || message.newText.length > 10_000) {
+    if (typeof message.newText !== 'string' || message.newText.length > 10_000) {
       return {
-        type: "ast:response",
+        type: 'ast:response',
         requestId: message.requestId,
         success: false,
-        error: "newText exceeds maximum length of 10000 characters",
+        error: 'newText exceeds maximum length of 10000 characters',
       };
     }
     // Reject path traversal via locale/namespace — same guard as the SaaS HTTP route.
     // Key validation prevents JSX injection when key is interpolated into {t("...")} expressions.
     const SAFE_SEGMENT = /^[\w-]{1,64}$/;
     if (!SAFE_SEGMENT.test(message.activeLocale)) {
-      return { type: "ast:response", requestId: message.requestId, success: false, error: "Invalid activeLocale" };
+      return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid activeLocale' };
     }
     if (message.namespace !== undefined && !SAFE_SEGMENT.test(message.namespace)) {
-      return { type: "ast:response", requestId: message.requestId, success: false, error: "Invalid namespace" };
+      return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid namespace' };
     }
     // Reject control chars (would break JSON parsing) and JSX-structural chars
     // ({, }, <, >). Curly braces in particular corrupt the source: the JSX-rewrite
@@ -598,7 +598,7 @@ export class AstBridge {
     // the key prematurely closes the expression and the rest leaks into JSXText.
     const keyLen = message.key.length;
     if (keyLen === 0 || keyLen > 256 || /[\n\r\0{}<>]/.test(message.key)) {
-      return { type: "ast:response", requestId: message.requestId, success: false, error: "Invalid key" };
+      return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid key' };
     }
 
     const localeLayout = await discoverLayout(
@@ -633,7 +633,7 @@ export class AstBridge {
 
     if (!writeResult.success) {
       return {
-        type: "ast:response",
+        type: 'ast:response',
         requestId: message.requestId,
         success: false,
         error: writeResult.error,
@@ -654,11 +654,11 @@ export class AstBridge {
     if (i18nFilePath && i18nElementId && previousKey) {
       try {
         const preContent = await this._fileIO.readFile(i18nFilePath);
-        const lines = preContent.split("\n");
+        const lines = preContent.split('\n');
         const snippet = lines
           .slice(109, 145)
           .map((l, i) => `L${i + 110}:${l}`)
-          .join(" | ")
+          .join(' | ')
           .substring(0, 2000);
         _dbgBridge(`[pre-updateI18nKey] lines 110-145: ${snippet}`);
       } catch {}
@@ -670,7 +670,7 @@ export class AstBridge {
       );
       if (!updateResult.success) {
         return {
-          type: "ast:response",
+          type: 'ast:response',
           requestId: message.requestId,
           success: false,
           error: updateResult.error,
@@ -682,7 +682,7 @@ export class AstBridge {
     }
 
     return {
-      type: "ast:response",
+      type: 'ast:response',
       requestId: message.requestId,
       success: true,
       data: { filePath: writeResult.filePath, newElementId },
@@ -696,11 +696,11 @@ export class AstBridge {
   private _sendResponse(response: AstResponse, targetWebview?: vscode.Webview): void {
     const webview = targetWebview ?? this._webview;
     if (!webview) {
-      console.warn("[AstBridge] No webview set, cannot send response");
+      console.warn('[AstBridge] No webview set, cannot send response');
       return;
     }
 
-    console.log("[AstBridge] Sending response:", response.type, response.success);
+    console.log('[AstBridge] Sending response:', response.type, response.success);
     webview.postMessage(response);
   }
 }

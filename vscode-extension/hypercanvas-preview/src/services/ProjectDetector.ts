@@ -10,10 +10,10 @@
  *   HYP-383 — @astrojs/tailwind and @tailwindcss/vite not detected as tailwind CSS system
  */
 
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import type { ProjectInfo, ProjectType, RepoType, UnsupportedProjectError } from "../types";
-import { WRITABLE_CSS_SYSTEMS } from "../types";
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import type { ProjectInfo, ProjectType, RepoType, UnsupportedProjectError } from '../types';
+import { WRITABLE_CSS_SYSTEMS } from '../types';
 
 /**
  * Read and parse package.json from project directory.
@@ -21,8 +21,8 @@ import { WRITABLE_CSS_SYSTEMS } from "../types";
  */
 export async function readPackageJson(projectPath: string): Promise<Record<string, unknown> | null> {
   try {
-    const packageJsonPath = path.join(projectPath, "package.json");
-    const content = await fs.readFile(packageJsonPath, "utf-8");
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const content = await fs.readFile(packageJsonPath, 'utf-8');
     return JSON.parse(content);
   } catch {
     return null;
@@ -53,21 +53,21 @@ export async function detectRepoType(projectPath: string): Promise<RepoType> {
   };
 
   // Nx: nx.json config file OR nx package in deps
-  if ((await fileExists(path.join(projectPath, "nx.json"))) || allDeps.nx) return "mono-nx";
+  if ((await fileExists(path.join(projectPath, 'nx.json'))) || allDeps.nx) return 'mono-nx';
 
   // Turborepo: turbo.json config file OR turbo in deps
-  if ((await fileExists(path.join(projectPath, "turbo.json"))) || allDeps.turbo) return "mono-turbo";
+  if ((await fileExists(path.join(projectPath, 'turbo.json'))) || allDeps.turbo) return 'mono-turbo';
 
   // pnpm workspaces: pnpm-workspace.yaml
-  if (await fileExists(path.join(projectPath, "pnpm-workspace.yaml"))) return "mono-pnpm";
+  if (await fileExists(path.join(projectPath, 'pnpm-workspace.yaml'))) return 'mono-pnpm';
 
   // Lerna
-  if (await fileExists(path.join(projectPath, "lerna.json"))) return "mono-lerna";
+  if (await fileExists(path.join(projectPath, 'lerna.json'))) return 'mono-lerna';
 
   // Generic workspaces (npm/yarn workspaces field in package.json)
-  if (pkg && Array.isArray((pkg as { workspaces?: unknown }).workspaces)) return "mono-generic";
+  if (pkg && Array.isArray((pkg as { workspaces?: unknown }).workspaces)) return 'mono-generic';
 
-  return "simple";
+  return 'simple';
 }
 
 /**
@@ -77,7 +77,7 @@ export async function detectRepoType(projectPath: string): Promise<RepoType> {
 async function readSubPackageDeps(projectPath: string): Promise<Record<string, string>> {
   const merged: Record<string, string> = {};
   // Common sub-package directory names across different monorepo conventions
-  for (const dir of ["apps", "packages", "targets", "libs", "services"]) {
+  for (const dir of ['apps', 'packages', 'targets', 'libs', 'services']) {
     try {
       const entries = await fs.readdir(path.join(projectPath, dir));
       for (const entry of entries) {
@@ -101,7 +101,7 @@ export async function detectProjectType(projectPath: string): Promise<ProjectTyp
   const packageJson = await readPackageJson(projectPath);
 
   if (!packageJson) {
-    return "unknown";
+    return 'unknown';
   }
 
   const deps = {
@@ -110,49 +110,49 @@ export async function detectProjectType(projectPath: string): Promise<ProjectTyp
   };
 
   // Check dependencies — order matters: framework-specific deps first, then bundlers
-  if (deps.next) return "nextjs";
-  if (deps["react-scripts"]) return "cra";
-  if (deps["@remix-run/react"]) return "remix";
+  if (deps.next) return 'nextjs';
+  if (deps['react-scripts']) return 'cra';
+  if (deps['@remix-run/react']) return 'remix';
   // Astro is Vite-powered — treat as 'vite' for dev server + HMR pipeline
-  if (deps.astro) return "vite";
-  if (deps.vite) return "vite";
-  if (deps.webpack || deps["webpack-dev-server"] || deps["webpack-cli"]) return "webpack";
+  if (deps.astro) return 'vite';
+  if (deps.vite) return 'vite';
+  if (deps.webpack || deps['webpack-dev-server'] || deps['webpack-cli']) return 'webpack';
 
   // Bun as bundler: @types/bun is the clearest signal (Vite/webpack projects don't have it).
   // bun-plugin-* deps or a dev script invoking bun directly (bun --hot / bun src/) also count.
-  const hasBunTypes = Boolean(deps["@types/bun"]);
-  const hasBunPlugin = Object.keys(deps).some((k) => k.startsWith("bun-plugin-"));
+  const hasBunTypes = Boolean(deps['@types/bun']);
+  const hasBunPlugin = Object.keys(deps).some((k) => k.startsWith('bun-plugin-'));
   const scripts = packageJson.scripts as Record<string, string> | undefined;
-  const devScript = scripts?.dev ?? scripts?.start ?? "";
+  const devScript = scripts?.dev ?? scripts?.start ?? '';
   const bunDirectInvocation = /\bbun\s+(--hot|--watch|src\/|index\.)/.test(devScript);
-  if (hasBunTypes || hasBunPlugin || bunDirectInvocation) return "bun";
+  if (hasBunTypes || hasBunPlugin || bunDirectInvocation) return 'bun';
 
   // Check for config files
-  if (await fileExists(path.join(projectPath, "next.config.js"))) return "nextjs";
-  if (await fileExists(path.join(projectPath, "next.config.mjs"))) return "nextjs";
-  if (await fileExists(path.join(projectPath, "next.config.ts"))) return "nextjs";
-  if (await fileExists(path.join(projectPath, "astro.config.ts"))) return "vite";
-  if (await fileExists(path.join(projectPath, "astro.config.mjs"))) return "vite";
-  if (await fileExists(path.join(projectPath, "astro.config.js"))) return "vite";
-  if (await fileExists(path.join(projectPath, "astro.config.cjs"))) return "vite";
-  if (await fileExists(path.join(projectPath, "vite.config.ts"))) return "vite";
-  if (await fileExists(path.join(projectPath, "vite.config.js"))) return "vite";
-  if (await fileExists(path.join(projectPath, "webpack.config.js"))) return "webpack";
-  if (await fileExists(path.join(projectPath, "webpack.config.ts"))) return "webpack";
+  if (await fileExists(path.join(projectPath, 'next.config.js'))) return 'nextjs';
+  if (await fileExists(path.join(projectPath, 'next.config.mjs'))) return 'nextjs';
+  if (await fileExists(path.join(projectPath, 'next.config.ts'))) return 'nextjs';
+  if (await fileExists(path.join(projectPath, 'astro.config.ts'))) return 'vite';
+  if (await fileExists(path.join(projectPath, 'astro.config.mjs'))) return 'vite';
+  if (await fileExists(path.join(projectPath, 'astro.config.js'))) return 'vite';
+  if (await fileExists(path.join(projectPath, 'astro.config.cjs'))) return 'vite';
+  if (await fileExists(path.join(projectPath, 'vite.config.ts'))) return 'vite';
+  if (await fileExists(path.join(projectPath, 'vite.config.js'))) return 'vite';
+  if (await fileExists(path.join(projectPath, 'webpack.config.js'))) return 'webpack';
+  if (await fileExists(path.join(projectPath, 'webpack.config.ts'))) return 'webpack';
 
   // Monorepo fallback: root package.json had no framework dep, but a sub-package might
   const repoType = await detectRepoType(projectPath);
-  if (repoType !== "simple") {
+  if (repoType !== 'simple') {
     const subDeps = await readSubPackageDeps(projectPath);
-    if (subDeps.next) return "nextjs";
-    if (subDeps["react-scripts"]) return "cra";
-    if (subDeps["@remix-run/react"]) return "remix";
-    if (subDeps.astro) return "vite";
-    if (subDeps.vite) return "vite";
-    if (subDeps.webpack || subDeps["webpack-dev-server"]) return "webpack";
+    if (subDeps.next) return 'nextjs';
+    if (subDeps['react-scripts']) return 'cra';
+    if (subDeps['@remix-run/react']) return 'remix';
+    if (subDeps.astro) return 'vite';
+    if (subDeps.vite) return 'vite';
+    if (subDeps.webpack || subDeps['webpack-dev-server']) return 'webpack';
   }
 
-  return "unknown";
+  return 'unknown';
 }
 
 /**
@@ -160,20 +160,20 @@ export async function detectProjectType(projectPath: string): Promise<ProjectTyp
  */
 export function getDevCommand(type: ProjectType): string {
   switch (type) {
-    case "nextjs":
-      return "dev";
-    case "vite":
-      return "dev";
-    case "cra":
-      return "start";
-    case "remix":
-      return "dev";
-    case "webpack":
-      return "dev";
-    case "bun":
-      return "dev";
+    case 'nextjs':
+      return 'dev';
+    case 'vite':
+      return 'dev';
+    case 'cra':
+      return 'start';
+    case 'remix':
+      return 'dev';
+    case 'webpack':
+      return 'dev';
+    case 'bun':
+      return 'dev';
     default:
-      return "dev";
+      return 'dev';
   }
 }
 
@@ -182,18 +182,18 @@ export function getDevCommand(type: ProjectType): string {
  */
 export function getDefaultPort(type: ProjectType): number {
   switch (type) {
-    case "nextjs":
+    case 'nextjs':
       return 3000;
-    case "vite":
+    case 'vite':
       return 5173;
-    case "cra":
+    case 'cra':
       return 3000;
-    case "remix":
+    case 'remix':
       // Remix v2 uses Vite under the hood — default Vite port
       return 5173;
-    case "webpack":
+    case 'webpack':
       return 3000;
-    case "bun":
+    case 'bun':
       return 3000;
     default:
       return 3000;
@@ -218,7 +218,7 @@ async function hasTypeScript(projectPath: string): Promise<boolean> {
   if (deps.typescript) return true;
 
   // Check for tsconfig
-  if (await fileExists(path.join(projectPath, "tsconfig.json"))) return true;
+  if (await fileExists(path.join(projectPath, 'tsconfig.json'))) return true;
 
   return false;
 }
@@ -258,13 +258,13 @@ export async function detectUnsupportedProject(
     ...(pkg.devDependencies as Record<string, string> | undefined),
   };
 
-  const hasReactNative = Boolean(deps["react-native"]);
+  const hasReactNative = Boolean(deps['react-native']);
   // @tamagui/cli is a build-time codegen tool — not a runtime indicator of RN usage
-  const hasTamagui = Boolean(deps.tamagui || deps["@tamagui/core"]);
+  const hasTamagui = Boolean(deps.tamagui || deps['@tamagui/core']);
 
   if (hasReactNative || hasTamagui) {
-    const what = hasTamagui ? "Tamagui (React Native)" : "React Native";
-    const hasRNWeb = Boolean(deps["react-native-web"]);
+    const what = hasTamagui ? 'Tamagui (React Native)' : 'React Native';
+    const hasRNWeb = Boolean(deps['react-native-web']);
     if (hasRNWeb) {
       // react-native-web already installed — project may work, don't block
       return null;
@@ -278,7 +278,7 @@ export async function detectUnsupportedProject(
     let isTamaguiOne = false;
     if (!hasNext) {
       try {
-        const viteRaw = await fs.readFile(path.join(projectPath, "vite.config.ts"), "utf-8");
+        const viteRaw = await fs.readFile(path.join(projectPath, 'vite.config.ts'), 'utf-8');
         isTamaguiOne =
           /\bone\s*\(/.test(viteRaw) || viteRaw.includes("from 'one/vite'") || viteRaw.includes('from "one/vite"');
       } catch {
@@ -286,10 +286,10 @@ export async function detectUnsupportedProject(
       }
     }
 
-    const fixLabel = hasNext || isTamaguiOne ? "Fix: Add react-native-web" : "Fix: Add react-native-web + Vite config";
+    const fixLabel = hasNext || isTamaguiOne ? 'Fix: Add react-native-web' : 'Fix: Add react-native-web + Vite config';
 
     return {
-      type: "react-native",
+      type: 'react-native',
       message: `${what} projects need react-native-web and a Vite config to render in a browser. Click "Fix" to set it up automatically.`,
       fixLabel,
     };
@@ -305,11 +305,11 @@ export async function detectUnsupportedProject(
 export async function detectUIKit(
   projectPath: string,
   packageJson?: Record<string, unknown> | null,
-): Promise<"tailwind" | "tamagui" | "none"> {
+): Promise<'tailwind' | 'tamagui' | 'none'> {
   const pkg = packageJson ?? (await readPackageJson(projectPath));
 
   if (!pkg) {
-    return "none";
+    return 'none';
   }
 
   const deps = {
@@ -318,16 +318,16 @@ export async function detectUIKit(
   };
 
   // Check for Tamagui
-  if (deps.tamagui || deps["@tamagui/core"] || deps["@tamagui/cli"]) {
-    return "tamagui";
+  if (deps.tamagui || deps['@tamagui/core'] || deps['@tamagui/cli']) {
+    return 'tamagui';
   }
 
   // Check for Tailwind — bare dep or Astro integration (@astrojs/tailwind, @tailwindcss/vite)
-  if (deps.tailwindcss || deps["@astrojs/tailwind"] || deps["@tailwindcss/vite"]) {
-    return "tailwind";
+  if (deps.tailwindcss || deps['@astrojs/tailwind'] || deps['@tailwindcss/vite']) {
+    return 'tailwind';
   }
 
-  return "none";
+  return 'none';
 }
 
 /**
@@ -340,9 +340,9 @@ export async function detectUIKit(
 export async function detectCssSystem(
   projectPath: string,
   packageJson?: Record<string, unknown> | null,
-): Promise<import("../types").CssSystem> {
+): Promise<import('../types').CssSystem> {
   const pkg = packageJson ?? (await readPackageJson(projectPath));
-  if (!pkg) return "unknown";
+  if (!pkg) return 'unknown';
 
   const deps = {
     ...(pkg.dependencies as Record<string, string> | undefined),
@@ -352,39 +352,39 @@ export async function detectCssSystem(
   const has = (name: string) => name in deps;
 
   // Design systems built on Tailwind (check BEFORE bare tailwind)
-  if (has("@shadcn/ui") || has("class-variance-authority")) return "shadcn";
-  if (has("daisyui")) return "daisyui";
-  if (has("@nextui-org/react") || has("@nextui-org/theme")) return "nextui";
+  if (has('@shadcn/ui') || has('class-variance-authority')) return 'shadcn';
+  if (has('daisyui')) return 'daisyui';
+  if (has('@nextui-org/react') || has('@nextui-org/theme')) return 'nextui';
 
   // Tamagui
-  if (has("tamagui") || has("@tamagui/core")) return "tamagui";
+  if (has('tamagui') || has('@tamagui/core')) return 'tamagui';
 
   // CSS-in-JS / zero-runtime
-  if (has("@vanilla-extract/css")) return "vanilla-extract";
-  if (has("@pandacss/dev") || has("pandacss")) return "pandacss";
-  if (has("unocss") || has("@unocss/preset-uno")) return "unocss";
-  if (has("@stylexjs/stylex") || has("stylex")) return "stylex";
-  if (has("styled-components")) return "styled-components";
-  if (has("@emotion/react") || has("@emotion/styled")) return "emotion";
+  if (has('@vanilla-extract/css')) return 'vanilla-extract';
+  if (has('@pandacss/dev') || has('pandacss')) return 'pandacss';
+  if (has('unocss') || has('@unocss/preset-uno')) return 'unocss';
+  if (has('@stylexjs/stylex') || has('stylex')) return 'stylex';
+  if (has('styled-components')) return 'styled-components';
+  if (has('@emotion/react') || has('@emotion/styled')) return 'emotion';
 
   // Component libraries (check after CSS-in-JS since they often bring their own)
-  if (has("@mui/material") || has("@mui/system")) return "mui";
-  if (has("antd") || has("@ant-design/icons")) return "antd";
-  if (has("@chakra-ui/react")) return "chakra";
-  if (has("@mantine/core")) return "mantine";
-  if (has("@fluentui/react-components") || has("@fluentui/react")) return "fluentui";
+  if (has('@mui/material') || has('@mui/system')) return 'mui';
+  if (has('antd') || has('@ant-design/icons')) return 'antd';
+  if (has('@chakra-ui/react')) return 'chakra';
+  if (has('@mantine/core')) return 'mantine';
+  if (has('@fluentui/react-components') || has('@fluentui/react')) return 'fluentui';
 
   // Tailwind (bare — most common, check last so design systems win)
   // @astrojs/tailwind = Astro integration; @tailwindcss/vite = Tailwind v4 in Vite/Astro
-  if (has("tailwindcss") || has("@astrojs/tailwind") || has("@tailwindcss/vite")) return "tailwind";
+  if (has('tailwindcss') || has('@astrojs/tailwind') || has('@tailwindcss/vite')) return 'tailwind';
 
   // SASS/SCSS — detected by sass/node-sass dep. Extension treats it like
   // plain CSS (className-based, no special AST handling needed).
-  if (has("sass") || has("node-sass") || has("sass-embedded")) return "sass" as import("../types").CssSystem;
+  if (has('sass') || has('node-sass') || has('sass-embedded')) return 'sass' as import('../types').CssSystem;
 
   // CSS Modules have no package.json dependency — detect by scanning src/
   // for *.module.css / *.module.scss / *.module.less files.
-  if (await hasCssModuleFiles(projectPath)) return "cssmodules";
+  if (await hasCssModuleFiles(projectPath)) return 'cssmodules';
 
   // Monorepo fallback: root package.json had no CSS dep, check sub-packages.
   // Runs regardless of whether packageJson was pre-resolved — by the time we reach
@@ -392,19 +392,19 @@ export async function detectCssSystem(
   // path from extension.ts) would leave Conloca targets/ tailwindcss invisible.
   {
     const repoType = await detectRepoType(projectPath);
-    if (repoType !== "simple") {
+    if (repoType !== 'simple') {
       const subDeps = await readSubPackageDeps(projectPath);
       const hasSub = (name: string) => name in subDeps;
-      if (hasSub("@shadcn/ui") || hasSub("class-variance-authority")) return "shadcn";
-      if (hasSub("daisyui")) return "daisyui";
-      if (hasSub("tamagui") || hasSub("@tamagui/core")) return "tamagui";
-      if (hasSub("styled-components")) return "styled-components";
-      if (hasSub("@emotion/react") || hasSub("@emotion/styled")) return "emotion";
-      if (hasSub("tailwindcss") || hasSub("@astrojs/tailwind") || hasSub("@tailwindcss/vite")) return "tailwind";
+      if (hasSub('@shadcn/ui') || hasSub('class-variance-authority')) return 'shadcn';
+      if (hasSub('daisyui')) return 'daisyui';
+      if (hasSub('tamagui') || hasSub('@tamagui/core')) return 'tamagui';
+      if (hasSub('styled-components')) return 'styled-components';
+      if (hasSub('@emotion/react') || hasSub('@emotion/styled')) return 'emotion';
+      if (hasSub('tailwindcss') || hasSub('@astrojs/tailwind') || hasSub('@tailwindcss/vite')) return 'tailwind';
     }
   }
 
-  return "unknown";
+  return 'unknown';
 }
 
 /**
@@ -412,12 +412,12 @@ export async function detectCssSystem(
  * files in common source directories.
  */
 async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
-  const SOURCE_DIRS = ["src", "app", "pages", "components"];
+  const SOURCE_DIRS = ['src', 'app', 'pages', 'components'];
   for (const dir of SOURCE_DIRS) {
     try {
       const fullDir = path.join(projectPath, dir);
       const entries = await fs.readdir(fullDir, { recursive: true });
-      const hasModule = entries.some((e) => typeof e === "string" && /\.module\.(css|scss|less)$/.test(e));
+      const hasModule = entries.some((e) => typeof e === 'string' && /\.module\.(css|scss|less)$/.test(e));
       if (hasModule) return true;
     } catch {
       // Directory doesn't exist
@@ -438,7 +438,7 @@ async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
  * works for the common client-component case. Promoted to full-edit; the
  * readonly badge stays available for genuine non-writable systems.
  */
-const FULL_EDIT_BUNDLERS: import("../types").ProjectType[] = ["vite", "cra", "webpack", "nextjs", "bun"];
+const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'webpack', 'nextjs', 'bun'];
 
 // 'unknown' → unsupported (no dev server management)
 
@@ -452,12 +452,12 @@ const FULL_EDIT_BUNDLERS: import("../types").ProjectType[] = ["vite", "cra", "we
  * Readonly = preview renders but either CSS or bundler is limited
  */
 export function computeCapabilities(
-  cssSystem: import("../types").CssSystem,
-  uiKit: "tailwind" | "tamagui" | "none",
-  projectError: import("../types").UnsupportedProjectError | null,
-  projectType?: import("../types").ProjectType,
+  cssSystem: import('../types').CssSystem,
+  uiKit: 'tailwind' | 'tamagui' | 'none',
+  projectError: import('../types').UnsupportedProjectError | null,
+  projectType?: import('../types').ProjectType,
   repoType?: RepoType,
-): import("../types").ProjectCapabilities {
+): import('../types').ProjectCapabilities {
   const cssWritable = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
   const bundlerFullEdit = projectType ? FULL_EDIT_BUNDLERS.includes(projectType) : false;
   const canWriteStyles = cssWritable && bundlerFullEdit;
@@ -500,22 +500,22 @@ export async function getPackageScripts(projectPath: string): Promise<Record<str
  * shim wasn't enabled — observed on bulka-the-dog (`packageManager: pnpm@10.14.0`,
  * no lockfile) blocking dev-server bring-up.
  */
-export async function detectPackageManager(projectPath: string): Promise<"npm" | "yarn" | "pnpm" | "bun"> {
+export async function detectPackageManager(projectPath: string): Promise<'npm' | 'yarn' | 'pnpm' | 'bun'> {
   // Check for lock files first — these are the strongest signal.
-  if (await fileExists(path.join(projectPath, "bun.lockb"))) return "bun";
-  if (await fileExists(path.join(projectPath, "bun.lock"))) return "bun";
-  if (await fileExists(path.join(projectPath, "pnpm-lock.yaml"))) return "pnpm";
-  if (await fileExists(path.join(projectPath, "yarn.lock"))) return "yarn";
+  if (await fileExists(path.join(projectPath, 'bun.lockb'))) return 'bun';
+  if (await fileExists(path.join(projectPath, 'bun.lock'))) return 'bun';
+  if (await fileExists(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (await fileExists(path.join(projectPath, 'yarn.lock'))) return 'yarn';
 
   // Fall back to the `packageManager` field — corepack-style declaration
   // common in projects that don't commit lock files but pin a manager.
   try {
-    const pkgRaw = await fs.readFile(path.join(projectPath, "package.json"), "utf8");
+    const pkgRaw = await fs.readFile(path.join(projectPath, 'package.json'), 'utf8');
     const pkg = JSON.parse(pkgRaw) as { packageManager?: unknown };
-    if (typeof pkg.packageManager === "string") {
+    if (typeof pkg.packageManager === 'string') {
       // Format is "<name>@<version>[+<integrity>]". We only need the name.
-      const name = pkg.packageManager.split("@", 1)[0]?.trim().toLowerCase();
-      if (name === "pnpm" || name === "yarn" || name === "bun" || name === "npm") {
+      const name = pkg.packageManager.split('@', 1)[0]?.trim().toLowerCase();
+      if (name === 'pnpm' || name === 'yarn' || name === 'bun' || name === 'npm') {
         return name;
       }
     }
@@ -523,5 +523,5 @@ export async function detectPackageManager(projectPath: string): Promise<"npm" |
     // No package.json or parse error — fall through to npm default.
   }
 
-  return "npm";
+  return 'npm';
 }

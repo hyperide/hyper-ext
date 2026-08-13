@@ -1,13 +1,13 @@
-import { TID } from "@shared/data-testid-map";
-import { IconChevronDown, IconComponents, IconPlus, IconRefresh, IconSearch } from "@tabler/icons-react";
-import cn from "clsx";
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import type { ComponentGroup, ComponentListItem, SubProject } from "../../../../lib/component-scanner/types";
-import { ComponentGroupList } from "../../ComponentGroupList";
-import { SubProjectAccordion } from "./SubProjectAccordion";
+import { TID } from '@shared/data-testid-map';
+import { IconChevronDown, IconComponents, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react';
+import cn from 'clsx';
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
+import type { ComponentGroup, ComponentListItem, SubProject } from '../../../../lib/component-scanner/types';
+import { ComponentGroupList } from '../../ComponentGroupList';
+import { SubProjectAccordion } from './SubProjectAccordion';
 
-type SetupReason = "no-ai-config" | "no-paths" | "empty-scan";
+type SetupReason = 'no-ai-config' | 'no-paths' | 'empty-scan';
 
 interface ComponentsSectionProps {
   collapsed: boolean;
@@ -45,7 +45,7 @@ export function ComponentsSection({
   setupReason,
 }: ComponentsSectionProps) {
   const [searchVisible, setSearchVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
 
   const filterGroups = (groups: ComponentGroup[]) => {
     if (!searchQuery) return groups;
@@ -61,23 +61,23 @@ export function ComponentsSection({
   const filteredComposites = filterGroups(compositeGroups);
   const hasSearchResults = filteredAtoms.length > 0 || filteredComposites.length > 0;
   return (
-    <div data-testid={TID.explorer.componentGroup("components")} className="h-full overflow-hidden flex flex-col">
+    <div data-testid={TID.explorer.componentGroup('components')} className="h-full overflow-hidden flex flex-col">
       <div className="h-6 px-2 flex items-center justify-between bg-muted border-t border-border w-full shrink-0">
         <button type="button" onClick={onToggle} className="flex items-center gap-1 flex-1" disabled={!hasContent}>
           <IconChevronDown
-            className={cn("w-3 h-3 transition-transform duration-200", {
-              "rotate-[-90deg]": collapsed || !hasContent,
+            className={cn('w-3 h-3 transition-transform duration-200', {
+              'rotate-[-90deg]': collapsed || !hasContent,
             })}
             stroke={1.5}
           />
           <IconComponents className="w-3.5 h-3.5" stroke={1.5} />
           <span
-            className={cn("text-xs font-semibold", {
-              "text-foreground": hasContent,
-              "text-muted-foreground": !hasContent,
+            className={cn('text-xs font-semibold', {
+              'text-foreground': hasContent,
+              'text-muted-foreground': !hasContent,
             })}
           >
-            {hasContent ? "Components" : "No components"}
+            {hasContent ? 'Components' : 'No components'}
           </span>
         </button>
         <div className="flex items-center gap-1.5">
@@ -88,9 +88,9 @@ export function ComponentsSection({
               onReload();
             }}
             disabled={isReloading}
-            className={isReloading ? "opacity-50" : ""}
+            className={isReloading ? 'opacity-50' : ''}
           >
-            <IconRefresh className={cn("w-4 h-4", { "animate-spin": isReloading })} stroke={1.5} />
+            <IconRefresh className={cn('w-4 h-4', { 'animate-spin': isReloading })} stroke={1.5} />
           </button>
           {!isVSCode && (
             <button
@@ -119,11 +119,11 @@ export function ComponentsSection({
       {!collapsed && !hasContent && setupReason && (
         <div className="px-3 py-2">
           <p className="text-xs text-muted-foreground">
-            {setupReason === "no-paths" &&
-              "No component paths configured. Add component directories to your project settings."}
-            {setupReason === "empty-scan" && "No components found in configured paths. Check your project structure."}
-            {setupReason === "no-ai-config" &&
-              "AI configuration not set up. Configure AI settings to enable component scanning."}
+            {setupReason === 'no-paths' &&
+              'No component paths configured. Add component directories to your project settings.'}
+            {setupReason === 'empty-scan' && 'No components found in configured paths. Check your project structure.'}
+            {setupReason === 'no-ai-config' &&
+              'AI configuration not set up. Configure AI settings to enable component scanning.'}
           </p>
         </div>
       )}

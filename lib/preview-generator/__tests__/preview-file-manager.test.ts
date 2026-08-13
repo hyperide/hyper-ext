@@ -1,12 +1,12 @@
-import { describe, expect, it } from "bun:test";
-import type { FileIO } from "../../ast/file-io";
-import { PREVIEW_GENERATOR_SCHEMA_MARKER } from "../generator";
+import { describe, expect, it } from 'bun:test';
+import type { FileIO } from '../../ast/file-io';
+import { PREVIEW_GENERATOR_SCHEMA_MARKER } from '../generator';
 import {
   isValidTypeScript,
   PreviewFileManager,
   PreviewGenerationError,
   parseExistingPreview,
-} from "../preview-file-manager";
+} from '../preview-file-manager';
 
 /** In-memory FileIO for testing without disk */
 class InMemoryFileIO implements FileIO {
@@ -36,7 +36,7 @@ class InMemoryFileIO implements FileIO {
   }
 
   async listFiles(dirPath: string, extensions?: string[]): Promise<string[]> {
-    const prefix = dirPath.endsWith("/") ? dirPath : `${dirPath}/`;
+    const prefix = dirPath.endsWith('/') ? dirPath : `${dirPath}/`;
     return [...this.files.keys()].filter((k) => {
       if (!k.startsWith(prefix)) return false;
       if (!extensions) return true;
@@ -51,7 +51,7 @@ class InMemoryFileIO implements FileIO {
 
 function createManager(io: InMemoryFileIO, isNextPagesRouter = false) {
   return new PreviewFileManager({
-    projectRoot: "/project",
+    projectRoot: '/project',
     io,
     isNextPagesRouter,
   });
@@ -101,29 +101,29 @@ export const SampleDefault = () => (
 );
 `;
 
-describe("PreviewFileManager", () => {
-  describe("getPreviewFilePath", () => {
-    it("should use apps/next/ for monorepo projects", async () => {
+describe('PreviewFileManager', () => {
+  describe('getPreviewFilePath', () => {
+    it('should use apps/next/ for monorepo projects', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/apps/next/package.json", "{}");
+      io.files.set('/project/apps/next/package.json', '{}');
       const manager = createManager(io);
 
       const path = await manager.getPreviewFilePath();
-      expect(path).toBe("/project/apps/next/__canvas_preview__.tsx");
+      expect(path).toBe('/project/apps/next/__canvas_preview__.tsx');
     });
 
-    it("should use src/ for standard projects", async () => {
+    it('should use src/ for standard projects', async () => {
       const io = new InMemoryFileIO();
       const manager = createManager(io);
 
       const path = await manager.getPreviewFilePath();
-      expect(path).toBe("/project/src/__canvas_preview__.tsx");
+      expect(path).toBe('/project/src/__canvas_preview__.tsx');
     });
 
     it('should use client/ when index.html has <script type="module" src="/client/main.tsx">', async () => {
       const io = new InMemoryFileIO();
       io.files.set(
-        "/project/index.html",
+        '/project/index.html',
         `<!DOCTYPE html>
     <html>
       <body>
@@ -134,299 +134,299 @@ describe("PreviewFileManager", () => {
       );
       const manager = createManager(io);
       const path = await manager.getPreviewFilePath();
-      expect(path).toBe("/project/client/__canvas_preview__.tsx");
+      expect(path).toBe('/project/client/__canvas_preview__.tsx');
     });
 
-    it("should prefer client/ from index.html even when src/ directory exists (bulka-the-dog pattern)", async () => {
+    it('should prefer client/ from index.html even when src/ directory exists (bulka-the-dog pattern)', async () => {
       // Projects like bulka-the-dog have a src/ dir at root (server code etc.)
       // but the frontend entry is client/main.tsx — index.html must win over src/ presence.
       const io = new InMemoryFileIO();
-      io.files.set("/project/src/server.ts", "export {}"); // src/ exists but is NOT the frontend
+      io.files.set('/project/src/server.ts', 'export {}'); // src/ exists but is NOT the frontend
       io.files.set(
-        "/project/index.html",
+        '/project/index.html',
         `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
       );
       const manager = createManager(io);
       const path = await manager.getPreviewFilePath();
-      expect(path).toBe("/project/client/__canvas_preview__.tsx");
+      expect(path).toBe('/project/client/__canvas_preview__.tsx');
     });
 
-    it("should use src/ when no index.html exists", async () => {
+    it('should use src/ when no index.html exists', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/src/main.tsx", "export {}");
+      io.files.set('/project/src/main.tsx', 'export {}');
       const manager = createManager(io);
       const path = await manager.getPreviewFilePath();
-      expect(path).toBe("/project/src/__canvas_preview__.tsx");
+      expect(path).toBe('/project/src/__canvas_preview__.tsx');
     });
 
     it('should use app/ when index.html has <script type="module" src="/app/main.tsx">', async () => {
       const io = new InMemoryFileIO();
       io.files.set(
-        "/project/index.html",
+        '/project/index.html',
         `<!DOCTYPE html><html><body><script type="module" src="/app/main.tsx"></script></body></html>`,
       );
       const manager = createManager(io);
       const path = await manager.getPreviewFilePath();
-      expect(path).toBe("/project/app/__canvas_preview__.tsx");
+      expect(path).toBe('/project/app/__canvas_preview__.tsx');
     });
   });
 
-  describe("ensureComponent", () => {
-    it("should create new preview file with component", async () => {
+  describe('ensureComponent', () => {
+    it('should create new preview file with component', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+      io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
       const manager = createManager(io);
 
-      const content = await manager.ensureComponent(["src/components/Button.tsx"]);
+      const content = await manager.ensureComponent(['src/components/Button.tsx']);
 
-      expect(content).toContain("Button");
-      expect(content).toContain("SampleDefault as ButtonSampleDefault");
-      expect(content).toContain("SamplePrimary as ButtonSamplePrimary");
-      expect(content).toContain("componentRegistry");
-      expect(content).toContain("sampleRenderMap");
-      expect(content).toContain("sampleRenderersMap");
+      expect(content).toContain('Button');
+      expect(content).toContain('SampleDefault as ButtonSampleDefault');
+      expect(content).toContain('SamplePrimary as ButtonSamplePrimary');
+      expect(content).toContain('componentRegistry');
+      expect(content).toContain('sampleRenderMap');
+      expect(content).toContain('sampleRenderersMap');
 
       // Should have written the file
-      const written = io.files.get("/project/src/__canvas_preview__.tsx");
+      const written = io.files.get('/project/src/__canvas_preview__.tsx');
       expect(written).toBe(content);
     });
 
-    it("should skip write if component is already registered", async () => {
+    it('should skip write if component is already registered', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+      io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
       const manager = createManager(io);
 
-      const content1 = await manager.ensureComponent(["src/components/Button.tsx"]);
-      const content2 = await manager.ensureComponent(["src/components/Button.tsx"]);
+      const content1 = await manager.ensureComponent(['src/components/Button.tsx']);
+      const content2 = await manager.ensureComponent(['src/components/Button.tsx']);
 
       // Should return same content (early return path)
       expect(content2).toBe(content1);
     });
 
-    it("should add new component to existing preview", async () => {
+    it('should add new component to existing preview', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-      io.files.set("/project/src/components/Card.tsx", CARD_SOURCE);
+      io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+      io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
       const manager = createManager(io);
 
-      await manager.ensureComponent(["src/components/Button.tsx"]);
-      const content = await manager.ensureComponent(["src/components/Button.tsx", "src/components/Card.tsx"]);
+      await manager.ensureComponent(['src/components/Button.tsx']);
+      const content = await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Card.tsx']);
 
-      expect(content).toContain("Button");
-      expect(content).toContain("Card");
+      expect(content).toContain('Button');
+      expect(content).toContain('Card');
     });
 
-    it("should skip unreadable component files silently", async () => {
+    it('should skip unreadable component files silently', async () => {
       const io = new InMemoryFileIO();
       // Button exists, Card does NOT exist on disk
-      io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+      io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
       const manager = createManager(io);
 
-      const content = await manager.ensureComponent(["src/components/Button.tsx", "src/components/Missing.tsx"]);
+      const content = await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Missing.tsx']);
 
-      expect(content).toContain("Button");
+      expect(content).toContain('Button');
       // Path must not appear in the component registry
       expect(content).not.toContain("'src/components/Missing.tsx'");
     });
 
-    it("should skip PascalCase files without a matching runtime export", async () => {
+    it('should skip PascalCase files without a matching runtime export', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/src/App.tsx", "export default function App() { return <div />; }");
-      io.files.set("/project/src/Layout.tsx", "export const layoutTokens = { gap: 8 };");
+      io.files.set('/project/src/App.tsx', 'export default function App() { return <div />; }');
+      io.files.set('/project/src/Layout.tsx', 'export const layoutTokens = { gap: 8 };');
       const manager = createManager(io);
 
-      const content = await manager.ensureComponent(["src/App.tsx"]);
+      const content = await manager.ensureComponent(['src/App.tsx']);
 
       expect(content).toContain("import App from './App';");
       expect(content).not.toContain("import { Layout } from './Layout';");
       expect(content).not.toContain("'src/Layout.tsx'");
     });
 
-    it("should throw PreviewGenerationError when no valid components", async () => {
+    it('should throw PreviewGenerationError when no valid components', async () => {
       const io = new InMemoryFileIO();
       const manager = createManager(io);
 
-      await expect(manager.ensureComponent(["src/components/NoExist.tsx"])).rejects.toThrow(PreviewGenerationError);
+      await expect(manager.ensureComponent(['src/components/NoExist.tsx'])).rejects.toThrow(PreviewGenerationError);
     });
 
-    it("should use scoped package name from package.json for monorepo imports", async () => {
+    it('should use scoped package name from package.json for monorepo imports', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/packages/ui/package.json", '{"name": "@acme/ui"}');
+      io.files.set('/project/packages/ui/package.json', '{"name": "@acme/ui"}');
       io.files.set(
-        "/project/packages/ui/src/Button.tsx",
+        '/project/packages/ui/src/Button.tsx',
         `export function Button() { return <button/> }\nexport const SampleDefault = () => <Button />;\n`,
       );
       const manager = createManager(io);
 
-      const content = await manager.ensureComponent(["packages/ui/src/Button.tsx"]);
+      const content = await manager.ensureComponent(['packages/ui/src/Button.tsx']);
 
       expect(content).toContain("from '@acme/ui/Button'");
     });
 
-    it("should fall back to directory name when package.json is unreadable", async () => {
+    it('should fall back to directory name when package.json is unreadable', async () => {
       const io = new InMemoryFileIO();
       // No package.json — directory name fallback
       io.files.set(
-        "/project/packages/ui/src/Button.tsx",
+        '/project/packages/ui/src/Button.tsx',
         `export function Button() { return <button/> }\nexport const SampleDefault = () => <Button />;\n`,
       );
       const manager = createManager(io);
 
-      const content = await manager.ensureComponent(["packages/ui/src/Button.tsx"]);
+      const content = await manager.ensureComponent(['packages/ui/src/Button.tsx']);
 
       expect(content).toContain("from 'ui/Button'");
     });
   });
 
-  describe("rebuild", () => {
-    it("should regenerate from scratch ignoring existing file", async () => {
+  describe('rebuild', () => {
+    it('should regenerate from scratch ignoring existing file', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-      io.files.set("/project/src/__canvas_preview__.tsx", "// old content that should be replaced");
+      io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+      io.files.set('/project/src/__canvas_preview__.tsx', '// old content that should be replaced');
       const manager = createManager(io);
 
-      const content = await manager.rebuild(["src/components/Button.tsx"]);
+      const content = await manager.rebuild(['src/components/Button.tsx']);
 
-      expect(content).toContain("Button");
-      expect(content).not.toContain("old content");
+      expect(content).toContain('Button');
+      expect(content).not.toContain('old content');
     });
   });
 
-  describe("forceRefreshComponent", () => {
-    it("updates sampleRenderMap when SampleDefault is added to an already-registered component", async () => {
+  describe('forceRefreshComponent', () => {
+    it('updates sampleRenderMap when SampleDefault is added to an already-registered component', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/src/components/Alert.tsx", ALERT_NO_SAMPLE_SOURCE);
+      io.files.set('/project/src/components/Alert.tsx', ALERT_NO_SAMPLE_SOURCE);
       const manager = createManager(io);
 
       // Register Alert without SampleDefault
-      const beforeContent = await manager.ensureComponent(["src/components/Alert.tsx"]);
-      expect(beforeContent).not.toContain("AlertSampleDefault");
+      const beforeContent = await manager.ensureComponent(['src/components/Alert.tsx']);
+      expect(beforeContent).not.toContain('AlertSampleDefault');
 
       // ensureComponent detects sample export mismatch via hasSampleExportMismatch — picks up new SampleDefault
-      io.files.set("/project/src/components/Alert.tsx", ALERT_WITH_SAMPLE_SOURCE);
-      const updatedContent = await manager.ensureComponent(["src/components/Alert.tsx"]);
-      expect(updatedContent).toContain("AlertSampleDefault");
+      io.files.set('/project/src/components/Alert.tsx', ALERT_WITH_SAMPLE_SOURCE);
+      const updatedContent = await manager.ensureComponent(['src/components/Alert.tsx']);
+      expect(updatedContent).toContain('AlertSampleDefault');
 
       // forceRefreshComponent also forces full regen — confirms same result via the explicit path
-      const refreshedContent = await manager.forceRefreshComponent("src/components/Alert.tsx");
-      expect(refreshedContent).toContain("AlertSampleDefault");
+      const refreshedContent = await manager.forceRefreshComponent('src/components/Alert.tsx');
+      expect(refreshedContent).toContain('AlertSampleDefault');
       expect(refreshedContent).toContain("'src/components/Alert.tsx': AlertSampleDefault");
     });
 
-    it("preserves other registered components when force-refreshing one", async () => {
+    it('preserves other registered components when force-refreshing one', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-      io.files.set("/project/src/components/Alert.tsx", ALERT_NO_SAMPLE_SOURCE);
+      io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+      io.files.set('/project/src/components/Alert.tsx', ALERT_NO_SAMPLE_SOURCE);
       const manager = createManager(io);
 
-      await manager.ensureComponent(["src/components/Button.tsx", "src/components/Alert.tsx"]);
+      await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Alert.tsx']);
 
       // Add SampleDefault to Alert and force-refresh
-      io.files.set("/project/src/components/Alert.tsx", ALERT_WITH_SAMPLE_SOURCE);
-      const refreshedContent = await manager.forceRefreshComponent("src/components/Alert.tsx");
+      io.files.set('/project/src/components/Alert.tsx', ALERT_WITH_SAMPLE_SOURCE);
+      const refreshedContent = await manager.forceRefreshComponent('src/components/Alert.tsx');
 
       // Both components still present
-      expect(refreshedContent).toContain("Button");
-      expect(refreshedContent).toContain("Alert");
+      expect(refreshedContent).toContain('Button');
+      expect(refreshedContent).toContain('Alert');
       // Alert now has SampleDefault in sampleRenderMap
-      expect(refreshedContent).toContain("AlertSampleDefault");
+      expect(refreshedContent).toContain('AlertSampleDefault');
       // Button's samples still intact
-      expect(refreshedContent).toContain("ButtonSampleDefault");
+      expect(refreshedContent).toContain('ButtonSampleDefault');
     });
 
-    it("creates preview file from scratch when none exists", async () => {
+    it('creates preview file from scratch when none exists', async () => {
       const io = new InMemoryFileIO();
-      io.files.set("/project/src/components/Alert.tsx", ALERT_WITH_SAMPLE_SOURCE);
+      io.files.set('/project/src/components/Alert.tsx', ALERT_WITH_SAMPLE_SOURCE);
       const manager = createManager(io);
 
-      const content = await manager.forceRefreshComponent("src/components/Alert.tsx");
+      const content = await manager.forceRefreshComponent('src/components/Alert.tsx');
 
-      expect(content).toContain("Alert");
-      expect(content).toContain("AlertSampleDefault");
+      expect(content).toContain('Alert');
+      expect(content).toContain('AlertSampleDefault');
     });
   });
 });
 
-describe("parseExistingPreview", () => {
-  it("should extract entries from generated preview content", async () => {
+describe('parseExistingPreview', () => {
+  it('should extract entries from generated preview content', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     const manager = createManager(io);
 
-    const content = await manager.ensureComponent(["src/components/Button.tsx"]);
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
     const entries = parseExistingPreview(content);
 
     expect(entries.length).toBe(1);
-    expect(entries[0].componentPath).toBe("src/components/Button.tsx");
-    expect(entries[0].componentName).toBe("Button");
-    expect(entries[0].sampleExports).toContain("SampleDefault");
-    expect(entries[0].sampleExports).toContain("SamplePrimary");
+    expect(entries[0].componentPath).toBe('src/components/Button.tsx');
+    expect(entries[0].componentName).toBe('Button');
+    expect(entries[0].sampleExports).toContain('SampleDefault');
+    expect(entries[0].sampleExports).toContain('SamplePrimary');
   });
 
-  it("should return empty array for non-preview content", () => {
-    const entries = parseExistingPreview("const x = 1;");
+  it('should return empty array for non-preview content', () => {
+    const entries = parseExistingPreview('const x = 1;');
     expect(entries).toEqual([]);
   });
 
-  it("should round-trip multiple components including default exports", async () => {
+  it('should round-trip multiple components including default exports', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-    io.files.set("/project/src/components/Card.tsx", CARD_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
     const manager = createManager(io);
 
-    const content = await manager.ensureComponent(["src/components/Button.tsx", "src/components/Card.tsx"]);
+    const content = await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Card.tsx']);
     const entries = parseExistingPreview(content);
 
     expect(entries.length).toBe(2);
-    const button = entries.find((e) => e.componentName === "Button");
-    const card = entries.find((e) => e.componentName === "Card");
+    const button = entries.find((e) => e.componentName === 'Button');
+    const card = entries.find((e) => e.componentName === 'Card');
 
     expect(button).toBeDefined();
-    expect(button?.sampleExports).toContain("SampleDefault");
-    expect(button?.sampleExports).toContain("SamplePrimary");
+    expect(button?.sampleExports).toContain('SampleDefault');
+    expect(button?.sampleExports).toContain('SamplePrimary');
 
     expect(card).toBeDefined();
-    expect(card?.sampleExports).toContain("SampleDefault");
+    expect(card?.sampleExports).toContain('SampleDefault');
     // Card has default export — parser should detect this
-    expect(card?.exportStyle).toBe("default-named");
+    expect(card?.exportStyle).toBe('default-named');
   });
 
-  it("should not confuse Card and CardGrid imports (substring collision)", async () => {
+  it('should not confuse Card and CardGrid imports (substring collision)', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/components/Card.tsx",
+      '/project/src/components/Card.tsx',
       `export function Card() { return <div/> }\nexport const SampleDefault = () => <Card />;\n`,
     );
     io.files.set(
-      "/project/src/components/CardGrid.tsx",
+      '/project/src/components/CardGrid.tsx',
       `export function CardGrid() { return <div/> }\nexport const SampleDefault = () => <CardGrid />;\n`,
     );
     const manager = createManager(io);
 
     // Generate with CardGrid first, then Card — this order triggers the old substring bug
-    await manager.ensureComponent(["src/components/CardGrid.tsx", "src/components/Card.tsx"]);
+    await manager.ensureComponent(['src/components/CardGrid.tsx', 'src/components/Card.tsx']);
 
     // Re-add Badge to force re-generation from parsed entries
     io.files.set(
-      "/project/src/components/Badge.tsx",
+      '/project/src/components/Badge.tsx',
       `export function Badge() { return <div/> }\nexport const SampleDefault = () => <Badge />;\n`,
     );
     const content = await manager.ensureComponent([
-      "src/components/CardGrid.tsx",
-      "src/components/Card.tsx",
-      "src/components/Badge.tsx",
+      'src/components/CardGrid.tsx',
+      'src/components/Card.tsx',
+      'src/components/Badge.tsx',
     ]);
 
     // Card must import from Card, not CardGrid
     expect(content).toContain("from './components/Card';");
     expect(content).toContain("from './components/CardGrid';");
     // Verify no Card imported from CardGrid path
-    const cardImport = content.split("\n").find((l: string) => l.includes("{ Card,") || l.includes("{ Card }"));
+    const cardImport = content.split('\n').find((l: string) => l.includes('{ Card,') || l.includes('{ Card }'));
     expect(cardImport).toContain("'./components/Card'");
-    expect(cardImport).not.toContain("CardGrid");
+    expect(cardImport).not.toContain('CardGrid');
   });
 
-  it("should parse entries from manually written preview with package imports", () => {
+  it('should parse entries from manually written preview with package imports', () => {
     const manualPreview = `import React from 'react';
 import { Button, SampleDefault as ButtonSampleDefault } from '@acme/ui/Button';
 
@@ -446,13 +446,13 @@ const sampleRenderersMap: Record<string, Record<string, React.FC>> = {
 `;
     const entries = parseExistingPreview(manualPreview);
     expect(entries.length).toBe(1);
-    expect(entries[0].componentPath).toBe("packages/ui/src/Button.tsx");
-    expect(entries[0].componentName).toBe("Button");
-    expect(entries[0].importPath).toBe("@acme/ui/Button");
-    expect(entries[0].sampleExports).toContain("SampleDefault");
+    expect(entries[0].componentPath).toBe('packages/ui/src/Button.tsx');
+    expect(entries[0].componentName).toBe('Button');
+    expect(entries[0].importPath).toBe('@acme/ui/Button');
+    expect(entries[0].sampleExports).toContain('SampleDefault');
   });
 
-  it("parses componentRegistry entries wrapped in toPreviewComponent()", () => {
+  it('parses componentRegistry entries wrapped in toPreviewComponent()', () => {
     const manualPreview = `import React from 'react';
 import Tweet from './components/Tweet';
 
@@ -469,12 +469,12 @@ const componentRegistry: Record<string, PreviewComponent> = {
     const entries = parseExistingPreview(manualPreview);
 
     expect(entries.length).toBe(1);
-    expect(entries[0].componentPath).toBe("src/components/Tweet.tsx");
-    expect(entries[0].componentName).toBe("Tweet");
-    expect(entries[0].importPath).toBe("./components/Tweet");
+    expect(entries[0].componentPath).toBe('src/components/Tweet.tsx');
+    expect(entries[0].componentName).toBe('Tweet');
+    expect(entries[0].importPath).toBe('./components/Tweet');
   });
 
-  it("should parse server-generated preview with SampleDefaultMap and no componentRegistry", () => {
+  it('should parse server-generated preview with SampleDefaultMap and no componentRegistry', () => {
     const serverPreview = `import React from 'react';
 import { SampleDefault as WeatherDashboardSampleRender } from './examples/WeatherDashboard';
 import { SampleDefault as FileExplorerSampleRender } from './examples/FileExplorer';
@@ -498,22 +498,22 @@ export default function CanvasPreview() {
 
     expect(entries.length).toBe(3);
 
-    const weather = entries.find((e) => e.componentName === "WeatherDashboard");
+    const weather = entries.find((e) => e.componentName === 'WeatherDashboard');
     expect(weather).toBeDefined();
-    expect(weather?.componentPath).toBe("src/examples/WeatherDashboard.tsx");
-    expect(weather?.importPath).toBe("./examples/WeatherDashboard");
-    expect(weather?.sampleExports).toContain("SampleDefault");
+    expect(weather?.componentPath).toBe('src/examples/WeatherDashboard.tsx');
+    expect(weather?.importPath).toBe('./examples/WeatherDashboard');
+    expect(weather?.sampleExports).toContain('SampleDefault');
 
-    const explorer = entries.find((e) => e.componentName === "FileExplorer");
+    const explorer = entries.find((e) => e.componentName === 'FileExplorer');
     expect(explorer).toBeDefined();
-    expect(explorer?.importPath).toBe("./examples/FileExplorer");
+    expect(explorer?.importPath).toBe('./examples/FileExplorer');
 
-    const button = entries.find((e) => e.componentName === "Button");
+    const button = entries.find((e) => e.componentName === 'Button');
     expect(button).toBeDefined();
-    expect(button?.importPath).toBe("./components/Button");
+    expect(button?.importPath).toBe('./components/Button');
   });
 
-  it("should parse trailing-comma-less last entry in maps", () => {
+  it('should parse trailing-comma-less last entry in maps', () => {
     const noTrailingComma = `import React from 'react';
 import { Card } from './components/Card';
 import { Button } from './components/Button';
@@ -526,11 +526,11 @@ const componentRegistry: Record<string, React.ComponentType<any>> = {
     const entries = parseExistingPreview(noTrailingComma);
 
     expect(entries.length).toBe(2);
-    expect(entries.find((e) => e.componentName === "Button")).toBeDefined();
-    expect(entries.find((e) => e.componentName === "Card")).toBeDefined();
+    expect(entries.find((e) => e.componentName === 'Button')).toBeDefined();
+    expect(entries.find((e) => e.componentName === 'Card')).toBeDefined();
   });
 
-  it("should merge componentRegistry with SampleDefaultMap-only entries", () => {
+  it('should merge componentRegistry with SampleDefaultMap-only entries', () => {
     const mixedPreview = `import React from 'react';
 import { Button, SampleDefault as ButtonSampleDefault } from './components/Button';
 import { SampleDefault as CardSampleRender } from './components/Card';
@@ -554,22 +554,22 @@ const sampleRenderersMap: Record<string, Record<string, React.FC>> = {
 
     expect(entries.length).toBe(2);
 
-    const button = entries.find((e) => e.componentName === "Button");
+    const button = entries.find((e) => e.componentName === 'Button');
     expect(button).toBeDefined();
-    expect(button?.importPath).toBe("./components/Button");
-    expect(button?.sampleExports).toContain("SampleDefault");
+    expect(button?.importPath).toBe('./components/Button');
+    expect(button?.sampleExports).toContain('SampleDefault');
 
     // Card comes from SampleDefaultMap only — should still be found
-    const card = entries.find((e) => e.componentName === "Card");
+    const card = entries.find((e) => e.componentName === 'Card');
     expect(card).toBeDefined();
-    expect(card?.componentPath).toBe("src/components/Card.tsx");
-    expect(card?.importPath).toBe("./components/Card");
-    expect(card?.sampleExports).toContain("SampleDefault");
+    expect(card?.componentPath).toBe('src/components/Card.tsx');
+    expect(card?.importPath).toBe('./components/Card');
+    expect(card?.sampleExports).toContain('SampleDefault');
   });
 
   // --- Edge cases for extractSection / parseExistingPreview ---
 
-  it("should not corrupt entries when comment contains unbalanced brace", () => {
+  it('should not corrupt entries when comment contains unbalanced brace', () => {
     // Unbalanced { in comment breaks brace-counting in extractSection —
     // the section overshoots into the next map, polluting pathToName
     const preview = `import React from 'react';
@@ -598,14 +598,14 @@ const sampleRenderersMap: Record<string, Record<string, React.FC>> = {
     const entries = parseExistingPreview(preview);
 
     expect(entries.length).toBe(2);
-    const button = entries.find((e) => e.componentPath === "src/components/Button.tsx");
+    const button = entries.find((e) => e.componentPath === 'src/components/Button.tsx');
     // componentName must be 'Button', not 'ButtonSampleDefault' (from sampleRenderMap leak)
-    expect(button?.componentName).toBe("Button");
-    const card = entries.find((e) => e.componentPath === "src/components/Card.tsx");
-    expect(card?.componentName).toBe("Card");
+    expect(button?.componentName).toBe('Button');
+    const card = entries.find((e) => e.componentPath === 'src/components/Card.tsx');
+    expect(card?.componentName).toBe('Card');
   });
 
-  it("should extract sampleRenderersMap when type annotation contains arrow =>", () => {
+  it('should extract sampleRenderersMap when type annotation contains arrow =>', () => {
     // extractSection regex [^=]* stops at = from () => in the type annotation,
     // causing the entire sampleRenderersMap section to be missed
     const preview = `import React from 'react';
@@ -623,14 +623,14 @@ const sampleRenderersMap: Record<string, Record<string, () => React.ReactNode>> 
 };
 `;
     const entries = parseExistingPreview(preview);
-    const button = entries.find((e) => e.componentName === "Button");
+    const button = entries.find((e) => e.componentName === 'Button');
 
     expect(button).toBeDefined();
-    expect(button?.sampleExports).toContain("SampleDefault");
-    expect(button?.sampleExports).toContain("SamplePrimary");
+    expect(button?.sampleExports).toContain('SampleDefault');
+    expect(button?.sampleExports).toContain('SamplePrimary');
   });
 
-  it("should derive correct component name for .jsx files from SampleDefaultMap", () => {
+  it('should derive correct component name for .jsx files from SampleDefaultMap', () => {
     // When .jsx component is only in SampleDefaultMap (no componentRegistry),
     // basename fallback must strip .jsx, not just .tsx
     const preview = `import React from 'react';
@@ -642,10 +642,10 @@ const SampleDefaultMap: Record<string, React.FC> = {
 `;
     const entries = parseExistingPreview(preview);
     expect(entries.length).toBe(1);
-    expect(entries[0].componentName).toBe("Button");
+    expect(entries[0].componentName).toBe('Button');
   });
 
-  it("should not match entries from comments inside maps", () => {
+  it('should not match entries from comments inside maps', () => {
     const preview = `import React from 'react';
 import { Button } from './components/Button';
 
@@ -661,12 +661,12 @@ const sampleRenderersMap: Record<string, Record<string, React.FC>> = {
     const entries = parseExistingPreview(preview);
 
     expect(entries.length).toBe(1);
-    expect(entries[0].componentName).toBe("Button");
+    expect(entries[0].componentName).toBe('Button');
     // OldButton from the comment must NOT appear
-    expect(entries.find((e) => e.componentName === "OldButton")).toBeUndefined();
+    expect(entries.find((e) => e.componentName === 'OldButton')).toBeUndefined();
   });
 
-  it("should preserve SampleDefault when sampleRenderersMap entry is empty but sampleRenderMap has renderer", () => {
+  it('should preserve SampleDefault when sampleRenderersMap entry is empty but sampleRenderMap has renderer', () => {
     const preview = `import React from 'react';
 import { Button, SampleDefault as ButtonSampleDefault } from './components/Button';
 
@@ -684,143 +684,143 @@ const sampleRenderersMap: Record<string, Record<string, React.FC>> = {
 `;
     const entries = parseExistingPreview(preview);
     expect(entries.length).toBe(1);
-    expect(entries[0].sampleExports).toContain("SampleDefault");
+    expect(entries[0].sampleExports).toContain('SampleDefault');
   });
 });
 
-describe("PreviewFileManager — path traversal guard", () => {
-  it("skips traversal paths and uses project scan to find real components", async () => {
+describe('PreviewFileManager — path traversal guard', () => {
+  it('skips traversal paths and uses project scan to find real components', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     // This path tries to escape projectRoot
-    io.files.set("/etc/passwd", "root:x:0:0:root");
+    io.files.set('/etc/passwd', 'root:x:0:0:root');
     const manager = createManager(io);
 
     // Traversal path is skipped; _scanAllComponents discovers Button.tsx instead
-    const content = await manager.ensureComponent(["../../../etc/passwd"]);
-    expect(content).toContain("Button");
-    expect(content).not.toContain("passwd");
+    const content = await manager.ensureComponent(['../../../etc/passwd']);
+    expect(content).toContain('Button');
+    expect(content).not.toContain('passwd');
   });
 
-  it("should skip traversal path but include valid components", async () => {
+  it('should skip traversal path but include valid components', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     const manager = createManager(io);
 
-    const content = await manager.ensureComponent(["../../etc/passwd", "src/components/Button.tsx"]);
-    expect(content).toContain("Button");
-    expect(content).not.toContain("passwd");
+    const content = await manager.ensureComponent(['../../etc/passwd', 'src/components/Button.tsx']);
+    expect(content).toContain('Button');
+    expect(content).not.toContain('passwd');
   });
 
   it('should reject packages with ".." directory in monorepo path', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/secret/package.json", '{"name": "leaked"}');
-    io.files.set("/project/packages/../secret/src/Evil.tsx", "export function Evil() { return <div/> }");
+    io.files.set('/project/secret/package.json', '{"name": "leaked"}');
+    io.files.set('/project/packages/../secret/src/Evil.tsx', 'export function Evil() { return <div/> }');
     const manager = createManager(io);
 
-    await expect(manager.ensureComponent(["packages/../secret/src/Evil.tsx"])).rejects.toThrow(PreviewGenerationError);
+    await expect(manager.ensureComponent(['packages/../secret/src/Evil.tsx'])).rejects.toThrow(PreviewGenerationError);
   });
 });
 
-describe("PreviewFileManager — buildEntry error handling", () => {
-  it("should handle unparseable component source gracefully", async () => {
+describe('PreviewFileManager — buildEntry error handling', () => {
+  it('should handle unparseable component source gracefully', async () => {
     const io = new InMemoryFileIO();
     // Broken JSX — Babel throws even with errorRecovery
-    io.files.set("/project/src/components/Broken.tsx", "export function Broken(){ return <div>");
+    io.files.set('/project/src/components/Broken.tsx', 'export function Broken(){ return <div>');
     io.files.set(
-      "/project/src/components/Button.tsx",
+      '/project/src/components/Button.tsx',
       `export function Button() { return <button/> }\nexport const SampleDefault = () => <Button />;\n`,
     );
     const manager = createManager(io);
 
     // Should not throw — Broken component is skipped until it parses again.
-    const content = await manager.ensureComponent(["src/components/Broken.tsx", "src/components/Button.tsx"]);
-    expect(content).toContain("Button");
-    expect(content).not.toContain("Broken");
+    const content = await manager.ensureComponent(['src/components/Broken.tsx', 'src/components/Button.tsx']);
+    expect(content).toContain('Button');
+    expect(content).not.toContain('Broken');
   });
 });
 
-describe("PreviewFileManager — buildEntry preview-ineligible suffix guard", () => {
-  it("skips React Native platform-specific files (Foo.native.tsx) that would collide with Foo.tsx", async () => {
+describe('PreviewFileManager — buildEntry preview-ineligible suffix guard', () => {
+  it('skips React Native platform-specific files (Foo.native.tsx) that would collide with Foo.tsx', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/components/RootProvider.tsx",
+      '/project/src/components/RootProvider.tsx',
       `export function RootProvider({ children }: { children: React.ReactNode }) { return <>{children}</>; }`,
     );
     io.files.set(
-      "/project/src/components/RootProvider.native.tsx",
+      '/project/src/components/RootProvider.native.tsx',
       `export function RootProvider({ children }: { children: React.ReactNode }) { return <>{children}</>; }`,
     );
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     const content = await manager.ensureComponent([
-      "src/components/RootProvider.tsx",
-      "src/components/RootProvider.native.tsx",
+      'src/components/RootProvider.tsx',
+      'src/components/RootProvider.native.tsx',
     ]);
     // Web variant kept, .native dropped — no duplicate-import syntax error
     expect(content).toContain("from './components/RootProvider'");
-    expect(content).not.toContain("RootProvider.native");
+    expect(content).not.toContain('RootProvider.native');
     expect(isValidTypeScript(content)).toBe(true);
   });
 
-  it("skips iOS / Android RN variants in addition to .native", async () => {
+  it('skips iOS / Android RN variants in addition to .native', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Toolbar.tsx", `export function Toolbar() { return <div/>; }`);
-    io.files.set("/project/src/components/Toolbar.ios.tsx", `export function Toolbar() { return <div/>; }`);
-    io.files.set("/project/src/components/Toolbar.android.tsx", `export function Toolbar() { return <div/>; }`);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/src/components/Toolbar.tsx', `export function Toolbar() { return <div/>; }`);
+    io.files.set('/project/src/components/Toolbar.ios.tsx', `export function Toolbar() { return <div/>; }`);
+    io.files.set('/project/src/components/Toolbar.android.tsx', `export function Toolbar() { return <div/>; }`);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     const content = await manager.ensureComponent([
-      "src/components/Toolbar.tsx",
-      "src/components/Toolbar.ios.tsx",
-      "src/components/Toolbar.android.tsx",
+      'src/components/Toolbar.tsx',
+      'src/components/Toolbar.ios.tsx',
+      'src/components/Toolbar.android.tsx',
     ]);
     expect(content).toContain("from './components/Toolbar'");
-    expect(content).not.toContain("Toolbar.ios");
-    expect(content).not.toContain("Toolbar.android");
+    expect(content).not.toContain('Toolbar.ios');
+    expect(content).not.toContain('Toolbar.android');
     expect(isValidTypeScript(content)).toBe(true);
   });
 
-  it("skips vanilla-extract Foo.css.ts style sheets that fall back to invalid identifier", async () => {
+  it('skips vanilla-extract Foo.css.ts style sheets that fall back to invalid identifier', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Navbar.tsx", `export function Navbar() { return <nav/>; }`);
+    io.files.set('/project/src/components/Navbar.tsx', `export function Navbar() { return <nav/>; }`);
     // Style sheet — exports `style()` calls, no PascalCase component
     io.files.set(
-      "/project/src/components/Navbar.css.ts",
+      '/project/src/components/Navbar.css.ts',
       `import { style } from '@vanilla-extract/css';\nexport const navbar = style({ display: 'flex' });`,
     );
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    const content = await manager.ensureComponent(["src/components/Navbar.tsx", "src/components/Navbar.css.ts"]);
+    const content = await manager.ensureComponent(['src/components/Navbar.tsx', 'src/components/Navbar.css.ts']);
     // Component import valid, style sheet skipped — no `Navbar.css` identifier leak
     expect(content).toContain("from './components/Navbar'");
-    expect(content).not.toContain("Navbar.css");
+    expect(content).not.toContain('Navbar.css');
     expect(isValidTypeScript(content)).toBe(true);
   });
 
-  it("skips Foo.styles.ts and Foo.module.ts naming variants", async () => {
+  it('skips Foo.styles.ts and Foo.module.ts naming variants', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Card.tsx", `export function Card() { return <div/>; }`);
-    io.files.set("/project/src/components/Card.styles.ts", `export const cardClass = 'card';`);
-    io.files.set("/project/src/components/Card.module.ts", `export const cardMod = {};`);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/src/components/Card.tsx', `export function Card() { return <div/>; }`);
+    io.files.set('/project/src/components/Card.styles.ts', `export const cardClass = 'card';`);
+    io.files.set('/project/src/components/Card.module.ts', `export const cardMod = {};`);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     const content = await manager.ensureComponent([
-      "src/components/Card.tsx",
-      "src/components/Card.styles.ts",
-      "src/components/Card.module.ts",
+      'src/components/Card.tsx',
+      'src/components/Card.styles.ts',
+      'src/components/Card.module.ts',
     ]);
     expect(content).toContain("from './components/Card'");
-    expect(content).not.toContain("Card.styles");
-    expect(content).not.toContain("Card.module");
+    expect(content).not.toContain('Card.styles');
+    expect(content).not.toContain('Card.module');
     expect(isValidTypeScript(content)).toBe(true);
   });
 
-  it("strips platform/style suffix entries when migrating a stale preview file", async () => {
+  it('strips platform/style suffix entries when migrating a stale preview file', async () => {
     // Stale preview with a stylesheet entry that previously slipped past detection.
     // Single import per identifier — still valid TS, but the stylesheet path leaks
     // into componentRegistry. Next ensure must clean it out.
@@ -837,102 +837,102 @@ const sampleRenderersMap = {};
 export default function CanvasPreview() { return null; }
 `;
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/__canvas_preview__.tsx", stalePreview);
-    io.files.set("/project/src/components/Navbar.tsx", `export function Navbar() { return <nav/>; }`);
+    io.files.set('/project/src/__canvas_preview__.tsx', stalePreview);
+    io.files.set('/project/src/components/Navbar.tsx', `export function Navbar() { return <nav/>; }`);
     io.files.set(
-      "/project/src/components/Navbar.css.ts",
+      '/project/src/components/Navbar.css.ts',
       `import { style } from '@vanilla-extract/css';\nexport const navbarStyles = style({});`,
     );
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    const content = await manager.ensureComponent(["src/components/Navbar.tsx"]);
-    expect(content).not.toContain("Navbar.css");
+    const content = await manager.ensureComponent(['src/components/Navbar.tsx']);
+    expect(content).not.toContain('Navbar.css');
     expect(content).toContain("from './components/Navbar'");
     expect(isValidTypeScript(content)).toBe(true);
   });
 
-  it("skips Storybook story files (Button.stories.tsx) even when they export PascalCase names", async () => {
+  it('skips Storybook story files (Button.stories.tsx) even when they export PascalCase names', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", `export function Button() { return <button/>; }`);
+    io.files.set('/project/src/components/Button.tsx', `export function Button() { return <button/>; }`);
     io.files.set(
-      "/project/src/components/Button.stories.tsx",
+      '/project/src/components/Button.stories.tsx',
       `import { Button } from './Button';\nexport const Primary = () => <Button/>;\nexport const Secondary = () => <Button/>;`,
     );
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    const content = await manager.ensureComponent(["src/components/Button.tsx", "src/components/Button.stories.tsx"]);
+    const content = await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Button.stories.tsx']);
     expect(content).toContain("from './components/Button'");
-    expect(content).not.toContain("Button.stories");
+    expect(content).not.toContain('Button.stories');
     expect(isValidTypeScript(content)).toBe(true);
   });
 
-  it("skips test files (Button.test.tsx, Button.spec.tsx)", async () => {
+  it('skips test files (Button.test.tsx, Button.spec.tsx)', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", `export function Button() { return <button/>; }`);
+    io.files.set('/project/src/components/Button.tsx', `export function Button() { return <button/>; }`);
     io.files.set(
-      "/project/src/components/Button.test.tsx",
+      '/project/src/components/Button.test.tsx',
       `import { render } from '@testing-library/react';\nexport const TestSuite = () => null;`,
     );
-    io.files.set("/project/src/components/Button.spec.tsx", `export const SpecCase = () => null;`);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/src/components/Button.spec.tsx', `export const SpecCase = () => null;`);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     const content = await manager.ensureComponent([
-      "src/components/Button.tsx",
-      "src/components/Button.test.tsx",
-      "src/components/Button.spec.tsx",
+      'src/components/Button.tsx',
+      'src/components/Button.test.tsx',
+      'src/components/Button.spec.tsx',
     ]);
     expect(content).toContain("from './components/Button'");
-    expect(content).not.toContain("Button.test");
-    expect(content).not.toContain("Button.spec");
+    expect(content).not.toContain('Button.test');
+    expect(content).not.toContain('Button.spec');
     expect(isValidTypeScript(content)).toBe(true);
   });
 
-  it("keeps App.web.tsx (web entry) and assigns AppWeb alias to avoid collision with App.tsx", async () => {
+  it('keeps App.web.tsx (web entry) and assigns AppWeb alias to avoid collision with App.tsx', async () => {
     // .web suffix must NOT be treated as a platform-exclusion suffix (unlike .native/.ios/.android).
     // App.web.tsx is the web entry for Expo/Tamagui projects and must appear in componentRegistry.
     // deriveUniquePrefix should resolve the App/App collision via platform-suffix: App.tsx→App, App.web.tsx→AppWeb.
     const io = new InMemoryFileIO();
-    io.files.set("/project/App.tsx", `export function App() { return <div>App</div>; }`);
-    io.files.set("/project/App.web.tsx", `export function App() { return <div>AppWeb</div>; }`);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/App.tsx', `export function App() { return <div>App</div>; }`);
+    io.files.set('/project/App.web.tsx', `export function App() { return <div>AppWeb</div>; }`);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    const content = await manager.ensureComponent(["App.tsx", "App.web.tsx"]);
+    const content = await manager.ensureComponent(['App.tsx', 'App.web.tsx']);
     // Both files must be registered in componentRegistry
     expect(content).toContain("'App.tsx'");
     expect(content).toContain("'App.web.tsx'");
     // App.web.tsx gets AppWeb alias, App.tsx gets App alias
-    expect(content).toContain("AppWeb");
+    expect(content).toContain('AppWeb');
     // No duplicate identifier
     expect(isValidTypeScript(content)).toBe(true);
   });
 });
 
-describe("PreviewFileManager — buildEntry non-PascalCase guard", () => {
-  it("skips entry files (main.tsx, index.tsx) that have no PascalCase export", async () => {
+describe('PreviewFileManager — buildEntry non-PascalCase guard', () => {
+  it('skips entry files (main.tsx, index.tsx) that have no PascalCase export', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/main.tsx",
+      '/project/src/main.tsx',
       `import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')!).render(<App />)\n`,
     );
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     // ensureComponent with main.tsx should not throw, but should skip it and still register Button
-    const content = await manager.ensureComponent(["src/main.tsx", "src/components/Button.tsx"]);
+    const content = await manager.ensureComponent(['src/main.tsx', 'src/components/Button.tsx']);
     // main.tsx has no PascalCase export → excluded from registry
     expect(content).not.toContain('"src/main.tsx"');
     // Button is valid → included
-    expect(content).toContain("Button");
+    expect(content).toContain('Button');
   });
 });
 
-describe("PreviewFileManager — ensureComponent stale entry detection", () => {
-  it("regenerates when existing file has non-PascalCase entries (e.g. from main.tsx)", async () => {
+describe('PreviewFileManager — ensureComponent stale entry detection', () => {
+  it('regenerates when existing file has non-PascalCase entries (e.g. from main.tsx)', async () => {
     // Simulate a stale __canvas_preview__.tsx that includes src/main.tsx
     const stalePreview = `import React from 'react';
 import { main } from './main';
@@ -944,25 +944,25 @@ const callbackStubs = {};
 export default function CanvasPreview() { return null; }
 `;
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/__canvas_preview__.tsx", stalePreview);
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/__canvas_preview__.tsx', stalePreview);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     io.files.set(
-      "/project/src/main.tsx",
+      '/project/src/main.tsx',
       `import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')!).render(<App />)\n`,
     );
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     // Triggering ensureComponent with Button (already in registry) should detect stale main entry
-    const content = await manager.ensureComponent(["src/components/Button.tsx"]);
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
     // After regeneration, main.tsx must be gone
     expect(content).not.toContain('"src/main.tsx"');
-    expect(content).not.toContain("{ main }");
+    expect(content).not.toContain('{ main }');
     // Button should still be there
-    expect(content).toContain("Button");
+    expect(content).toContain('Button');
   });
 
-  it("regenerates when existing file contains app/layout.tsx (Next.js reserved file)", async () => {
+  it('regenerates when existing file contains app/layout.tsx (Next.js reserved file)', async () => {
     // Simulate a __canvas_preview__.tsx that was generated when user opened layout.tsx.
     // layout.tsx exports RootLayout (PascalCase) so old stale detection missed it.
     const stalePreview = `import React from 'react';
@@ -975,27 +975,27 @@ const callbackStubs = {};
 export default function CanvasPreview() { return null; }
 `;
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/__canvas_preview__.tsx", stalePreview);
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/__canvas_preview__.tsx', stalePreview);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     io.files.set(
-      "/project/app/layout.tsx",
+      '/project/app/layout.tsx',
       `import type { Metadata } from 'next';
 export const metadata: Metadata = { title: 'App' };
 export default function RootLayout({ children }: { children: React.ReactNode }) { return <>{children}</>; }`,
     );
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     // Triggering ensureComponent with Button (already in registry) should detect reserved layout entry
-    const content = await manager.ensureComponent(["src/components/Button.tsx"]);
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
     // layout.tsx must be removed — it breaks Next.js Client Component chain
     expect(content).not.toContain('"app/layout.tsx"');
-    expect(content).not.toContain("RootLayout");
+    expect(content).not.toContain('RootLayout');
     // Button should still be there
-    expect(content).toContain("Button");
+    expect(content).toContain('Button');
   });
 
-  it("regenerates when existing file has wrong path casing from a case-insensitive filesystem", async () => {
+  it('regenerates when existing file has wrong path casing from a case-insensitive filesystem', async () => {
     const stalePreview = `import React from 'react';
 import Sidebar from './components/Sidebar';
 import SRCApp from '../SRC/App';
@@ -1009,42 +1009,42 @@ const callbackStubs = {};
 export default function CanvasPreview() { return null; }
 `;
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/__canvas_preview__.tsx", stalePreview);
-    io.files.set("/project/src/App.tsx", "export default function App() { return <div />; }");
-    io.files.set("/project/src/components/Sidebar.tsx", "export default function Sidebar() { return <nav />; }");
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/src/__canvas_preview__.tsx', stalePreview);
+    io.files.set('/project/src/App.tsx', 'export default function App() { return <div />; }');
+    io.files.set('/project/src/components/Sidebar.tsx', 'export default function Sidebar() { return <nav />; }');
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    const content = await manager.ensureComponent(["src/components/Sidebar.tsx"]);
+    const content = await manager.ensureComponent(['src/components/Sidebar.tsx']);
 
-    expect(content).not.toContain("SRC/App");
+    expect(content).not.toContain('SRC/App');
     expect(content).not.toContain("'SRC/App.tsx'");
     expect(content).toContain("'src/App.tsx'");
     expect(content).toContain("from './App'");
     expect(content).toContain("'src/components/Sidebar.tsx'");
   });
 
-  it("excludes layout.tsx when explicitly requested via ensureComponent", async () => {
+  it('excludes layout.tsx when explicitly requested via ensureComponent', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/app/layout.tsx",
+      '/project/app/layout.tsx',
       `export const metadata = {};
 export default function RootLayout({ children }: { children: React.ReactNode }) { return <>{children}</>; }`,
     );
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     // Requesting layout.tsx explicitly should not add it to the registry
-    const content = await manager.ensureComponent(["app/layout.tsx", "src/components/Button.tsx"]);
+    const content = await manager.ensureComponent(['app/layout.tsx', 'src/components/Button.tsx']);
     expect(content).not.toContain('"app/layout.tsx"');
-    expect(content).not.toContain("RootLayout");
-    expect(content).toContain("Button");
+    expect(content).not.toContain('RootLayout');
+    expect(content).toContain('Button');
   });
 });
 
-describe("PreviewFileManager — ensureComponent all-non-component paths", () => {
-  it("returns existing preview content when all requested paths are non-PascalCase (e.g. main.tsx only)", async () => {
+describe('PreviewFileManager — ensureComponent all-non-component paths', () => {
+  it('returns existing preview content when all requested paths are non-PascalCase (e.g. main.tsx only)', async () => {
     const existingPreview = `import React from 'react';
 import Button from './components/Button';
 const componentRegistry = { 'src/components/Button.tsx': Button };
@@ -1054,21 +1054,21 @@ const callbackStubs = {};
 export default function CanvasPreview() { return null; }
 `;
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/__canvas_preview__.tsx", existingPreview);
+    io.files.set('/project/src/__canvas_preview__.tsx', existingPreview);
     io.files.set(
-      "/project/src/main.tsx",
+      '/project/src/main.tsx',
       `import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')!).render(<App />)\n`,
     );
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     // Only main.tsx passed — no valid component entries — should no-op and return existing content
-    const content = await manager.ensureComponent(["src/main.tsx"]);
-    expect(content).toContain("Button");
+    const content = await manager.ensureComponent(['src/main.tsx']);
+    expect(content).toContain('Button');
     expect(content).not.toContain('"src/main.tsx"');
   });
 
-  it("salvages real components via scan when stale preview only has non-component entries", async () => {
+  it('salvages real components via scan when stale preview only has non-component entries', async () => {
     // Stale file with ONLY main.tsx — no valid PascalCase components
     const staleOnlyNonComponent = `import React from 'react';
 import { main } from './main';
@@ -1079,41 +1079,41 @@ const callbackStubs = {};
 export default function CanvasPreview() { return null; }
 `;
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/__canvas_preview__.tsx", staleOnlyNonComponent);
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/__canvas_preview__.tsx', staleOnlyNonComponent);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     io.files.set(
-      "/project/src/main.tsx",
+      '/project/src/main.tsx',
       `import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')!).render(<App />)\n`,
     );
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     // ensureComponent(['src/main.tsx']): stale fast path calls _initPreviewFile(['src/main.tsx'])
     // _initPreviewFile has no valid requested entries, but scan finds Button.tsx
-    const content = await manager.ensureComponent(["src/main.tsx"]);
+    const content = await manager.ensureComponent(['src/main.tsx']);
     // Stale main.tsx entry must be gone
     expect(content).not.toContain('"src/main.tsx"');
-    expect(content).not.toContain("{ main }");
+    expect(content).not.toContain('{ main }');
     // Button found via scan must be present
-    expect(content).toContain("Button");
+    expect(content).toContain('Button');
   });
 
-  it("throws PreviewGenerationError when all requested paths are non-component and no existing file", async () => {
+  it('throws PreviewGenerationError when all requested paths are non-component and no existing file', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/main.tsx",
+      '/project/src/main.tsx',
       `import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')!).render(<App />)\n`,
     );
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    await expect(manager.ensureComponent(["src/main.tsx"])).rejects.toThrow(
-      "No valid components to include in preview",
+    await expect(manager.ensureComponent(['src/main.tsx'])).rejects.toThrow(
+      'No valid components to include in preview',
     );
   });
 });
 
-describe("PreviewFileManager — router shell exclusion (Bulka/Vite React SSG regression)", () => {
+describe('PreviewFileManager — router shell exclusion (Bulka/Vite React SSG regression)', () => {
   const ROUTER_SHELL_APP = `
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
@@ -1144,61 +1144,61 @@ export default function Index() {
 }
 `;
 
-  it("excludes App.tsx (router shell) and includes pages/Index.tsx when Index is requested", async () => {
+  it('excludes App.tsx (router shell) and includes pages/Index.tsx when Index is requested', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/client/App.tsx", ROUTER_SHELL_APP);
-    io.files.set("/project/client/pages/Index.tsx", INDEX_PAGE);
-    io.files.set("/project/package.json", "{}");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/client/App.tsx', ROUTER_SHELL_APP);
+    io.files.set('/project/client/pages/Index.tsx', INDEX_PAGE);
+    io.files.set('/project/package.json', '{}');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
 
-    const content = await manager.ensureComponent(["client/pages/Index.tsx"]);
+    const content = await manager.ensureComponent(['client/pages/Index.tsx']);
 
     // Router shell must be absent from the registry
     expect(content).not.toContain("'client/App.tsx'");
     expect(content).not.toContain("from './App'");
     // The requested page component must be present
     expect(content).toContain("'client/pages/Index.tsx'");
-    expect(content).toContain("Index");
+    expect(content).toContain('Index');
     expect(isValidTypeScript(content)).toBe(true);
   });
 
-  it("also excludes App.tsx when both App.tsx and Index.tsx are passed explicitly", async () => {
+  it('also excludes App.tsx when both App.tsx and Index.tsx are passed explicitly', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/client/App.tsx", ROUTER_SHELL_APP);
-    io.files.set("/project/client/pages/Index.tsx", INDEX_PAGE);
-    io.files.set("/project/package.json", "{}");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/client/App.tsx', ROUTER_SHELL_APP);
+    io.files.set('/project/client/pages/Index.tsx', INDEX_PAGE);
+    io.files.set('/project/package.json', '{}');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
 
-    const content = await manager.ensureComponent(["client/App.tsx", "client/pages/Index.tsx"]);
+    const content = await manager.ensureComponent(['client/App.tsx', 'client/pages/Index.tsx']);
 
     expect(content).not.toContain("'client/App.tsx'");
     expect(content).toContain("'client/pages/Index.tsx'");
     expect(isValidTypeScript(content)).toBe(true);
   });
 
-  it("excludes React Navigation shells while keeping screens", async () => {
+  it('excludes React Navigation shells while keeping screens', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/App.web.tsx",
+      '/project/App.web.tsx',
       `import { ChatListScreen } from './src/screens/ChatListScreen';\nexport default function App() { return <ChatListScreen />; }`,
     );
     io.files.set(
-      "/project/src/navigation/AppNavigator.tsx",
+      '/project/src/navigation/AppNavigator.tsx',
       `import { NavigationContainer } from '@react-navigation/native';\nexport function AppNavigator() { return <NavigationContainer><div /></NavigationContainer>; }`,
     );
     io.files.set(
-      "/project/src/navigation/BottomTabs.tsx",
+      '/project/src/navigation/BottomTabs.tsx',
       `import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';\nconst Tab = createBottomTabNavigator();\nexport function BottomTabs() { return <Tab.Navigator />; }`,
     );
-    io.files.set("/project/src/screens/ChatListScreen.tsx", `export function ChatListScreen() { return <main />; }`);
-    io.files.set("/project/package.json", "{}");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/src/screens/ChatListScreen.tsx', `export function ChatListScreen() { return <main />; }`);
+    io.files.set('/project/package.json', '{}');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
 
     const content = await manager.ensureComponent([
-      "App.web.tsx",
-      "src/navigation/AppNavigator.tsx",
-      "src/navigation/BottomTabs.tsx",
-      "src/screens/ChatListScreen.tsx",
+      'App.web.tsx',
+      'src/navigation/AppNavigator.tsx',
+      'src/navigation/BottomTabs.tsx',
+      'src/screens/ChatListScreen.tsx',
     ]);
 
     expect(content).toContain("'App.web.tsx'");
@@ -1210,10 +1210,10 @@ export default function Index() {
     expect(isValidTypeScript(content)).toBe(true);
   });
 
-  it("keeps explicitly requested App.web.tsx even when it owns React Navigation providers", async () => {
+  it('keeps explicitly requested App.web.tsx even when it owns React Navigation providers', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/App.web.tsx",
+      '/project/App.web.tsx',
       `import { NavigationContainer } from '@react-navigation/native';
 import { HomeScreen } from './src/screens/HomeScreen';
 
@@ -1222,13 +1222,13 @@ export default function App() {
 }`,
     );
     io.files.set(
-      "/project/src/screens/HomeScreen.tsx",
+      '/project/src/screens/HomeScreen.tsx',
       `export function HomeScreen() { return <main>Free Delivery</main>; }`,
     );
-    io.files.set("/project/package.json", "{}");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/package.json', '{}');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
 
-    const content = await manager.ensureComponent(["App.web.tsx"]);
+    const content = await manager.ensureComponent(['App.web.tsx']);
 
     expect(content).toContain("'App.web.tsx'");
     expect(content).toContain("import App from '../App.web';");
@@ -1237,307 +1237,307 @@ export default function App() {
   });
 });
 
-describe("isValidTypeScript", () => {
-  it("should return true for valid TSX code", () => {
-    expect(isValidTypeScript("const x: number = 1;")).toBe(true);
+describe('isValidTypeScript', () => {
+  it('should return true for valid TSX code', () => {
+    expect(isValidTypeScript('const x: number = 1;')).toBe(true);
   });
 
-  it("should return true for JSX code", () => {
-    expect(isValidTypeScript("const el = <div>Hello</div>;")).toBe(true);
+  it('should return true for JSX code', () => {
+    expect(isValidTypeScript('const el = <div>Hello</div>;')).toBe(true);
   });
 
-  it("should return false for invalid code", () => {
-    expect(isValidTypeScript("const x: = ;; {{{")).toBe(false);
+  it('should return false for invalid code', () => {
+    expect(isValidTypeScript('const x: = ;; {{{')).toBe(false);
   });
 
-  it("should return true for empty string", () => {
+  it('should return true for empty string', () => {
     // Empty file is valid TypeScript module
-    expect(isValidTypeScript("")).toBe(true);
+    expect(isValidTypeScript('')).toBe(true);
   });
 
-  it("should return false for HTML document", () => {
-    expect(isValidTypeScript("<!DOCTYPE html><html><body></body></html>")).toBe(false);
+  it('should return false for HTML document', () => {
+    expect(isValidTypeScript('<!DOCTYPE html><html><body></body></html>')).toBe(false);
   });
 });
 
-describe("PreviewFileManager.ensurePreviewFiles", () => {
-  it("generates route file for Next.js App Router", async () => {
+describe('PreviewFileManager.ensurePreviewFiles', () => {
+  it('generates route file for Next.js App Router', async () => {
     const io = new InMemoryFileIO();
     // Simulate Next.js App Router project
-    io.files.set("/project/app/layout.tsx", "export default function RootLayout...");
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { next: "^14.0.0" } }));
+    io.files.set('/project/app/layout.tsx', 'export default function RootLayout...');
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
     // Pre-populate source component
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     // Pre-populate __canvas_preview__.tsx (as if ensureComponent ran first)
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
-      "// @hyperide-managed\nexport default function CanvasPreview() {}",
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     const result = await manager.ensurePreviewFiles();
     // Files freshly written → 'ok-files-written' so caller can arm recompile gate
-    expect(result).toBe("ok-files-written");
+    expect(result).toBe('ok-files-written');
 
-    const routeFile = io.files.get("/project/app/test-preview/page.tsx");
+    const routeFile = io.files.get('/project/app/test-preview/page.tsx');
     expect(routeFile).toBeDefined();
-    expect(routeFile).toContain("@hyperide-managed");
-    expect(routeFile).toContain("CanvasPreview");
-    expect(routeFile).toContain("useSearchParams");
+    expect(routeFile).toContain('@hyperide-managed');
+    expect(routeFile).toContain('CanvasPreview');
+    expect(routeFile).toContain('useSearchParams');
 
-    const layoutFile = io.files.get("/project/app/test-preview/layout.tsx");
+    const layoutFile = io.files.get('/project/app/test-preview/layout.tsx');
     expect(layoutFile).toBeDefined();
-    expect(layoutFile).toContain("@hyperide-managed");
+    expect(layoutFile).toContain('@hyperide-managed');
 
     // Idempotent — same content, no new writes → 'ok'
     const result2 = await manager.ensurePreviewFiles();
-    expect(result2).toBe("ok");
+    expect(result2).toBe('ok');
   });
 
-  it("updates route file if it already exists with @hyperide-managed", async () => {
+  it('updates route file if it already exists with @hyperide-managed', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/app/layout.tsx", "...");
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { next: "^14.0.0" } }));
-    const existingContent = "// @hyperide-managed\nexport default function TestPreviewPage() {}";
-    io.files.set("/project/app/test-preview/page.tsx", existingContent);
+    io.files.set('/project/app/layout.tsx', '...');
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
+    const existingContent = '// @hyperide-managed\nexport default function TestPreviewPage() {}';
+    io.files.set('/project/app/test-preview/page.tsx', existingContent);
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
-      "// @hyperide-managed\nexport default function CanvasPreview() {}",
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensurePreviewFiles();
 
-    const routeFile = io.files.get("/project/app/test-preview/page.tsx");
+    const routeFile = io.files.get('/project/app/test-preview/page.tsx');
     expect(routeFile).not.toBe(existingContent);
     expect(routeFile).toContain('id="root"');
   });
 
-  it("does not overwrite user file without @hyperide-managed", async () => {
+  it('does not overwrite user file without @hyperide-managed', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/app/layout.tsx", "...");
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { next: "^14.0.0" } }));
-    const userContent = "export default function UserPage() { return <div>My page</div>; }";
-    io.files.set("/project/app/test-preview/page.tsx", userContent);
+    io.files.set('/project/app/layout.tsx', '...');
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
+    const userContent = 'export default function UserPage() { return <div>My page</div>; }';
+    io.files.set('/project/app/test-preview/page.tsx', userContent);
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
-      "// @hyperide-managed\nexport default function CanvasPreview() {}",
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensurePreviewFiles();
 
     // User file must not be overwritten
-    expect(io.files.get("/project/app/test-preview/page.tsx")).toBe(userContent);
+    expect(io.files.get('/project/app/test-preview/page.tsx')).toBe(userContent);
   });
 
-  it("returns unsupported for unknown framework", async () => {
+  it('returns unsupported for unknown framework', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { react: "^18.0.0" } }));
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { react: '^18.0.0' } }));
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
-      "// @hyperide-managed\nexport default function CanvasPreview() {}",
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     const result = await manager.ensurePreviewFiles();
-    expect(result).toBe("unsupported");
+    expect(result).toBe('unsupported');
   });
 
-  it("returns needs-patch for vite-spa-jsx-router", async () => {
+  it('returns needs-patch for vite-spa-jsx-router', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { vite: "^5.0.0" } }));
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { vite: '^5.0.0' } }));
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     const result = await manager.ensurePreviewFiles();
-    expect(result).toBe("needs-patch");
+    expect(result).toBe('needs-patch');
   });
 
-  it("returns needs-patch for bun SPA project", async () => {
+  it('returns needs-patch for bun SPA project', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/bun.lock", "");
-    io.files.set("/project/package.json", JSON.stringify({ scripts: { start: "bun run index.tsx" } }));
+    io.files.set('/project/bun.lock', '');
+    io.files.set('/project/package.json', JSON.stringify({ scripts: { start: 'bun run index.tsx' } }));
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     const result = await manager.ensurePreviewFiles();
-    expect(result).toBe("needs-patch");
+    expect(result).toBe('needs-patch');
   });
 });
 
-describe("PreviewFileManager.ensureComponent — git exclude side-effect", () => {
-  it("writes git exclude after generating __canvas_preview__.tsx (monorepo: git root above projectRoot)", async () => {
+describe('PreviewFileManager.ensureComponent — git exclude side-effect', () => {
+  it('writes git exclude after generating __canvas_preview__.tsx (monorepo: git root above projectRoot)', async () => {
     // Simulates conloca-private monorepo: git root is /monorepo, project is /monorepo/targets/conloca-app
     const io = new InMemoryFileIO();
     // .git lives at monorepo root, not at projectRoot
-    io.files.set("/monorepo/.git/HEAD", "ref: refs/heads/main\n");
-    io.files.set("/monorepo/targets/conloca-app/package.json", JSON.stringify({ dependencies: { vite: "^5.0.0" } }));
-    io.files.set("/monorepo/targets/conloca-app/src/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/monorepo/.git/HEAD', 'ref: refs/heads/main\n');
+    io.files.set('/monorepo/targets/conloca-app/package.json', JSON.stringify({ dependencies: { vite: '^5.0.0' } }));
+    io.files.set('/monorepo/targets/conloca-app/src/Button.tsx', BUTTON_SOURCE);
 
     const manager = new PreviewFileManager({
-      projectRoot: "/monorepo/targets/conloca-app",
+      projectRoot: '/monorepo/targets/conloca-app',
       io,
     });
-    await manager.ensureComponent(["src/Button.tsx"]);
+    await manager.ensureComponent(['src/Button.tsx']);
 
     // Exclude file must be at the monorepo git root, not at projectRoot
-    const content = io.files.get("/monorepo/.git/info/exclude");
+    const content = io.files.get('/monorepo/.git/info/exclude');
     expect(content).toBeDefined();
-    expect(content).toContain("__canvas_preview__.tsx");
-    expect(content).toContain("__canvas_preview_standalone__.tsx");
+    expect(content).toContain('__canvas_preview__.tsx');
+    expect(content).toContain('__canvas_preview_standalone__.tsx');
   });
 });
 
-describe("PreviewFileManager.ensureGitExclude", () => {
-  it("creates .git/info/exclude with all entries when file is missing", async () => {
+describe('PreviewFileManager.ensureGitExclude', () => {
+  it('creates .git/info/exclude with all entries when file is missing', async () => {
     const io = new InMemoryFileIO();
     // Provide a .git dir so findGitRoot can locate the repo root
-    io.files.set("/project/.git/HEAD", "ref: refs/heads/main\n");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/.git/HEAD', 'ref: refs/heads/main\n');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensureGitExclude();
 
-    const content = io.files.get("/project/.git/info/exclude");
-    expect(content).toContain("# HyperIDE — generated preview files");
-    expect(content).toContain("__canvas_preview__.tsx");
-    expect(content).toContain("__canvas_preview_standalone__.tsx");
-    expect(content).toContain("**/test-preview/");
-    expect(content).toContain("**/test-preview.tsx");
+    const content = io.files.get('/project/.git/info/exclude');
+    expect(content).toContain('# HyperIDE — generated preview files');
+    expect(content).toContain('__canvas_preview__.tsx');
+    expect(content).toContain('__canvas_preview_standalone__.tsx');
+    expect(content).toContain('**/test-preview/');
+    expect(content).toContain('**/test-preview.tsx');
   });
 
-  it("appends missing entries to existing exclude file", async () => {
+  it('appends missing entries to existing exclude file', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/.git/info/exclude", "# existing\n*.log\n");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/.git/info/exclude', '# existing\n*.log\n');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensureGitExclude();
 
-    const content = io.files.get("/project/.git/info/exclude");
-    expect(content).toContain("# existing");
-    expect(content).toContain("*.log");
-    expect(content).toContain("__canvas_preview__.tsx");
+    const content = io.files.get('/project/.git/info/exclude');
+    expect(content).toContain('# existing');
+    expect(content).toContain('*.log');
+    expect(content).toContain('__canvas_preview__.tsx');
   });
 
-  it("is idempotent — does not duplicate entries", async () => {
+  it('is idempotent — does not duplicate entries', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/.git/info/exclude",
-      "# HyperIDE — generated preview files\n__canvas_preview__.tsx\n__canvas_preview_standalone__.tsx\n__canvas_samples__.tsx\n*.samples.tsx\n.hyperide/\n**/test-preview/\n**/test-preview.tsx\n",
+      '/project/.git/info/exclude',
+      '# HyperIDE — generated preview files\n__canvas_preview__.tsx\n__canvas_preview_standalone__.tsx\n__canvas_samples__.tsx\n*.samples.tsx\n.hyperide/\n**/test-preview/\n**/test-preview.tsx\n',
     );
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    const before = io.files.get("/project/.git/info/exclude");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const before = io.files.get('/project/.git/info/exclude');
     await manager.ensureGitExclude();
-    const after = io.files.get("/project/.git/info/exclude");
+    const after = io.files.get('/project/.git/info/exclude');
     expect(after).toBe(before); // unchanged
   });
 
-  it("adds newline separator when existing file does not end with newline", async () => {
+  it('adds newline separator when existing file does not end with newline', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/.git/info/exclude", "# existing");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/.git/info/exclude', '# existing');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensureGitExclude();
 
-    const content = io.files.get("/project/.git/info/exclude") ?? "";
-    expect(content.startsWith("# existing\n")).toBe(true);
+    const content = io.files.get('/project/.git/info/exclude') ?? '';
+    expect(content.startsWith('# existing\n')).toBe(true);
   });
 
-  it("does not throw when .git/info/exclude is not writable (worktree or non-git dir)", async () => {
+  it('does not throw when .git/info/exclude is not writable (worktree or non-git dir)', async () => {
     const io = new InMemoryFileIO();
     // writeFile always throws (simulates .git being a file or no write access)
     io.writeFile = async () => {
-      throw new Error("ENOTDIR");
+      throw new Error('ENOTDIR');
     };
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await expect(manager.ensureGitExclude()).resolves.toBeUndefined();
   });
 });
 
-describe("PreviewFileManager.cleanupPreviewFiles", () => {
-  it("removes @hyperide-managed route files", async () => {
+describe('PreviewFileManager.cleanupPreviewFiles', () => {
+  it('removes @hyperide-managed route files', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/app/layout.tsx", "...");
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { next: "^14.0.0" } }));
+    io.files.set('/project/app/layout.tsx', '...');
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
     io.files.set(
-      "/project/app/test-preview/page.tsx",
-      "// @hyperide-managed\nexport default function TestPreviewPage() {}",
+      '/project/app/test-preview/page.tsx',
+      '// @hyperide-managed\nexport default function TestPreviewPage() {}',
     );
     io.files.set(
-      "/project/app/test-preview/layout.tsx",
-      "// @hyperide-managed\nexport default function PreviewLayout...",
+      '/project/app/test-preview/layout.tsx',
+      '// @hyperide-managed\nexport default function PreviewLayout...',
     );
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
-      "// @hyperide-managed\nexport default function CanvasPreview() {}",
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.cleanupPreviewFiles();
 
-    expect(io.files.has("/project/app/test-preview/page.tsx")).toBe(false);
-    expect(io.files.has("/project/app/test-preview/layout.tsx")).toBe(false);
+    expect(io.files.has('/project/app/test-preview/page.tsx')).toBe(false);
+    expect(io.files.has('/project/app/test-preview/layout.tsx')).toBe(false);
     // __canvas_preview__.tsx should NOT be removed — only route files
-    expect(io.files.has("/project/src/__canvas_preview__.tsx")).toBe(true);
+    expect(io.files.has('/project/src/__canvas_preview__.tsx')).toBe(true);
   });
 
-  it("does not remove user files without @hyperide-managed", async () => {
+  it('does not remove user files without @hyperide-managed', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/app/layout.tsx", "...");
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { next: "^14.0.0" } }));
-    io.files.set("/project/app/test-preview/page.tsx", "export default function MyPage() {}");
+    io.files.set('/project/app/layout.tsx', '...');
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
+    io.files.set('/project/app/test-preview/page.tsx', 'export default function MyPage() {}');
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.cleanupPreviewFiles();
 
-    expect(io.files.has("/project/app/test-preview/page.tsx")).toBe(true);
+    expect(io.files.has('/project/app/test-preview/page.tsx')).toBe(true);
   });
 });
 
-describe("PreviewFileManager._hasImport", () => {
-  it("returns true for exact relative import", async () => {
+describe('PreviewFileManager._hasImport', () => {
+  it('returns true for exact relative import', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "import Button from './components/Button';\nexport default function CanvasPreview() {}",
     );
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    expect(await manager._hasImport("/project/src/__canvas_preview__.tsx", "./components/Button")).toBe(true);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Button')).toBe(true);
   });
 
-  it("returns true when import has extension but search does not", async () => {
+  it('returns true when import has extension but search does not', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "import Button from './components/Button.tsx';\nexport default function CanvasPreview() {}",
     );
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    expect(await manager._hasImport("/project/src/__canvas_preview__.tsx", "./components/Button")).toBe(true);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Button')).toBe(true);
   });
 
-  it("returns false for missing import", async () => {
+  it('returns false for missing import', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "import Button from './components/Button';\nexport default function CanvasPreview() {}",
     );
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    expect(await manager._hasImport("/project/src/__canvas_preview__.tsx", "./components/Card")).toBe(false);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Card')).toBe(false);
   });
 
-  it("handles absolute vs relative normalization (same resolved path)", async () => {
+  it('handles absolute vs relative normalization (same resolved path)', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "import Button from '../src/components/Button';\nexport default function CanvasPreview() {}",
     );
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     // Different relative path, same resolved file
-    expect(await manager._hasImport("/project/src/__canvas_preview__.tsx", "./components/Button")).toBe(true);
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Button')).toBe(true);
   });
 });
 
-describe("ensureComponent — fast path", () => {
-  it("does not write file when import already present", async () => {
+describe('ensureComponent — fast path', () => {
+  it('does not write file when import already present', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       `// ${PREVIEW_GENERATOR_SCHEMA_MARKER}\n// @hyperide-managed\nimport Button from './components/Button';\nconst previewFallbackProps = {};\nexport default function CanvasPreview() {}`,
     );
     let writeCount = 0;
@@ -1547,31 +1547,31 @@ describe("ensureComponent — fast path", () => {
       return origWrite(p, c);
     };
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.ensureComponent(["src/components/Button.tsx"]);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureComponent(['src/components/Button.tsx']);
 
     expect(writeCount).toBe(0); // fast path — no write
   });
 
-  it("regenerates when generated schema marker is stale", async () => {
+  it('regenerates when generated schema marker is stale', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "// @hyperide-managed\nimport Button from './components/Button';\nconst previewFallbackProps = { data: [] };\nexport default function CanvasPreview() {}",
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    const content = await manager.ensureComponent(["src/components/Button.tsx"]);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
 
     expect(content).toContain(PREVIEW_GENERATOR_SCHEMA_MARKER);
-    expect(content).toContain("data: previewData");
+    expect(content).toContain('data: previewData');
   });
 
-  it("regenerates when an already registered component gains SampleDefault", async () => {
+  it('regenerates when an already registered component gains SampleDefault', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/components/Alert.tsx",
+      '/project/src/components/Alert.tsx',
       `
 export function Alert({ children }: { children?: React.ReactNode }) {
   return <div>{children}</div>;
@@ -1581,7 +1581,7 @@ export const SampleDefault = () => <Alert>Visible alert</Alert>;
 `,
     );
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       `// ${PREVIEW_GENERATOR_SCHEMA_MARKER}
 // @hyperide-managed
 import { Alert } from './components/Alert';
@@ -1594,45 +1594,45 @@ export default function CanvasPreview() { return null; }
 `,
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    const content = await manager.ensureComponent(["src/components/Alert.tsx"]);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const content = await manager.ensureComponent(['src/components/Alert.tsx']);
 
-    expect(content).toContain("SampleDefault as AlertSampleDefault");
+    expect(content).toContain('SampleDefault as AlertSampleDefault');
     expect(content).toContain("'src/components/Alert.tsx': AlertSampleDefault");
   });
 
-  it("AST-inserts missing import without full regeneration", async () => {
+  it('AST-inserts missing import without full regeneration', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-    io.files.set("/project/src/components/Card.tsx", CARD_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
     // File has Button but not Card
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "// @hyperide-managed\nimport Button from './components/Button';\nexport default function CanvasPreview() {}",
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.ensureComponent(["src/components/Card.tsx"]);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureComponent(['src/components/Card.tsx']);
 
-    const content = io.files.get("/project/src/__canvas_preview__.tsx");
+    const content = io.files.get('/project/src/__canvas_preview__.tsx');
     expect(content).toBeDefined();
-    expect(content).toContain("Button"); // existing import preserved
-    expect(content).toContain("Card"); // new import added
+    expect(content).toContain('Button'); // existing import preserved
+    expect(content).toContain('Card'); // new import added
   });
 
-  it("init: generates with ALL project components when file is missing", async () => {
+  it('init: generates with ALL project components when file is missing', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-    io.files.set("/project/src/components/Card.tsx", CARD_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.ensureComponent(["src/components/Button.tsx"]); // only Button requested
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureComponent(['src/components/Button.tsx']); // only Button requested
 
-    const content = io.files.get("/project/src/__canvas_preview__.tsx");
+    const content = io.files.get('/project/src/__canvas_preview__.tsx');
     expect(content).toBeDefined();
-    expect(content).toContain("Button");
-    expect(content).toContain("Card"); // all components included on init
+    expect(content).toContain('Button');
+    expect(content).toContain('Card'); // all components included on init
   });
 });
 
@@ -1687,78 +1687,78 @@ export default function App() {
 }
 `;
 
-describe("PreviewFileManager.patchRouterConfig", () => {
-  it("injects /test-preview route into <Routes>", async () => {
+describe('PreviewFileManager.patchRouterConfig', () => {
+  it('injects /test-preview route into <Routes>', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/App.tsx", ROUTER_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchRouterConfig("/project/src/App.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
 
-    const patched = io.files.get("/project/src/App.tsx");
+    const patched = io.files.get('/project/src/App.tsx');
     expect(patched).toBeDefined();
-    expect(patched).toContain("test-preview");
-    expect(patched).toContain("@hyperide-managed");
-    expect(patched).toContain("CanvasPreview");
+    expect(patched).toContain('test-preview');
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('CanvasPreview');
   });
 
-  it("injects /test-preview route before a catch-all route", async () => {
+  it('injects /test-preview route before a catch-all route', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/App.tsx", ROUTER_SOURCE_WITH_CATCH_ALL);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE_WITH_CATCH_ALL);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchRouterConfig("/project/src/App.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
 
-    const patched = io.files.get("/project/src/App.tsx");
+    const patched = io.files.get('/project/src/App.tsx');
     expect(patched).toBeDefined();
     expect(patched?.indexOf('path="/test-preview"')).toBeLessThan(patched?.indexOf('path="*"') ?? -1);
   });
 
-  it("moves an existing managed /test-preview route before a catch-all route", async () => {
+  it('moves an existing managed /test-preview route before a catch-all route', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/App.tsx", ROUTER_SOURCE_WITH_MANAGED_ROUTE_AFTER_CATCH_ALL);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE_WITH_MANAGED_ROUTE_AFTER_CATCH_ALL);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchRouterConfig("/project/src/App.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
 
-    const patched = io.files.get("/project/src/App.tsx");
+    const patched = io.files.get('/project/src/App.tsx');
     expect(patched).toBeDefined();
     expect(patched?.indexOf('path="/test-preview"')).toBeLessThan(patched?.indexOf('path="*"') ?? -1);
     expect(patched?.match(/import CanvasPreview/g)?.length).toBe(1);
     expect(patched?.match(/path="\/test-preview"/g)?.length).toBe(1);
   });
 
-  it("revertRouterPatch removes @hyperide-managed lines and preserves original routes", async () => {
+  it('revertRouterPatch removes @hyperide-managed lines and preserves original routes', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/App.tsx", ROUTER_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchRouterConfig("/project/src/App.tsx");
-    await manager.revertRouterPatch("/project/src/App.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
+    await manager.revertRouterPatch('/project/src/App.tsx');
 
-    const reverted = io.files.get("/project/src/App.tsx");
+    const reverted = io.files.get('/project/src/App.tsx');
     expect(reverted).toBeDefined();
-    expect(reverted).not.toContain("@hyperide-managed");
-    expect(reverted).not.toContain("test-preview");
+    expect(reverted).not.toContain('@hyperide-managed');
+    expect(reverted).not.toContain('test-preview');
     // Original home route must survive the revert
     expect(reverted).toContain('path="/"');
-    expect(reverted).toContain("Home");
+    expect(reverted).toContain('Home');
   });
 
-  it("is idempotent — does not double-inject", async () => {
+  it('is idempotent — does not double-inject', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/App.tsx", ROUTER_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchRouterConfig("/project/src/App.tsx");
-    await manager.patchRouterConfig("/project/src/App.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
+    await manager.patchRouterConfig('/project/src/App.tsx');
 
-    const patched = io.files.get("/project/src/App.tsx");
+    const patched = io.files.get('/project/src/App.tsx');
     expect(patched).toBeDefined();
     // Should only have one test-preview route
     const count = (patched?.match(/test-preview/g) ?? []).length;
@@ -1779,294 +1779,294 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 `;
 
-describe("PreviewFileManager.patchEntryFile", () => {
-  it("wraps createRoot call in if/else block", async () => {
+describe('PreviewFileManager.patchEntryFile', () => {
+  it('wraps createRoot call in if/else block', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/index.tsx", ENTRY_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/index.tsx");
-    const patched = io.files.get("/project/src/index.tsx");
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
+    const patched = io.files.get('/project/src/index.tsx');
     expect(patched).toBeDefined();
-    expect(patched).toContain("@hyperide-managed");
-    expect(patched).toContain("__canvas_preview__");
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('__canvas_preview__');
     // Checks both ?component= and /test-preview path to avoid hijacking app URLs
     expect(patched).toMatch(/get\(["']component["']\)/);
-    expect(patched).toContain("includes");
-    expect(patched).toContain("test-preview");
+    expect(patched).toContain('includes');
+    expect(patched).toContain('test-preview');
     // App shell: must render CanvasPreview via .then() — not a plain side-effect import
-    expect(patched).toContain(".then(");
-    expect(patched).toContain("CanvasPreviewComp");
+    expect(patched).toContain('.then(');
+    expect(patched).toContain('CanvasPreviewComp');
     // Uses JSX (<CanvasPreviewComp />) — no React.createElement needed, works with auto JSX runtime
-    expect(patched).toContain("<CanvasPreviewComp");
+    expect(patched).toContain('<CanvasPreviewComp');
     // Defensive: .catch() fallback renders original app if __canvas_preview__ fails to load
-    expect(patched).toContain(".catch(");
+    expect(patched).toContain('.catch(');
   });
 
-  it("revertEntryFile restores original bootstrap code", async () => {
+  it('revertEntryFile restores original bootstrap code', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/index.tsx", ENTRY_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/index.tsx");
-    await manager.revertEntryFile("/project/src/index.tsx");
-    const reverted = io.files.get("/project/src/index.tsx");
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
+    await manager.revertEntryFile('/project/src/index.tsx');
+    const reverted = io.files.get('/project/src/index.tsx');
     expect(reverted).toBeDefined();
-    expect(reverted).not.toContain("@hyperide-managed");
+    expect(reverted).not.toContain('@hyperide-managed');
     expect(reverted).not.toMatch(/get\(["']component["']\)/);
-    expect(reverted).toContain("ReactDOM.createRoot");
+    expect(reverted).toContain('ReactDOM.createRoot');
     expect(reverted).toContain("document.getElementById('root')");
   });
 
-  it("is idempotent", async () => {
+  it('is idempotent', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/index.tsx", ENTRY_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/index.tsx");
-    await manager.patchEntryFile("/project/src/index.tsx");
-    const patched = io.files.get("/project/src/index.tsx");
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
+    await manager.patchEntryFile('/project/src/index.tsx');
+    const patched = io.files.get('/project/src/index.tsx');
     expect(patched).toBeDefined();
     const count = (patched?.match(/get\(["']component["']\)/g) ?? []).length;
     expect(count).toBe(1);
   });
 
-  it("uses React.createElement for .ts entry files (no JSX allowed in plain TypeScript)", async () => {
+  it('uses React.createElement for .ts entry files (no JSX allowed in plain TypeScript)', async () => {
     const tsEntry = `import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 ReactDOM.createRoot(document.getElementById('root')!).render(React.createElement(App, null));
 `;
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/index.ts", tsEntry);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/index.ts");
-    const patched = io.files.get("/project/src/index.ts");
+    io.files.set('/project/src/index.ts', tsEntry);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.ts');
+    const patched = io.files.get('/project/src/index.ts');
     expect(patched).toBeDefined();
-    expect(patched).toContain("@hyperide-managed");
-    expect(patched).toContain("CanvasPreviewComp");
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('CanvasPreviewComp');
     // Must NOT contain JSX syntax — TypeScript rejects JSX in .ts files
-    expect(patched).not.toContain("<CanvasPreviewComp");
+    expect(patched).not.toContain('<CanvasPreviewComp');
     // Must use React.createElement instead
-    expect(patched).toContain("React.createElement");
+    expect(patched).toContain('React.createElement');
   });
-  it("falls back to appended conditional import for non-standard entries (ViteReactSSG)", async () => {
+  it('falls back to appended conditional import for non-standard entries (ViteReactSSG)', async () => {
     const viteReactSsgEntry = `import { ViteReactSSG } from "vite-react-ssg/single-page";
 import App from "./App";
 export const createRoot = ViteReactSSG(<App />);
 `;
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/main.tsx", viteReactSsgEntry);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/main.tsx");
-    const patched = io.files.get("/project/src/main.tsx");
+    io.files.set('/project/src/main.tsx', viteReactSsgEntry);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/main.tsx');
+    const patched = io.files.get('/project/src/main.tsx');
     expect(patched).toBeDefined();
-    expect(patched).toContain("@hyperide-managed");
-    expect(patched).toContain("__canvas_preview__");
-    expect(patched).toContain("test-preview");
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('__canvas_preview__');
+    expect(patched).toContain('test-preview');
     expect(patched).toContain('import("');
     // Original code preserved
-    expect(patched).toContain("ViteReactSSG");
+    expect(patched).toContain('ViteReactSSG');
     // App Shell fallback must render the component — plain import is not enough because
     // __canvas_preview__ only exports a React component, it doesn't self-render.
-    expect(patched).toContain("react-dom/client");
-    expect(patched).toContain("createElement");
+    expect(patched).toContain('react-dom/client');
+    expect(patched).toContain('createElement');
   });
 
-  it("falls back to plain import for non-standard entries in Isolated/standalone mode (ViteReactSSG)", async () => {
+  it('falls back to plain import for non-standard entries in Isolated/standalone mode (ViteReactSSG)', async () => {
     const viteReactSsgEntry = `import { ViteReactSSG } from "vite-react-ssg/single-page";
 import App from "./App";
 export const createRoot = ViteReactSSG(<App />);
 `;
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/main.tsx", viteReactSsgEntry);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/main.tsx", "./__canvas_preview_standalone__");
-    const patched = io.files.get("/project/src/main.tsx");
+    io.files.set('/project/src/main.tsx', viteReactSsgEntry);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/main.tsx', './__canvas_preview_standalone__');
+    const patched = io.files.get('/project/src/main.tsx');
     expect(patched).toBeDefined();
-    expect(patched).toContain("@hyperide-managed");
-    expect(patched).toContain("__canvas_preview_standalone__");
-    expect(patched).toContain("test-preview");
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('__canvas_preview_standalone__');
+    expect(patched).toContain('test-preview');
     expect(patched).toContain('import("');
     // Original code preserved
-    expect(patched).toContain("ViteReactSSG");
+    expect(patched).toContain('ViteReactSSG');
     // Standalone has its own createRoot — should NOT add extra rendering boilerplate
-    expect(patched).not.toContain("react-dom/client");
-    expect(patched).not.toContain("createElement");
+    expect(patched).not.toContain('react-dom/client');
+    expect(patched).not.toContain('createElement');
   });
 
-  it("revertEntryFile restores appended fallback form", async () => {
+  it('revertEntryFile restores appended fallback form', async () => {
     const viteReactSsgEntry = `import { ViteReactSSG } from "vite-react-ssg/single-page";
 import App from "./App";
 export const createRoot = ViteReactSSG(<App />);
 `;
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/main.tsx", viteReactSsgEntry);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/main.tsx");
-    await manager.revertEntryFile("/project/src/main.tsx");
-    const reverted = io.files.get("/project/src/main.tsx");
+    io.files.set('/project/src/main.tsx', viteReactSsgEntry);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/main.tsx');
+    await manager.revertEntryFile('/project/src/main.tsx');
+    const reverted = io.files.get('/project/src/main.tsx');
     expect(reverted).toBeDefined();
-    expect(reverted).not.toContain("@hyperide-managed");
-    expect(reverted).not.toContain("test-preview");
-    expect(reverted).toContain("ViteReactSSG");
+    expect(reverted).not.toContain('@hyperide-managed');
+    expect(reverted).not.toContain('test-preview');
+    expect(reverted).toContain('ViteReactSSG');
   });
 });
 
-describe("PreviewFileManager.ensureStandaloneEntry", () => {
-  it("generates __canvas_preview_standalone__.tsx from existing canvas_preview", async () => {
+describe('PreviewFileManager.ensureStandaloneEntry', () => {
+  it('generates __canvas_preview_standalone__.tsx from existing canvas_preview', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     const manager = createManager(io);
-    await manager.ensureComponent(["src/components/Button.tsx"]);
+    await manager.ensureComponent(['src/components/Button.tsx']);
     await manager.ensureStandaloneEntry();
 
-    const standalone = io.files.get("/project/src/__canvas_preview_standalone__.tsx");
+    const standalone = io.files.get('/project/src/__canvas_preview_standalone__.tsx');
     expect(standalone).toBeDefined();
-    expect(standalone).toContain("createRoot");
-    expect(standalone).toContain("PreviewWrapper");
-    expect(standalone).toContain("CanvasPreview");
-    expect(standalone).toContain("@hyperide-managed");
+    expect(standalone).toContain('createRoot');
+    expect(standalone).toContain('PreviewWrapper');
+    expect(standalone).toContain('CanvasPreview');
+    expect(standalone).toContain('@hyperide-managed');
     // Base preview content is preserved
-    expect(standalone).toContain("componentRegistry");
-    expect(standalone).toContain("sampleRenderMap");
+    expect(standalone).toContain('componentRegistry');
+    expect(standalone).toContain('sampleRenderMap');
   });
 
-  it("wrapper import path is relative from src/ to .hyperide/", async () => {
+  it('wrapper import path is relative from src/ to .hyperide/', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     const manager = createManager(io);
-    await manager.ensureComponent(["src/components/Button.tsx"]);
+    await manager.ensureComponent(['src/components/Button.tsx']);
     await manager.ensureStandaloneEntry();
 
-    const standalone = io.files.get("/project/src/__canvas_preview_standalone__.tsx");
-    expect(standalone).toContain("../.hyperide/preview");
+    const standalone = io.files.get('/project/src/__canvas_preview_standalone__.tsx');
+    expect(standalone).toContain('../.hyperide/preview');
   });
 
-  it("is a no-op when __canvas_preview__.tsx does not exist", async () => {
+  it('is a no-op when __canvas_preview__.tsx does not exist', async () => {
     const io = new InMemoryFileIO();
     const manager = createManager(io);
     await expect(manager.ensureStandaloneEntry()).resolves.toBeUndefined();
-    expect(io.files.has("/project/src/__canvas_preview_standalone__.tsx")).toBe(false);
+    expect(io.files.has('/project/src/__canvas_preview_standalone__.tsx')).toBe(false);
   });
 
-  it("updates standalone entry when called again after new component added", async () => {
+  it('updates standalone entry when called again after new component added', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-    io.files.set("/project/src/components/Card.tsx", CARD_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
     const manager = createManager(io);
-    await manager.ensureComponent(["src/components/Button.tsx"]);
+    await manager.ensureComponent(['src/components/Button.tsx']);
     await manager.ensureStandaloneEntry();
 
     // Add Card — regenerate preview + standalone
-    await manager.ensureComponent(["src/components/Button.tsx", "src/components/Card.tsx"]);
+    await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Card.tsx']);
     await manager.ensureStandaloneEntry();
 
-    const standalone = io.files.get("/project/src/__canvas_preview_standalone__.tsx");
-    expect(standalone).toContain("Button");
-    expect(standalone).toContain("Card");
+    const standalone = io.files.get('/project/src/__canvas_preview_standalone__.tsx');
+    expect(standalone).toContain('Button');
+    expect(standalone).toContain('Card');
   });
 });
 
-describe("PreviewFileManager._writeIfSafe mkdir", () => {
-  it("calls mkdir before writing nested route file", async () => {
+describe('PreviewFileManager._writeIfSafe mkdir', () => {
+  it('calls mkdir before writing nested route file', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { next: "^14" } }));
-    io.files.set("/project/app/layout.tsx", "// root layout");
-    io.files.set("/project/src/__canvas_preview__.tsx", "// preview");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14' } }));
+    io.files.set('/project/app/layout.tsx', '// root layout');
+    io.files.set('/project/src/__canvas_preview__.tsx', '// preview');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensurePreviewFiles();
 
     // mkdir should have been called for the nested route directory
-    expect(io.mkdirCalls).toContain("/project/app/test-preview");
+    expect(io.mkdirCalls).toContain('/project/app/test-preview');
   });
 });
 
-describe("PreviewFileManager.patchEntryFile — importTarget", () => {
-  it("uses default __canvas_preview__ import target (App Shell)", async () => {
+describe('PreviewFileManager.patchEntryFile — importTarget', () => {
+  it('uses default __canvas_preview__ import target (App Shell)', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/index.tsx", ENTRY_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/index.tsx");
-    const patched = io.files.get("/project/src/index.tsx");
-    expect(patched).toContain("./__canvas_preview__");
-    expect(patched).not.toContain("__canvas_preview_standalone__");
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
+    const patched = io.files.get('/project/src/index.tsx');
+    expect(patched).toContain('./__canvas_preview__');
+    expect(patched).not.toContain('__canvas_preview_standalone__');
   });
 
-  it("uses __canvas_preview_standalone__ import target when specified (Isolated/Tier 2)", async () => {
+  it('uses __canvas_preview_standalone__ import target when specified (Isolated/Tier 2)', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/index.tsx", ENTRY_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/index.tsx", "./__canvas_preview_standalone__");
-    const patched = io.files.get("/project/src/index.tsx");
-    expect(patched).toContain("./__canvas_preview_standalone__");
-    expect(patched).toContain("@hyperide-managed");
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx', './__canvas_preview_standalone__');
+    const patched = io.files.get('/project/src/index.tsx');
+    expect(patched).toContain('./__canvas_preview_standalone__');
+    expect(patched).toContain('@hyperide-managed');
     expect(patched).toMatch(/get\(["']component["']\)/);
   });
 
-  it("revertEntryFile removes Tier 2 patch correctly", async () => {
+  it('revertEntryFile removes Tier 2 patch correctly', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/index.tsx", ENTRY_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/index.tsx", "./__canvas_preview_standalone__");
-    await manager.revertEntryFile("/project/src/index.tsx");
-    const reverted = io.files.get("/project/src/index.tsx");
-    expect(reverted).not.toContain("@hyperide-managed");
-    expect(reverted).toContain("ReactDOM.createRoot");
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx', './__canvas_preview_standalone__');
+    await manager.revertEntryFile('/project/src/index.tsx');
+    const reverted = io.files.get('/project/src/index.tsx');
+    expect(reverted).not.toContain('@hyperide-managed');
+    expect(reverted).toContain('ReactDOM.createRoot');
   });
 });
 
-describe("PreviewFileManager.ensureIsolatedNextJsLayout (Tier 3)", () => {
-  it("generates layout.tsx with PreviewWrapper import for Next.js App Router", async () => {
+describe('PreviewFileManager.ensureIsolatedNextJsLayout (Tier 3)', () => {
+  it('generates layout.tsx with PreviewWrapper import for Next.js App Router', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { next: "^14" } }));
-    io.files.set("/project/app/layout.tsx", "// root layout");
-    io.files.set("/project/src/__canvas_preview__.tsx", "// preview");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14' } }));
+    io.files.set('/project/app/layout.tsx', '// root layout');
+    io.files.set('/project/src/__canvas_preview__.tsx', '// preview');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensureIsolatedNextJsLayout();
 
-    const layout = io.files.get("/project/app/test-preview/layout.tsx");
+    const layout = io.files.get('/project/app/test-preview/layout.tsx');
     expect(layout).toBeDefined();
-    expect(layout).toContain("@hyperide-managed");
-    expect(layout).toContain("PreviewWrapper");
-    expect(layout).toContain(".hyperide/preview");
+    expect(layout).toContain('@hyperide-managed');
+    expect(layout).toContain('PreviewWrapper');
+    expect(layout).toContain('.hyperide/preview');
     // Must NOT be a blank layout
-    expect(layout).not.toContain("<>{children}</>");
+    expect(layout).not.toContain('<>{children}</>');
   });
 
-  it("generates route file alongside the isolated layout", async () => {
+  it('generates route file alongside the isolated layout', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { next: "^14" } }));
-    io.files.set("/project/app/layout.tsx", "// root layout");
-    io.files.set("/project/src/__canvas_preview__.tsx", "// preview");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14' } }));
+    io.files.set('/project/app/layout.tsx', '// root layout');
+    io.files.set('/project/src/__canvas_preview__.tsx', '// preview');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensureIsolatedNextJsLayout();
 
-    const page = io.files.get("/project/app/test-preview/page.tsx");
+    const page = io.files.get('/project/app/test-preview/page.tsx');
     expect(page).toBeDefined();
-    expect(page).toContain("@hyperide-managed");
-    expect(page).toContain("TestPreviewPage");
+    expect(page).toContain('@hyperide-managed');
+    expect(page).toContain('TestPreviewPage');
   });
 
-  it("wrapper import path goes from layout dir to projectRoot/.hyperide/preview", async () => {
+  it('wrapper import path goes from layout dir to projectRoot/.hyperide/preview', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/package.json", JSON.stringify({ dependencies: { next: "^14" } }));
-    io.files.set("/project/app/layout.tsx", "// root layout");
-    io.files.set("/project/src/__canvas_preview__.tsx", "// preview");
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14' } }));
+    io.files.set('/project/app/layout.tsx', '// root layout');
+    io.files.set('/project/src/__canvas_preview__.tsx', '// preview');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensureIsolatedNextJsLayout();
 
-    const layout = io.files.get("/project/app/test-preview/layout.tsx");
+    const layout = io.files.get('/project/app/test-preview/layout.tsx');
     // Layout is at app/test-preview/layout.tsx, .hyperide is at project root
     // Relative path: ../../.hyperide/preview
-    expect(layout).toContain("../../.hyperide/preview");
+    expect(layout).toContain('../../.hyperide/preview');
   });
 });
 
@@ -2085,15 +2085,15 @@ export function cn(...classes: string[]) {
 }
 `;
 
-describe("PreviewFileManager._scanAllComponents — multi-root + shadcn pattern", () => {
-  it("synthesizes SampleDefault for components/ui/* compound shadcn modules so they preview without fallback-prop crashes", async () => {
+describe('PreviewFileManager._scanAllComponents — multi-root + shadcn pattern', () => {
+  it('synthesizes SampleDefault for components/ui/* compound shadcn modules so they preview without fallback-prop crashes', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/index.html",
+      '/project/index.html',
       `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
     );
-    io.files.set("/project/client/components/ui/sheet.tsx", SHEET_SOURCE);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/client/components/ui/sheet.tsx', SHEET_SOURCE);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     // Sheet has no authored SampleDefault but it does export the compound
@@ -2101,16 +2101,16 @@ describe("PreviewFileManager._scanAllComponents — multi-root + shadcn pattern"
     // file gets a synthetic SampleDefault and stays in the registry. The
     // crash-prevention invariant still holds: rendering goes through the
     // synthesized sample arrow, never the bare fallback-prop spread.
-    const content = await manager.ensureComponent(["client/components/ui/sheet.tsx"]);
+    const content = await manager.ensureComponent(['client/components/ui/sheet.tsx']);
     expect(content).toContain("'client/components/ui/sheet.tsx'");
-    expect(content).toContain("SheetModule.Sheet");
-    expect(content).toContain("SheetModule.SheetTrigger");
+    expect(content).toContain('SheetModule.Sheet');
+    expect(content).toContain('SheetModule.SheetTrigger');
   });
 
-  it("excludes components/ui/* with non-default samples but no SampleDefault", async () => {
+  it('excludes components/ui/* with non-default samples but no SampleDefault', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/index.html",
+      '/project/index.html',
       `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
     );
     const navMenuSource = `
@@ -2118,39 +2118,39 @@ import React from 'react';
 export function NavigationMenu() { return <nav />; }
 export const SamplePrimary = () => <NavigationMenu />;
 `;
-    io.files.set("/project/client/components/ui/navigation-menu.tsx", navMenuSource);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/client/components/ui/navigation-menu.tsx', navMenuSource);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     // Has SamplePrimary but no SampleDefault — render path would fall through to fallback-prop
     // spread and crash, so must still be excluded from componentRegistry/sampleRenderMap.
     // It IS allowed (and now expected) to appear in componentExportsMap so the iframe's
     // fallback UI can show "Detected exports: NavigationMenu" instead of "Generating sample…".
-    const content = await manager.ensureComponent(["client/components/ui/navigation-menu.tsx"]);
+    const content = await manager.ensureComponent(['client/components/ui/navigation-menu.tsx']);
     // Build the registry/sampleRenderMap region to assert the path is NOT registered there.
     const registrySection = content.slice(
-      content.indexOf("const componentRegistry"),
-      content.indexOf("const componentExportsMap"),
+      content.indexOf('const componentRegistry'),
+      content.indexOf('const componentExportsMap'),
     );
     const sampleRenderMapSection = content.slice(
-      content.indexOf("const sampleRenderMap"),
-      content.indexOf("const componentExportsMap"),
+      content.indexOf('const sampleRenderMap'),
+      content.indexOf('const componentExportsMap'),
     );
     expect(registrySection).not.toContain("'client/components/ui/navigation-menu.tsx'");
     expect(sampleRenderMapSection).not.toContain("'client/components/ui/navigation-menu.tsx'");
     // componentExportsMap MAY include the path so the fallback UI can list detected exports.
     const exportsSection = content.slice(
-      content.indexOf("const componentExportsMap"),
-      content.indexOf("const sampleRenderersMap"),
+      content.indexOf('const componentExportsMap'),
+      content.indexOf('const sampleRenderersMap'),
     );
     expect(exportsSection).toContain("'client/components/ui/navigation-menu.tsx'");
     expect(exportsSection).toContain('"NavigationMenu"');
   });
 
-  it("keeps components/ui/* with SampleDefault in registry when explicitly requested", async () => {
+  it('keeps components/ui/* with SampleDefault in registry when explicitly requested', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/index.html",
+      '/project/index.html',
       `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
     );
     const fillPickerSource = `
@@ -2158,51 +2158,51 @@ import React from 'react';
 export function FillPicker() { return <div />; }
 export const SampleDefault = () => <FillPicker />;
 `;
-    io.files.set("/project/client/components/ui/fill-picker.tsx", fillPickerSource);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/client/components/ui/fill-picker.tsx', fillPickerSource);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
     // fill-picker has SampleDefault — explicitly previewable, must remain in registry
-    const content = await manager.ensureComponent(["client/components/ui/fill-picker.tsx"]);
+    const content = await manager.ensureComponent(['client/components/ui/fill-picker.tsx']);
     expect(content).toContain("'client/components/ui/fill-picker.tsx'");
   });
 
-  it("does not register lowercase files that export no PascalCase component", async () => {
+  it('does not register lowercase files that export no PascalCase component', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/index.html",
+      '/project/index.html',
       `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
     );
-    io.files.set("/project/client/lib/utils.ts", UTILS_SOURCE);
-    io.files.set("/project/client/components/Button.tsx", BUTTON_SOURCE);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/client/lib/utils.ts', UTILS_SOURCE);
+    io.files.set('/project/client/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    const content = await manager.ensureComponent(["client/components/Button.tsx"]);
+    const content = await manager.ensureComponent(['client/components/Button.tsx']);
     // utils.ts has no PascalCase export → must not appear in registry
     expect(content).not.toContain("'client/lib/utils.ts'");
-    expect(content).not.toContain("utils");
+    expect(content).not.toContain('utils');
     // Button is valid → included
-    expect(content).toContain("Button");
+    expect(content).toContain('Button');
   });
 
-  it("scans src/ in addition to detected root so shared components are not missed", async () => {
+  it('scans src/ in addition to detected root so shared components are not missed', async () => {
     // Project with client/ as frontend root but also has components in src/
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/index.html",
+      '/project/index.html',
       `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
     );
-    io.files.set("/project/client/components/Header.tsx", `export function Header() { return <header />; }`);
-    io.files.set("/project/src/components/Sidebar.tsx", `export function Sidebar() { return <nav />; }`);
-    io.files.set("/project/package.json", "{}");
+    io.files.set('/project/client/components/Header.tsx', `export function Header() { return <header />; }`);
+    io.files.set('/project/src/components/Sidebar.tsx', `export function Sidebar() { return <nav />; }`);
+    io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    const content = await manager.ensureComponent(["client/components/Header.tsx"]);
+    const content = await manager.ensureComponent(['client/components/Header.tsx']);
     // client/ component — explicitly requested
-    expect(content).toContain("Header");
+    expect(content).toContain('Header');
     // src/ component — discovered via supplemental scan
-    expect(content).toContain("Sidebar");
+    expect(content).toContain('Sidebar');
   });
 });
 
@@ -2227,76 +2227,76 @@ export default function LoginScreenSample() {
 }
 `;
 
-describe("*.samples.tsx — co-located sample render files", () => {
-  it("isPreviewIneligibleByName excludes *.samples.tsx files", async () => {
+describe('*.samples.tsx — co-located sample render files', () => {
+  it('isPreviewIneligibleByName excludes *.samples.tsx files', async () => {
     // isPreviewIneligibleByName is not exported — test indirectly via ensureComponent:
     // a file named LoginScreen.samples.tsx must NOT appear in the preview registry.
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/LoginScreen.tsx", LOGIN_SCREEN_SOURCE);
-    io.files.set("/project/src/components/LoginScreen.samples.tsx", LOGIN_SCREEN_SAMPLES_SOURCE);
+    io.files.set('/project/src/components/LoginScreen.tsx', LOGIN_SCREEN_SOURCE);
+    io.files.set('/project/src/components/LoginScreen.samples.tsx', LOGIN_SCREEN_SAMPLES_SOURCE);
     const manager = createManager(io);
 
     const content = await manager.ensureComponent([
-      "src/components/LoginScreen.tsx",
-      "src/components/LoginScreen.samples.tsx",
+      'src/components/LoginScreen.tsx',
+      'src/components/LoginScreen.samples.tsx',
     ]);
 
     // The samples file must NOT appear in the componentRegistry or sampleRenderMap
     expect(content).not.toContain("'src/components/LoginScreen.samples.tsx'");
-    expect(content).not.toContain("LoginScreen.samples");
+    expect(content).not.toContain('LoginScreen.samples');
     // The real component must still be registered
     expect(content).toContain("'src/components/LoginScreen.tsx'");
   });
 
-  it("*.samples.tsx sibling does not cause errors when passed to ensureComponent", async () => {
+  it('*.samples.tsx sibling does not cause errors when passed to ensureComponent', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/LoginScreen.tsx", LOGIN_SCREEN_SOURCE);
-    io.files.set("/project/src/components/LoginScreen.samples.tsx", LOGIN_SCREEN_SAMPLES_SOURCE);
+    io.files.set('/project/src/components/LoginScreen.tsx', LOGIN_SCREEN_SOURCE);
+    io.files.set('/project/src/components/LoginScreen.samples.tsx', LOGIN_SCREEN_SAMPLES_SOURCE);
     const manager = createManager(io);
 
     // Should not throw — samples file is silently skipped
     await expect(
-      manager.ensureComponent(["src/components/LoginScreen.tsx", "src/components/LoginScreen.samples.tsx"]),
+      manager.ensureComponent(['src/components/LoginScreen.tsx', 'src/components/LoginScreen.samples.tsx']),
     ).resolves.toBeDefined();
   });
 
-  it("ensureStandaloneEntry is a no-op for samples sibling — sampleRenderMap stays as generated", async () => {
+  it('ensureStandaloneEntry is a no-op for samples sibling — sampleRenderMap stays as generated', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/LoginScreen.tsx", LOGIN_SCREEN_SOURCE);
-    io.files.set("/project/src/components/LoginScreen.samples.tsx", LOGIN_SCREEN_SAMPLES_SOURCE);
+    io.files.set('/project/src/components/LoginScreen.tsx', LOGIN_SCREEN_SOURCE);
+    io.files.set('/project/src/components/LoginScreen.samples.tsx', LOGIN_SCREEN_SAMPLES_SOURCE);
     const manager = createManager(io);
 
-    await manager.ensureComponent(["src/components/LoginScreen.tsx"]);
+    await manager.ensureComponent(['src/components/LoginScreen.tsx']);
     await manager.ensureStandaloneEntry();
 
-    const standalone = io.files.get("/project/src/__canvas_preview_standalone__.tsx");
+    const standalone = io.files.get('/project/src/__canvas_preview_standalone__.tsx');
     expect(standalone).toBeDefined();
     // The standalone file must not reference the samples file path or import
-    expect(standalone).not.toContain("LoginScreen.samples");
+    expect(standalone).not.toContain('LoginScreen.samples');
     // Standard standalone structure must be intact
-    expect(standalone).toContain("sampleRenderMap");
-    expect(standalone).toContain("createRoot");
+    expect(standalone).toContain('sampleRenderMap');
+    expect(standalone).toContain('createRoot');
   });
 
-  it("multiple *.samples.tsx variants are all excluded from registry", async () => {
+  it('multiple *.samples.tsx variants are all excluded from registry', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     io.files.set(
-      "/project/src/components/Button.samples.tsx",
+      '/project/src/components/Button.samples.tsx',
       `import React from 'react'; import { Button } from './Button'; export default () => <Button>Sample</Button>;`,
     );
-    io.files.set("/project/src/components/Card.tsx", CARD_SOURCE);
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
     io.files.set(
-      "/project/src/components/Card.samples.tsx",
+      '/project/src/components/Card.samples.tsx',
       `import React from 'react'; import Card from './Card'; export default () => <Card title="Sample" />;`,
     );
     const manager = createManager(io);
 
     const content = await manager.ensureComponent([
-      "src/components/Button.tsx",
-      "src/components/Button.samples.tsx",
-      "src/components/Card.tsx",
-      "src/components/Card.samples.tsx",
+      'src/components/Button.tsx',
+      'src/components/Button.samples.tsx',
+      'src/components/Card.tsx',
+      'src/components/Card.samples.tsx',
     ]);
 
     expect(content).not.toContain("'src/components/Button.samples.tsx'");

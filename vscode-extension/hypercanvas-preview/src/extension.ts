@@ -12,11 +12,11 @@
  * - AI integration with user's API key
  */
 
-import { execFile } from "node:child_process";
-import { appendFileSync } from "node:fs";
-import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { execFile } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
+import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   ensureSample,
   isUiPrimitive,
@@ -24,27 +24,27 @@ import {
   PreviewModeManager,
   parseExistingPreview,
   type SSRMockConfig,
-} from "@lib/preview-generator";
-import { detectFramework } from "@lib/preview-generator/framework-routing";
-import { buildNeedsPatchPrompt } from "@lib/preview-generator/needs-patch-prompt";
-import * as vscode from "vscode";
-import { AI_PROVIDER_DEFAULTS, type AIProvider } from "../../../shared/ai-provider-defaults";
-import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from "../../../shared/ai-provider-info";
-import { AIChatPanelProvider } from "./AIChatPanelProvider";
-import { DiagnosticHub } from "./DiagnosticHub";
-import { goToCode } from "./EditorBridge";
-import { isForeignExtensionError, serializeRejectionReason } from "./extension-utils";
-import { LeftPanelProvider } from "./LeftPanelProvider";
-import { LogsPanelProvider } from "./LogsPanelProvider";
-import { HyperMcpServer } from "./mcp/HyperMcpServer";
-import { PanelRouter } from "./PanelRouter";
-import { normalizeSampleComponentName, PreviewPanel } from "./PreviewPanel";
-import { detectBrowserForPlaywright } from "./playwright-chrome";
-import { RightPanelProvider } from "./RightPanelProvider";
-import { StateHub } from "./StateHub";
-import { AstService } from "./services/AstService";
-import { DevServerManager } from "./services/DevServerManager";
-import { shouldCreateNoPropsSample } from "./services/no-props-sample";
+} from '@lib/preview-generator';
+import { detectFramework } from '@lib/preview-generator/framework-routing';
+import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
+import * as vscode from 'vscode';
+import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provider-defaults';
+import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../../shared/ai-provider-info';
+import { AIChatPanelProvider } from './AIChatPanelProvider';
+import { DiagnosticHub } from './DiagnosticHub';
+import { goToCode } from './EditorBridge';
+import { isForeignExtensionError, serializeRejectionReason } from './extension-utils';
+import { LeftPanelProvider } from './LeftPanelProvider';
+import { LogsPanelProvider } from './LogsPanelProvider';
+import { HyperMcpServer } from './mcp/HyperMcpServer';
+import { PanelRouter } from './PanelRouter';
+import { normalizeSampleComponentName, PreviewPanel } from './PreviewPanel';
+import { detectBrowserForPlaywright } from './playwright-chrome';
+import { RightPanelProvider } from './RightPanelProvider';
+import { StateHub } from './StateHub';
+import { AstService } from './services/AstService';
+import { DevServerManager } from './services/DevServerManager';
+import { shouldCreateNoPropsSample } from './services/no-props-sample';
 import {
   computeCapabilities,
   detectCssSystem,
@@ -54,10 +54,10 @@ import {
   detectUIKit,
   detectUnsupportedProject,
   readPackageJson,
-} from "./services/ProjectDetector";
-import { createExtensionSampleGenerator } from "./services/SampleAIGenerator";
-import { generatePreviewWrapper, writePreviewWrapper } from "./services/WrapperGenerator";
-import { VSCodeFileIO } from "./vscode-file-io";
+} from './services/ProjectDetector';
+import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
+import { generatePreviewWrapper, writePreviewWrapper } from './services/WrapperGenerator';
+import { VSCodeFileIO } from './vscode-file-io';
 
 // Global references
 let mcpServer: HyperMcpServer | null = null;
@@ -81,15 +81,15 @@ let _diagnosticCaptureActive = false;
  */
 async function detectPreviewProviders(
   root: string,
-): Promise<import("@lib/preview-generator").ProviderWrapConfig | undefined> {
+): Promise<import('@lib/preview-generator').ProviderWrapConfig | undefined> {
   try {
     const previewDir = await getPreviewDir(root);
     const contextFiles = await readProviderContextFiles(root);
     if (contextFiles.length === 0) return undefined;
 
     const imports: string[] = [];
-    let wrapOpen = "";
-    let wrapClose = "";
+    let wrapOpen = '';
+    let wrapClose = '';
 
     const pushImport = (line: string) => {
       if (!imports.includes(line)) imports.push(line);
@@ -100,39 +100,39 @@ async function detectPreviewProviders(
       wrapClose = `${close}${wrapClose}`;
     };
 
-    const emotionTheme = findThemeProvider(contextFiles, "@emotion/react");
+    const emotionTheme = findThemeProvider(contextFiles, '@emotion/react');
     if (emotionTheme) {
       pushImport("import { ThemeProvider as EmotionThemeProvider } from '@emotion/react';");
       pushImport(buildThemeImport(root, previewDir, emotionTheme.file, emotionTheme.themeImport));
-      appendWrapper(`<EmotionThemeProvider theme={${emotionTheme.themeImport.localName}}>`, "</EmotionThemeProvider>");
+      appendWrapper(`<EmotionThemeProvider theme={${emotionTheme.themeImport.localName}}>`, '</EmotionThemeProvider>');
     }
 
-    const styledTheme = findThemeProvider(contextFiles, "styled-components");
+    const styledTheme = findThemeProvider(contextFiles, 'styled-components');
     if (styledTheme) {
       pushImport("import { ThemeProvider as StyledThemeProvider } from 'styled-components';");
       pushImport(buildThemeImport(root, previewDir, styledTheme.file, styledTheme.themeImport));
-      appendWrapper(`<StyledThemeProvider theme={${styledTheme.themeImport.localName}}>`, "</StyledThemeProvider>");
+      appendWrapper(`<StyledThemeProvider theme={${styledTheme.themeImport.localName}}>`, '</StyledThemeProvider>');
     }
 
-    const appContent = contextFiles.map((file) => file.content).join("\n");
-    const appFile = contextFiles.find((file) => file.content.includes("TamaguiProvider")) ?? contextFiles[0];
+    const appContent = contextFiles.map((file) => file.content).join('\n');
+    const appFile = contextFiles.find((file) => file.content.includes('TamaguiProvider')) ?? contextFiles[0];
 
     // Detect TamaguiProvider + config
     const tamaguiCfg = appFile.content.match(
       /import\s+(?:\{\s*(\w+)\s*\}|(\w+))\s+from\s+['"]([^'"]*tamagui\.config[^'"]*)['"]/,
     );
-    if (tamaguiCfg && appContent.includes("TamaguiProvider")) {
+    if (tamaguiCfg && appContent.includes('TamaguiProvider')) {
       const cfgVar = tamaguiCfg[1] || tamaguiCfg[2];
       const cfgPath = rebaseImportPath(root, previewDir, appFile.relativePath, tamaguiCfg[3]);
       const themeMatch = appContent.match(/defaultTheme=["'](\w+)["']/);
-      const theme = themeMatch?.[1] || "dark";
+      const theme = themeMatch?.[1] || 'dark';
       pushImport("import { TamaguiProvider } from 'tamagui';");
       pushImport(tamaguiCfg[1] ? `import { ${cfgVar} } from '${cfgPath}';` : `import ${cfgVar} from '${cfgPath}';`);
-      appendWrapper(`<TamaguiProvider config={${cfgVar}} defaultTheme="${theme}">`, "</TamaguiProvider>");
+      appendWrapper(`<TamaguiProvider config={${cfgVar}} defaultTheme="${theme}">`, '</TamaguiProvider>');
     }
 
     // Detect SafeAreaProvider
-    if (appContent.includes("SafeAreaProvider")) {
+    if (appContent.includes('SafeAreaProvider')) {
       pushImport("import { SafeAreaProvider } from 'react-native-safe-area-context';");
       wrapOpen = `<SafeAreaProvider>${wrapOpen}`;
       wrapClose = `${wrapClose}</SafeAreaProvider>`;
@@ -143,17 +143,17 @@ async function detectPreviewProviders(
     // (e.g. AppNavigator) that render their own NavigationContainer.
     // NavigationIndependentTree sets the independent flag so inner containers don't throw,
     // while the outer container still provides context for useNavigation() in screen components.
-    if (appContent.includes("NavigationContainer")) {
+    if (appContent.includes('NavigationContainer')) {
       pushImport("import { NavigationContainer } from '@react-navigation/native';");
       pushImport("import { NavigationIndependentTree } from '@react-navigation/core';");
       // Place NavigationContainer inside SafeAreaProvider but outside TamaguiProvider,
       // with NavigationIndependentTree wrapping everything inside NavigationContainer.
-      const tamaguiIdx = wrapOpen.indexOf("<TamaguiProvider");
+      const tamaguiIdx = wrapOpen.indexOf('<TamaguiProvider');
       if (tamaguiIdx >= 0) {
         wrapOpen = `${wrapOpen.slice(0, tamaguiIdx)}<NavigationContainer><NavigationIndependentTree>${wrapOpen.slice(tamaguiIdx)}`;
-        const tamaguiCloseIdx = wrapClose.indexOf("</TamaguiProvider>");
+        const tamaguiCloseIdx = wrapClose.indexOf('</TamaguiProvider>');
         if (tamaguiCloseIdx >= 0) {
-          wrapClose = `${wrapClose.slice(0, tamaguiCloseIdx + "</TamaguiProvider>".length)}</NavigationIndependentTree></NavigationContainer>${wrapClose.slice(tamaguiCloseIdx + "</TamaguiProvider>".length)}`;
+          wrapClose = `${wrapClose.slice(0, tamaguiCloseIdx + '</TamaguiProvider>'.length)}</NavigationIndependentTree></NavigationContainer>${wrapClose.slice(tamaguiCloseIdx + '</TamaguiProvider>'.length)}`;
         }
       } else {
         wrapOpen = `<NavigationContainer><NavigationIndependentTree>${wrapOpen}`;
@@ -163,21 +163,21 @@ async function detectPreviewProviders(
 
     // Detect GalleryProvider — local/aliased gallery context (e.g. @/components/Gallery).
     // GalleryLightbox is placed after children inside GalleryProvider, as App.tsx uses it.
-    if (appContent.includes("GalleryProvider")) {
+    if (appContent.includes('GalleryProvider')) {
       const galleryImportLine = contextFiles
-        .flatMap((f) => f.content.split("\n"))
-        .find((line) => line.includes("GalleryProvider") && line.trimStart().startsWith("import"));
+        .flatMap((f) => f.content.split('\n'))
+        .find((line) => line.includes('GalleryProvider') && line.trimStart().startsWith('import'));
       if (galleryImportLine) {
         const pathMatch = galleryImportLine.match(/from\s+['"]([^'"]+)['"]/);
         if (pathMatch) {
           const galleryPath = pathMatch[1];
-          const hasLightbox = appContent.includes("GalleryLightbox");
+          const hasLightbox = appContent.includes('GalleryLightbox');
           if (hasLightbox) {
             pushImport(`import { GalleryProvider, GalleryLightbox } from '${galleryPath}';`);
-            appendWrapper("<GalleryProvider>", "<GalleryLightbox /></GalleryProvider>");
+            appendWrapper('<GalleryProvider>', '<GalleryLightbox /></GalleryProvider>');
           } else {
             pushImport(`import { GalleryProvider } from '${galleryPath}';`);
-            appendWrapper("<GalleryProvider>", "</GalleryProvider>");
+            appendWrapper('<GalleryProvider>', '</GalleryProvider>');
           }
         }
       }
@@ -193,7 +193,7 @@ async function detectPreviewProviders(
 async function detectSSRMockConfig(root: string): Promise<SSRMockConfig | undefined> {
   try {
     const { framework } = await detectFramework(root, new VSCodeFileIO());
-    return framework === "remix" ? { framework: "remix" } : undefined;
+    return framework === 'remix' ? { framework: 'remix' } : undefined;
   } catch {
     return undefined;
   }
@@ -213,23 +213,23 @@ interface ThemeImport {
 
 async function detectFrontendRoot(root: string): Promise<string> {
   try {
-    const html = await readFile(join(root, "index.html"), "utf-8"); // nosemgrep: path-join-resolve-traversal
+    const html = await readFile(join(root, 'index.html'), 'utf-8'); // nosemgrep: path-join-resolve-traversal
     for (const scriptTag of html.matchAll(/<script\b([^>]*)>/g)) {
       const attrs = scriptTag[1];
       if (!/\btype=["']module["']/.test(attrs)) continue;
       const srcMatch = attrs.match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/);
-      if (srcMatch && srcMatch[1] !== "src") return srcMatch[1];
+      if (srcMatch && srcMatch[1] !== 'src') return srcMatch[1];
     }
   } catch {
     /* no index.html */
   }
-  return "src";
+  return 'src';
 }
 
 async function getPreviewDir(root: string): Promise<string> {
   try {
-    await access(join(root, "apps/next")); // nosemgrep: path-join-resolve-traversal
-    return join(root, "apps/next"); // nosemgrep: path-join-resolve-traversal
+    await access(join(root, 'apps/next')); // nosemgrep: path-join-resolve-traversal
+    return join(root, 'apps/next'); // nosemgrep: path-join-resolve-traversal
   } catch {
     const frontendRoot = await detectFrontendRoot(root);
     return join(root, frontendRoot); // nosemgrep: path-join-resolve-traversal
@@ -239,14 +239,14 @@ async function getPreviewDir(root: string): Promise<string> {
 async function readProviderContextFiles(root: string): Promise<ProviderContextFile[]> {
   const result: ProviderContextFile[] = [];
   const frontendRoot = await detectFrontendRoot(root);
-  const rootPrefixes = frontendRoot !== "src" ? [frontendRoot, "src"] : ["src"];
-  const fileNames = ["main.tsx", "main.ts", "App.web.tsx", "App.tsx", "app.tsx"];
+  const rootPrefixes = frontendRoot !== 'src' ? [frontendRoot, 'src'] : ['src'];
+  const fileNames = ['main.tsx', 'main.ts', 'App.web.tsx', 'App.tsx', 'app.tsx'];
   const candidates = [
     ...rootPrefixes.flatMap((r) => fileNames.map((f) => `${r}/${f}`)),
-    "App.web.tsx",
-    "App.tsx",
-    "main.tsx",
-    "main.ts",
+    'App.web.tsx',
+    'App.tsx',
+    'main.tsx',
+    'main.ts',
   ];
 
   const seen = new Set<string>();
@@ -254,7 +254,7 @@ async function readProviderContextFiles(root: string): Promise<ProviderContextFi
     if (seen.has(relativePath)) continue;
     seen.add(relativePath);
     try {
-      const content = await readFile(join(root, relativePath), "utf-8"); // nosemgrep: path-join-resolve-traversal
+      const content = await readFile(join(root, relativePath), 'utf-8'); // nosemgrep: path-join-resolve-traversal
       result.push({ relativePath, content });
     } catch {
       /* file doesn't exist — try next */
@@ -265,9 +265,9 @@ async function readProviderContextFiles(root: string): Promise<ProviderContextFi
 
 function findThemeProvider(
   files: ProviderContextFile[],
-  packageName: "@emotion/react" | "styled-components",
+  packageName: '@emotion/react' | 'styled-components',
 ): { file: ProviderContextFile; themeImport: ThemeImport } | null {
-  const escapedPackageName = packageName.replace("/", "\\/");
+  const escapedPackageName = packageName.replace('/', '\\/');
   const providerImport = new RegExp(`import\\s+[^;]*\\bThemeProvider\\b[^;]*from\\s+['"]${escapedPackageName}['"]`);
 
   for (const file of files) {
@@ -282,15 +282,15 @@ function extractThemeImport(source: string): ThemeImport | null {
   const namedImport = source.match(/import\s+\{([^}]*\btheme\b[^}]*)\}\s+from\s+['"]([^'"]+)['"]/);
   if (namedImport) {
     const spec = namedImport[1]
-      .split(",")
+      .split(',')
       .map((part) => part.trim())
-      .find((part) => part === "theme" || part.startsWith("theme as "));
+      .find((part) => part === 'theme' || part.startsWith('theme as '));
     if (spec) {
       const alias = spec.match(/^theme\s+as\s+(\w+)$/);
       return {
         importPath: namedImport[2],
-        importedName: "theme",
-        localName: alias?.[1] ?? "theme",
+        importedName: 'theme',
+        localName: alias?.[1] ?? 'theme',
         defaultImport: false,
       };
     }
@@ -327,19 +327,19 @@ function buildThemeImport(
 }
 
 function rebaseImportPath(root: string, previewDir: string, sourceRelativePath: string, importPath: string): string {
-  if (!importPath.startsWith(".")) return importPath;
+  if (!importPath.startsWith('.')) return importPath;
   const absImportPath = resolve(dirname(join(root, sourceRelativePath)), importPath);
   let rebased = relative(previewDir, absImportPath);
-  if (!rebased.startsWith(".")) rebased = `./${rebased}`;
-  return rebased.replace(/\\/g, "/");
+  if (!rebased.startsWith('.')) rebased = `./${rebased}`;
+  return rebased.replace(/\\/g, '/');
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log("[HyperIDE] Extension activating...");
+  console.log('[HyperIDE] Extension activating...');
 
   // Initialize right-panel input-focus guard to false so the keybinding
   // `!hypercanvas.rightPanelInputFocused` condition is defined from the start.
-  void vscode.commands.executeCommand("setContext", "hypercanvas.rightPanelInputFocused", false);
+  void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
 
   // Catch unhandled rejections and uncaught exceptions inside the extension
   // host process. Extension host is shared across all installed extensions, so
@@ -347,11 +347,11 @@ export function activate(context: vscode.ExtensionContext) {
   // Events are written to the 'HyperIDE Diagnostics' output channel (always)
   // and optionally to HYPERIDE_DIAGNOSTIC_ERROR_SINK (a file path) so E2E
   // harnesses and debug sessions can tail the structured log.
-  diagnosticsChannel = vscode.window.createOutputChannel("HyperIDE Diagnostics");
+  diagnosticsChannel = vscode.window.createOutputChannel('HyperIDE Diagnostics');
   context.subscriptions.push(diagnosticsChannel);
   const ch = diagnosticsChannel;
 
-  const logProcessError = (kind: "unhandledRejection" | "uncaughtException", reason: unknown) => {
+  const logProcessError = (kind: 'unhandledRejection' | 'uncaughtException', reason: unknown) => {
     if (isForeignExtensionError(reason)) return;
     const serialized = serializeRejectionReason(reason);
     const label = reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason);
@@ -360,7 +360,7 @@ export function activate(context: vscode.ExtensionContext) {
       ch.appendLine(reason.stack);
     }
     // Also emit to console so Playwright window.on('console') can detect these in E2E tests.
-    const consoleLabel = kind === "unhandledRejection" ? "Unhandled rejection" : "Uncaught exception";
+    const consoleLabel = kind === 'unhandledRejection' ? 'Unhandled rejection' : 'Uncaught exception';
     console.error(`[HyperIDE] ${consoleLabel} in extension host:`, label);
     const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
     if (sinkPath) {
@@ -372,29 +372,29 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  const unhandledHandler = (reason: unknown) => logProcessError("unhandledRejection", reason);
+  const unhandledHandler = (reason: unknown) => logProcessError('unhandledRejection', reason);
   // Log and swallow — do NOT re-throw. The extension host is a shared Node.js
   // process; re-throwing inside an uncaughtException handler terminates the
   // entire host, taking all other extensions down with it.
   const uncaughtHandler = (error: unknown) => {
-    logProcessError("uncaughtException", error);
+    logProcessError('uncaughtException', error);
   };
-  process.on("unhandledRejection", unhandledHandler);
-  process.on("uncaughtException", uncaughtHandler);
+  process.on('unhandledRejection', unhandledHandler);
+  process.on('uncaughtException', uncaughtHandler);
   context.subscriptions.push({
     dispose: () => {
-      process.off("unhandledRejection", unhandledHandler);
-      process.off("uncaughtException", uncaughtHandler);
+      process.off('unhandledRejection', unhandledHandler);
+      process.off('uncaughtException', uncaughtHandler);
     },
   });
 
   // Diagnostic capture commands — registered before workspace guard so they work
   // even when no folder is open (the process error handlers above are also pre-guard).
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.startDiagnosticCapture", async () => {
+    vscode.commands.registerCommand('hypercanvas.startDiagnosticCapture', async () => {
       if (_diagnosticCaptureActive) {
         void vscode.window.showWarningMessage(
-          "Diagnostic capture already active. Stop the current one before starting a new one.",
+          'Diagnostic capture already active. Stop the current one before starting a new one.',
         );
         return;
       }
@@ -403,9 +403,9 @@ export function activate(context: vscode.ExtensionContext) {
       _diagnosticCaptureActive = true;
       const defaultPath = join(homedir(), `.hyperide-diagnostics-${Date.now()}.log`);
       const filePath = await vscode.window.showInputBox({
-        prompt: "Path for diagnostic capture output (NDJSON)",
+        prompt: 'Path for diagnostic capture output (NDJSON)',
         value: defaultPath,
-        validateInput: (v: string) => (v.trim().length === 0 ? "Path cannot be empty" : undefined),
+        validateInput: (v: string) => (v.trim().length === 0 ? 'Path cannot be empty' : undefined),
       });
       if (!filePath) {
         _diagnosticCaptureActive = false;
@@ -414,7 +414,7 @@ export function activate(context: vscode.ExtensionContext) {
       const trimmedPath = resolve(filePath.trim());
       try {
         await mkdir(dirname(trimmedPath), { recursive: true });
-        appendFileSync(trimmedPath, "");
+        appendFileSync(trimmedPath, '');
       } catch (err) {
         _diagnosticCaptureActive = false;
         void vscode.window.showErrorMessage(`Cannot write to diagnostic sink path: ${(err as Error).message}`);
@@ -429,14 +429,14 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.stopDiagnosticCapture", async () => {
+    vscode.commands.registerCommand('hypercanvas.stopDiagnosticCapture', async () => {
       if (!_diagnosticCaptureActive) {
-        void vscode.window.showWarningMessage("No active diagnostic capture session.");
+        void vscode.window.showWarningMessage('No active diagnostic capture session.');
         return;
       }
       // env var was set by startDiagnosticCapture; could only be missing if something
       // external cleared it between start and stop — treat as empty string (no file).
-      const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK ?? "";
+      const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK ?? '';
       // Stop capture: restore the previous sink path (e.g. E2E harness path) rather
       // than deleting the key entirely, so the harness stays functional for the rest
       // of the worker session.
@@ -450,7 +450,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       if (!sinkPath) {
         void vscode.window.showWarningMessage(
-          "Diagnostic capture stopped, but the sink path was externally cleared — no log data was recorded.",
+          'Diagnostic capture stopped, but the sink path was externally cleared — no log data was recorded.',
         );
         return;
       }
@@ -460,15 +460,15 @@ export function activate(context: vscode.ExtensionContext) {
       let diagnosticEntries = 0;
       let fileExists = false;
       try {
-        const content = await readFile(sinkPath, "utf8");
+        const content = await readFile(sinkPath, 'utf8');
         fileExists = true;
-        for (const line of content.split("\n")) {
+        for (const line of content.split('\n')) {
           if (!line.trim()) continue;
           try {
             const entry = JSON.parse(line) as { kind?: string };
-            if (entry.kind === "unhandledRejection") rejections++;
-            else if (entry.kind === "uncaughtException") exceptions++;
-            else if (entry.kind === "diagnosticEntry") diagnosticEntries++;
+            if (entry.kind === 'unhandledRejection') rejections++;
+            else if (entry.kind === 'uncaughtException') exceptions++;
+            else if (entry.kind === 'diagnosticEntry') diagnosticEntries++;
           } catch {
             // skip malformed lines
           }
@@ -495,7 +495,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Get workspace root
   const workspaceRoot = getWorkspaceRoot();
   if (!workspaceRoot) {
-    console.log("[HyperIDE] No workspace folder open");
+    console.log('[HyperIDE] No workspace folder open');
     return;
   }
 
@@ -554,7 +554,7 @@ export function activate(context: vscode.ExtensionContext) {
         stateHub?.applyUpdate({ projectUIKit: kit });
 
         const capabilities = computeCapabilities(cssSystem, kit, projectError, projectType, repoType);
-        console.log("[HyperIDE] Project capabilities:", JSON.stringify(capabilities));
+        console.log('[HyperIDE] Project capabilities:', JSON.stringify(capabilities));
 
         // Send capabilities to preview panel (readonly badge, style write guard)
         previewPanel?.notifyCapabilities(capabilities);
@@ -566,11 +566,11 @@ export function activate(context: vscode.ExtensionContext) {
         // when switching from an unsupported workspace to a supported one.
         previewPanel?.notifyUnsupportedProject(projectError ?? null);
         if (projectError) {
-          console.log("[HyperIDE] Unsupported project detected:", projectError.type);
+          console.log('[HyperIDE] Unsupported project detected:', projectError.type);
         }
       })
       .catch((err) => {
-        console.warn("[HyperIDE] Failed to detect project info:", err);
+        console.warn('[HyperIDE] Failed to detect project info:', err);
       });
   };
 
@@ -587,7 +587,7 @@ export function activate(context: vscode.ExtensionContext) {
           if (flushed) unsubFlush();
         })
         .catch((err) => {
-          console.error("[HyperIDE] Failed to flush structure store:", err);
+          console.error('[HyperIDE] Failed to flush structure store:', err);
         });
     }
   });
@@ -595,7 +595,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Create DiagnosticHub for centralized diagnostic data
   diagnosticHub = new DiagnosticHub(context.globalStorageUri.fsPath);
   diagnosticHub.init().catch((err) => {
-    console.error("[HyperIDE] Failed to init DiagnosticHub:", err);
+    console.error('[HyperIDE] Failed to init DiagnosticHub:', err);
   });
 
   // Wire DiagnosticHub to logs panel and AI chat
@@ -617,16 +617,16 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     devServerManager.onStatusChange((state) => {
-      const statusMap: Record<string, "building" | "ready" | "error" | "idle"> = {
-        starting: "building",
-        running: "ready",
-        error: "error",
-        stopped: "idle",
+      const statusMap: Record<string, 'building' | 'ready' | 'error' | 'idle'> = {
+        starting: 'building',
+        running: 'ready',
+        error: 'error',
+        stopped: 'idle',
       };
-      diagnosticHub?.setBuildStatus(statusMap[state.status] ?? "idle");
+      diagnosticHub?.setBuildStatus(statusMap[state.status] ?? 'idle');
 
       // Notify preview panel when dev server stops so the status badge updates
-      if (state.status === "stopped" || state.status === "error") {
+      if (state.status === 'stopped' || state.status === 'error') {
         previewPanel?.notifyDevServerStopped();
       }
     });
@@ -664,9 +664,9 @@ export function activate(context: vscode.ExtensionContext) {
         .ensureComponent([relPath])
         .then((content) => {
           if (isUiPrimitive(relPath)) {
-            const normalizedRelPath = relPath.replace(/\\/g, "/");
+            const normalizedRelPath = relPath.replace(/\\/g, '/');
             const entries = parseExistingPreview(content);
-            const inRegistry = entries.some((e) => e.componentPath.replace(/\\/g, "/") === normalizedRelPath);
+            const inRegistry = entries.some((e) => e.componentPath.replace(/\\/g, '/') === normalizedRelPath);
             if (!inRegistry) {
               // Primitive that has neither an authored SampleDefault nor a synthesizable
               // compound scaffold (no shadcn-style nested exports) — entryHasRenderableSample
@@ -686,7 +686,7 @@ export function activate(context: vscode.ExtensionContext) {
           }
         })
         .catch((err) => {
-          console.error("[HyperIDE] componentMissing ensureComponent failed:", err);
+          console.error('[HyperIDE] componentMissing ensureComponent failed:', err);
         });
     });
 
@@ -705,7 +705,7 @@ export function activate(context: vscode.ExtensionContext) {
           panelRef.setComponentParam(relPath);
         })
         .catch((err) => {
-          console.error("[HyperIDE] sampleCreated forceRefresh failed:", err);
+          console.error('[HyperIDE] sampleCreated forceRefresh failed:', err);
         });
     });
   }
@@ -745,7 +745,7 @@ export function activate(context: vscode.ExtensionContext) {
       io: vsCodeIO,
       onModeChange: (isolated) => {
         devServerManager?.setIsolatedMode(isolated);
-        previewPanel?.setPreviewScope(isolated ? "component-only" : "full-app");
+        previewPanel?.setPreviewScope(isolated ? 'component-only' : 'full-app');
         // Force iframe reload on every mode change.
         // App Shell ↔ Isolated transitions swap what the proxy serves at the same URL.
         // HMR alone is unreliable across entry-point boundaries — a hard reload ensures
@@ -841,8 +841,8 @@ export function activate(context: vscode.ExtensionContext) {
   // Handle scope toggle from toolbar: write or delete .hyperide/preview.tsx
   previewPanel.setScopeChangeHandler(async (scope) => {
     const currentWorkspaceRoot = syncWorkspaceRuntime();
-    const wrapperPath = join(currentWorkspaceRoot, ".hyperide/preview.tsx");
-    if (scope === "component-only") {
+    const wrapperPath = join(currentWorkspaceRoot, '.hyperide/preview.tsx');
+    if (scope === 'component-only') {
       // Check if wrapper already exists (user may have written it manually)
       const exists = await vsCodeIO
         .access(wrapperPath)
@@ -855,7 +855,7 @@ export function activate(context: vscode.ExtensionContext) {
           // FSWatch picks up the file and calls modeManager.onWrapperCreated() → setIsolatedMode(true)
         } else {
           void vscode.window.showInformationMessage(
-            "HyperIDE: configure an AI key to auto-generate .hyperide/preview.tsx, or create it manually.",
+            'HyperIDE: configure an AI key to auto-generate .hyperide/preview.tsx, or create it manually.',
           );
         }
       }
@@ -910,7 +910,7 @@ export function activate(context: vscode.ExtensionContext) {
           }),
         )
         .then(undefined, (err) => {
-          console.error("[HyperIDE] Failed to open component file:", err);
+          console.error('[HyperIDE] Failed to open component file:', err);
         });
 
       // Parse component structure
@@ -923,7 +923,7 @@ export function activate(context: vscode.ExtensionContext) {
           }
         })
         .catch((err) => {
-          console.error("[HyperIDE] Failed to inject UUIDs / parse structure:", err);
+          console.error('[HyperIDE] Failed to inject UUIDs / parse structure:', err);
         });
 
       // Cancel previous ensureSample/ensureComponent chain
@@ -957,8 +957,8 @@ export function activate(context: vscode.ExtensionContext) {
       // between specs drops the export, Vite reports "export removed", forces
       // a full reload, and __canvas_preview__.tsx fails to reload mid-transition.
       const autoSampleEnabled = vscode.workspace
-        .getConfiguration("hypercanvas.preview")
-        .get<boolean>("autoSampleGeneration", true);
+        .getConfiguration('hypercanvas.preview')
+        .get<boolean>('autoSampleGeneration', true);
 
       const ensureSamplePromise =
         autoSampleEnabled && !isPrimitive
@@ -966,7 +966,7 @@ export function activate(context: vscode.ExtensionContext) {
               io: vsCodeIO,
               absolutePath: absComponentPath,
               componentName: sampleComponentName,
-              sampleName: "SampleDefault",
+              sampleName: 'SampleDefault',
               generate: sampleGenerator,
             })
           : Promise.resolve({ generated: false, exists: false });
@@ -988,37 +988,37 @@ export function activate(context: vscode.ExtensionContext) {
           return previewManager.ensureComponent([relativePath]);
         })
         .then(async () => {
-          if (ac.signal.aborted) return "aborted" as const;
+          if (ac.signal.aborted) return 'aborted' as const;
           // 3. Ensure route files + handle mode transitions (App Shell / Isolated)
           const result = await modeManager.onComponentSelected();
-          if (result === "unsupported") {
+          if (result === 'unsupported') {
             // SYNC: shared/framework-support.ts → FRAMEWORK_SUPPORT
             void vscode.window.showWarningMessage(
-              "HyperIDE: unsupported project type. " +
-                "Supported: Next.js, Remix, Vite (file-based and JSX router), Webpack/CRA, Parcel.",
+              'HyperIDE: unsupported project type. ' +
+                'Supported: Next.js, Remix, Vite (file-based and JSX router), Webpack/CRA, Parcel.',
             );
-            return "unsupported" as const;
+            return 'unsupported' as const;
           }
-          if (result === "needs-patch") {
+          if (result === 'needs-patch') {
             void vscode.window
               .showWarningMessage(
-                "HyperIDE: JSX router detected but no /test-preview route found. " +
-                  "Add the route manually or let AI do it.",
-                "Auto fix",
-                "Dismiss",
+                'HyperIDE: JSX router detected but no /test-preview route found. ' +
+                  'Add the route manually or let AI do it.',
+                'Auto fix',
+                'Dismiss',
               )
               .then(async (choice) => {
-                if (choice === "Auto fix") {
+                if (choice === 'Auto fix') {
                   const prompt = await buildNeedsPatchPrompt(currentWorkspaceRoot, vsCodeIO);
                   aiChatProvider?.sendAIPrompt(prompt);
                 }
               });
-            return "needs-patch" as const;
+            return 'needs-patch' as const;
           }
           return result;
         })
         .then(async (result) => {
-          if (ac.signal.aborted || result === "aborted" || result === "unsupported" || result === "needs-patch") return;
+          if (ac.signal.aborted || result === 'aborted' || result === 'unsupported' || result === 'needs-patch') return;
           // 4. If webpack armed the recompile gate (via onBeforeWebpackEntryPatch),
           // wait for the post-patch `compiled successfully` so the iframe doesn't
           // race a half-built bundle. No-op for vite/remix/next.
@@ -1029,7 +1029,7 @@ export function activate(context: vscode.ExtensionContext) {
         })
         .catch((err) => {
           if (ac.signal.aborted) return;
-          console.error("[HyperIDE] Failed to ensure sample/preview:", err);
+          console.error('[HyperIDE] Failed to ensure sample/preview:', err);
         });
     }
   });
@@ -1038,7 +1038,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Auto-reveal Inspector when component insertion UI opens
   const unsubInsertReveal = stateHub.onChange((_state, patch) => {
     if (patch.insertTargetId) {
-      vscode.commands.executeCommand("hypercanvas.inspectorView.focus");
+      vscode.commands.executeCommand('hypercanvas.inspectorView.focus');
     }
   });
   context.subscriptions.push({ dispose: unsubInsertReveal });
@@ -1094,9 +1094,9 @@ export function activate(context: vscode.ExtensionContext) {
           path,
           name:
             path
-              .split("/")
+              .split('/')
               .pop()
-              ?.replace(/\.\w+$/, "") ?? path,
+              ?.replace(/\.\w+$/, '') ?? path,
         },
       });
     },
@@ -1105,7 +1105,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // MCP status bar item (shown after server starts)
   const mcpStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
-  mcpStatusBarItem.command = "hypercanvas.setupMcp";
+  mcpStatusBarItem.command = 'hypercanvas.setupMcp';
   context.subscriptions.push(mcpStatusBarItem);
 
   mcpServer
@@ -1118,49 +1118,49 @@ export function activate(context: vscode.ExtensionContext) {
       registerCopilotMcp(context, port);
 
       // Show MCP status bar
-      mcpStatusBarItem.text = "$(plug) Hyper MCP";
+      mcpStatusBarItem.text = '$(plug) Hyper MCP';
       mcpStatusBarItem.tooltip = `HyperCanvas MCP: http://127.0.0.1:${port}/mcp\nClick to configure AI agents`;
       mcpStatusBarItem.show();
 
       // One-time notification for MCP discoverability
-      const notificationShown = context.globalState.get<boolean>("mcpNotificationShown", false);
+      const notificationShown = context.globalState.get<boolean>('mcpNotificationShown', false);
       if (!notificationShown) {
         vscode.window
           .showInformationMessage(
-            "HyperCanvas MCP server is running — AI agents can now use visual editing tools.",
-            "Setup Agents",
-            "Dismiss",
+            'HyperCanvas MCP server is running — AI agents can now use visual editing tools.',
+            'Setup Agents',
+            'Dismiss',
           )
           .then((choice) => {
-            if (choice === "Setup Agents") {
-              vscode.commands.executeCommand("hypercanvas.setupMcp");
+            if (choice === 'Setup Agents') {
+              vscode.commands.executeCommand('hypercanvas.setupMcp');
             }
           });
-        context.globalState.update("mcpNotificationShown", true);
+        context.globalState.update('mcpNotificationShown', true);
       }
     })
     .catch((err) => {
-      console.error("[HyperIDE] Failed to start MCP server:", err);
+      console.error('[HyperIDE] Failed to start MCP server:', err);
     });
 
   context.subscriptions.push({ dispose: () => mcpServer?.dispose() });
 
   // Status bar item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBarItem.text = "$(eye) Hyper Canvas";
-  statusBarItem.tooltip = "Open HyperCanvas Preview";
-  statusBarItem.command = "hypercanvas.openPreview";
+  statusBarItem.text = '$(eye) Hyper Canvas';
+  statusBarItem.tooltip = 'Open HyperCanvas Preview';
+  statusBarItem.command = 'hypercanvas.openPreview';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
   // Auto-start dev server if configured
-  const autoStart = vscode.workspace.getConfiguration("hypercanvas.devServer").get<boolean>("autoStart", false);
+  const autoStart = vscode.workspace.getConfiguration('hypercanvas.devServer').get<boolean>('autoStart', false);
 
   if (autoStart) {
     devServerManager
       .start()
       .then((state) => {
-        if (state.status === "running" && state.url) {
+        if (state.status === 'running' && state.url) {
           previewPanel?.setPreviewUrl(state.url);
         }
       })
@@ -1170,20 +1170,20 @@ export function activate(context: vscode.ExtensionContext) {
         // unhandled rejection that VS Code surfaces as ".error" toast
         // ("Unhandled rejection ..."), tripping every test that asserts no
         // /fatal|crash|unhandled/i in the error toast list.
-        console.error("[HyperIDE] Auto-start dev server failed:", err);
+        console.error('[HyperIDE] Auto-start dev server failed:', err);
       });
   }
 
-  console.log("[HyperIDE] Extension activated successfully");
+  console.log('[HyperIDE] Extension activated successfully');
 }
 
 export async function deactivate() {
-  console.log("[HyperIDE] Extension deactivating...");
+  console.log('[HyperIDE] Extension deactivating...');
 
   // Flush deferred .hyperide writes before teardown
   if (panelRouter) {
     await panelRouter.flushStructureStore().catch((err) => {
-      console.error("[HyperIDE] Failed to flush structure store on deactivate:", err);
+      console.error('[HyperIDE] Failed to flush structure store on deactivate:', err);
     });
   }
 
@@ -1226,7 +1226,7 @@ export async function deactivate() {
     stateHub = null;
   }
 
-  console.log("[HyperIDE] Extension deactivated");
+  console.log('[HyperIDE] Extension deactivated');
 }
 
 /**
@@ -1247,7 +1247,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   const getCurrentRoot = () => getWorkspaceRoot() ?? workspaceRoot;
   // Open preview
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.openPreview", () => {
+    vscode.commands.registerCommand('hypercanvas.openPreview', () => {
       // ViewColumn.Two — see the auto-open comment above for why not ViewColumn.Beside.
       previewPanel?.createOrShow(vscode.ViewColumn.Two);
       // Sync current dev-server state into the just-created panel. The
@@ -1258,7 +1258,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       // happened while previewPanel was null and was lost. Pull current state
       // here so the panel's iframe gets a URL on first paint.
       const state = devServerManager?.getState();
-      if (state?.status === "running" && state.url) {
+      if (state?.status === 'running' && state.url) {
         previewPanel?.setPreviewUrl(state.url);
       }
     }),
@@ -1268,52 +1268,52 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // without relying on the external `code --reuse-window` process targeting the
   // correct Extension Development Host.
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.openFolderPath", async (folderPath: string) => {
-      if (typeof folderPath !== "string" || folderPath.length === 0) return;
+    vscode.commands.registerCommand('hypercanvas.openFolderPath', async (folderPath: string) => {
+      if (typeof folderPath !== 'string' || folderPath.length === 0) return;
       await devServerManager?.stop();
       previewPanel?.dispose();
-      await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(folderPath), false);
+      await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(folderPath), false);
     }),
   );
 
   // Open Logs
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.openLogs", () => {
-      vscode.commands.executeCommand("hypercanvas.logsView.focus");
+    vscode.commands.registerCommand('hypercanvas.openLogs', () => {
+      vscode.commands.executeCommand('hypercanvas.logsView.focus');
     }),
   );
 
   // Clear diagnostics
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.clearDiagnostics", () => {
+    vscode.commands.registerCommand('hypercanvas.clearDiagnostics', () => {
       diagnosticHub?.clear();
     }),
   );
 
   // Open AI Chat
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.openAIChat", async () => {
+    vscode.commands.registerCommand('hypercanvas.openAIChat', async () => {
       await aiChatProvider?.focusAndEnsureReady();
     }),
   );
 
   // Open Explorer panel
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.openExplorer", () => {
-      vscode.commands.executeCommand("hypercanvas.explorerView.focus");
+    vscode.commands.registerCommand('hypercanvas.openExplorer', () => {
+      vscode.commands.executeCommand('hypercanvas.explorerView.focus');
     }),
   );
 
   // Open Inspector panel
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.openInspector", async () => {
+    vscode.commands.registerCommand('hypercanvas.openInspector', async () => {
       await rightPanelProvider?.focusAndEnsureReady();
     }),
   );
 
   // Refresh preview
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.refreshPreview", () => {
+    vscode.commands.registerCommand('hypercanvas.refreshPreview', () => {
       previewPanel?.refresh();
     }),
   );
@@ -1333,47 +1333,47 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // and the per-test git checkout + command palette reopens give us
   // enough isolation for cross-test stability.
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.closePreview", async () => {
+    vscode.commands.registerCommand('hypercanvas.closePreview', async () => {
       previewPanel?.dispose();
     }),
   );
 
   // Canvas keybinding commands (VS Code intercepts keys before they reach the webview iframe)
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.canvasUndo", () => previewPanel?.undo()),
-    vscode.commands.registerCommand("hypercanvas.canvasRedo", () => previewPanel?.redo()),
-    vscode.commands.registerCommand("hypercanvas.canvasDelete", () => previewPanel?.deleteSelected()),
-    vscode.commands.registerCommand("hypercanvas.canvasDuplicate", () => previewPanel?.duplicateSelected()),
-    vscode.commands.registerCommand("hypercanvas.canvasGoToCode", () => previewPanel?.goToCodeSelected()),
-    vscode.commands.registerCommand("hypercanvas.canvasWrap", () => previewPanel?.wrapSelected()),
-    vscode.commands.registerCommand("hypercanvas.canvasInsertElement", () =>
+    vscode.commands.registerCommand('hypercanvas.canvasUndo', () => previewPanel?.undo()),
+    vscode.commands.registerCommand('hypercanvas.canvasRedo', () => previewPanel?.redo()),
+    vscode.commands.registerCommand('hypercanvas.canvasDelete', () => previewPanel?.deleteSelected()),
+    vscode.commands.registerCommand('hypercanvas.canvasDuplicate', () => previewPanel?.duplicateSelected()),
+    vscode.commands.registerCommand('hypercanvas.canvasGoToCode', () => previewPanel?.goToCodeSelected()),
+    vscode.commands.registerCommand('hypercanvas.canvasWrap', () => previewPanel?.wrapSelected()),
+    vscode.commands.registerCommand('hypercanvas.canvasInsertElement', () =>
       previewPanel?.openInsertPanelForSelection(),
     ),
-    vscode.commands.registerCommand("hypercanvas.canvasSelectChildren", () => previewPanel?.selectChildren()),
-    vscode.commands.registerCommand("hypercanvas.canvasSelectParent", () => previewPanel?.selectParent()),
-    vscode.commands.registerCommand("hypercanvas.canvasSelectNextSibling", () => previewPanel?.selectNextSibling()),
-    vscode.commands.registerCommand("hypercanvas.canvasSelectPrevSibling", () => previewPanel?.selectPrevSibling()),
-    vscode.commands.registerCommand("hypercanvas.canvasEscape", () => previewPanel?.clearSelection()),
-    vscode.commands.registerCommand("hypercanvas.selectElement", (elementId: string) => {
+    vscode.commands.registerCommand('hypercanvas.canvasSelectChildren', () => previewPanel?.selectChildren()),
+    vscode.commands.registerCommand('hypercanvas.canvasSelectParent', () => previewPanel?.selectParent()),
+    vscode.commands.registerCommand('hypercanvas.canvasSelectNextSibling', () => previewPanel?.selectNextSibling()),
+    vscode.commands.registerCommand('hypercanvas.canvasSelectPrevSibling', () => previewPanel?.selectPrevSibling()),
+    vscode.commands.registerCommand('hypercanvas.canvasEscape', () => previewPanel?.clearSelection()),
+    vscode.commands.registerCommand('hypercanvas.selectElement', (elementId: string) => {
       previewPanel?.selectElement(elementId);
     }),
-    vscode.commands.registerCommand("hypercanvas.selectElements", (elementIds: string[]) => {
+    vscode.commands.registerCommand('hypercanvas.selectElements', (elementIds: string[]) => {
       previewPanel?.selectElements(elementIds);
     }),
   );
 
   // Go to Visual - navigate from code to canvas
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.goToVisual", async () => {
+    vscode.commands.registerCommand('hypercanvas.goToVisual', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
-        vscode.window.showWarningMessage("No active editor");
+        vscode.window.showWarningMessage('No active editor');
         return;
       }
 
       const filePath = editor.document.uri.fsPath;
       if (!/\.(tsx|jsx)$/.test(filePath)) {
-        vscode.window.showWarningMessage("Go to Visual only works in TSX/JSX files");
+        vscode.window.showWarningMessage('Go to Visual only works in TSX/JSX files');
         return;
       }
 
@@ -1387,15 +1387,15 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       if (result?.nodeRef) {
         previewPanel?.sendGoToVisual(result.nodeRef);
       } else {
-        vscode.window.showWarningMessage("No element found at cursor position");
+        vscode.window.showWarningMessage('No element found at cursor position');
       }
     }),
   );
 
   // Start dev server
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.startDevServer", async () => {
-      console.log("[HyperIDE] startDevServer command triggered");
+    vscode.commands.registerCommand('hypercanvas.startDevServer', async () => {
+      console.log('[HyperIDE] startDevServer command triggered');
 
       if (!devServerManager) {
         return;
@@ -1404,18 +1404,18 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "HyperIDE: Starting dev server...",
+          title: 'HyperIDE: Starting dev server...',
           cancellable: false,
         },
         async () => {
           if (!devServerManager) return;
           const state = await devServerManager.start();
-          console.log("[HyperIDE] Dev server state:", state.status, state.url);
+          console.log('[HyperIDE] Dev server state:', state.status, state.url);
 
-          if (state.status === "running") {
+          if (state.status === 'running') {
             vscode.window.showInformationMessage(`Dev server running at ${state.url}`);
             if (state.url) previewPanel?.setPreviewUrl(state.url);
-          } else if (state.status === "error") {
+          } else if (state.status === 'error') {
             vscode.window.showErrorMessage(`Failed to start dev server: ${state.error}`);
           }
         },
@@ -1425,49 +1425,49 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
   // Stop dev server
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.stopDevServer", async () => {
+    vscode.commands.registerCommand('hypercanvas.stopDevServer', async () => {
       if (!devServerManager) {
         return;
       }
 
       await devServerManager.stop();
-      vscode.window.showInformationMessage("Dev server stopped");
+      vscode.window.showInformationMessage('Dev server stopped');
     }),
   );
 
   // Show dev server output
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.showDevServerOutput", () => {
+    vscode.commands.registerCommand('hypercanvas.showDevServerOutput', () => {
       devServerManager?.showOutput();
     }),
   );
 
   // Fix unsupported project — installs react-native-web + Vite config for React Native / Tamagui projects
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.fixUnsupportedProject", async () => {
+    vscode.commands.registerCommand('hypercanvas.fixUnsupportedProject', async () => {
       const root = getCurrentRoot();
       const pkgManager = await detectPackageManager(root);
       const installCmd =
-        pkgManager === "bun"
-          ? "bun add"
-          : pkgManager === "yarn"
-            ? "yarn add"
-            : pkgManager === "pnpm"
-              ? "pnpm add"
-              : "npm install";
+        pkgManager === 'bun'
+          ? 'bun add'
+          : pkgManager === 'yarn'
+            ? 'yarn add'
+            : pkgManager === 'pnpm'
+              ? 'pnpm add'
+              : 'npm install';
       const devInstallCmd =
-        pkgManager === "bun"
-          ? "bun add -d"
-          : pkgManager === "yarn"
-            ? "yarn add -D"
-            : pkgManager === "pnpm"
-              ? "pnpm add -D"
-              : "npm install -D";
+        pkgManager === 'bun'
+          ? 'bun add -d'
+          : pkgManager === 'yarn'
+            ? 'yarn add -D'
+            : pkgManager === 'pnpm'
+              ? 'pnpm add -D'
+              : 'npm install -D';
 
       // Detect if this is a Next.js project
       let isNextJs = false;
       try {
-        const pkgRaw = await readFile(join(root, "package.json"), "utf-8");
+        const pkgRaw = await readFile(join(root, 'package.json'), 'utf-8');
         const pkg = JSON.parse(pkgRaw);
         isNextJs = !!(pkg.dependencies?.next || pkg.devDependencies?.next);
       } catch {
@@ -1478,7 +1478,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       let isTamaguiOne = false;
       if (!isNextJs) {
         try {
-          const viteRaw = await readFile(join(root, "vite.config.ts"), "utf-8");
+          const viteRaw = await readFile(join(root, 'vite.config.ts'), 'utf-8');
           isTamaguiOne =
             /\bone\s*\(/.test(viteRaw) || viteRaw.includes("from 'one/vite'") || viteRaw.includes('from "one/vite"');
         } catch {
@@ -1497,26 +1497,26 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
             },
             async (progress) => {
               // Step 1: Install react-native-web as a dependency (no Vite needed)
-              progress.report({ message: "Installing react-native-web..." });
+              progress.report({ message: 'Installing react-native-web...' });
               await new Promise<void>((resolve, reject) => {
-                const [cmd, ...args] = `${installCmd} react-native-web`.split(" ");
-                execFile(cmd, args, { cwd: root, shell: process.platform === "win32" }, (err) => {
+                const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
               });
 
               // Step 2: Create or patch next.config
-              progress.report({ message: "Configuring Next.js for Tamagui..." });
+              progress.report({ message: 'Configuring Next.js for Tamagui...' });
 
               // Find existing next.config file (ts > mjs > js)
-              const configVariants = ["next.config.ts", "next.config.mjs", "next.config.js"] as const;
+              const configVariants = ['next.config.ts', 'next.config.mjs', 'next.config.js'] as const;
               let existingConfigPath: string | null = null;
-              let existingConfigContent = "";
+              let existingConfigContent = '';
               for (const variant of configVariants) {
                 const candidate = join(root, variant);
                 try {
-                  existingConfigContent = await readFile(candidate, "utf-8");
+                  existingConfigContent = await readFile(candidate, 'utf-8');
                   existingConfigPath = candidate;
                   break;
                 } catch {
@@ -1524,15 +1524,15 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                 }
               }
 
-              const targetConfigPath = existingConfigPath ?? join(root, "next.config.ts");
-              const isTypeScript = targetConfigPath.endsWith(".ts");
+              const targetConfigPath = existingConfigPath ?? join(root, 'next.config.ts');
+              const isTypeScript = targetConfigPath.endsWith('.ts');
 
               // Check if config already has tamagui transpilePackages and turbo alias
               const hasTranspile =
-                existingConfigContent.includes("react-native-web") &&
-                existingConfigContent.includes("transpilePackages");
+                existingConfigContent.includes('react-native-web') &&
+                existingConfigContent.includes('transpilePackages');
               const hasTurboAlias =
-                existingConfigContent.includes("resolveAlias") && existingConfigContent.includes("react-native-web");
+                existingConfigContent.includes('resolveAlias') && existingConfigContent.includes('react-native-web');
 
               if (!hasTranspile || !hasTurboAlias) {
                 // Generate a fresh config — patching arbitrary user configs is fragile,
@@ -1540,21 +1540,21 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                 const configLines: string[] = [];
                 if (isTypeScript) {
                   configLines.push("import type { NextConfig } from 'next';");
-                  configLines.push("");
-                  configLines.push("const nextConfig: NextConfig = {");
+                  configLines.push('');
+                  configLines.push('const nextConfig: NextConfig = {');
                 } else {
                   configLines.push('/** @type {import("next").NextConfig} */');
-                  configLines.push("const nextConfig = {");
+                  configLines.push('const nextConfig = {');
                 }
                 configLines.push(
                   "  transpilePackages: ['react-native', 'react-native-web', 'tamagui', '@tamagui/config'],",
                 );
-                configLines.push("  experimental: {");
-                configLines.push("    turbo: {");
-                configLines.push("      resolveAlias: {");
+                configLines.push('  experimental: {');
+                configLines.push('    turbo: {');
+                configLines.push('      resolveAlias: {');
                 configLines.push("        'react-native': 'react-native-web',");
-                configLines.push("      },");
-                configLines.push("      resolveExtensions: [");
+                configLines.push('      },');
+                configLines.push('      resolveExtensions: [');
                 configLines.push("        '.web.tsx',");
                 configLines.push("        '.web.ts',");
                 configLines.push("        '.web.jsx',");
@@ -1564,18 +1564,18 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                 configLines.push("        '.jsx',");
                 configLines.push("        '.js',");
                 configLines.push("        '.json',");
-                configLines.push("      ],");
-                configLines.push("    },");
-                configLines.push("  },");
-                configLines.push("};");
-                configLines.push("");
-                if (isTypeScript || targetConfigPath.endsWith(".mjs")) {
-                  configLines.push("export default nextConfig;");
+                configLines.push('      ],');
+                configLines.push('    },');
+                configLines.push('  },');
+                configLines.push('};');
+                configLines.push('');
+                if (isTypeScript || targetConfigPath.endsWith('.mjs')) {
+                  configLines.push('export default nextConfig;');
                 } else {
-                  configLines.push("module.exports = nextConfig;");
+                  configLines.push('module.exports = nextConfig;');
                 }
-                configLines.push("");
-                await writeFile(targetConfigPath, configLines.join("\n"), "utf-8");
+                configLines.push('');
+                await writeFile(targetConfigPath, configLines.join('\n'), 'utf-8');
               }
             },
           );
@@ -1588,10 +1588,10 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               cancellable: false,
             },
             async (progress) => {
-              progress.report({ message: "Installing react-native-web..." });
+              progress.report({ message: 'Installing react-native-web...' });
               await new Promise<void>((resolve, reject) => {
-                const [cmd, ...args] = `${installCmd} react-native-web`.split(" ");
-                execFile(cmd, args, { cwd: root, shell: process.platform === "win32" }, (err) => {
+                const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
@@ -1608,20 +1608,20 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
             },
             async (progress) => {
               // Step 1: Install react-native-web as a dependency
-              progress.report({ message: "Installing react-native-web..." });
+              progress.report({ message: 'Installing react-native-web...' });
               await new Promise<void>((resolve, reject) => {
-                const [cmd, ...args] = `${installCmd} react-native-web`.split(" ");
-                execFile(cmd, args, { cwd: root, shell: process.platform === "win32" }, (err) => {
+                const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
               });
 
               // Step 2: Install Vite toolchain as devDependencies
-              progress.report({ message: "Installing vite + plugins..." });
+              progress.report({ message: 'Installing vite + plugins...' });
               await new Promise<void>((resolve, reject) => {
-                const [cmd, ...args] = `${devInstallCmd} vite @vitejs/plugin-react @tamagui/vite-plugin`.split(" ");
-                execFile(cmd, args, { cwd: root, shell: process.platform === "win32" }, (err) => {
+                const [cmd, ...args] = `${devInstallCmd} vite @vitejs/plugin-react @tamagui/vite-plugin`.split(' ');
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
@@ -1631,11 +1631,11 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               // If the file exists but doesn't have tamaguiPlugin / react-native-web
               // alias, overwrite it — a bare vite.config without these won't work
               // for Tamagui web builds.
-              progress.report({ message: "Configuring Vite for Tamagui..." });
-              const viteConfigPath = join(root, "vite.config.ts");
-              let existingViteConfig = "";
+              progress.report({ message: 'Configuring Vite for Tamagui...' });
+              const viteConfigPath = join(root, 'vite.config.ts');
+              let existingViteConfig = '';
               try {
-                existingViteConfig = await readFile(viteConfigPath, "utf-8");
+                existingViteConfig = await readFile(viteConfigPath, 'utf-8');
               } catch {
                 // File doesn't exist
               }
@@ -1647,21 +1647,21 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               const needsViteConfig =
                 !isOneConfig &&
                 (!existingViteConfig ||
-                  !existingViteConfig.includes("tamaguiPlugin") ||
-                  !existingViteConfig.includes("react-native-web"));
+                  !existingViteConfig.includes('tamaguiPlugin') ||
+                  !existingViteConfig.includes('react-native-web'));
               if (needsViteConfig) {
                 // Create stub files for deep react-native imports that rolldown can't resolve
-                const stubsDir = join(root, "src", "stubs");
+                const stubsDir = join(root, 'src', 'stubs');
                 await mkdir(stubsDir, { recursive: true });
-                const codegenStub = join(stubsDir, "codegenNativeComponent.ts");
-                const appContainerStub = join(stubsDir, "AppContainer.tsx");
+                const codegenStub = join(stubsDir, 'codegenNativeComponent.ts');
+                const appContainerStub = join(stubsDir, 'AppContainer.tsx');
                 try {
                   await readFile(codegenStub);
                 } catch {
                   await writeFile(
                     codegenStub,
-                    "export default function codegenNativeComponent<P>(_name: string) {\n  return (_props: P) => null;\n}\n",
-                    "utf-8",
+                    'export default function codegenNativeComponent<P>(_name: string) {\n  return (_props: P) => null;\n}\n',
+                    'utf-8',
                   );
                 }
                 try {
@@ -1670,7 +1670,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   await writeFile(
                     appContainerStub,
                     'import React from "react";\nexport default function AppContainer({ children }: { children: React.ReactNode }) {\n  return <>{children}</>;\n}\n',
-                    "utf-8",
+                    'utf-8',
                   );
                 }
 
@@ -1679,34 +1679,34 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   "import { tamaguiPlugin } from '@tamagui/vite-plugin'",
                   "import react from '@vitejs/plugin-react'",
                   "import { defineConfig } from 'vite'",
-                  "",
-                  "export default defineConfig({",
-                  "  plugins: [",
-                  "    react(),",
-                  "    tamaguiPlugin({",
+                  '',
+                  'export default defineConfig({',
+                  '  plugins: [',
+                  '    react(),',
+                  '    tamaguiPlugin({',
                   "      components: ['tamagui'],",
-                  "    }),",
-                  "  ],",
-                  "  resolve: {",
+                  '    }),',
+                  '  ],',
+                  '  resolve: {',
                   "    extensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.json'],",
-                  "    alias: {",
+                  '    alias: {',
                   "      'react-native': 'react-native-web',",
                   "      'react-native/Libraries/Utilities/codegenNativeComponent': path.resolve(__dirname, 'src/stubs/codegenNativeComponent.ts'),",
                   "      'react-native/Libraries/ReactNative/AppContainer': path.resolve(__dirname, 'src/stubs/AppContainer.tsx'),",
-                  "    },",
-                  "  },",
-                  "  optimizeDeps: {",
+                  '    },',
+                  '  },',
+                  '  optimizeDeps: {',
                   "    include: ['react-native-web', 'warn-once'],",
                   "    exclude: ['react-native-safe-area-context', 'react-native-screens'],",
-                  "  },",
-                  "})",
-                  "",
-                ].join("\n");
-                await writeFile(viteConfigPath, viteConfigContent, "utf-8");
+                  '  },',
+                  '})',
+                  '',
+                ].join('\n');
+                await writeFile(viteConfigPath, viteConfigContent, 'utf-8');
               }
 
               // Step 4: Create index.html if it doesn't exist
-              const indexHtmlPath = join(root, "index.html");
+              const indexHtmlPath = join(root, 'index.html');
               let indexHtmlExists = false;
               try {
                 await readFile(indexHtmlPath);
@@ -1716,37 +1716,37 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               }
               if (!indexHtmlExists) {
                 const indexHtmlContent = [
-                  "<!DOCTYPE html>",
+                  '<!DOCTYPE html>',
                   '<html lang="en">',
-                  "<head>",
+                  '<head>',
                   '  <meta charset="UTF-8">',
                   '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
-                  "  <title>App</title>",
-                  "</head>",
-                  "<body>",
+                  '  <title>App</title>',
+                  '</head>',
+                  '<body>',
                   '  <div id="root"></div>',
                   '  <script type="module" src="/src/main.tsx"></script>',
-                  "</body>",
-                  "</html>",
-                  "",
-                ].join("\n");
-                await writeFile(indexHtmlPath, indexHtmlContent, "utf-8");
+                  '</body>',
+                  '</html>',
+                  '',
+                ].join('\n');
+                await writeFile(indexHtmlPath, indexHtmlContent, 'utf-8');
               }
 
               // Step 5: Update package.json scripts — set "dev": "vite" if currently using expo/metro
-              progress.report({ message: "Updating package.json scripts..." });
+              progress.report({ message: 'Updating package.json scripts...' });
               try {
-                const pkgJsonPath = join(root, "package.json");
-                const pkgRaw = await readFile(pkgJsonPath, "utf-8");
+                const pkgJsonPath = join(root, 'package.json');
+                const pkgRaw = await readFile(pkgJsonPath, 'utf-8');
                 const pkg = JSON.parse(pkgRaw);
                 const scripts = (pkg.scripts ?? {}) as Record<string, string>;
-                const currentDev = scripts.dev ?? "";
+                const currentDev = scripts.dev ?? '';
                 // Replace expo-based or missing dev script with vite
                 // Never replace `one dev` — Tamagui One projects use their own Vite wrapper
-                if ((!currentDev || currentDev.includes("expo")) && !currentDev.includes("one ")) {
-                  scripts.dev = "vite";
+                if ((!currentDev || currentDev.includes('expo')) && !currentDev.includes('one ')) {
+                  scripts.dev = 'vite';
                   pkg.scripts = scripts;
-                  await writeFile(pkgJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf-8");
+                  await writeFile(pkgJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
                 }
               } catch {
                 // Non-critical — user can set the script manually
@@ -1755,10 +1755,10 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               // Step 6: Create App.web.tsx — web entry without native navigation stack
               // Keeps SafeAreaProvider + NavigationContainer (both work on web via react-native-web)
               // but replaces native-stack navigator with direct screen render.
-              progress.report({ message: "Creating web entry point..." });
+              progress.report({ message: 'Creating web entry point...' });
               try {
-                const appPath = join(root, "App.tsx");
-                const appContent = await readFile(appPath, "utf-8");
+                const appPath = join(root, 'App.tsx');
+                const appContent = await readFile(appPath, 'utf-8');
                 const hasNativeImports = /expo-status-bar|@react-navigation\/native-stack|react-native-screens/.test(
                   appContent,
                 );
@@ -1767,23 +1767,23 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   const cfgMatch = appContent.match(
                     /import\s+(?:\{\s*(\w+)\s*\}|(\w+))\s+from\s+['"]([^'"]*tamagui\.config[^'"]*)['"]/,
                   );
-                  const cfgVar = cfgMatch?.[1] || cfgMatch?.[2] || "config";
-                  const cfgPath = cfgMatch?.[3] || "./src/theme/tamagui.config";
+                  const cfgVar = cfgMatch?.[1] || cfgMatch?.[2] || 'config';
+                  const cfgPath = cfgMatch?.[3] || './src/theme/tamagui.config';
                   const cfgIsNamed = !!cfgMatch?.[1];
                   // Find default theme
                   const themeMatch = appContent.match(/defaultTheme=["'](\w+)["']/);
-                  const theme = themeMatch?.[1] || "dark";
+                  const theme = themeMatch?.[1] || 'dark';
 
                   // Find first screen in src/screens/
-                  let screenName = "HomeScreen";
+                  let screenName = 'HomeScreen';
                   try {
-                    const files = await readdir(join(root, "src", "screens"));
+                    const files = await readdir(join(root, 'src', 'screens'));
                     const home = files.find((f) => /^HomeScreen\.(tsx|jsx)$/.test(f));
                     const feed = files.find((f) => /^FeedScreen\.(tsx|jsx)$/.test(f));
                     const chat = files.find((f) => /^ChatListScreen\.(tsx|jsx)$/.test(f));
                     const any = files.find((f) => /Screen\.(tsx|jsx)$/.test(f));
                     const chosen = home || feed || chat || any;
-                    if (chosen) screenName = chosen.replace(/\.(tsx|jsx)$/, "");
+                    if (chosen) screenName = chosen.replace(/\.(tsx|jsx)$/, '');
                   } catch {
                     /* no screens dir — use default */
                   }
@@ -1791,7 +1791,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   // Check if screen uses useNavigation hook
                   let needsNavContainer = false;
                   try {
-                    const screenSrc = await readFile(join(root, "src", "screens", `${screenName}.tsx`), "utf-8");
+                    const screenSrc = await readFile(join(root, 'src', 'screens', `${screenName}.tsx`), 'utf-8');
                     needsNavContainer = /useNavigation\s*[<(]/.test(screenSrc);
                   } catch {
                     /* can't read screen — skip nav container */
@@ -1803,7 +1803,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   if (cartMatch) {
                     extraProviders.push({
                       importLine: `import { CartProvider } from "${cartMatch[1]}";`,
-                      name: "CartProvider",
+                      name: 'CartProvider',
                     });
                   }
 
@@ -1821,13 +1821,13 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   );
                   for (const ep of extraProviders) lines.push(ep.importLine);
                   lines.push(`import { ${screenName} } from "./src/screens/${screenName}";`);
-                  lines.push("");
-                  lines.push("export default function App() {");
-                  lines.push("  return (");
+                  lines.push('');
+                  lines.push('export default function App() {');
+                  lines.push('  return (');
 
                   // Build provider nesting
                   let depth = 2;
-                  const pad = (d: number) => "  ".repeat(d);
+                  const pad = (d: number) => '  '.repeat(d);
                   lines.push(`${pad(depth)}<SafeAreaProvider>`);
                   depth++;
                   if (needsNavContainer) {
@@ -1853,11 +1853,11 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   }
                   depth--;
                   lines.push(`${pad(depth)}</SafeAreaProvider>`);
-                  lines.push("  );");
-                  lines.push("}");
-                  lines.push("");
+                  lines.push('  );');
+                  lines.push('}');
+                  lines.push('');
 
-                  await writeFile(join(root, "App.web.tsx"), lines.join("\n"), "utf-8");
+                  await writeFile(join(root, 'App.web.tsx'), lines.join('\n'), 'utf-8');
                 }
               } catch {
                 // App.tsx doesn't exist or can't be read — skip
@@ -1869,13 +1869,13 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
         const stillUnsupported = await detectUnsupportedProject(root);
         if (stillUnsupported) {
           vscode.window.showWarningMessage(
-            "HyperIDE: react-native-web may not have been added to package.json. Try running the install manually.",
+            'HyperIDE: react-native-web may not have been added to package.json. Try running the install manually.',
           );
         } else {
           const successMsg = isNextJs
             ? 'react-native-web + Next.js configured. Run "dev" to start the Next.js dev server.'
             : isTamaguiOne
-              ? "react-native-web installed. Restart `one dev` to apply."
+              ? 'react-native-web installed. Restart `one dev` to apply.'
               : 'react-native-web + Vite configured. Run "dev" to start the Vite dev server.';
           vscode.window.showInformationMessage(successMsg);
           previewPanel?.notifyUnsupportedProject(null);
@@ -1889,51 +1889,51 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
   // Configure AI API key — multi-step wizard
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.configureAIKey", async () => {
+    vscode.commands.registerCommand('hypercanvas.configureAIKey', async () => {
       // ── Step 1: Choose provider ──
-      const config = vscode.workspace.getConfiguration("hypercanvas.ai");
-      const currentProvider = config.get<string>("provider", "glm") as AIProvider;
-      const plansLine = GLM_RECOMMENDATION.plans.map((p) => `${p.name} ${p.price}`).join(" \u00b7 ");
+      const config = vscode.workspace.getConfiguration('hypercanvas.ai');
+      const currentProvider = config.get<string>('provider', 'glm') as AIProvider;
+      const plansLine = GLM_RECOMMENDATION.plans.map((p) => `${p.name} ${p.price}`).join(' \u00b7 ');
 
       interface ProviderItem extends vscode.QuickPickItem {
-        providerId: AIProvider | "settings";
+        providerId: AIProvider | 'settings';
       }
 
       const providerItems: ProviderItem[] = [
         {
           label: `$(star-full) ${PROVIDER_LABELS.glm}`,
           detail: `${GLM_RECOMMENDATION.description} ${plansLine}`,
-          description: currentProvider === "glm" ? "current" : "",
-          providerId: "glm",
+          description: currentProvider === 'glm' ? 'current' : '',
+          providerId: 'glm',
         },
         {
           label: PROVIDER_LABELS.claude,
-          detail: "Per-token pricing via Anthropic API",
-          description: currentProvider === "claude" ? "current" : "",
-          providerId: "claude",
+          detail: 'Per-token pricing via Anthropic API',
+          description: currentProvider === 'claude' ? 'current' : '',
+          providerId: 'claude',
         },
         {
           label: PROVIDER_LABELS.openai,
-          detail: "GPT-4o and OpenAI-compatible APIs",
-          description: currentProvider === "openai" ? "current" : "",
-          providerId: "openai",
+          detail: 'GPT-4o and OpenAI-compatible APIs',
+          description: currentProvider === 'openai' ? 'current' : '',
+          providerId: 'openai',
         },
         {
-          label: "$(gear) Other providers (Gemini, DeepSeek, Mistral, Qwen...)",
-          detail: "Opens AI Settings to pick provider, model, and backend",
-          providerId: "settings",
+          label: '$(gear) Other providers (Gemini, DeepSeek, Mistral, Qwen...)',
+          detail: 'Opens AI Settings to pick provider, model, and backend',
+          providerId: 'settings',
         },
       ];
 
       const pickedProvider = await vscode.window.showQuickPick(providerItems, {
-        title: "Hyper: Configure AI (Step 1/2) — Choose Provider",
-        placeHolder: "Which AI provider do you want to use?",
+        title: 'Hyper: Configure AI (Step 1/2) — Choose Provider',
+        placeHolder: 'Which AI provider do you want to use?',
       });
 
       if (!pickedProvider) return;
 
-      if (pickedProvider.providerId === "settings") {
-        vscode.commands.executeCommand("workbench.action.openSettings", "hypercanvas.ai");
+      if (pickedProvider.providerId === 'settings') {
+        vscode.commands.executeCommand('workbench.action.openSettings', 'hypercanvas.ai');
         return;
       }
 
@@ -1943,23 +1943,23 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
       // Apply provider + defaults to settings
       if (selectedProvider !== currentProvider) {
-        await config.update("provider", selectedProvider, vscode.ConfigurationTarget.Global);
-        await config.update("model", defaults.model, vscode.ConfigurationTarget.Global);
-        await config.update("baseURL", defaults.baseURL ?? undefined, vscode.ConfigurationTarget.Global);
+        await config.update('provider', selectedProvider, vscode.ConfigurationTarget.Global);
+        await config.update('model', defaults.model, vscode.ConfigurationTarget.Global);
+        await config.update('baseURL', defaults.baseURL ?? undefined, vscode.ConfigurationTarget.Global);
       }
 
       // ── Step 2: Enter key or get one ──
       const keyUrl = PROVIDER_KEY_URLS[selectedProvider];
 
       interface ActionItem extends vscode.QuickPickItem {
-        action: "enter" | "get-key";
+        action: 'enter' | 'get-key';
       }
 
       const actionItems: ActionItem[] = [
         {
           label: `$(key) Enter API key for ${providerLabel}`,
           detail: `model=${defaults.model}`,
-          action: "enter",
+          action: 'enter',
         },
       ];
 
@@ -1967,18 +1967,18 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
         actionItems.push({
           label: `$(link-external) Get API key from ${keyUrl.label}`,
           detail: keyUrl.url,
-          action: "get-key",
+          action: 'get-key',
         });
       }
 
       const pickedAction = await vscode.window.showQuickPick(actionItems, {
-        title: "Hyper: Configure AI (Step 2/2) — API Key",
+        title: 'Hyper: Configure AI (Step 2/2) — API Key',
         placeHolder: `Provider: ${providerLabel}`,
       });
 
       if (!pickedAction) return;
 
-      if (pickedAction.action === "get-key" && keyUrl) {
+      if (pickedAction.action === 'get-key' && keyUrl) {
         vscode.env.openExternal(vscode.Uri.parse(keyUrl.url));
         return;
       }
@@ -1992,11 +1992,11 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
       if (key !== undefined) {
         if (key) {
-          await context.secrets.store("hypercanvas.ai.apiKey", key);
+          await context.secrets.store('hypercanvas.ai.apiKey', key);
           vscode.window.showInformationMessage(`${providerLabel} API key saved.`);
         } else {
-          await context.secrets.delete("hypercanvas.ai.apiKey");
-          vscode.window.showInformationMessage("AI API key removed.");
+          await context.secrets.delete('hypercanvas.ai.apiKey');
+          vscode.window.showInformationMessage('AI API key removed.');
         }
       }
     }),
@@ -2004,9 +2004,9 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
   // Open/create project structure config file
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.openProjectStructure", async () => {
-      const configDir = vscode.Uri.joinPath(vscode.Uri.file(getCurrentRoot()), ".hyperide");
-      const configFile = vscode.Uri.joinPath(configDir, "project-structure.json");
+    vscode.commands.registerCommand('hypercanvas.openProjectStructure', async () => {
+      const configDir = vscode.Uri.joinPath(vscode.Uri.file(getCurrentRoot()), '.hyperide');
+      const configFile = vscode.Uri.joinPath(configDir, 'project-structure.json');
 
       try {
         await vscode.workspace.fs.stat(configFile);
@@ -2015,15 +2015,15 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
         await vscode.workspace.fs.createDirectory(configDir);
 
         const template = {
-          ".atomComponentsPaths": "Paths to directories with atomic/base UI components (buttons, inputs, etc.)",
+          '.atomComponentsPaths': 'Paths to directories with atomic/base UI components (buttons, inputs, etc.)',
           atomComponentsPaths: [] as string[],
-          ".compositeComponentsPaths": "Paths to directories with composite components (forms, cards, layouts)",
+          '.compositeComponentsPaths': 'Paths to directories with composite components (forms, cards, layouts)',
           compositeComponentsPaths: [] as string[],
-          ".pagesPaths": "Paths to directories with page components (Next.js pages, route components)",
+          '.pagesPaths': 'Paths to directories with page components (Next.js pages, route components)',
           pagesPaths: [] as string[],
         };
 
-        const content = Buffer.from(JSON.stringify(template, null, 2), "utf-8");
+        const content = Buffer.from(JSON.stringify(template, null, 2), 'utf-8');
         await vscode.workspace.fs.writeFile(configFile, content);
       }
 
@@ -2034,49 +2034,49 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
   // Setup MCP for AI agents (Copilot, Claude Code, Codex, OpenCode)
   context.subscriptions.push(
-    vscode.commands.registerCommand("hypercanvas.setupMcp", async () => {
+    vscode.commands.registerCommand('hypercanvas.setupMcp', async () => {
       if (!mcpServer || mcpServer.port === 0) {
-        vscode.window.showErrorMessage("HyperCanvas MCP server is not running");
+        vscode.window.showErrorMessage('HyperCanvas MCP server is not running');
         return;
       }
 
       // Step 1: Choose AI agents — pre-check already configured ones
       interface AgentItem extends vscode.QuickPickItem {
-        agentId: "copilot" | "claude-code" | "codex" | "opencode";
+        agentId: 'copilot' | 'claude-code' | 'codex' | 'opencode';
       }
 
       const configured = await detectConfiguredAgents(getCurrentRoot());
 
       const agents: AgentItem[] = [
         {
-          label: "VS Code Copilot",
-          detail: "Write .vscode/mcp.json — auto-discovered by GitHub Copilot",
-          agentId: "copilot",
+          label: 'VS Code Copilot',
+          detail: 'Write .vscode/mcp.json — auto-discovered by GitHub Copilot',
+          agentId: 'copilot',
           picked: configured.copilot,
         },
         {
-          label: "Claude Code",
-          detail: "Write .mcp.json — auto-discovered by Claude Code CLI",
-          agentId: "claude-code",
+          label: 'Claude Code',
+          detail: 'Write .mcp.json — auto-discovered by Claude Code CLI',
+          agentId: 'claude-code',
           picked: configured.claudeCode,
         },
         {
-          label: "Codex",
-          detail: "Write .codex/config.toml — auto-discovered by OpenAI Codex CLI",
-          agentId: "codex",
+          label: 'Codex',
+          detail: 'Write .codex/config.toml — auto-discovered by OpenAI Codex CLI',
+          agentId: 'codex',
           picked: configured.codex,
         },
         {
-          label: "OpenCode",
-          detail: "Write opencode.json — auto-discovered by OpenCode CLI",
-          agentId: "opencode",
+          label: 'OpenCode',
+          detail: 'Write opencode.json — auto-discovered by OpenCode CLI',
+          agentId: 'opencode',
           picked: configured.opencode,
         },
       ];
 
       const picked = await vscode.window.showQuickPick(agents, {
-        title: "Hyper: Setup MCP (Step 1/2) — Choose AI Agents",
-        placeHolder: "Select AI agents to configure (multi-select)",
+        title: 'Hyper: Setup MCP (Step 1/2) — Choose AI Agents',
+        placeHolder: 'Select AI agents to configure (multi-select)',
         canPickMany: true,
       });
 
@@ -2086,13 +2086,13 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
       const configRoot = getCurrentRoot();
       for (const agent of picked) {
-        if (agent.agentId === "copilot") {
+        if (agent.agentId === 'copilot') {
           await writeVsCodeMcpJson(configRoot, url);
-        } else if (agent.agentId === "claude-code") {
+        } else if (agent.agentId === 'claude-code') {
           await writeMcpJson(configRoot, url);
-        } else if (agent.agentId === "codex") {
+        } else if (agent.agentId === 'codex') {
           await writeCodexConfig(configRoot, url);
-        } else if (agent.agentId === "opencode") {
+        } else if (agent.agentId === 'opencode') {
           await writeOpenCodeJson(configRoot, url);
         }
       }
@@ -2105,34 +2105,34 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
       const companions: CompanionItem[] = [
         {
-          label: "Playwright MCP",
-          detail: "Browser automation & visual testing — take screenshots, click elements, fill forms",
-          companionId: "playwright",
-          npxPackage: "@playwright/mcp@latest",
+          label: 'Playwright MCP',
+          detail: 'Browser automation & visual testing — take screenshots, click elements, fill forms',
+          companionId: 'playwright',
+          npxPackage: '@playwright/mcp@latest',
         },
         {
-          label: "Serena MCP",
-          detail: "Semantic code navigation & refactoring — find symbols, references, rename across codebase",
-          companionId: "serena",
-          npxPackage: "@anthropic/serena-mcp@latest",
+          label: 'Serena MCP',
+          detail: 'Semantic code navigation & refactoring — find symbols, references, rename across codebase',
+          companionId: 'serena',
+          npxPackage: '@anthropic/serena-mcp@latest',
         },
         {
-          label: "Context7 MCP",
-          detail: "Up-to-date library docs — pulls latest API references for any npm/pip package",
-          companionId: "context7",
-          npxPackage: "@upstash/context7-mcp@latest",
+          label: 'Context7 MCP',
+          detail: 'Up-to-date library docs — pulls latest API references for any npm/pip package',
+          companionId: 'context7',
+          npxPackage: '@upstash/context7-mcp@latest',
         },
       ];
 
       const pickedCompanions = await vscode.window.showQuickPick(companions, {
-        title: "Hyper: Setup MCP (Step 2/2) — Companion Servers",
-        placeHolder: "These MCP servers work great alongside HyperCanvas (optional)",
+        title: 'Hyper: Setup MCP (Step 2/2) — Companion Servers',
+        placeHolder: 'These MCP servers work great alongside HyperCanvas (optional)',
         canPickMany: true,
       });
 
       // Detect browser for Playwright before building configs
       let playwrightExtraArgs: string[] = [];
-      const playwrightPicked = (pickedCompanions ?? []).some((c) => c.companionId === "playwright");
+      const playwrightPicked = (pickedCompanions ?? []).some((c) => c.companionId === 'playwright');
       if (playwrightPicked) {
         const detection = detectBrowserForPlaywright();
         if (detection.found) {
@@ -2149,8 +2149,8 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       // Write companion servers into the same config files selected in step 1
       const companionConfigs = (pickedCompanions ?? []).map((c) => ({
         id: c.companionId,
-        command: "npx",
-        args: ["-y", c.npxPackage, ...(c.companionId === "playwright" ? playwrightExtraArgs : [])],
+        command: 'npx',
+        args: ['-y', c.npxPackage, ...(c.companionId === 'playwright' ? playwrightExtraArgs : [])],
       }));
 
       const agentIds = picked.map((a) => a.agentId);
@@ -2160,7 +2160,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       }
 
       const allNames = [...picked.map((a) => a.label), ...(pickedCompanions ?? []).map((c) => c.label)];
-      vscode.window.showInformationMessage(`MCP configured: ${allNames.join(", ")}`);
+      vscode.window.showInformationMessage(`MCP configured: ${allNames.join(', ')}`);
     }),
   );
 }
@@ -2173,56 +2173,56 @@ async function autoUpdateMcpConfigs(workspaceRoot: string, port: number): Promis
   const url = `http://127.0.0.1:${port}/mcp`;
 
   // Check and update .mcp.json (Claude Code)
-  const mcpJsonPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), ".mcp.json");
+  const mcpJsonPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.mcp.json');
   try {
     const content = await vscode.workspace.fs.readFile(mcpJsonPath);
     const config = JSON.parse(new TextDecoder().decode(content));
-    if (config?.mcpServers?.["hyper-canvas"]) {
-      config.mcpServers["hyper-canvas"].url = url;
-      await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(JSON.stringify(config, null, 2), "utf-8"));
-      console.log("[HyperMCP] Updated .mcp.json with new port");
+    if (config?.mcpServers?.['hyper-canvas']) {
+      config.mcpServers['hyper-canvas'].url = url;
+      await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+      console.log('[HyperMCP] Updated .mcp.json with new port');
     }
   } catch {
     // File doesn't exist or no hyper-canvas entry — skip
   }
 
   // Check and update .vscode/mcp.json (Copilot)
-  const vscodeMcpPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), ".vscode", "mcp.json");
+  const vscodeMcpPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.vscode', 'mcp.json');
   try {
     const content = await vscode.workspace.fs.readFile(vscodeMcpPath);
     const config = JSON.parse(new TextDecoder().decode(content));
-    if (config?.servers?.["hyper-canvas"]) {
-      config.servers["hyper-canvas"].url = url;
-      await vscode.workspace.fs.writeFile(vscodeMcpPath, Buffer.from(JSON.stringify(config, null, 2), "utf-8"));
-      console.log("[HyperMCP] Updated .vscode/mcp.json with new port");
+    if (config?.servers?.['hyper-canvas']) {
+      config.servers['hyper-canvas'].url = url;
+      await vscode.workspace.fs.writeFile(vscodeMcpPath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+      console.log('[HyperMCP] Updated .vscode/mcp.json with new port');
     }
   } catch {
     // File doesn't exist or no hyper-canvas entry — skip
   }
 
   // Check and update opencode.json
-  const opencodePath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), "opencode.json");
+  const opencodePath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), 'opencode.json');
   try {
     const content = await vscode.workspace.fs.readFile(opencodePath);
     const config = JSON.parse(new TextDecoder().decode(content));
-    if (config?.mcp?.["hyper-canvas"]) {
-      config.mcp["hyper-canvas"].url = url;
-      await vscode.workspace.fs.writeFile(opencodePath, Buffer.from(JSON.stringify(config, null, 2), "utf-8"));
-      console.log("[HyperMCP] Updated opencode.json with new port");
+    if (config?.mcp?.['hyper-canvas']) {
+      config.mcp['hyper-canvas'].url = url;
+      await vscode.workspace.fs.writeFile(opencodePath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+      console.log('[HyperMCP] Updated opencode.json with new port');
     }
   } catch {
     // File doesn't exist or no hyper-canvas entry — skip
   }
 
   // Check and update .codex/config.toml (Codex)
-  const codexConfigPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), ".codex", "config.toml");
+  const codexConfigPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.codex', 'config.toml');
   try {
     const content = await vscode.workspace.fs.readFile(codexConfigPath);
     const toml = new TextDecoder().decode(content);
-    if (toml.includes("hyper-canvas")) {
+    if (toml.includes('hyper-canvas')) {
       const updated = toml.replace(/url\s*=\s*"http:\/\/127\.0\.0\.1:\d+\/mcp"/, `url = "${url}"`);
-      await vscode.workspace.fs.writeFile(codexConfigPath, Buffer.from(updated, "utf-8"));
-      console.log("[HyperMCP] Updated .codex/config.toml with new port");
+      await vscode.workspace.fs.writeFile(codexConfigPath, Buffer.from(updated, 'utf-8'));
+      console.log('[HyperMCP] Updated .codex/config.toml with new port');
     }
   } catch {
     // File doesn't exist or no hyper-canvas entry — skip
@@ -2249,33 +2249,33 @@ async function detectConfiguredAgents(workspaceRoot: string): Promise<Configured
     }
   };
 
-  const vscodeMcp = await tryRead(".vscode/mcp.json");
+  const vscodeMcp = await tryRead('.vscode/mcp.json');
   if (vscodeMcp) {
     try {
-      result.copilot = !!JSON.parse(vscodeMcp)?.servers?.["hyper-canvas"];
+      result.copilot = !!JSON.parse(vscodeMcp)?.servers?.['hyper-canvas'];
     } catch {
       /* invalid json */
     }
   }
 
-  const mcpJson = await tryRead(".mcp.json");
+  const mcpJson = await tryRead('.mcp.json');
   if (mcpJson) {
     try {
-      result.claudeCode = !!JSON.parse(mcpJson)?.mcpServers?.["hyper-canvas"];
+      result.claudeCode = !!JSON.parse(mcpJson)?.mcpServers?.['hyper-canvas'];
     } catch {
       /* invalid json */
     }
   }
 
-  const codexToml = await tryRead(".codex/config.toml");
+  const codexToml = await tryRead('.codex/config.toml');
   if (codexToml) {
-    result.codex = codexToml.includes("hyper-canvas");
+    result.codex = codexToml.includes('hyper-canvas');
   }
 
-  const opencodeJson = await tryRead("opencode.json");
+  const opencodeJson = await tryRead('opencode.json');
   if (opencodeJson) {
     try {
-      result.opencode = !!JSON.parse(opencodeJson)?.mcp?.["hyper-canvas"];
+      result.opencode = !!JSON.parse(opencodeJson)?.mcp?.['hyper-canvas'];
     } catch {
       /* invalid json */
     }
@@ -2285,14 +2285,14 @@ async function detectConfiguredAgents(workspaceRoot: string): Promise<Configured
 }
 
 async function writeVsCodeMcpJson(workspaceRoot: string, url: string): Promise<void> {
-  const vscodeDir = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), ".vscode");
+  const vscodeDir = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.vscode');
   try {
     await vscode.workspace.fs.stat(vscodeDir);
   } catch {
     await vscode.workspace.fs.createDirectory(vscodeDir);
   }
 
-  const mcpJsonPath = vscode.Uri.joinPath(vscodeDir, "mcp.json");
+  const mcpJsonPath = vscode.Uri.joinPath(vscodeDir, 'mcp.json');
   let config: Record<string, unknown> = { servers: {} };
 
   try {
@@ -2303,16 +2303,16 @@ async function writeVsCodeMcpJson(workspaceRoot: string, url: string): Promise<v
     // File doesn't exist — use default
   }
 
-  (config.servers as Record<string, unknown>)["hyper-canvas"] = {
-    type: "http",
+  (config.servers as Record<string, unknown>)['hyper-canvas'] = {
+    type: 'http',
     url,
   };
 
-  await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(JSON.stringify(config, null, 2), "utf-8"));
+  await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
 }
 
 async function writeMcpJson(workspaceRoot: string, url: string): Promise<void> {
-  const mcpJsonPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), ".mcp.json");
+  const mcpJsonPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.mcp.json');
   let config: Record<string, unknown> = { mcpServers: {} };
 
   try {
@@ -2323,16 +2323,16 @@ async function writeMcpJson(workspaceRoot: string, url: string): Promise<void> {
     // File doesn't exist — use default
   }
 
-  (config.mcpServers as Record<string, unknown>)["hyper-canvas"] = {
-    type: "http",
+  (config.mcpServers as Record<string, unknown>)['hyper-canvas'] = {
+    type: 'http',
     url,
   };
 
-  await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(JSON.stringify(config, null, 2), "utf-8"));
+  await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
 }
 
 async function writeOpenCodeJson(workspaceRoot: string, url: string): Promise<void> {
-  const opencodePath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), "opencode.json");
+  const opencodePath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), 'opencode.json');
   let config: Record<string, unknown> = {};
 
   try {
@@ -2343,24 +2343,24 @@ async function writeOpenCodeJson(workspaceRoot: string, url: string): Promise<vo
   }
 
   if (!config.mcp) config.mcp = {};
-  (config.mcp as Record<string, unknown>)["hyper-canvas"] = {
-    type: "remote",
+  (config.mcp as Record<string, unknown>)['hyper-canvas'] = {
+    type: 'remote',
     url,
   };
 
-  await vscode.workspace.fs.writeFile(opencodePath, Buffer.from(JSON.stringify(config, null, 2), "utf-8"));
+  await vscode.workspace.fs.writeFile(opencodePath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
 }
 
 async function writeCodexConfig(workspaceRoot: string, url: string): Promise<void> {
-  const codexDir = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), ".codex");
+  const codexDir = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.codex');
   try {
     await vscode.workspace.fs.stat(codexDir);
   } catch {
     await vscode.workspace.fs.createDirectory(codexDir);
   }
 
-  const configPath = vscode.Uri.joinPath(codexDir, "config.toml");
-  let toml = "";
+  const configPath = vscode.Uri.joinPath(codexDir, 'config.toml');
+  let toml = '';
 
   try {
     const content = await vscode.workspace.fs.readFile(configPath);
@@ -2369,7 +2369,7 @@ async function writeCodexConfig(workspaceRoot: string, url: string): Promise<voi
     // File doesn't exist — start fresh
   }
 
-  if (toml.includes("[mcp_servers.hyper-canvas]")) {
+  if (toml.includes('[mcp_servers.hyper-canvas]')) {
     // Update existing entry
     toml = toml.replace(/url\s*=\s*"http:\/\/127\.0\.0\.1:\d+\/mcp"/, `url = "${url}"`);
   } else {
@@ -2378,23 +2378,23 @@ async function writeCodexConfig(workspaceRoot: string, url: string): Promise<voi
     toml = `${toml.trimEnd()}\n${entry}`;
   }
 
-  await vscode.workspace.fs.writeFile(configPath, Buffer.from(toml, "utf-8"));
+  await vscode.workspace.fs.writeFile(configPath, Buffer.from(toml, 'utf-8'));
 }
 
 async function installChromeForPlaywright(): Promise<void> {
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: "Installing Chrome for Playwright MCP...",
+      title: 'Installing Chrome for Playwright MCP...',
       cancellable: false,
     },
     () =>
       new Promise<void>((resolve, reject) => {
-        const npx = process.platform === "win32" ? "npx.cmd" : "npx";
-        execFile(npx, ["playwright", "install", "chrome"], { timeout: 120_000 }, (error) => {
+        const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+        execFile(npx, ['playwright', 'install', 'chrome'], { timeout: 120_000 }, (error) => {
           if (error) {
             vscode.window.showErrorMessage(
-              "Failed to install Chrome for Playwright. Run manually: npx playwright install chrome",
+              'Failed to install Chrome for Playwright. Run manually: npx playwright install chrome',
             );
             reject(error);
           } else {
@@ -2413,17 +2413,17 @@ interface CompanionConfig {
 
 async function writeCompanionServers(
   workspaceRoot: string,
-  agentIds: Array<"copilot" | "claude-code" | "codex" | "opencode">,
+  agentIds: Array<'copilot' | 'claude-code' | 'codex' | 'opencode'>,
   companions: CompanionConfig[],
 ): Promise<void> {
   for (const agentId of agentIds) {
-    if (agentId === "copilot") {
-      await mergeStdioServers(".vscode/mcp.json", "servers", workspaceRoot, companions);
-    } else if (agentId === "claude-code") {
-      await mergeStdioServers(".mcp.json", "mcpServers", workspaceRoot, companions);
-    } else if (agentId === "opencode") {
-      await mergeStdioServers("opencode.json", "mcp", workspaceRoot, companions);
-    } else if (agentId === "codex") {
+    if (agentId === 'copilot') {
+      await mergeStdioServers('.vscode/mcp.json', 'servers', workspaceRoot, companions);
+    } else if (agentId === 'claude-code') {
+      await mergeStdioServers('.mcp.json', 'mcpServers', workspaceRoot, companions);
+    } else if (agentId === 'opencode') {
+      await mergeStdioServers('opencode.json', 'mcp', workspaceRoot, companions);
+    } else if (agentId === 'codex') {
       await appendCodexCompanions(workspaceRoot, companions);
     }
   }
@@ -2453,12 +2453,12 @@ async function mergeStdioServers(
   }
   config[serversKey] = servers;
 
-  await vscode.workspace.fs.writeFile(filePath, Buffer.from(JSON.stringify(config, null, 2), "utf-8"));
+  await vscode.workspace.fs.writeFile(filePath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
 }
 
 async function appendCodexCompanions(workspaceRoot: string, companions: CompanionConfig[]): Promise<void> {
-  const configPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), ".codex", "config.toml");
-  let toml = "";
+  const configPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.codex', 'config.toml');
+  let toml = '';
 
   try {
     const content = await vscode.workspace.fs.readFile(configPath);
@@ -2469,13 +2469,13 @@ async function appendCodexCompanions(workspaceRoot: string, companions: Companio
 
   for (const c of companions) {
     if (!toml.includes(`[mcp_servers.${c.id}]`)) {
-      const argsToml = c.args.map((a) => `"${a}"`).join(", ");
+      const argsToml = c.args.map((a) => `"${a}"`).join(', ');
       const entry = `\n[mcp_servers.${c.id}]\ncommand = "${c.command}"\nargs = [${argsToml}]\n`;
       toml = `${toml.trimEnd()}\n${entry}`;
     }
   }
 
-  await vscode.workspace.fs.writeFile(configPath, Buffer.from(toml, "utf-8"));
+  await vscode.workspace.fs.writeFile(configPath, Buffer.from(toml, 'utf-8'));
 }
 
 /**
@@ -2484,8 +2484,8 @@ async function appendCodexCompanions(workspaceRoot: string, companions: Companio
  */
 function registerCopilotMcp(context: vscode.ExtensionContext, port: number): void {
   const lm = vscode.lm as Record<string, unknown> | undefined;
-  if (typeof lm?.registerMcpServerDefinitionProvider !== "function") {
-    console.log("[HyperMCP] vscode.lm.registerMcpServerDefinitionProvider not available (VS Code < 1.99)");
+  if (typeof lm?.registerMcpServerDefinitionProvider !== 'function') {
+    console.log('[HyperMCP] vscode.lm.registerMcpServerDefinitionProvider not available (VS Code < 1.99)');
     return;
   }
 
@@ -2495,7 +2495,7 @@ function registerCopilotMcp(context: vscode.ExtensionContext, port: number): voi
       | undefined;
 
     if (!McpHttpServerDefinition) {
-      console.log("[HyperMCP] vscode.McpHttpServerDefinition not available");
+      console.log('[HyperMCP] vscode.McpHttpServerDefinition not available');
       return;
     }
 
@@ -2504,11 +2504,11 @@ function registerCopilotMcp(context: vscode.ExtensionContext, port: number): voi
 
     type RegisterFn = (id: string, provider: Record<string, unknown>) => vscode.Disposable | undefined;
     const register = lm.registerMcpServerDefinitionProvider as RegisterFn;
-    const disposable = register("hypercanvas.mcpServer", {
+    const disposable = register('hypercanvas.mcpServer', {
       onDidChangeMcpServerDefinitions: didChangeEmitter.event,
       provideMcpServerDefinitions: async () => [
         new McpHttpServerDefinition(
-          "HyperCanvas",
+          'HyperCanvas',
           vscode.Uri.parse(`http://127.0.0.1:${port}/mcp`),
           undefined,
           context.extension.packageJSON.version,
@@ -2518,10 +2518,10 @@ function registerCopilotMcp(context: vscode.ExtensionContext, port: number): voi
 
     if (disposable) {
       context.subscriptions.push(disposable);
-      console.log("[HyperMCP] Registered Copilot MCP server provider");
+      console.log('[HyperMCP] Registered Copilot MCP server provider');
     }
   } catch (err) {
-    console.error("[HyperMCP] Failed to register Copilot MCP provider:", err);
+    console.error('[HyperMCP] Failed to register Copilot MCP provider:', err);
   }
 }
 

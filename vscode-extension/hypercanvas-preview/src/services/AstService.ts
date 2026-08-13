@@ -7,38 +7,38 @@
  * Uses fiber-based nodeRef resolution (via NodeMapService + findElementByPosition).
  */
 
-import * as fsSync from "node:fs";
-import * as t from "@babel/types";
-import { buildJSXElement } from "@lib/ast/element-builder";
-import type { FileIO } from "@lib/ast/file-io";
-import { ensureImport } from "@lib/ast/import-manager";
+import * as fsSync from 'node:fs';
+import * as t from '@babel/types';
+import { buildJSXElement } from '@lib/ast/element-builder';
+import type { FileIO } from '@lib/ast/file-io';
+import { ensureImport } from '@lib/ast/import-manager';
 import {
   collectJsxExternalRefs,
   collectJsxLocalBindings,
   findImportForName,
   pruneOrphanImports,
   replicateImport,
-} from "@lib/ast/jsx-deps";
-import { cloneElement, setAttribute, updateElementChildren, valueToJSXAttribute } from "@lib/ast/mutator";
+} from '@lib/ast/jsx-deps';
+import { cloneElement, setAttribute, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
 import {
   duplicateElementInAST,
   extractElementSource,
   insertElementIntoAST,
   parseTSXElements,
   wrapElementInAST,
-} from "@lib/ast/operations";
-import { createFileParser } from "@lib/ast/parser";
-import { findElementByPosition } from "@lib/ast/position-finder";
-import { findElementAtPosition, traverseJSXElements } from "@lib/ast/traverser";
-import { NodeMapService } from "@lib/element-tracing/node-map-service";
-import { executeStyleWriteRequest } from "@lib/style-write/style-write-executor";
-import type { FindElementResult } from "@lib/types";
-import type { NodeMapEntry, NodeRef } from "@shared/element-tracing/types";
-import { resolveWorkspacePath } from "./workspace-path";
+} from '@lib/ast/operations';
+import { createFileParser } from '@lib/ast/parser';
+import { findElementByPosition } from '@lib/ast/position-finder';
+import { findElementAtPosition, traverseJSXElements } from '@lib/ast/traverser';
+import { NodeMapService } from '@lib/element-tracing/node-map-service';
+import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor';
+import type { FindElementResult } from '@lib/types';
+import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
+import { resolveWorkspacePath } from './workspace-path';
 
 // File sink only when explicitly requested or in CI — never in normal production use
 const DEBUG_LOG: string | null =
-  process.env.HYPERIDE_AST_DEBUG_LOG ?? (process.env.CI === "true" ? "/artifacts/ast-debug.log" : null);
+  process.env.HYPERIDE_AST_DEBUG_LOG ?? (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : null);
 function dbg(msg: string) {
   if (!DEBUG_LOG) return;
   console.log(msg);
@@ -58,7 +58,7 @@ function replaceStringLiteralValue(node: t.Node, previousValue: string, nextValu
       return;
     }
     if (t.isTemplateLiteral(current) && current.expressions.length === 0) {
-      const raw = current.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join("");
+      const raw = current.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join('');
       if (raw === previousValue) {
         current.quasis = [t.templateElement({ raw: nextValue, cooked: nextValue }, true)];
         changed = true;
@@ -70,9 +70,9 @@ function replaceStringLiteralValue(node: t.Node, previousValue: string, nextValu
       if (!value) continue;
       if (Array.isArray(value)) {
         for (const item of value) {
-          if (item && typeof item === "object" && "type" in item) visit(item as t.Node);
+          if (item && typeof item === 'object' && 'type' in item) visit(item as t.Node);
         }
-      } else if (typeof value === "object" && "type" in value) {
+      } else if (typeof value === 'object' && 'type' in value) {
         visit(value as t.Node);
       }
     }
@@ -257,14 +257,14 @@ function findJsxInExpression(expr: t.Expression | t.JSXEmptyExpression, needle: 
  *     child of a fragment).
  */
 function liftToCommonJsxParent(
-  sourcePath: import("@babel/traverse").NodePath<t.JSXElement>,
-  targetPath: import("@babel/traverse").NodePath<t.JSXElement>,
+  sourcePath: import('@babel/traverse').NodePath<t.JSXElement>,
+  targetPath: import('@babel/traverse').NodePath<t.JSXElement>,
 ): {
   sourceLifted: t.JSXElement;
   targetLifted: t.JSXElement;
   commonParent: t.JSXElement | t.JSXFragment;
 } | null {
-  type AnyPath = import("@babel/traverse").NodePath;
+  type AnyPath = import('@babel/traverse').NodePath;
   const buildChain = (start: AnyPath): t.Node[] => {
     const chain: t.Node[] = [];
     let p: AnyPath | null = start;
@@ -334,11 +334,11 @@ function describeJsxName(el: t.JSXElement): string {
   const name = el.openingElement.name;
   if (t.isJSXIdentifier(name)) return name.name;
   if (t.isJSXMemberExpression(name)) {
-    const obj = t.isJSXIdentifier(name.object) ? name.object.name : "?";
+    const obj = t.isJSXIdentifier(name.object) ? name.object.name : '?';
     return `${obj}.${name.property.name}`;
   }
   if (t.isJSXNamespacedName(name)) return `${name.namespace.name}:${name.name.name}`;
-  return "?";
+  return '?';
 }
 
 // ============================================
@@ -360,8 +360,8 @@ export class AstService {
     const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
     if (!m) return nodeRef;
     const [, filePath, line, col] = m;
-    if (filePath.startsWith("/")) return nodeRef;
-    const path = require("node:path");
+    if (filePath.startsWith('/')) return nodeRef;
+    const path = require('node:path');
     return `${path.join(this._workspaceRoot, filePath)}:${line}:${col}`;
   }
 
@@ -396,7 +396,7 @@ export class AstService {
     // inspector.setOpacity / deleteSelected would fail because the scan
     // hadn't finished yet.
     this._initPromise = this._populateNodeMaps().catch((err) => {
-      console.error("[AstService] Initial NodeMapService population failed:", err);
+      console.error('[AstService] Initial NodeMapService population failed:', err);
       // Store the error so ensureInitialized() callers know the node map
       // is empty and why, rather than silently proceeding with an empty map.
       this._initError = err;
@@ -423,13 +423,13 @@ export class AstService {
     if (this._initialized) return;
     if (!this._fileIO.listFiles) return; // FileIO doesn't support directory listing
 
-    const SOURCE_DIRS = ["src", "app", "pages", "components", "client"];
+    const SOURCE_DIRS = ['src', 'app', 'pages', 'components', 'client'];
     const allFiles: string[] = [];
 
     for (const dir of SOURCE_DIRS) {
       const fullDir = `${this._workspaceRoot}/${dir}`;
       try {
-        const files = await this._fileIO.listFiles(fullDir, [".tsx", ".jsx"]);
+        const files = await this._fileIO.listFiles(fullDir, ['.tsx', '.jsx']);
         allFiles.push(...files);
       } catch {
         // Directory doesn't exist
@@ -439,12 +439,12 @@ export class AstService {
     // Also scan root-level .tsx/.jsx files (e.g. tamagui projects with App.tsx at root).
     // listFiles is recursive, so filter to only files directly in the workspace root.
     try {
-      const rootFiles = await this._fileIO.listFiles(this._workspaceRoot, [".tsx", ".jsx"]);
-      const rootPrefix = this._workspaceRoot.endsWith("/") ? this._workspaceRoot : `${this._workspaceRoot}/`;
+      const rootFiles = await this._fileIO.listFiles(this._workspaceRoot, ['.tsx', '.jsx']);
+      const rootPrefix = this._workspaceRoot.endsWith('/') ? this._workspaceRoot : `${this._workspaceRoot}/`;
       for (const f of rootFiles) {
         // Only root-level: no additional '/' after workspace root prefix
         const relative = f.slice(rootPrefix.length);
-        if (!relative.includes("/") && !allFiles.includes(f)) {
+        if (!relative.includes('/') && !allFiles.includes(f)) {
           allFiles.push(f);
         }
       }
@@ -508,22 +508,22 @@ export class AstService {
   /** Stable identity string for a JSX element based on tag name and sorted attribute list. */
   private _getElementFingerprint(element: t.JSXElement): string {
     const opening = element.openingElement;
-    const tagName = t.isJSXIdentifier(opening.name) ? opening.name.name : "unknown";
+    const tagName = t.isJSXIdentifier(opening.name) ? opening.name.name : 'unknown';
     const attrs = opening.attributes
       .filter((a): a is t.JSXAttribute => t.isJSXAttribute(a))
       .map((a) => {
-        const name = t.isJSXIdentifier(a.name) ? a.name.name : "?";
+        const name = t.isJSXIdentifier(a.name) ? a.name.name : '?';
         const val = !a.value
-          ? "true"
+          ? 'true'
           : t.isStringLiteral(a.value)
             ? a.value.value
             : t.isJSXExpressionContainer(a.value)
-              ? "expr"
-              : "?";
+              ? 'expr'
+              : '?';
         return `${name}=${val}`;
       })
       .sort()
-      .join(",");
+      .join(',');
     return `${tagName}[${attrs}]`;
   }
 
@@ -655,7 +655,7 @@ export class AstService {
       }
       const { result, ast, resolvedPath } = resolved;
       dbg(
-        `[AstService.updateStyles] resolved element=${(result.element.openingElement?.name as { name?: string })?.name ?? "?"} resolvedPath=${resolvedPath}`,
+        `[AstService.updateStyles] resolved element=${(result.element.openingElement?.name as { name?: string })?.name ?? '?'} resolvedPath=${resolvedPath}`,
       );
 
       // Read content BEFORE the write so _withUndoTracking can compare before/after for cross-file writes.
@@ -675,9 +675,9 @@ export class AstService {
         state,
         selectedSourceTabId,
         runtimeThemeContext: {
-          ideThemePreference: "system",
-          resolvedColorScheme: "light",
-          source: "vscode",
+          ideThemePreference: 'system',
+          resolvedColorScheme: 'light',
+          source: 'vscode',
         },
         fileIO: this._fileIO,
         projectRoot: this._workspaceRoot,
@@ -691,8 +691,8 @@ export class AstService {
       }
       return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
-      console.error("[AstService.updateStyles] Error:", error);
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error('[AstService.updateStyles] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -721,7 +721,7 @@ export class AstService {
       }
       const { result, ast, resolvedPath } = resolved;
       dbg(
-        `[AstService.updateProps] resolved element=${result.element.openingElement?.name && "name" in result.element.openingElement.name ? result.element.openingElement.name.name : "?"} resolvedPath=${resolvedPath}`,
+        `[AstService.updateProps] resolved element=${result.element.openingElement?.name && 'name' in result.element.openingElement.name ? result.element.openingElement.name.name : '?'} resolvedPath=${resolvedPath}`,
       );
 
       let contentBeforeWrite: string | undefined;
@@ -739,8 +739,8 @@ export class AstService {
       await this._updateNodeMap(resolvedPath);
       return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
-      console.error("[AstService.updateProps] Error:", error);
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error('[AstService.updateProps] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -784,8 +784,8 @@ export class AstService {
       await this._updateNodeMap(resolvedPath);
       return { success: true, resolvedPath, contentBeforeWrite, newLocation };
     } catch (error) {
-      console.error("[AstService.updateText] Error:", error);
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error('[AstService.updateText] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -830,7 +830,7 @@ export class AstService {
         // prior read via ?? fallback). Fall back: replace first StringLiteral in first
         // JSXExpressionContainer with nextKey so the write succeeds regardless.
         dbg(
-          `[updateI18nKey] fallback: element type=${result.element.type} children=${result.element.children.length} childTypes=${result.element.children.map((c) => c.type).join(",")}`,
+          `[updateI18nKey] fallback: element type=${result.element.type} children=${result.element.children.length} childTypes=${result.element.children.map((c) => c.type).join(',')}`,
         );
         for (const child of result.element.children) {
           if (!t.isJSXExpressionContainer(child)) continue;
@@ -871,7 +871,7 @@ export class AstService {
           dbg(`[updateI18nKey] file-wide JSX fallback: replaced t('${previousKey}') → t('${nextKey}')`);
         }
       }
-      if (!changed) return { success: false, error: "i18n key literal not found in selected element" };
+      if (!changed) return { success: false, error: 'i18n key literal not found in selected element' };
 
       await this._fileParser.writeAST(ast, resolvedPath);
       await this._updateNodeMap(resolvedPath);
@@ -900,7 +900,7 @@ export class AstService {
             // Compute fingerprint of element at new position for stale-cache detection.
             // When the file is restored externally (HMR, test reset), the forwarded position
             // will point to a different element — fingerprint mismatch drops the stale entry.
-            let newFingerprint = "";
+            let newFingerprint = '';
             traverseJSXElements(newAst, (elem) => {
               if (elem.loc && elem.loc.start.line === pos.line && elem.loc.start.column === pos.column) {
                 newFingerprint = getFingerprint(elem);
@@ -916,8 +916,8 @@ export class AstService {
 
       return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
-      console.error("[AstService.updateI18nKey] Error:", error);
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error('[AstService.updateI18nKey] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -969,7 +969,7 @@ export class AstService {
       if (!inserted) {
         return {
           success: false,
-          error: parentId ? `Parent element not found in ${filePath}` : "Could not find return statement with JSX",
+          error: parentId ? `Parent element not found in ${filePath}` : 'Could not find return statement with JSX',
         };
       }
 
@@ -977,8 +977,8 @@ export class AstService {
       await this._updateNodeMap(absolutePath);
       return { success: true, index: actualIndex };
     } catch (error) {
-      console.error("[AstService.insertElement] Error:", error);
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error('[AstService.insertElement] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -1027,7 +1027,7 @@ export class AstService {
       }
 
       if (deletedCount === 0) {
-        return { success: false, error: "No elements found with provided IDs" };
+        return { success: false, error: 'No elements found with provided IDs' };
       }
 
       const allCrossFileSnapshots =
@@ -1040,8 +1040,8 @@ export class AstService {
         allCrossFileSnapshots,
       };
     } catch (error) {
-      console.error("[AstService.deleteElements] Error:", error);
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error('[AstService.deleteElements] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -1068,8 +1068,8 @@ export class AstService {
       await this._updateNodeMap(actualPath);
       return { success: true };
     } catch (error) {
-      console.error("[AstService.duplicateElement] Error:", error);
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error('[AstService.duplicateElement] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -1093,7 +1093,7 @@ export class AstService {
     filePath: string,
     sourceId: NodeRef | string,
     targetId: NodeRef | string,
-    position: "before" | "after",
+    position: 'before' | 'after',
   ): Promise<MoveResult> {
     await this.ensureInitialized();
 
@@ -1128,12 +1128,12 @@ export class AstService {
     // the resolvedPath here — the AST returned is parsed-once-per-call,
     // so we re-parse below to ensure both endpoints share one AST object.
     const sourceLocate = await this._resolveElementInCorrectFile(absolutePath, sourceId as NodeRef);
-    dbg(`[moveElement] source locate result=${sourceLocate ? `path=${sourceLocate.resolvedPath}` : "NULL"}`);
+    dbg(`[moveElement] source locate result=${sourceLocate ? `path=${sourceLocate.resolvedPath}` : 'NULL'}`);
     if (!sourceLocate) {
       throw new Error(`moveElement: source element not found (nodeRef=${sourceId})`);
     }
     const targetLocate = await this._resolveElementInCorrectFile(absolutePath, targetId as NodeRef);
-    dbg(`[moveElement] target locate result=${targetLocate ? `path=${targetLocate.resolvedPath}` : "NULL"}`);
+    dbg(`[moveElement] target locate result=${targetLocate ? `path=${targetLocate.resolvedPath}` : 'NULL'}`);
     if (!targetLocate) {
       throw new Error(`moveElement: target element not found (nodeRef=${targetId})`);
     }
@@ -1164,14 +1164,14 @@ export class AstService {
     const { ast } = await this._fileParser.readAndParseFile(targetFilePath);
     const sourceResult = this._resolveElement(ast, sourceId as NodeRef, targetFilePath);
     dbg(
-      `[moveElement] same-file re-parse sourceResult=${sourceResult ? `name=${describeJsxName(sourceResult.element)}` : "NULL"}`,
+      `[moveElement] same-file re-parse sourceResult=${sourceResult ? `name=${describeJsxName(sourceResult.element)}` : 'NULL'}`,
     );
     if (!sourceResult) {
       throw new Error(`moveElement: source disappeared after re-parse (nodeRef=${sourceId})`);
     }
     const targetResult = this._resolveElement(ast, targetId as NodeRef, targetFilePath);
     dbg(
-      `[moveElement] same-file re-parse targetResult=${targetResult ? `name=${describeJsxName(targetResult.element)}` : "NULL"}`,
+      `[moveElement] same-file re-parse targetResult=${targetResult ? `name=${describeJsxName(targetResult.element)}` : 'NULL'}`,
     );
     if (!targetResult) {
       throw new Error(`moveElement: target disappeared after re-parse (nodeRef=${targetId})`);
@@ -1191,14 +1191,14 @@ export class AstService {
     // best-effort because the user-visible drop indicator should never
     // permit this geometry; if it does, that's a separate bug.
     if (jsxContains(sourceNode, targetNode)) {
-      throw new Error("moveElement: cannot move a node into one of its descendants");
+      throw new Error('moveElement: cannot move a node into one of its descendants');
     }
 
     const sourceParent = sourceResult.path.parent;
     const targetParent = targetResult.path.parent;
 
     dbg(
-      `[moveElement] parents sourceParent=${sourceParent?.type ?? "undefined"} targetParent=${targetParent?.type ?? "undefined"} sameParent=${sourceParent === targetParent}`,
+      `[moveElement] parents sourceParent=${sourceParent?.type ?? 'undefined'} targetParent=${targetParent?.type ?? 'undefined'} sameParent=${sourceParent === targetParent}`,
     );
 
     if (!t.isJSXElement(sourceParent) && !t.isJSXFragment(sourceParent)) {
@@ -1235,7 +1235,7 @@ export class AstService {
         `[moveElement] liftToCommonJsxParent → ${
           lifted
             ? `sourceLifted=${describeJsxName(lifted.sourceLifted)} targetLifted=${describeJsxName(lifted.targetLifted)} commonParent=${lifted.commonParent.type}`
-            : "NULL"
+            : 'NULL'
         }`,
       );
       if (lifted) {
@@ -1273,15 +1273,15 @@ export class AstService {
     const movingSiblings = movingParent.children;
     const srcIdx = movingSiblings.indexOf(movingNode);
     if (srcIdx === -1) {
-      throw new Error("moveElement: source not found in its parent children");
+      throw new Error('moveElement: source not found in its parent children');
     }
     movingSiblings.splice(srcIdx, 1);
     const pivotSiblings = pivotParent.children;
     const newTgtIdx = pivotSiblings.indexOf(pivotNode);
     if (newTgtIdx === -1) {
-      throw new Error("moveElement: target not found in its parent children after source cut");
+      throw new Error('moveElement: target not found in its parent children after source cut');
     }
-    pivotSiblings.splice(position === "before" ? newTgtIdx : newTgtIdx + 1, 0, movingNode);
+    pivotSiblings.splice(position === 'before' ? newTgtIdx : newTgtIdx + 1, 0, movingNode);
 
     dbg(`[moveElement] mutation done, writing AST to ${targetFilePath}`);
     await this._fileParser.writeAST(ast, targetFilePath);
@@ -1294,9 +1294,9 @@ export class AstService {
     const changed =
       contentBeforeWrite !== undefined && contentAfterWrite !== undefined
         ? contentBeforeWrite !== contentAfterWrite
-        : "unknown";
+        : 'unknown';
     dbg(
-      `[moveElement] write done filePath=${targetFilePath} changed=${changed} bytesBefore=${contentBeforeWrite?.length ?? "?"} bytesAfter=${contentAfterWrite?.length ?? "?"}`,
+      `[moveElement] write done filePath=${targetFilePath} changed=${changed} bytesBefore=${contentBeforeWrite?.length ?? '?'} bytesAfter=${contentAfterWrite?.length ?? '?'}`,
     );
 
     return {
@@ -1323,7 +1323,7 @@ export class AstService {
     targetFilePath: string;
     sourceId: NodeRef;
     targetId: NodeRef;
-    position: "before" | "after";
+    position: 'before' | 'after';
   }): Promise<MoveResult> {
     const { sourceFilePath, targetFilePath, sourceId, targetId, position } = opts;
 
@@ -1343,12 +1343,12 @@ export class AstService {
     const { ast: targetAst } = await this._fileParser.readAndParseFile(targetFilePath);
 
     const sourceResult = this._resolveElement(sourceAst, sourceId, sourceFilePath);
-    dbg(`[moveElement.cross] sourceResult=${sourceResult ? `name=${describeJsxName(sourceResult.element)}` : "NULL"}`);
+    dbg(`[moveElement.cross] sourceResult=${sourceResult ? `name=${describeJsxName(sourceResult.element)}` : 'NULL'}`);
     if (!sourceResult) {
       throw new Error(`moveElement: source disappeared in ${sourceFilePath} (nodeRef=${sourceId})`);
     }
     const targetResult = this._resolveElement(targetAst, targetId, targetFilePath);
-    dbg(`[moveElement.cross] targetResult=${targetResult ? `name=${describeJsxName(targetResult.element)}` : "NULL"}`);
+    dbg(`[moveElement.cross] targetResult=${targetResult ? `name=${describeJsxName(targetResult.element)}` : 'NULL'}`);
     if (!targetResult) {
       throw new Error(`moveElement: target disappeared in ${targetFilePath} (nodeRef=${targetId})`);
     }
@@ -1360,7 +1360,7 @@ export class AstService {
     const targetParent = targetResult.path.parent;
 
     dbg(
-      `[moveElement.cross] parents sourceParent=${sourceParent?.type ?? "undefined"} targetParent=${targetParent?.type ?? "undefined"}`,
+      `[moveElement.cross] parents sourceParent=${sourceParent?.type ?? 'undefined'} targetParent=${targetParent?.type ?? 'undefined'}`,
     );
 
     if (!t.isJSXElement(sourceParent) && !t.isJSXFragment(sourceParent)) {
@@ -1394,7 +1394,7 @@ export class AstService {
     const sourceSiblings = sourceParent.children;
     const srcIdx = sourceSiblings.indexOf(sourceNode);
     if (srcIdx === -1) {
-      throw new Error("moveElement: source not found in its parent children");
+      throw new Error('moveElement: source not found in its parent children');
     }
     sourceSiblings.splice(srcIdx, 1);
 
@@ -1415,28 +1415,28 @@ export class AstService {
     // are JS globals / built-ins that the over-collector picks up from
     // expression slots.)
     const ALWAYS_AVAILABLE = new Set([
-      "React",
-      "undefined",
-      "null",
-      "true",
-      "false",
-      "NaN",
-      "Infinity",
-      "console",
-      "window",
-      "document",
-      "globalThis",
-      "Math",
-      "Date",
-      "JSON",
-      "Number",
-      "String",
-      "Boolean",
-      "Array",
-      "Object",
-      "Promise",
-      "Symbol",
-      "Error",
+      'React',
+      'undefined',
+      'null',
+      'true',
+      'false',
+      'NaN',
+      'Infinity',
+      'console',
+      'window',
+      'document',
+      'globalThis',
+      'Math',
+      'Date',
+      'JSON',
+      'Number',
+      'String',
+      'Boolean',
+      'Array',
+      'Object',
+      'Promise',
+      'Symbol',
+      'Error',
     ]);
     for (const name of refs) {
       const found = findImportForName(sourceAst, name);
@@ -1456,10 +1456,10 @@ export class AstService {
       }
       const result = replicateImport(targetAst, found, sourceFilePath, targetFilePath);
       switch (result.kind) {
-        case "added":
+        case 'added':
           adjustments.push(`added import: ${name} from '${result.sourceValue}'`);
           break;
-        case "collision":
+        case 'collision':
           // Target already imports `name` from a different module. The moved
           // subtree will bind to the existing (wrong) symbol — surface so the
           // user can fix manually rather than producing silent runtime breakage.
@@ -1467,14 +1467,14 @@ export class AstService {
             `import collision: '${name}' already imported from '${result.existingSourceValue}' in target, expected '${result.expectedSourceValue}' — fix manually`,
           );
           break;
-        case "already-present":
+        case 'already-present':
           // Same local name, same module — nothing to do.
           break;
       }
     }
     if (unresolvedLocalRefs.length > 0) {
       adjustments.push(
-        `unresolved references in moved subtree: ${unresolvedLocalRefs.join(", ")} — bound in source-component scope, not auto-replicated`,
+        `unresolved references in moved subtree: ${unresolvedLocalRefs.join(', ')} — bound in source-component scope, not auto-replicated`,
       );
     }
 
@@ -1482,9 +1482,9 @@ export class AstService {
     const targetSiblings = targetParent.children;
     const tgtIdx = targetSiblings.indexOf(targetNode);
     if (tgtIdx === -1) {
-      throw new Error("moveElement: target not found in its parent children");
+      throw new Error('moveElement: target not found in its parent children');
     }
-    targetSiblings.splice(position === "before" ? tgtIdx : tgtIdx + 1, 0, movedNode);
+    targetSiblings.splice(position === 'before' ? tgtIdx : tgtIdx + 1, 0, movedNode);
 
     // 6. Prune source imports orphaned by the cut.
     const orphaned = pruneOrphanImports(sourceAst);
@@ -1513,9 +1513,9 @@ export class AstService {
       sourceAfter = await this._fileIO.readFile(sourceFilePath);
     } catch {}
     const tgtChanged =
-      targetContentBefore !== undefined && targetAfter !== undefined ? targetContentBefore !== targetAfter : "unknown";
+      targetContentBefore !== undefined && targetAfter !== undefined ? targetContentBefore !== targetAfter : 'unknown';
     const srcChanged =
-      sourceContentBefore !== undefined && sourceAfter !== undefined ? sourceContentBefore !== sourceAfter : "unknown";
+      sourceContentBefore !== undefined && sourceAfter !== undefined ? sourceContentBefore !== sourceAfter : 'unknown';
     dbg(
       `[moveElement.cross] write done targetChanged=${tgtChanged} sourceChanged=${srcChanged} adjustments=${adjustments.length}`,
     );
@@ -1626,15 +1626,15 @@ export class AstService {
       const { wrapped } = wrapElementInAST(result, wrapperType, wrapperProps);
 
       if (!wrapped) {
-        return { success: false, error: "Could not wrap element" };
+        return { success: false, error: 'Could not wrap element' };
       }
 
       await this._fileParser.writeAST(ast, resolvedPath);
       await this._updateNodeMap(resolvedPath);
       return { success: true };
     } catch (error) {
-      console.error("[AstService.wrapElement] Error:", error);
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error('[AstService.wrapElement] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -1655,7 +1655,7 @@ export class AstService {
 
       // Get tag name from the found element
       const nameNode = result.element.openingElement.name;
-      const tagName = t.isJSXIdentifier(nameNode) ? nameNode.name : "unknown";
+      const tagName = t.isJSXIdentifier(nameNode) ? nameNode.name : 'unknown';
 
       // Try to find nodeRef via NodeMapService for the same position
       const sourceLocation = { fileName: absolutePath, line, column: column - 1 };
@@ -1666,7 +1666,7 @@ export class AstService {
         ...(entry ? { nodeRef: entry.nodeRef } : {}),
       };
     } catch (error) {
-      console.warn("[AstService.findElementAtPosition] parse failed (expected for broken/partial files):", error);
+      console.warn('[AstService.findElementAtPosition] parse failed (expected for broken/partial files):', error);
       return null;
     }
   }
@@ -1691,7 +1691,7 @@ export class AstService {
 
       return null;
     } catch (error) {
-      console.error("[AstService.getElementLocation] Error:", error);
+      console.error('[AstService.getElementLocation] Error:', error);
       return null;
     }
   }
@@ -1709,7 +1709,7 @@ export class AstService {
 
       return extractElementSource(sourceCode, result.element);
     } catch (error) {
-      console.error("[AstService.getElementCode] Error:", error);
+      console.error('[AstService.getElementCode] Error:', error);
       return null;
     }
   }
@@ -1725,7 +1725,7 @@ export class AstService {
       }
       return null;
     } catch (error) {
-      console.error("[AstService.getParentElementId] Error:", error);
+      console.error('[AstService.getParentElementId] Error:', error);
       return null;
     }
   }
@@ -1741,7 +1741,7 @@ export class AstService {
       }
       return [];
     } catch (error) {
-      console.error("[AstService.getChildElementIds] Error:", error);
+      console.error('[AstService.getChildElementIds] Error:', error);
       return [];
     }
   }
@@ -1750,7 +1750,7 @@ export class AstService {
   async getSiblingElementId(
     _filePath: string,
     _elementId: string,
-    direction: "next" | "prev",
+    direction: 'next' | 'prev',
     nodeRef?: NodeRef,
   ): Promise<string | null> {
     try {
@@ -1774,7 +1774,7 @@ export class AstService {
             }
             if (currentIndex !== -1) {
               let targetIndex: number;
-              if (direction === "prev") {
+              if (direction === 'prev') {
                 targetIndex = currentIndex === 0 ? siblings.length - 1 : currentIndex - 1;
               } else {
                 targetIndex = currentIndex === siblings.length - 1 ? 0 : currentIndex + 1;
@@ -1786,7 +1786,7 @@ export class AstService {
       }
       return null;
     } catch (error) {
-      console.error("[AstService.getSiblingElementId] Error:", error);
+      console.error('[AstService.getSiblingElementId] Error:', error);
       return null;
     }
   }
@@ -1808,7 +1808,7 @@ export class AstService {
       const { elements: newElements } = parseTSXElements(tsxCode);
 
       if (newElements.length === 0) {
-        return { success: false, error: "No valid JSX elements in clipboard" };
+        return { success: false, error: 'No valid JSX elements in clipboard' };
       }
 
       let inserted = false;
@@ -1842,15 +1842,15 @@ export class AstService {
       }
 
       if (!inserted) {
-        return { success: false, error: "Could not find insertion point" };
+        return { success: false, error: 'Could not find insertion point' };
       }
 
       await this._fileParser.writeAST(ast, absolutePath);
       await this._updateNodeMap(absolutePath);
       return { success: true };
     } catch (error) {
-      console.error("[AstService.pasteElement] Error:", error);
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error('[AstService.pasteElement] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 }

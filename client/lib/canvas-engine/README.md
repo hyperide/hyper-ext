@@ -24,12 +24,12 @@ A clean, OOP-based canvas builder library for React. Provides data management, u
 ### 1. Create Engine
 
 ```typescript
-import { CanvasEngine } from "@/lib/canvas-engine";
+import { CanvasEngine } from '@/lib/canvas-engine';
 
 const engine = new CanvasEngine({
   onStateChange: (snapshot) => {
     // Sync to external storage
-    localStorage.setItem("canvas-state", JSON.stringify(snapshot));
+    localStorage.setItem('canvas-state', JSON.stringify(snapshot));
   },
   maxHistoryLength: 100,
   debug: true,
@@ -81,14 +81,14 @@ engine.registerComponent({
 ```typescript
 // Insert instance
 const buttonId = engine.insert({
-  type: "Button",
-  props: { text: "Hello World" },
+  type: 'Button',
+  props: { text: 'Hello World' },
 });
 
 // Update props
 engine.update(buttonId, {
-  text: "Updated Text",
-  size: "lg",
+  text: 'Updated Text',
+  size: 'lg',
 });
 
 // Move instance
@@ -162,24 +162,24 @@ if (engine.hasClipboard()) {
 
 ```typescript
 // Subscribe to events
-engine.events.on("instance:insert", (event) => {
-  console.log("Instance inserted:", event.instance);
+engine.events.on('instance:insert', (event) => {
+  console.log('Instance inserted:', event.instance);
 });
 
-engine.events.on("instance:update", (event) => {
-  console.log("Instance updated:", event.id, event.props);
+engine.events.on('instance:update', (event) => {
+  console.log('Instance updated:', event.id, event.props);
 });
 
-engine.events.on("selection:change", (event) => {
-  console.log("Selection changed:", event.selectedIds);
+engine.events.on('selection:change', (event) => {
+  console.log('Selection changed:', event.selectedIds);
 });
 
-engine.events.on("history:change", (event) => {
-  console.log("History state:", event.state);
+engine.events.on('history:change', (event) => {
+  console.log('History state:', event.state);
 });
 
 // Unsubscribe
-const unsubscribe = engine.events.on("instance:insert", listener);
+const unsubscribe = engine.events.on('instance:insert', listener);
 unsubscribe(); // Remove listener
 ```
 
@@ -213,10 +213,10 @@ const all = engine.getAllInstances();
 ```typescript
 // Serialize to JSON
 const json = engine.serialize();
-localStorage.setItem("canvas", json);
+localStorage.setItem('canvas', json);
 
 // Deserialize from JSON
-const json = localStorage.getItem("canvas");
+const json = localStorage.getItem('canvas');
 if (json) {
   engine.deserialize(json);
 }
@@ -225,11 +225,11 @@ if (json) {
 const snapshot = engine.getSnapshot();
 
 // Export to file (browser)
-import { exportToFile } from "@/lib/canvas-engine";
-exportToFile(engine.getSnapshot(), "my-canvas.json");
+import { exportToFile } from '@/lib/canvas-engine';
+exportToFile(engine.getSnapshot(), 'my-canvas.json');
 
 // Import from file (browser)
-import { importFromFile } from "@/lib/canvas-engine";
+import { importFromFile } from '@/lib/canvas-engine';
 const tree = await importFromFile(file);
 engine.deserialize(JSON.stringify({ version: 1, tree, timestamp: Date.now() }));
 ```

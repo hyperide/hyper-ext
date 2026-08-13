@@ -5,20 +5,20 @@
  * Detects project type and runs appropriate dev command.
  */
 
-import { type ChildProcess, spawn } from "node:child_process";
-import * as net from "node:net";
-import * as vscode from "vscode";
-import { ERROR_PATTERNS, SUCCESS_PATTERNS } from "../../../../shared/fix-session";
-import type { RuntimeError } from "../../../../shared/runtime-error";
-import type { DevServerState, DevServerStatus } from "../types";
-import { PreviewProxy } from "./PreviewProxy";
-import { detectPackageManager, getPackageScripts, getProjectInfo } from "./ProjectDetector";
+import { type ChildProcess, spawn } from 'node:child_process';
+import * as net from 'node:net';
+import * as vscode from 'vscode';
+import { ERROR_PATTERNS, SUCCESS_PATTERNS } from '../../../../shared/fix-session';
+import type { RuntimeError } from '../../../../shared/runtime-error';
+import type { DevServerState, DevServerStatus } from '../types';
+import { PreviewProxy } from './PreviewProxy';
+import { detectPackageManager, getPackageScripts, getProjectInfo } from './ProjectDetector';
 
 const MAX_LOG_ENTRIES = 200;
 // Strips all ANSI/VT escape sequences: CSI (ESC[...final), OSC (ESC]...BEL/ST), and bare ESC+char.
 // CSI pattern covers color codes AND terminal mode sequences like \x1b[?2004h that Bun emits.
 const ANSI_ESCAPE_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[A-Z\\[\]^_@]/g;
-type PackageManager = "npm" | "yarn" | "pnpm" | "bun";
+type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
 
 export interface LogEntry {
   line: string;
@@ -27,41 +27,41 @@ export interface LogEntry {
 }
 
 export function appendScriptCliArgs(command: { args: string[] }, packageManager: PackageManager, args: string[]): void {
-  if (packageManager === "npm") {
-    command.args.push("--", ...args);
+  if (packageManager === 'npm') {
+    command.args.push('--', ...args);
     return;
   }
   command.args.push(...args);
 }
 
 export function shouldRepairDependencies(errorMessage: string, logs: LogEntry[]): boolean {
-  const text = `${errorMessage}\n${logs.map((entry) => entry.line).join("\n")}`.toLowerCase();
+  const text = `${errorMessage}\n${logs.map((entry) => entry.line).join('\n')}`.toLowerCase();
   return (
-    text.includes("cannot find native binding") ||
-    text.includes("optional dependencies") ||
-    text.includes("@rolldown/binding") ||
-    text.includes("@rollup/rollup-") ||
-    (text.includes("node_modules") && text.includes("module_not_found") && text.includes("binding"))
+    text.includes('cannot find native binding') ||
+    text.includes('optional dependencies') ||
+    text.includes('@rolldown/binding') ||
+    text.includes('@rollup/rollup-') ||
+    (text.includes('node_modules') && text.includes('module_not_found') && text.includes('binding'))
   );
 }
 
 export function buildInstallCommand(packageManager: PackageManager): { cmd: string; args: string[] } {
   switch (packageManager) {
-    case "bun":
-      return { cmd: "bun", args: ["install"] };
-    case "pnpm":
-      return { cmd: "pnpm", args: ["install", "--force"] };
-    case "yarn":
-      return { cmd: "yarn", args: ["install"] };
+    case 'bun':
+      return { cmd: 'bun', args: ['install'] };
+    case 'pnpm':
+      return { cmd: 'pnpm', args: ['install', '--force'] };
+    case 'yarn':
+      return { cmd: 'yarn', args: ['install'] };
     default:
-      return { cmd: "npm", args: ["install"] };
+      return { cmd: 'npm', args: ['install'] };
   }
 }
 
 export class DevServerManager {
   private _process: ChildProcess | null = null;
   private _port: number | null = null;
-  private _status: DevServerStatus = "stopped";
+  private _status: DevServerStatus = 'stopped';
   private _error: string | undefined;
   private _projectPath: string;
   private _outputChannel: vscode.OutputChannel;
@@ -96,7 +96,7 @@ export class DevServerManager {
 
   constructor(projectPath: string) {
     this._projectPath = projectPath;
-    this._outputChannel = vscode.window.createOutputChannel("HyperIDE Dev Server");
+    this._outputChannel = vscode.window.createOutputChannel('HyperIDE Dev Server');
   }
 
   /**
@@ -185,15 +185,15 @@ export class DevServerManager {
   async start(dependencyRepairAttempted = false): Promise<DevServerState> {
     await this._syncProjectPathWithWorkspace();
 
-    if (this._status === "running") {
+    if (this._status === 'running') {
       return this.getState();
     }
 
-    if (this._status === "starting") {
+    if (this._status === 'starting') {
       return this.getState();
     }
 
-    this._updateStatus("starting");
+    this._updateStatus('starting');
 
     // Reset logs and port detection on new start
     this._logs = [];
@@ -211,15 +211,15 @@ export class DevServerManager {
       let devScript = projectInfo.devCommand;
       if (!scripts[devScript]) {
         // Fallback to available scripts
-        if (scripts.dev) devScript = "dev";
-        else if (scripts.start) devScript = "start";
+        if (scripts.dev) devScript = 'dev';
+        else if (scripts.start) devScript = 'start';
         else {
-          throw new Error("No dev or start script found in package.json");
+          throw new Error('No dev or start script found in package.json');
         }
       }
 
       // Find free port — prefer VS Code setting, fall back to project default
-      const configuredPort = vscode.workspace.getConfiguration("hypercanvas.preview").get<number>("defaultPort");
+      const configuredPort = vscode.workspace.getConfiguration('hypercanvas.preview').get<number>('defaultPort');
       const startPort = configuredPort ?? projectInfo.defaultPort;
       this._port = await this._findFreePort(startPort);
 
@@ -245,12 +245,12 @@ export class DevServerManager {
 
       // Pass --port via CLI for frameworks that support it.
       // Env vars PORT/VITE_PORT alone are not reliable (Vite ignores them).
-      if (projectInfo.type === "vite" || projectInfo.type === "remix") {
-        appendScriptCliArgs(command, packageManager, ["--port", String(this._port)]);
-      } else if (projectInfo.type === "nextjs") {
-        appendScriptCliArgs(command, packageManager, ["-p", String(this._port)]);
-      } else if (projectInfo.type === "webpack") {
-        appendScriptCliArgs(command, packageManager, ["--port", String(this._port)]);
+      if (projectInfo.type === 'vite' || projectInfo.type === 'remix') {
+        appendScriptCliArgs(command, packageManager, ['--port', String(this._port)]);
+      } else if (projectInfo.type === 'nextjs') {
+        appendScriptCliArgs(command, packageManager, ['-p', String(this._port)]);
+      } else if (projectInfo.type === 'webpack') {
+        appendScriptCliArgs(command, packageManager, ['--port', String(this._port)]);
       }
       // CRA reads PORT env var — no CLI flag needed
 
@@ -264,70 +264,70 @@ export class DevServerManager {
           // For Vite
           VITE_PORT: String(this._port),
         },
-        detached: process.platform !== "win32",
+        detached: process.platform !== 'win32',
         shell: true, // nosemgrep: spawn-shell-true -- dev server requires shell for npm/pnpm/yarn scripts
-        stdio: ["pipe", "pipe", "pipe"],
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
       this._process = child;
 
       const isCurrentProcess = () => this._process === child;
 
       // Handle stdout
-      child.stdout?.on("data", (data: Buffer) => {
+      child.stdout?.on('data', (data: Buffer) => {
         if (!isCurrentProcess()) return;
         const text = data.toString();
         // Strip ANSI escape codes — Vite 8 (rolldown) wraps output in color
         // codes that pollute the VS Code output channel and split keywords.
-        const clean = text.replace(ANSI_ESCAPE_PATTERN, "");
+        const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
         this._appendLog(text); // raw ANSI — webview renders via ansi_up
 
         this._maybeUpdatePortFromOutput(clean);
 
         // Detect when server is ready
-        if (this._status === "starting" && this._isServerReadyMessage(clean)) {
-          console.log("[HyperIDE] DevServer ready detected via stdout");
-          this._updateStatus("running");
+        if (this._status === 'starting' && this._isServerReadyMessage(clean)) {
+          console.log('[HyperIDE] DevServer ready detected via stdout');
+          this._updateStatus('running');
         }
 
         this._maybeResolveRecompileGate(clean);
       });
 
       // Handle stderr — many servers (Vite 8, Next.js) write to stderr
-      child.stderr?.on("data", (data: Buffer) => {
+      child.stderr?.on('data', (data: Buffer) => {
         if (!isCurrentProcess()) return;
         const text = data.toString();
-        const clean = text.replace(ANSI_ESCAPE_PATTERN, "");
+        const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
         this._appendLog(text); // raw ANSI — webview renders via ansi_up
 
         this._maybeUpdatePortFromOutput(clean);
 
-        if (this._status === "starting" && this._isServerReadyMessage(clean)) {
-          console.log("[HyperIDE] DevServer ready detected via stderr");
-          this._updateStatus("running");
+        if (this._status === 'starting' && this._isServerReadyMessage(clean)) {
+          console.log('[HyperIDE] DevServer ready detected via stderr');
+          this._updateStatus('running');
         }
 
         this._maybeResolveRecompileGate(clean);
       });
 
       // Handle process exit
-      child.on("exit", (code) => {
+      child.on('exit', (code) => {
         if (!isCurrentProcess()) return;
         console.log(`[HyperIDE] DevServer process exited with code ${code}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         this._outputChannel.appendLine(`[DevServer] Process exited with code ${code}`);
         this._process = null;
         this._port = null;
         this._stopProxy();
-        this._updateStatus("stopped");
+        this._updateStatus('stopped');
       });
 
       // Handle process error
-      child.on("error", (error) => {
+      child.on('error', (error) => {
         if (!isCurrentProcess()) return;
-        console.error("[HyperIDE] DevServer process error:", error.message);
+        console.error('[HyperIDE] DevServer process error:', error.message);
         this._outputChannel.appendLine(`[DevServer] Process error: ${error.message}`);
-        this._updateStatus("error", error.message);
+        this._updateStatus('error', error.message);
       });
 
       // Wait for server to be ready (with timeout).
@@ -338,8 +338,8 @@ export class DevServerManager {
 
       return this.getState();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      console.error("[HyperIDE] Dev server failed:", errorMessage);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[HyperIDE] Dev server failed:', errorMessage);
       this._outputChannel.appendLine(`[DevServer] Failed to start: ${errorMessage}`);
 
       if (!dependencyRepairAttempted && shouldRepairDependencies(errorMessage, this._logs)) {
@@ -349,13 +349,13 @@ export class DevServerManager {
           await this._repairDependencies(packageManager);
           return this.start(true);
         } catch (repairError) {
-          const repairMessage = repairError instanceof Error ? repairError.message : "Unknown dependency repair error";
+          const repairMessage = repairError instanceof Error ? repairError.message : 'Unknown dependency repair error';
           this._outputChannel.appendLine(`[DevServer] Dependency repair failed: ${repairMessage}`);
         }
       }
 
       this._stopProxy();
-      this._updateStatus("error", errorMessage);
+      this._updateStatus('error', errorMessage);
       return this.getState();
     }
   }
@@ -368,7 +368,7 @@ export class DevServerManager {
     // between the guard and the async operations below
     const proc = this._process;
     if (proc) {
-      this._outputChannel.appendLine("[DevServer] Stopping server...");
+      this._outputChannel.appendLine('[DevServer] Stopping server...');
     }
 
     this._process = null;
@@ -386,24 +386,24 @@ export class DevServerManager {
         const timeout = setTimeout(() => {
           // Force kill if still running
           if (!exited) {
-            this._killProcessTree(proc, "SIGKILL");
+            this._killProcessTree(proc, 'SIGKILL');
           }
           resolve();
         }, 5000);
 
-        proc.once("exit", () => {
+        proc.once('exit', () => {
           exited = true;
           clearTimeout(timeout);
           resolve();
         });
 
         // Try graceful shutdown first
-        this._killProcessTree(proc, "SIGTERM");
+        this._killProcessTree(proc, 'SIGTERM');
       });
     }
 
     if (this._process === null) {
-      this._updateStatus("stopped");
+      this._updateStatus('stopped');
     }
   }
 
@@ -473,7 +473,7 @@ export class DevServerManager {
     // will read the fresh state after the new patch lands.
     this._recompileGate?.resolve();
     this._recompileGate = { promise, resolve, armedAt: Date.now() };
-    console.log("[HyperIDE] DevServer recompile gate armed");
+    console.log('[HyperIDE] DevServer recompile gate armed');
   }
 
   /**
@@ -512,7 +512,7 @@ export class DevServerManager {
     // webpack phrase missed the Remix/Vite/Next clusters and caused 90s
     // setupPreview hangs on those projects (HYP-363 cluster).
     if (!this._isRecompileReadyMessage(text)) return;
-    console.log("[HyperIDE] DevServer recompile gate released");
+    console.log('[HyperIDE] DevServer recompile gate released');
     this._recompileGate = null;
     gate.resolve();
   }
@@ -520,13 +520,13 @@ export class DevServerManager {
   private _isRecompileReadyMessage(text: string): boolean {
     const lower = text.toLowerCase();
     return (
-      lower.includes("compiled successfully") || // webpack/CRA success
-      lower.includes("compiled with") || // webpack/CRA finish with errors/warnings — still done
-      lower.includes("compiled in") || // Next.js post-HMR "Compiled in 200ms"
-      lower.includes("compiled client") || // Next.js post-HMR
-      lower.includes("hmr update") || // Vite "[vite] hmr update"
-      lower.includes("page reload") || // Vite/Remix "[vite] page reload"
-      lower.includes("rebuilt in") || // esbuild
+      lower.includes('compiled successfully') || // webpack/CRA success
+      lower.includes('compiled with') || // webpack/CRA finish with errors/warnings — still done
+      lower.includes('compiled in') || // Next.js post-HMR "Compiled in 200ms"
+      lower.includes('compiled client') || // Next.js post-HMR
+      lower.includes('hmr update') || // Vite "[vite] hmr update"
+      lower.includes('page reload') || // Vite/Remix "[vite] page reload"
+      lower.includes('rebuilt in') || // esbuild
       /ready in \d+\s*ms/i.test(text) // Vite "ready in N ms" after restart
     );
   }
@@ -558,12 +558,12 @@ export class DevServerManager {
     const isPortFree = (port: number): Promise<boolean> => {
       return new Promise((resolve) => {
         const server = net.createServer();
-        server.once("error", () => resolve(false));
-        server.once("listening", () => {
+        server.once('error', () => resolve(false));
+        server.once('listening', () => {
           server.close();
           resolve(true);
         });
-        server.listen(port, "127.0.0.1");
+        server.listen(port, '127.0.0.1');
       });
     };
 
@@ -571,7 +571,7 @@ export class DevServerManager {
     while (!(await isPortFree(port))) {
       port++;
       if (port > startPort + 100) {
-        throw new Error("Could not find free port");
+        throw new Error('Could not find free port');
       }
     }
 
@@ -583,21 +583,21 @@ export class DevServerManager {
    */
   private _buildCommand(packageManager: PackageManager, script: string): { cmd: string; args: string[] } {
     switch (packageManager) {
-      case "bun":
-        return { cmd: "bun", args: ["run", script] };
-      case "pnpm":
-        return { cmd: "pnpm", args: ["run", script] };
-      case "yarn":
-        return { cmd: "yarn", args: [script] };
+      case 'bun':
+        return { cmd: 'bun', args: ['run', script] };
+      case 'pnpm':
+        return { cmd: 'pnpm', args: ['run', script] };
+      case 'yarn':
+        return { cmd: 'yarn', args: [script] };
       default:
-        return { cmd: "npm", args: ["run", script] };
+        return { cmd: 'npm', args: ['run', script] };
     }
   }
 
   private async _repairDependencies(packageManager: PackageManager): Promise<void> {
     const command = buildInstallCommand(packageManager);
-    this._outputChannel.appendLine(`[DevServer] Repairing dependencies with ${command.cmd} ${command.args.join(" ")}`);
-    this._appendLog(`[HyperIDE] Repairing dependencies with ${command.cmd} ${command.args.join(" ")}\n`);
+    this._outputChannel.appendLine(`[DevServer] Repairing dependencies with ${command.cmd} ${command.args.join(' ')}`);
+    this._appendLog(`[HyperIDE] Repairing dependencies with ${command.cmd} ${command.args.join(' ')}\n`);
 
     await new Promise<void>((resolve, reject) => {
       // nosemgrep: spawn-shell-true -- package-manager commands may resolve through shell shims/corepack
@@ -605,39 +605,39 @@ export class DevServerManager {
         cwd: this._projectPath,
         env: {
           ...process.env,
-          CI: "true",
+          CI: 'true',
         },
         shell: true,
-        stdio: ["pipe", "pipe", "pipe"],
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
 
-      child.stdout?.on("data", (data: Buffer) => {
+      child.stdout?.on('data', (data: Buffer) => {
         const text = data.toString();
-        const clean = text.replace(ANSI_ESCAPE_PATTERN, "");
+        const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
         this._appendLog(text); // raw ANSI — webview renders via ansi_up
       });
 
-      child.stderr?.on("data", (data: Buffer) => {
+      child.stderr?.on('data', (data: Buffer) => {
         const text = data.toString();
-        const clean = text.replace(ANSI_ESCAPE_PATTERN, "");
+        const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(clean);
         this._appendLog(text); // raw ANSI — webview renders via ansi_up
       });
 
-      child.on("error", (error) => reject(error));
-      child.on("exit", (code) => {
+      child.on('error', (error) => reject(error));
+      child.on('exit', (code) => {
         if (code === 0) {
           resolve();
           return;
         }
-        reject(new Error(`${command.cmd} ${command.args.join(" ")} exited with code ${code}`));
+        reject(new Error(`${command.cmd} ${command.args.join(' ')} exited with code ${code}`));
       });
     });
   }
 
   private _killProcessTree(proc: ChildProcess, signal: NodeJS.Signals): void {
-    if (process.platform !== "win32" && proc.pid) {
+    if (process.platform !== 'win32' && proc.pid) {
       try {
         process.kill(-proc.pid, signal);
         return;
@@ -658,7 +658,7 @@ export class DevServerManager {
    * If a gate is armed (regardless of running state), blocks until release.
    */
   async waitForReady(timeoutMs = 90_000): Promise<void> {
-    if (this._status !== "running") {
+    if (this._status !== 'running') {
       await this._waitForReady(timeoutMs);
     }
     await this.awaitRecompile(timeoutMs);
@@ -671,12 +671,12 @@ export class DevServerManager {
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeout) {
-      if (this._status === "running") {
+      if (this._status === 'running') {
         return;
       }
 
-      if (this._status === "error" || this._status === "stopped") {
-        throw new Error("Server failed to start");
+      if (this._status === 'error' || this._status === 'stopped') {
+        throw new Error('Server failed to start');
       }
 
       // Check if port is accepting connections — capture port to a local variable
@@ -684,14 +684,14 @@ export class DevServerManager {
       // truthiness check and the async _isPortOpen call
       const port = this._port;
       if (port && (await this._isPortOpen(port))) {
-        this._updateStatus("running");
+        this._updateStatus('running');
         return;
       }
 
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
-    throw new Error("Server startup timeout");
+    throw new Error('Server startup timeout');
   }
 
   /**
@@ -702,17 +702,17 @@ export class DevServerManager {
       const socket = new net.Socket();
       socket.setTimeout(1000);
 
-      socket.on("connect", () => {
+      socket.on('connect', () => {
         socket.destroy();
         resolve(true);
       });
 
-      socket.on("error", () => {
+      socket.on('error', () => {
         socket.destroy();
         resolve(false);
       });
 
-      socket.on("timeout", () => {
+      socket.on('timeout', () => {
         socket.destroy();
         resolve(false);
       });
@@ -721,7 +721,7 @@ export class DevServerManager {
       // localhost to IPv6 ::1, and Vite/Next.js bind to localhost by default.
       // Hardcoding 127.0.0.1 caused "Server failed to start" on any dev
       // server that binds to IPv6.
-      socket.connect(port, "localhost");
+      socket.connect(port, 'localhost');
     });
   }
 
@@ -760,14 +760,14 @@ export class DevServerManager {
   private _isServerReadyMessage(text: string): boolean {
     const lower = text.toLowerCase();
     return (
-      lower.includes("ready") || // Vite "ready in", Next.js "Ready in"
-      text.includes("Local:") || // Vite "Local: http://..."
-      text.includes("localhost:") || // webpack-dev-server "Loopback: http://localhost:"
-      text.includes("Started") || // Generic
-      lower.includes("compiled successfully") || // webpack/CRA
-      lower.includes("compiled client") || // Next.js "Compiled client and server"
-      lower.includes("listening on") || // Generic servers
-      text.includes("Loopback:") // webpack-dev-server
+      lower.includes('ready') || // Vite "ready in", Next.js "Ready in"
+      text.includes('Local:') || // Vite "Local: http://..."
+      text.includes('localhost:') || // webpack-dev-server "Loopback: http://localhost:"
+      text.includes('Started') || // Generic
+      lower.includes('compiled successfully') || // webpack/CRA
+      lower.includes('compiled client') || // Next.js "Compiled client and server"
+      lower.includes('listening on') || // Generic servers
+      text.includes('Loopback:') // webpack-dev-server
     );
   }
 
@@ -776,11 +776,11 @@ export class DevServerManager {
    */
   private _appendLog(text: string): void {
     const now = Date.now();
-    const lines = text.split("\n").filter((l) => l.length > 0);
+    const lines = text.split('\n').filter((l) => l.length > 0);
     const newEntries: LogEntry[] = [];
 
     for (const line of lines) {
-      const cleanLine = line.replace(ANSI_ESCAPE_PATTERN, "");
+      const cleanLine = line.replace(ANSI_ESCAPE_PATTERN, '');
       const isError = ERROR_PATTERNS.some((pattern) => pattern.test(cleanLine));
       // Both checks are needed independently: isSuccess clears _hasErrors even for non-error lines.
       // Short-circuiting on isError would skip success detection for error-free log lines.
@@ -809,7 +809,7 @@ export class DevServerManager {
       // Notify about new errors
       const errorEntries = newEntries.filter((e) => e.isError);
       if (errorEntries.length > 0) {
-        this._onError?.(errorEntries.map((e) => e.line.replace(ANSI_ESCAPE_PATTERN, "")).join("\n"));
+        this._onError?.(errorEntries.map((e) => e.line.replace(ANSI_ESCAPE_PATTERN, '')).join('\n'));
       }
     }
   }

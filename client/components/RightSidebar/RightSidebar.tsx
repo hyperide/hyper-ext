@@ -1,14 +1,14 @@
-import { TID } from "@shared/data-testid-map";
-import { IconCode, IconPointer } from "@tabler/icons-react";
-import cn from "clsx";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "@/hooks/use-toast";
-import type { CanvasEngine } from "@/lib/canvas-engine";
-import { useCanvasEngineOptional } from "@/lib/canvas-engine";
-import type { StyleAdapter } from "@/lib/canvas-engine/adapters/StyleAdapter";
-import { TailwindAdapter } from "@/lib/canvas-engine/adapters/TailwindAdapter";
-import { TamaguiAdapter } from "@/lib/canvas-engine/adapters/TamaguiAdapter";
-import type { ParsedStyles } from "@/lib/canvas-engine/adapters/types";
+import { TID } from '@shared/data-testid-map';
+import { IconCode, IconPointer } from '@tabler/icons-react';
+import cn from 'clsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from '@/hooks/use-toast';
+import type { CanvasEngine } from '@/lib/canvas-engine';
+import { useCanvasEngineOptional } from '@/lib/canvas-engine';
+import type { StyleAdapter } from '@/lib/canvas-engine/adapters/StyleAdapter';
+import { TailwindAdapter } from '@/lib/canvas-engine/adapters/TailwindAdapter';
+import { TamaguiAdapter } from '@/lib/canvas-engine/adapters/TamaguiAdapter';
+import type { ParsedStyles } from '@/lib/canvas-engine/adapters/types';
 import {
   useElementStyleData,
   useGoToCode,
@@ -16,21 +16,21 @@ import {
   usePlatformAst,
   usePlatformCanvas,
   usePlatformContext,
-} from "@/lib/platform";
-import { createSharedDispatch, useSharedEditorState } from "@/lib/platform/shared-editor-state";
-import type { StyleNotAppliedContext } from "@/lib/style-change-detector";
-import { useEditorStore } from "@/stores/editorStore";
-import { authFetch } from "@/utils/authFetch";
-import type { ComponentGroup } from "../../../lib/component-scanner/types";
-import { useElementSelection } from "../LeftSidebar/hooks/useElementSelection";
-import { useElementsTree } from "../LeftSidebar/hooks/useElementsTree";
-import { useFunctionNavigate } from "../LeftSidebar/hooks/useFunctionNavigate";
-import { ElementsTreeSection } from "../LeftSidebar/sections/ElementsTreeSection";
-import { SetupTailwindButton } from "../SetupTailwindButton";
-import type { FillMode } from "../ui/fill-picker";
-import { Input } from "../ui/input";
-import { ToastAction } from "../ui/toast";
-import { useStyleSync } from "./hooks/useStyleSync";
+} from '@/lib/platform';
+import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
+import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
+import { useEditorStore } from '@/stores/editorStore';
+import { authFetch } from '@/utils/authFetch';
+import type { ComponentGroup } from '../../../lib/component-scanner/types';
+import { useElementSelection } from '../LeftSidebar/hooks/useElementSelection';
+import { useElementsTree } from '../LeftSidebar/hooks/useElementsTree';
+import { useFunctionNavigate } from '../LeftSidebar/hooks/useFunctionNavigate';
+import { ElementsTreeSection } from '../LeftSidebar/sections/ElementsTreeSection';
+import { SetupTailwindButton } from '../SetupTailwindButton';
+import type { FillMode } from '../ui/fill-picker';
+import { Input } from '../ui/input';
+import { ToastAction } from '../ui/toast';
+import { useStyleSync } from './hooks/useStyleSync';
 import {
   AppearanceSection,
   CommentsSectionContainer,
@@ -45,9 +45,9 @@ import {
   StrokeSection,
   StyleSourceTabsSection,
   ViewControlsSection,
-} from "./sections";
-import { getExplicitStyleSourceTabId, resolveInspectorStyleSourceTabs } from "./source-tabs";
-import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from "./types";
+} from './sections';
+import { getExplicitStyleSourceTabId, resolveInspectorStyleSourceTabs } from './source-tabs';
+import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
 import {
   computeNumericArrowValue,
   cssToPosition,
@@ -55,7 +55,7 @@ import {
   mapShadowSizeToValues,
   parseHexWithAlpha,
   positionToCss,
-} from "./utils";
+} from './utils';
 
 // ============================================================================
 // Component quick-list (Inspector empty state, VS Code only)
@@ -128,7 +128,7 @@ function useSelectionCompat(engine: CanvasEngine | null): string[] {
   useEffect(() => {
     if (!engine) return;
     setEngineIds(engine.getSelection().selectedIds);
-    return engine.events.on("selection:change", (event) => {
+    return engine.events.on('selection:change', (event) => {
       setEngineIds([...event.selectedIds]);
     });
   }, [engine]);
@@ -159,11 +159,11 @@ export default function RightSidebar({
   onZoomChange,
   onFitToContent,
   activeInstanceId = null,
-  canvasMode = "single",
+  canvasMode = 'single',
   instanceSize,
   onInstanceSizeChange,
   // Project UI kit data (passed from CanvasEditor)
-  projectUIKit = "none",
+  projectUIKit = 'none',
   activeProjectId = null,
   activeProjectName = null,
   publicDirExists = false,
@@ -175,15 +175,15 @@ export default function RightSidebar({
   const engine = useCanvasEngineOptional();
   const canvas = usePlatformCanvas();
   const platformContext = usePlatformContext();
-  const isVSCode = platformContext === "vscode-webview";
+  const isVSCode = platformContext === 'vscode-webview';
 
   const selectedIds = useSelectionCompat(engine);
   const componentPath = useComponentPathCompat(engine);
 
   const { openFile, showComments, setShowComments, isReadonly: editorStoreReadonly } = useEditorStore();
   const isReadonly = isVSCode ? readonlyProp : editorStoreReadonly;
-  const inspectorUIKit = projectUIKit === "none" && isVSCode ? "tailwind" : projectUIKit;
-  const canInspectStyles = inspectorUIKit !== "none";
+  const inspectorUIKit = projectUIKit === 'none' && isVSCode ? 'tailwind' : projectUIKit;
+  const canInspectStyles = inspectorUIKit !== 'none';
 
   // Elements tree for Inspector (VS Code only, when Explorer is hidden)
   const showTreeInInspector = isVSCode && explorerVisible !== true && !!componentPath;
@@ -199,12 +199,12 @@ export default function RightSidebar({
 
   // Create style adapter based on UI kit
   const styleAdapter: StyleAdapter = useMemo(() => {
-    return projectUIKit === "tamagui" ? new TamaguiAdapter(astOps) : new TailwindAdapter(astOps);
+    return projectUIKit === 'tamagui' ? new TamaguiAdapter(astOps) : new TailwindAdapter(astOps);
   }, [projectUIKit, astOps]);
 
   // Current state modifier for Tailwind (hover, focus, etc.)
   const [currentState, setCurrentState] = useState<string | undefined>(undefined);
-  const [selectedSourceTabId, setSelectedSourceTabId] = useState("computed");
+  const [selectedSourceTabId, setSelectedSourceTabId] = useState('computed');
 
   // Read element style data (browser: engine+DOM, VS Code: RPC)
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
@@ -265,7 +265,7 @@ export default function RightSidebar({
   );
   // Only show the tab row when there's more than one real CSS approach to choose from.
   const visibleSourceTabs = useMemo(() => {
-    const nonComputed = sourceTabs.filter((tab) => tab.confidence !== "computed-only");
+    const nonComputed = sourceTabs.filter((tab) => tab.confidence !== 'computed-only');
     return nonComputed.length <= 1 ? [] : sourceTabs;
   }, [sourceTabs]);
   const explicitSourceTabId = useMemo(() => {
@@ -277,13 +277,13 @@ export default function RightSidebar({
 
   useEffect(() => {
     if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
-      setSelectedSourceTabId("computed");
+      setSelectedSourceTabId('computed');
       return;
     }
     // When the project has exactly one concrete CSS approach, auto-select it so the user
     // doesn't have to manually switch away from "Computed" every time.
-    const nonComputedTabs = sourceTabs.filter((tab) => tab.confidence !== "computed-only");
-    if (nonComputedTabs.length === 1 && selectedSourceTabId === "computed") {
+    const nonComputedTabs = sourceTabs.filter((tab) => tab.confidence !== 'computed-only');
+    if (nonComputedTabs.length === 1 && selectedSourceTabId === 'computed') {
       setSelectedSourceTabId(nonComputedTabs[0].id);
     }
   }, [sourceTabs, selectedSourceTabId]);
@@ -315,9 +315,9 @@ export default function RightSidebar({
     (styles: Record<string, string>, error: string) => {
       const styleDesc = Object.entries(styles)
         .map(([k, v]) => `${k}: ${v}`)
-        .join(", ");
+        .join(', ');
       openAIChat({
-        prompt: `Style update failed for element "${selectedIds[0] ?? "unknown"}" in ${componentPath ?? "unknown file"}.\n\nAttempted styles: ${styleDesc}\nError: ${error}\n\nPlease fix the issue or apply these styles manually.`,
+        prompt: `Style update failed for element "${selectedIds[0] ?? 'unknown'}" in ${componentPath ?? 'unknown file'}.\n\nAttempted styles: ${styleDesc}\nError: ${error}\n\nPlease fix the issue or apply these styles manually.`,
         forceNewChat: true,
       });
     },
@@ -337,7 +337,7 @@ export default function RightSidebar({
     // Delay toast — if sync completes within 600ms, no toast shown
     syncToastTimerRef.current = setTimeout(() => {
       syncToastTimerRef.current = null;
-      syncToastRef.current = toast({ title: "Applying styles..." });
+      syncToastRef.current = toast({ title: 'Applying styles...' });
     }, 600);
   }, []);
 
@@ -353,17 +353,17 @@ export default function RightSidebar({
   const handleStyleNotApplied = useCallback(
     (context: StyleNotAppliedContext) => {
       syncToastRef.current?.dismiss();
-      const styleDesc = context.unchangedProperties.map((key) => `${key}: ${context.styles[key] ?? "?"}`).join(", ");
+      const styleDesc = context.unchangedProperties.map((key) => `${key}: ${context.styles[key] ?? '?'}`).join(', ');
 
       syncToastRef.current = toast({
-        title: "Style may not have taken effect",
+        title: 'Style may not have taken effect',
         description: `${context.unchangedProperties.length} property unchanged`,
         action: (
           <ToastAction
             altText="Ask AI for help"
             onClick={() =>
               openAIChat({
-                prompt: `I changed styles on element "${context.elementId}" in ${context.filePath}, but the visual result didn't change.\n\nAttempted: ${styleDesc}\nUnchanged: ${context.unchangedProperties.join(", ")}\n\nThis is likely CSS specificity — the component may use variants/cva that override className.\nPlease check the component source and suggest the correct way to apply these styles.`,
+                prompt: `I changed styles on element "${context.elementId}" in ${context.filePath}, but the visual result didn't change.\n\nAttempted: ${styleDesc}\nUnchanged: ${context.unchangedProperties.join(', ')}\n\nThis is likely CSS specificity — the component may use variants/cva that override className.\nPlease check the component source and suggest the correct way to apply these styles.`,
                 forceNewChat: true,
               })
             }
@@ -392,56 +392,56 @@ export default function RightSidebar({
   });
 
   // Position state
-  const [selectedPosition, setSelectedPosition] = useState<PositionType>("static");
-  const [posTop, setPosTop] = useState("");
-  const [posRight, setPosRight] = useState("");
-  const [posBottom, setPosBottom] = useState("");
-  const [posLeft, setPosLeft] = useState("");
+  const [selectedPosition, setSelectedPosition] = useState<PositionType>('static');
+  const [posTop, setPosTop] = useState('');
+  const [posRight, setPosRight] = useState('');
+  const [posBottom, setPosBottom] = useState('');
+  const [posLeft, setPosLeft] = useState('');
 
   // Margin state
-  const [marginTop, setMarginTop] = useState("");
-  const [marginRight, setMarginRight] = useState("");
-  const [marginBottom, setMarginBottom] = useState("");
-  const [marginLeft, setMarginLeft] = useState("");
+  const [marginTop, setMarginTop] = useState('');
+  const [marginRight, setMarginRight] = useState('');
+  const [marginBottom, setMarginBottom] = useState('');
+  const [marginLeft, setMarginLeft] = useState('');
   const [marginLinked, setMarginLinked] = useState(false);
 
   // Layout state
-  const [selectedLayout, setSelectedLayout] = useState<LayoutType>("layout");
+  const [selectedLayout, setSelectedLayout] = useState<LayoutType>('layout');
   const [clipContent, setClipContent] = useState(true);
-  const [width, setWidth] = useState("");
-  const [height, setHeight] = useState("");
+  const [width, setWidth] = useState('');
+  const [height, setHeight] = useState('');
 
   // Padding state
-  const [paddingTop, setPaddingTop] = useState("");
-  const [paddingRight, setPaddingRight] = useState("");
-  const [paddingBottom, setPaddingBottom] = useState("");
-  const [paddingLeft, setPaddingLeft] = useState("");
+  const [paddingTop, setPaddingTop] = useState('');
+  const [paddingRight, setPaddingRight] = useState('');
+  const [paddingBottom, setPaddingBottom] = useState('');
+  const [paddingLeft, setPaddingLeft] = useState('');
 
   // Flex/Grid layout state
-  const [gap, setGap] = useState("");
-  const [justifyContent, setJustifyContent] = useState("");
-  const [alignItems, setAlignItems] = useState("");
+  const [gap, setGap] = useState('');
+  const [justifyContent, setJustifyContent] = useState('');
+  const [alignItems, setAlignItems] = useState('');
 
   // Grid-specific layout state
-  const [columnGap, setColumnGap] = useState("");
-  const [rowGap, setRowGap] = useState("");
-  const [gridJustifyItems, setGridJustifyItems] = useState("");
-  const [gridAlignItems, setGridAlignItems] = useState("");
-  const [gridCols, setGridCols] = useState("");
-  const [gridRows, setGridRows] = useState("");
+  const [columnGap, setColumnGap] = useState('');
+  const [rowGap, setRowGap] = useState('');
+  const [gridJustifyItems, setGridJustifyItems] = useState('');
+  const [gridAlignItems, setGridAlignItems] = useState('');
+  const [gridCols, setGridCols] = useState('');
+  const [gridRows, setGridRows] = useState('');
 
   // Color state
-  const [backgroundColor, setBackgroundColor] = useState("");
-  const [textColor, setTextColor] = useState("");
-  const [fontSize, setFontSize] = useState("");
-  const [fillOpacity, setFillOpacity] = useState("");
-  const [textOpacity, setTextOpacity] = useState("");
-  const [opacity, setOpacity] = useState("");
-  const [fillMode, setFillMode] = useState<FillMode>("color");
+  const [backgroundColor, setBackgroundColor] = useState('');
+  const [textColor, setTextColor] = useState('');
+  const [fontSize, setFontSize] = useState('');
+  const [fillOpacity, setFillOpacity] = useState('');
+  const [textOpacity, setTextOpacity] = useState('');
+  const [opacity, setOpacity] = useState('');
+  const [fillMode, setFillMode] = useState<FillMode>('color');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
 
   // Border radius state
-  const [borderRadius, setBorderRadius] = useState("");
+  const [borderRadius, setBorderRadius] = useState('');
 
   // Stroke state
   const [strokes, setStrokes] = useState<StrokeItem[]>([]);
@@ -450,7 +450,7 @@ export default function RightSidebar({
   const [effects, setEffects] = useState<EffectItem[]>([]);
 
   // Text content state
-  const [textContent, setTextContent] = useState("");
+  const [textContent, setTextContent] = useState('');
   const [isTextFromProps, setIsTextFromProps] = useState(false);
   const debouncedTextSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedI18nWriteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -503,13 +503,13 @@ export default function RightSidebar({
   const handlePositionChange = useCallback(
     (pos: PositionType) => {
       setSelectedPosition(pos);
-      syncStyleChange("position", positionToCss(pos));
+      syncStyleChange('position', positionToCss(pos));
     },
     [syncStyleChange],
   );
 
   const handlePositionValueChange = useCallback(
-    (key: "top" | "right" | "bottom" | "left", value: string) => {
+    (key: 'top' | 'right' | 'bottom' | 'left', value: string) => {
       const setters = {
         top: setPosTop,
         right: setPosRight,
@@ -547,7 +547,7 @@ export default function RightSidebar({
       const selectedElementId = selectedIds[0];
 
       if (!componentPath) {
-        console.error("[RightSidebar] No file path found");
+        console.error('[RightSidebar] No file path found');
         return;
       }
 
@@ -556,7 +556,7 @@ export default function RightSidebar({
         await styleAdapter.changeLayout(selectedElementId, componentPath, layoutType);
         setStyleRefreshKey((k) => k + 1);
       } catch (error) {
-        console.error("[RightSidebar] Failed to change layout:", error);
+        console.error('[RightSidebar] Failed to change layout:', error);
       }
     },
     [selectedIds, componentPath, styleAdapter],
@@ -566,7 +566,7 @@ export default function RightSidebar({
   const handleWidthChange = useCallback(
     (value: string) => {
       setWidth(value);
-      syncStyleChange("width", value.replace(" Auto", ""));
+      syncStyleChange('width', value.replace(' Auto', ''));
     },
     [syncStyleChange],
   );
@@ -574,28 +574,28 @@ export default function RightSidebar({
   const handleHeightChange = useCallback(
     (value: string) => {
       setHeight(value);
-      syncStyleChange("height", value.replace(" Auto", ""));
+      syncStyleChange('height', value.replace(' Auto', ''));
     },
     [syncStyleChange],
   );
 
   const handleWidthBlur = useCallback(() => {
-    const cleanWidth = width.replace(" Auto", "");
+    const cleanWidth = width.replace(' Auto', '');
     const num = Number.parseFloat(cleanWidth);
-    if (!Number.isNaN(num) && !cleanWidth.includes("px")) {
+    if (!Number.isNaN(num) && !cleanWidth.includes('px')) {
       const newValue = `${num}px`;
       setWidth(newValue);
-      syncStyleChange("width", newValue);
+      syncStyleChange('width', newValue);
     }
   }, [width, syncStyleChange]);
 
   const handleHeightBlur = useCallback(() => {
-    const cleanHeight = height.replace(" Auto", "");
+    const cleanHeight = height.replace(' Auto', '');
     const num = Number.parseFloat(cleanHeight);
-    if (!Number.isNaN(num) && !cleanHeight.includes("px")) {
+    if (!Number.isNaN(num) && !cleanHeight.includes('px')) {
       const newValue = `${num}px`;
       setHeight(newValue);
-      syncStyleChange("height", newValue);
+      syncStyleChange('height', newValue);
     }
   }, [height, syncStyleChange]);
 
@@ -614,7 +614,7 @@ export default function RightSidebar({
   const handleSetupTailwind = useCallback(() => {
     openAIChat({
       prompt:
-        "Install and configure TailwindCSS in this project. Add tailwindcss to devDependencies, create tailwind.config.js file, and add TailwindCSS directives to the main CSS file.",
+        'Install and configure TailwindCSS in this project. Add tailwindcss to devDependencies, create tailwind.config.js file, and add TailwindCSS directives to the main CSS file.',
       forceNewChat: true,
     });
   }, [openAIChat]);
@@ -660,9 +660,9 @@ export default function RightSidebar({
 
       if (!response.ok) {
         toast({
-          variant: "destructive",
-          title: "Navigation Error",
-          description: "Could not find element location in code",
+          variant: 'destructive',
+          title: 'Navigation Error',
+          description: 'Could not find element location in code',
         });
         return;
       }
@@ -671,9 +671,9 @@ export default function RightSidebar({
 
       if (!data.success || !data.location) {
         toast({
-          variant: "destructive",
-          title: "Navigation Error",
-          description: "Could not find element location in code",
+          variant: 'destructive',
+          title: 'Navigation Error',
+          description: 'Could not find element location in code',
         });
         return;
       }
@@ -691,7 +691,7 @@ export default function RightSidebar({
       const fileData = await fileResponse.json();
 
       // Switch to code mode
-      engine.setMode("code");
+      engine.setMode('code');
 
       // Open file in editor
       openFile(componentPath, fileData.content);
@@ -699,7 +699,7 @@ export default function RightSidebar({
       // Dispatch navigation event after React updates
       requestAnimationFrame(() => {
         window.dispatchEvent(
-          new CustomEvent("monaco-goto-position", {
+          new CustomEvent('monaco-goto-position', {
             detail: {
               line: targetLocation.line,
               column: targetLocation.column,
@@ -711,11 +711,11 @@ export default function RightSidebar({
         );
       });
     } catch (error) {
-      console.error("[Go to Text Code] Error:", error);
+      console.error('[Go to Text Code] Error:', error);
       toast({
-        variant: "destructive",
-        title: "Navigation Error",
-        description: "Failed to navigate to code",
+        variant: 'destructive',
+        title: 'Navigation Error',
+        description: 'Failed to navigate to code',
       });
     }
   }, [selectedIds, componentPath, engine, openFile]);
@@ -746,7 +746,7 @@ export default function RightSidebar({
   if (pendingTextKeyRef.current !== null) {
     if (pendingTextKeyRef.current.elementId !== selectedId) {
       pendingTextKeyRef.current = null;
-    } else if (i18nText?.kind === "i18n" && i18nText.key === pendingTextKeyRef.current.key) {
+    } else if (i18nText?.kind === 'i18n' && i18nText.key === pendingTextKeyRef.current.key) {
       pendingTextKeyRef.current = null;
     }
   }
@@ -762,14 +762,14 @@ export default function RightSidebar({
       setPendingKeyWrite(null);
       return;
     }
-    if (i18nText?.kind === "i18n" && i18nText.key === pendingKeyWrite.key) {
+    if (i18nText?.kind === 'i18n' && i18nText.key === pendingKeyWrite.key) {
       setPendingKeyWrite(null);
     }
   }, [i18nText, selectedId, pendingKeyWrite]);
 
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
-      if (!i18nText || i18nText.kind !== "i18n") return;
+      if (!i18nText || i18nText.kind !== 'i18n') return;
       const effectiveSelectedId = selectedId ?? lastI18nElementRef.current?.elementId ?? null;
       if (!effectiveSelectedId) return;
       // Set before the async IIFE so debounced text writes use the new key
@@ -791,23 +791,23 @@ export default function RightSidebar({
         const w = window as unknown as Record<string, unknown>;
         if (!w.__HC_DEBUG_SELECTION) return;
         // eslint-disable-next-line no-console
-        console.warn(`[HC i18n-key-change ${label}] t+${Math.round(performance.now() - t0)}ms`, extra ?? "");
+        console.warn(`[HC i18n-key-change ${label}] t+${Math.round(performance.now() - t0)}ms`, extra ?? '');
       };
       const t0 = performance.now();
-      dbg("start", { previousSelectedId, newKey, isNewKey });
+      dbg('start', { previousSelectedId, newKey, isNewKey });
       void (async () => {
         const writeId = crypto.randomUUID();
         if (i18nDispatch) i18nDispatch({ writeInProgress: { writeId, startedAt: Date.now() } });
         // Path B: freeze selection rect during JSX rewrite — HMR gap would otherwise
         // flicker the outline off until the new fiber settles.
-        canvas.sendEvent({ type: "iframe:writeI18nResource", phase: "start" });
+        canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'start' });
         try {
           const writeResult = await astOps.writeI18nResource({
             library: i18nText.library,
             key: newKey,
             namespace: i18nText.namespace,
             activeLocale: i18nText.activeLocale,
-            newText: i18nText.resolvedText ?? "",
+            newText: i18nText.resolvedText ?? '',
             // Use lastWrittenI18nKeyRef when available: i18nText.key may be stale if a
             // second key change arrives before the useElementStyleData re-fetch completes.
             previousKey: lastWrittenI18nKeyRef.current ?? i18nText.key,
@@ -816,13 +816,13 @@ export default function RightSidebar({
             skipResourceWrite: !isNewKey,
           });
           lastWrittenI18nKeyRef.current = newKey;
-          dbg("writeI18nResource resolved", writeResult);
+          dbg('writeI18nResource resolved', writeResult);
           // Path A: bridge returns post-write canonical ID, single dispatch re-attaches
           // selection without timeout chains. Falls back to previousSelectedId.
           if (i18nDispatch) {
             const targetId = writeResult.newElementId ?? previousSelectedId;
             i18nDispatch({ selectedIds: [targetId] });
-            dbg("dispatch sent", { selectedIds: [targetId] });
+            dbg('dispatch sent', { selectedIds: [targetId] });
           }
         } catch {
           // Restore selection on partial write (JSON wrote but JSX update failed).
@@ -837,7 +837,7 @@ export default function RightSidebar({
           setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
         } finally {
           // Always release the freeze, even on throw.
-          canvas.sendEvent({ type: "iframe:writeI18nResource", phase: "done" });
+          canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'done' });
           // Clear writeInProgress so keyBusy disabling is released.
           if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
             i18nDispatch({ writeInProgress: null });
@@ -855,7 +855,7 @@ export default function RightSidebar({
 
   const handleI18nResolvedTextChange = useCallback(
     (newText: string) => {
-      if (!i18nText || i18nText.kind !== "i18n" || !selectedId) return;
+      if (!i18nText || i18nText.kind !== 'i18n' || !selectedId) return;
       const previousSelectedId = selectedId;
       if (debouncedI18nWriteRef.current) clearTimeout(debouncedI18nWriteRef.current);
       debouncedI18nWriteRef.current = setTimeout(() => {
@@ -942,41 +942,41 @@ export default function RightSidebar({
   useEffect(() => {
     if (!selectedId || !parsedStyles) {
       // Reset all values
-      setSelectedPosition("static");
-      setPosTop("");
-      setPosRight("");
-      setPosBottom("");
-      setPosLeft("");
-      setWidth("");
-      setHeight("");
-      setMarginTop("");
-      setMarginRight("");
-      setMarginBottom("");
-      setMarginLeft("");
-      setPaddingTop("");
-      setPaddingRight("");
-      setPaddingBottom("");
-      setPaddingLeft("");
-      setGap("");
-      setJustifyContent("");
-      setAlignItems("");
-      setColumnGap("");
-      setRowGap("");
-      setGridJustifyItems("");
-      setGridAlignItems("");
-      setGridCols("");
-      setGridRows("");
-      setBackgroundColor("");
-      setTextColor("");
-      setFontSize("");
-      setTextOpacity("");
-      setBorderRadius("");
-      setOpacity("");
+      setSelectedPosition('static');
+      setPosTop('');
+      setPosRight('');
+      setPosBottom('');
+      setPosLeft('');
+      setWidth('');
+      setHeight('');
+      setMarginTop('');
+      setMarginRight('');
+      setMarginBottom('');
+      setMarginLeft('');
+      setPaddingTop('');
+      setPaddingRight('');
+      setPaddingBottom('');
+      setPaddingLeft('');
+      setGap('');
+      setJustifyContent('');
+      setAlignItems('');
+      setColumnGap('');
+      setRowGap('');
+      setGridJustifyItems('');
+      setGridAlignItems('');
+      setGridCols('');
+      setGridRows('');
+      setBackgroundColor('');
+      setTextColor('');
+      setFontSize('');
+      setTextOpacity('');
+      setBorderRadius('');
+      setOpacity('');
       setClipContent(false);
-      setSelectedLayout("layout");
+      setSelectedLayout('layout');
       setStrokes([]);
       setEffects([]);
-      setTextContent("");
+      setTextContent('');
       setIsTextFromProps(false);
       return;
     }
@@ -984,84 +984,84 @@ export default function RightSidebar({
     const ep = effectiveParsed;
 
     // Update position
-    setSelectedPosition(cssToPosition(ep.position || "static"));
-    setPosTop(ep.top || "");
-    setPosRight(ep.right || "");
-    setPosBottom(ep.bottom || "");
-    setPosLeft(ep.left || "");
+    setSelectedPosition(cssToPosition(ep.position || 'static'));
+    setPosTop(ep.top || '');
+    setPosRight(ep.right || '');
+    setPosBottom(ep.bottom || '');
+    setPosLeft(ep.left || '');
 
     // Update dimensions
-    setWidth(ep.width || "");
-    setHeight(ep.height || "");
+    setWidth(ep.width || '');
+    setHeight(ep.height || '');
 
     // Update margin
-    setMarginTop(ep.marginTop || "");
-    setMarginRight(ep.marginRight || "");
-    setMarginBottom(ep.marginBottom || "");
-    setMarginLeft(ep.marginLeft || "");
+    setMarginTop(ep.marginTop || '');
+    setMarginRight(ep.marginRight || '');
+    setMarginBottom(ep.marginBottom || '');
+    setMarginLeft(ep.marginLeft || '');
 
     // Update padding
-    setPaddingTop(ep.paddingTop || "");
-    setPaddingRight(ep.paddingRight || "");
-    setPaddingBottom(ep.paddingBottom || "");
-    setPaddingLeft(ep.paddingLeft || "");
+    setPaddingTop(ep.paddingTop || '');
+    setPaddingRight(ep.paddingRight || '');
+    setPaddingBottom(ep.paddingBottom || '');
+    setPaddingLeft(ep.paddingLeft || '');
 
     // Update flex/grid
-    setGap(ep.gap || "");
-    setJustifyContent(ep.justifyContent || "");
-    setAlignItems(ep.alignItems || "");
+    setGap(ep.gap || '');
+    setJustifyContent(ep.justifyContent || '');
+    setAlignItems(ep.alignItems || '');
 
     // Update grid-specific
-    setColumnGap(ep.columnGap || "");
-    setRowGap(ep.rowGap || "");
-    setGridJustifyItems(ep.justifyItems || "");
-    setGridAlignItems(ep.alignItems || "");
-    setGridCols(ep.gridTemplateColumns || "");
-    setGridRows(ep.gridTemplateRows || "");
+    setColumnGap(ep.columnGap || '');
+    setRowGap(ep.rowGap || '');
+    setGridJustifyItems(ep.justifyItems || '');
+    setGridAlignItems(ep.alignItems || '');
+    setGridCols(ep.gridTemplateColumns || '');
+    setGridRows(ep.gridTemplateRows || '');
 
     // Update colors
     if (ep.backgroundColor) {
       const { color, opacity: parsedFillOpacity } = parseHexWithAlpha(ep.backgroundColor);
       setBackgroundColor(color);
-      setFillOpacity(parsedFillOpacity ?? "100");
+      setFillOpacity(parsedFillOpacity ?? '100');
     } else {
-      setBackgroundColor("");
-      setFillOpacity("");
+      setBackgroundColor('');
+      setFillOpacity('');
     }
-    setOpacity(ep.opacity || "");
+    setOpacity(ep.opacity || '');
     setBackgroundImage(ep.backgroundImage || null);
 
     if (ep.color) {
       const { color, opacity: parsedTextOpacity } = parseHexWithAlpha(ep.color);
       setTextColor(color);
-      setTextOpacity(parsedTextOpacity ?? "100");
+      setTextOpacity(parsedTextOpacity ?? '100');
     } else {
-      setTextColor("");
-      setTextOpacity("");
+      setTextColor('');
+      setTextOpacity('');
     }
 
-    setFontSize(ep.fontSize ?? "");
+    setFontSize(ep.fontSize ?? '');
 
     // Update border radius
-    setBorderRadius(ep.borderRadius || "");
+    setBorderRadius(ep.borderRadius || '');
 
     // Update overflow
-    if (ep.overflow === "hidden" || ep.overflow === "scroll" || ep.overflow === "auto") {
+    if (ep.overflow === 'hidden' || ep.overflow === 'scroll' || ep.overflow === 'auto') {
       setClipContent(true);
     } else {
       setClipContent(false);
     }
 
     // Update layout
-    setSelectedLayout(ep.layoutType || "layout");
+    setSelectedLayout(ep.layoutType || 'layout');
 
     // Update strokes
     const hasAnyBorder =
-      (ep.borderWidth && ep.borderWidth !== "0" && ep.borderWidth !== "0px") ||
-      (ep.borderTopWidth && ep.borderTopWidth !== "0") ||
-      (ep.borderRightWidth && ep.borderRightWidth !== "0") ||
-      (ep.borderBottomWidth && ep.borderBottomWidth !== "0") ||
-      (ep.borderLeftWidth && ep.borderLeftWidth !== "0");
+      (ep.borderWidth && ep.borderWidth !== '0' && ep.borderWidth !== '0px') ||
+      (ep.borderTopWidth && ep.borderTopWidth !== '0') ||
+      (ep.borderRightWidth && ep.borderRightWidth !== '0') ||
+      (ep.borderBottomWidth && ep.borderBottomWidth !== '0') ||
+      (ep.borderLeftWidth && ep.borderLeftWidth !== '0');
 
     if (hasAnyBorder) {
       const borderWidth =
@@ -1070,16 +1070,16 @@ export default function RightSidebar({
         ep.borderRightWidth ||
         ep.borderBottomWidth ||
         ep.borderLeftWidth ||
-        "1px";
+        '1px';
 
       setStrokes([
         {
-          id: "1",
+          id: '1',
           visible: true,
-          color: ep.borderColor || "#000000",
-          opacity: "100",
-          width: borderWidth.replace("px", ""),
-          style: (ep.borderStyle as StrokeItem["style"]) || "solid",
+          color: ep.borderColor || '#000000',
+          opacity: '100',
+          width: borderWidth.replace('px', ''),
+          style: (ep.borderStyle as StrokeItem['style']) || 'solid',
           sides: {
             top: !!ep.borderWidth || !!ep.borderTopWidth,
             right: !!ep.borderWidth || !!ep.borderRightWidth,
@@ -1094,9 +1094,9 @@ export default function RightSidebar({
 
     // Update effects
     const newEffects: EffectItem[] = [];
-    if (ep.shadow && ep.shadow !== "none") {
+    if (ep.shadow && ep.shadow !== 'none') {
       const hasArbitraryValues = ep.shadowX || ep.shadowY || ep.shadowBlur || ep.shadowSpread;
-      const isPreset = !hasArbitraryValues && ["sm", "default", "md", "lg", "xl", "2xl", "inner"].includes(ep.shadow);
+      const isPreset = !hasArbitraryValues && ['sm', 'default', 'md', 'lg', 'xl', '2xl', 'inner'].includes(ep.shadow);
 
       const values = hasArbitraryValues
         ? {
@@ -1106,25 +1106,25 @@ export default function RightSidebar({
             spread: ep.shadowSpread,
           }
         : mapShadowSizeToValues(
-            ep.shadow === "inner" ? "default" : ep.shadow,
-            ep.shadow === "inner" ? "inner-shadow" : "drop-shadow",
+            ep.shadow === 'inner' ? 'default' : ep.shadow,
+            ep.shadow === 'inner' ? 'inner-shadow' : 'drop-shadow',
           );
 
-      let color = "#000000";
-      let shadowOpacity = "100";
+      let color = '#000000';
+      let shadowOpacity = '100';
       if (ep.shadowColor?.match(/^#[0-9a-fA-F]{8}$/)) {
         color = ep.shadowColor.slice(0, 7);
         const alpha = Number.parseInt(ep.shadowColor.slice(7, 9), 16);
         shadowOpacity = Math.round((alpha / 255) * 100).toString();
       } else if (ep.shadowColor) {
         color = ep.shadowColor;
-        shadowOpacity = ep.shadowOpacity || "100";
+        shadowOpacity = ep.shadowOpacity || '100';
       }
 
       newEffects.push({
-        id: "1",
+        id: '1',
         visible: true,
-        type: ep.shadow === "inner" ? "inner-shadow" : "drop-shadow",
+        type: ep.shadow === 'inner' ? 'inner-shadow' : 'drop-shadow',
         x: values.x,
         y: values.y,
         blur: values.blur,
@@ -1134,14 +1134,14 @@ export default function RightSidebar({
         preset: isPreset ? ep.shadow : undefined,
       });
     }
-    if (ep.blur && ep.blur !== "none") {
+    if (ep.blur && ep.blur !== 'none') {
       newEffects.push({
-        id: "2",
+        id: '2',
         visible: true,
-        type: "blur",
+        type: 'blur',
         value: ep.blur,
-        color: "#000000",
-        opacity: "100",
+        color: '#000000',
+        opacity: '100',
       });
     }
     setEffects(newEffects);
@@ -1156,15 +1156,15 @@ export default function RightSidebar({
 
   // Auto-reset unsupported values when UI kit is Tamagui
   useEffect(() => {
-    if (projectUIKit !== "tamagui") return;
+    if (projectUIKit !== 'tamagui') return;
 
-    if (selectedPosition === "sticky") {
-      setSelectedPosition("static");
+    if (selectedPosition === 'sticky') {
+      setSelectedPosition('static');
     }
-    if (selectedLayout === "grid") {
-      setSelectedLayout("row");
+    if (selectedLayout === 'grid') {
+      setSelectedLayout('row');
     }
-    setEffects((prev) => prev.filter((e) => e.type !== "inner-shadow" && e.type !== "blur"));
+    setEffects((prev) => prev.filter((e) => e.type !== 'inner-shadow' && e.type !== 'blur'));
   }, [projectUIKit, selectedPosition, selectedLayout]);
 
   // Prevent scroll propagation
@@ -1176,9 +1176,9 @@ export default function RightSidebar({
       e.stopPropagation();
     };
 
-    el.addEventListener("wheel", handleWheel, { passive: true });
+    el.addEventListener('wheel', handleWheel, { passive: true });
     return () => {
-      el.removeEventListener("wheel", handleWheel);
+      el.removeEventListener('wheel', handleWheel);
     };
   }, []);
 
@@ -1227,7 +1227,7 @@ export default function RightSidebar({
   const getFrameType = useCallback(() => {
     // VS Code mode: use tagType from style data
     if (!engine) {
-      return tagType === "div" ? "Frame (div)" : tagType || "Frame";
+      return tagType === 'div' ? 'Frame (div)' : tagType || 'Frame';
     }
 
     // SaaS mode: look up in engine AST/registry
@@ -1242,7 +1242,7 @@ export default function RightSidebar({
       if (Array.isArray(rootAst)) {
         const foundNode = findNodeById(rootAst, lookupId);
         if (foundNode) {
-          return foundNode.type === "div" ? "Frame (div)" : foundNode.type;
+          return foundNode.type === 'div' ? 'Frame (div)' : foundNode.type;
         }
       }
 
@@ -1253,16 +1253,16 @@ export default function RightSidebar({
         if (Array.isArray(childAst)) {
           const foundNode = findNodeById(childAst, lookupId);
           if (foundNode) {
-            return foundNode.type === "div" ? "Frame (div)" : foundNode.type;
+            return foundNode.type === 'div' ? 'Frame (div)' : foundNode.type;
           }
         }
       }
 
-      return "Frame";
+      return 'Frame';
     }
 
     if (!instance) {
-      return "Frame";
+      return 'Frame';
     }
 
     const componentDef = engine.registry.get(instance.type);
@@ -1285,9 +1285,9 @@ export default function RightSidebar({
       )}
       {!isVSCode && (
         <ViewControlsSection
-          viewport={canvasMode === "multi" ? viewport : undefined}
-          onZoomChange={canvasMode === "multi" ? onZoomChange : undefined}
-          onFitToContent={canvasMode === "multi" ? onFitToContent : undefined}
+          viewport={canvasMode === 'multi' ? viewport : undefined}
+          onZoomChange={canvasMode === 'multi' ? onZoomChange : undefined}
+          onFitToContent={canvasMode === 'multi' ? onFitToContent : undefined}
           instanceSize={instanceSize}
           onInstanceSizeChange={onInstanceSizeChange}
         />
@@ -1305,12 +1305,12 @@ export default function RightSidebar({
         <div className="px-4 py-8 text-center flex flex-col items-center gap-3">
           <IconPointer className="w-8 h-8 text-muted-foreground/50" stroke={1.5} />
           <p className="text-sm font-medium text-foreground">
-            {componentPath ? "No element selected" : "No component open"}
+            {componentPath ? 'No element selected' : 'No component open'}
           </p>
           <p className="text-xs text-muted-foreground">
             {componentPath
-              ? "Click an element in the tree to inspect its styles"
-              : "Open a component from the Explorer panel"}
+              ? 'Click an element in the tree to inspect its styles'
+              : 'Open a component from the Explorer panel'}
           </p>
         </div>
       )}
@@ -1357,7 +1357,7 @@ export default function RightSidebar({
         </div>
       )}
 
-      {selectedIds.length === 1 && parsedStyles && (canvasMode !== "multi" || activeInstanceId) && (
+      {selectedIds.length === 1 && parsedStyles && (canvasMode !== 'multi' || activeInstanceId) && (
         <>
           {/* Frame type */}
           <div className="w-full px-4 py-3 border-b border-border overflow-hidden">
@@ -1367,14 +1367,14 @@ export default function RightSidebar({
           </div>
 
           {/* Text Content */}
-          {childrenType !== "jsx" && i18nText?.kind !== "i18n" && (
+          {childrenType !== 'jsx' && i18nText?.kind !== 'i18n' && (
             <div
-              className={`w-full px-4 py-3 border-b border-border overflow-hidden ${isReadonly ? "opacity-50 pointer-events-none" : ""}`}
+              className={`w-full px-4 py-3 border-b border-border overflow-hidden ${isReadonly ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <div className="flex items-center gap-1">
                 <div className="flex-1 min-w-0 min-h-6 px-2 bg-muted rounded flex items-center gap-1">
-                  {(childrenType === "expression" || childrenType === "expression-complex") && (
-                    <span className="text-[11px] text-muted-foreground font-mono">{"{}"}</span>
+                  {(childrenType === 'expression' || childrenType === 'expression-complex') && (
+                    <span className="text-[11px] text-muted-foreground font-mono">{'{}'}</span>
                   )}
                   <Input
                     type="text"
@@ -1383,9 +1383,9 @@ export default function RightSidebar({
                     disabled={isReadonly}
                     className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1 font-mono"
                     placeholder={
-                      childrenType === "expression" || childrenType === "expression-complex"
-                        ? "Expression"
-                        : "Text content"
+                      childrenType === 'expression' || childrenType === 'expression-complex'
+                        ? 'Expression'
+                        : 'Text content'
                     }
                   />
                 </div>
@@ -1415,14 +1415,14 @@ export default function RightSidebar({
               {isTextFromProps && (
                 <div className="w-sidebar-content mt-2 px-2 py-1.5 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded text-[10px] text-amber-800 dark:text-amber-400">
                   ⚠️ Text is passed dynamically.
-                  {activeInstanceId ? " To edit instance props click the badge." : " Editing may broke jsx"}
+                  {activeInstanceId ? ' To edit instance props click the badge.' : ' Editing may broke jsx'}
                 </div>
               )}
             </div>
           )}
 
           {/* i18n Text Inspector */}
-          {i18nText?.kind === "i18n" &&
+          {i18nText?.kind === 'i18n' &&
             (() => {
               // Key only changes on library/key identity change, NOT on locale change.
               // Locale change triggers a re-read via useElementStyleData deps; the component
@@ -1458,15 +1458,15 @@ export default function RightSidebar({
           )}
 
           {/* State Selector */}
-          {projectUIKit === "tailwind" && (
+          {projectUIKit === 'tailwind' && (
             <StateSelectorSection currentState={currentState} onStateChange={setCurrentState} />
           )}
 
           {/* Editing sections - disabled for readonly or during style sync */}
           <div
             className={cn(
-              isReadonly && "opacity-50 pointer-events-none",
-              isStyleSyncing && "pointer-events-none opacity-60",
+              isReadonly && 'opacity-50 pointer-events-none',
+              isStyleSyncing && 'pointer-events-none opacity-60',
             )}
           >
             {/* Position Section */}
@@ -1486,7 +1486,7 @@ export default function RightSidebar({
               />
             )}
 
-            {projectUIKit === "none" && !isVSCode && <SetupTailwindButton onSetupClick={handleSetupTailwind} />}
+            {projectUIKit === 'none' && !isVSCode && <SetupTailwindButton onSetupClick={handleSetupTailwind} />}
 
             {/* Margin Section */}
             {canInspectStyles && (
@@ -1590,7 +1590,7 @@ export default function RightSidebar({
             )}
 
             {/* Effects Section */}
-            {projectUIKit === "tailwind" && (
+            {projectUIKit === 'tailwind' && (
               <EffectsSection effects={effects} onEffectsChange={setEffects} syncStyleChange={syncStyleChange} />
             )}
           </div>
@@ -1603,7 +1603,7 @@ export default function RightSidebar({
 export const SampleDefault = () => {
   return (
     <MemoryRouter>
-      <div style={{ height: "100vh", display: "flex" }}>
+      <div style={{ height: '100vh', display: 'flex' }}>
         {/* Mock the CanvasEngine provider */}
         <div style={{ flex: 1 }}>
           {/* This would normally be wrapped in CanvasEngineProvider */}
@@ -1623,4 +1623,4 @@ export const SampleDefault = () => {
   );
 };
 
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from 'react-router-dom';
