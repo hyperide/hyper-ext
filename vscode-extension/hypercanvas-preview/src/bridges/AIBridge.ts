@@ -494,6 +494,8 @@ export class AIBridge {
         await vscode.commands.executeCommand('hypercanvas.configureAIKey');
         apiKey = await this._getApiKey();
         if (!apiKey) {
+          outcome = 'error';
+          errorCategory = 'no_api_key';
           callback({ type: 'ai:error', requestId, error: 'API key not configured.' });
           return;
         }

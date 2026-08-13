@@ -54,6 +54,170 @@
       "purpose": "FeatureInsight",
       "comment": "AI chat request finished. properties: durationMs, outcome (ok|error|aborted), errorCategory?"
     },
+    "ai.suggestionShown": {
+      "purpose": "FeatureInsight",
+      "comment": "AI-generated suggestion displayed to the user. properties: feature, provider (enum)"
+    },
+    "ai.suggestionAccepted": {
+      "purpose": "FeatureInsight",
+      "comment": "User accepted an AI suggestion. properties: feature, provider (enum), elapsedMs"
+    },
+    "ai.suggestionRejected": {
+      "purpose": "FeatureInsight",
+      "comment": "User dismissed/rejected an AI suggestion. properties: feature, provider (enum), elapsedMs"
+    },
+    "canvas.elementSelected": {
+      "purpose": "FeatureInsight",
+      "comment": "User selected a canvas element. properties: elementKind, depth?"
+    },
+    "canvas.selectionCleared": {
+      "purpose": "FeatureInsight",
+      "comment": "Canvas selection cleared."
+    },
+    "canvas.elementHovered": {
+      "purpose": "FeatureInsight",
+      "comment": "User hovered over a canvas element. properties: elementKind"
+    },
+    "canvas.dragStarted": {
+      "purpose": "FeatureInsight",
+      "comment": "User started a drag on a canvas element. properties: elementKind"
+    },
+    "canvas.dragEnded": {
+      "purpose": "FeatureInsight",
+      "comment": "Drag ended on canvas. properties: moved (bool), elementKind"
+    },
+    "canvas.elementResized": {
+      "purpose": "FeatureInsight",
+      "comment": "Canvas element resized by the user. properties: axis (x|y|both), elementKind"
+    },
+    "canvas.elementMoved": {
+      "purpose": "FeatureInsight",
+      "comment": "Canvas element moved (drag-and-drop). properties: elementKind"
+    },
+    "canvas.elementInserted": {
+      "purpose": "FeatureInsight",
+      "comment": "New element inserted on the canvas. properties: elementKind"
+    },
+    "canvas.elementDeleted": {
+      "purpose": "FeatureInsight",
+      "comment": "Element deleted from canvas. properties: elementKind"
+    },
+    "canvas.elementDuplicated": {
+      "purpose": "FeatureInsight",
+      "comment": "Element duplicated on canvas. properties: elementKind"
+    },
+    "canvas.elementWrapped": {
+      "purpose": "FeatureInsight",
+      "comment": "Element wrapped in a container. properties: wrapperKind"
+    },
+    "canvas.undo": {
+      "purpose": "FeatureInsight",
+      "comment": "Canvas undo invoked."
+    },
+    "canvas.redo": {
+      "purpose": "FeatureInsight",
+      "comment": "Canvas redo invoked."
+    },
+    "canvas.modeSwitched": {
+      "purpose": "FeatureInsight",
+      "comment": "Canvas switched between component and app mode. properties: mode (component|app)"
+    },
+    "canvas.routeNavigated": {
+      "purpose": "FeatureInsight",
+      "comment": "User navigated to a different route in the canvas preview. properties: fromRoute (hash), toRoute (hash)"
+    },
+    "canvas.previewRefreshed": {
+      "purpose": "FeatureInsight",
+      "comment": "Preview manually refreshed by the user."
+    },
+    "canvas.contextMenuOpened": {
+      "purpose": "FeatureInsight",
+      "comment": "Context menu opened on a canvas element. properties: elementKind"
+    },
+    "canvas.contextMenuAction": {
+      "purpose": "FeatureInsight",
+      "comment": "User invoked an action from the canvas context menu. properties: action (enum)"
+    },
+    "canvas.zoomed": {
+      "purpose": "FeatureInsight",
+      "comment": "Canvas zoom level changed. properties: direction (in|out|reset)"
+    },
+    "canvas.panned": {
+      "purpose": "FeatureInsight",
+      "comment": "Canvas viewport panned."
+    },
+    "explorer.itemOpened": {
+      "purpose": "FeatureInsight",
+      "comment": "User opened a component/page from the Explorer. properties: itemKind"
+    },
+    "explorer.treeToggled": {
+      "purpose": "FeatureInsight",
+      "comment": "Explorer tree node expanded or collapsed. properties: expanded (bool)"
+    },
+    "explorer.searched": {
+      "purpose": "FeatureInsight",
+      "comment": "User typed in the Explorer search field. properties: resultCount"
+    },
+    "explorer.itemCreated": {
+      "purpose": "FeatureInsight",
+      "comment": "New component/page created from Explorer. properties: itemKind"
+    },
+    "explorer.itemRenamed": {
+      "purpose": "FeatureInsight",
+      "comment": "Explorer item renamed. properties: itemKind"
+    },
+    "explorer.itemDeleted": {
+      "purpose": "FeatureInsight",
+      "comment": "Explorer item deleted. properties: itemKind"
+    },
+    "explorer.itemMoved": {
+      "purpose": "FeatureInsight",
+      "comment": "Explorer item moved to another location. properties: itemKind"
+    },
+    "explorer.itemSelected": {
+      "purpose": "FeatureInsight",
+      "comment": "Explorer item selected (focus/highlight, not open). properties: itemKind"
+    },
+    "explorer.navigated": {
+      "purpose": "FeatureInsight",
+      "comment": "Explorer navigated to a folder or page. properties: depth"
+    },
+    "inspector.elementInspected": {
+      "purpose": "FeatureInsight",
+      "comment": "An element was loaded into the Inspector panel. properties: elementKind, depth?"
+    },
+    "inspector.propEdited": {
+      "purpose": "FeatureInsight",
+      "comment": "User edited a prop value in the Inspector. properties: propKind (enum), valueKind (string|number|boolean|expression|other)"
+    },
+    "inspector.styleEdited": {
+      "purpose": "FeatureInsight",
+      "comment": "User edited a CSS/style property in the Inspector. properties: styleProperty (enum), valueKind"
+    },
+    "inspector.textEdited": {
+      "purpose": "FeatureInsight",
+      "comment": "User edited text content via the Inspector. properties: elementKind"
+    },
+    "inspector.tabSwitched": {
+      "purpose": "FeatureInsight",
+      "comment": "User switched tabs in the Inspector panel. properties: tab (enum)"
+    },
+    "inspector.toggled": {
+      "purpose": "FeatureInsight",
+      "comment": "Inspector panel opened or closed. properties: visible (bool)"
+    },
+    "panel.opened": {
+      "purpose": "FeatureInsight",
+      "comment": "An extension panel was opened. properties: panel (preview|explorer|inspector|aiChat|logs)"
+    },
+    "panel.closed": {
+      "purpose": "FeatureInsight",
+      "comment": "An extension panel was closed. properties: panel (preview|explorer|inspector|aiChat|logs)"
+    },
+    "theme.changed": {
+      "purpose": "FeatureInsight",
+      "comment": "VS Code theme changed. properties: kind (light|dark|highContrast|highContrastLight)"
+    },
     "error.unhandled": {
       "purpose": "PerformanceAndHealth",
       "comment": "Unhandled host error (ours, not foreign). properties: kind (unhandledRejection|uncaughtException), errorName, scrubbedStackHash, isForeign(false)"
