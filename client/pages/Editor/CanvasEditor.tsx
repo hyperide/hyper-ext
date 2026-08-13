@@ -747,22 +747,30 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 
         {/* Canvas Area */}
         <div className="flex-1 min-w-0">
-          <div className="h-full relative">
-            {/* App-preview address bar — fixed top-centered chrome OUTSIDE the pan/zoom transform,
-                shown only while previewing the current component as an app (not in code mode). */}
+          {/* Flex-column container: address bar row (normal flow) + canvas area below. This keeps
+              the bar as a real flow element above the canvas so the iframe is never covered. */}
+          <div className="h-full flex flex-col">
+            {/* App-preview address bar — normal-flow toolbar row, shown only in app-preview mode.
+                Rendered OUTSIDE the canvas scroll container so canvas overlays (edge-indicators,
+                error overlays) don't include the bar in their inset-0 extents. */}
             {!isCodeEditorMode && appPreview.appMode && (
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[900] w-[420px] max-w-[80%]">
-                <AddressBar
-                  value={appPreview.currentRoute}
-                  suggestions={appPreview.suggestions}
-                  onNavigate={appPreview.onNavigate}
-                  testId="app-preview-address-bar"
-                />
+              <div className="flex-shrink-0 flex justify-center py-2 z-[900] w-full">
+                <div className="w-[420px] max-w-[80%]">
+                  <AddressBar
+                    value={appPreview.currentRoute}
+                    suggestions={appPreview.suggestions}
+                    onNavigate={appPreview.onNavigate}
+                    testId="app-preview-address-bar"
+                  />
+                </div>
               </div>
             )}
+            {/* Canvas scroll container — `relative` makes it the positioning context for all
+                absolute canvas overlays (edge-indicators, error/connection overlays, instance
+                overlays) so they scope to the canvas area only, not the address bar row. */}
             <div
               ref={canvasContainerRef}
-              className="h-full overflow-auto"
+              className="flex-1 min-h-0 overflow-auto relative"
               style={{
                 touchAction: 'pan-x pan-y',
                 overscrollBehaviorX: 'none',
