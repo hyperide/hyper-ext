@@ -2,6 +2,16 @@
 
 All notable changes to HyperCanvas Preview are documented here.
 
+## [0.1.54] — 2026-05-29
+
+### Bug fixes
+
+- **Astro projects no longer stuck in readonly mode** — `detectProjectType()` now maps `astro` dep and `astro.config.{ts,mjs,js,cjs}` config file to `'vite'`; previously Astro projects showed bundler as `unknown` which disabled the full edit pipeline (`c7879324`, `9a48a443`)
+- **Astro Tailwind CSS detected correctly** — `detectCssSystem()` now recognises `@astrojs/tailwind` and `@tailwindcss/vite` as the Tailwind CSS system, not only bare `tailwindcss` dep (`5480bbb5`, `95fb75e9`)
+- **Extension installable on VS Code 1.105.x** — `engines.vscode` minimum restored to `^1.99.0`; was bumped to `^1.106.0` in a previous commit and blocked users on 1.105.1 (`63607931`)
+
+---
+
 ## [0.1.53] — 2026-05-29
 
 ### Bug fixes
