@@ -31,12 +31,9 @@
     // dead; do not delete without a product call:
     // - WorkspacePicker: a workspace-switcher UI component with no current
     //   callsite; may be a not-yet-wired feature rather than dead scaffolding.
-    // - PushPopover/**: the component is unused, BUT git-push popover STATE
-    //   (isPushPopoverOpen/setIsPushPopoverOpen) is live in gitStore + SidebarHeader,
-    //   suggesting a half-wired feature, not dead code.
     // (useNetworkAwarePolling was here — now consumed by useDiagnosticSync, HYP-518.)
+    // (PushPopover/** was here — dropped, superseded by SourceControlSection, HYP-517.)
     "client/components/WorkspacePicker.tsx",
-    "client/components/PushPopover/**",
   ],
   // -------------------------------------------------------------------------
   // HYP-432: silence three knip false-positive categories WITHOUT hiding real

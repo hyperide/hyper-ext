@@ -7,11 +7,14 @@ import {
   IconGitBranch,
   IconPlayerStop,
   IconRefresh,
+  IconSettings,
 } from '@tabler/icons-react';
 import cn from 'clsx';
-import { useCallback, useEffect, useRef } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Textarea } from '@/components/ui/textarea';
 import { useCanvasEngine } from '@/lib/canvas-engine';
+import { useAuthStore } from '@/stores/authStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { type GitFileStatus, useGitStore } from '@/stores/gitStore';
 import { authFetch } from '@/utils/authFetch';
@@ -70,6 +73,8 @@ export function SourceControlSection({
   className,
 }: SourceControlSectionProps) {
   const engine = useCanvasEngine();
+  const navigate = useNavigate();
+  const currentWorkspace = useAuthStore((s) => s.currentWorkspace);
   const {
     changedFiles,
     isLoadingChanges,
@@ -80,6 +85,7 @@ export function SourceControlSection({
     setCommitMessage,
     generateCommitMessage,
     stopGeneration,
+    pushChanges,
   } = useGitStore();
   const { openFile } = useEditorStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -108,6 +114,26 @@ export function SourceControlSection({
       textareaRef.current.focus();
     }
   }, [flowState]);
+
+  // Keyboard shortcut: Cmd/Ctrl+Enter to push (salvaged from the old PushPopover).
+  // Scoped to the commit textarea instead of a window listener: SourceControlSection
+  // stays mounted while the side panel is open AND the user keeps editing code, so a
+  // window-level handler would push from anywhere (e.g. the code editor). The textarea
+  // is disabled during generating/pushing, so those states can't fire this.
+  const handleCommitKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && commitMessage.trim()) {
+        e.preventDefault();
+        void pushChanges();
+      }
+    },
+    [commitMessage, pushChanges],
+  );
+
+  const handleOpenWorkspaceSettings = useCallback(() => {
+    if (!currentWorkspace) return;
+    navigate(`/workspaces/${currentWorkspace.slug}/settings`);
+  }, [currentWorkspace, navigate]);
 
   const handleFileClick = useCallback(
     async (file: GitFileStatus) => {
@@ -226,15 +252,27 @@ export function SourceControlSection({
                   Stop
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => generateCommitMessage()}
-                  disabled={flowState === 'pushing'}
-                  className="h-5 px-1.5 text-[10px] flex items-center gap-1 rounded hover:bg-accent disabled:opacity-50"
-                >
-                  <IconRefresh className="w-3 h-3" />
-                  Regenerate
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => generateCommitMessage()}
+                    disabled={flowState === 'pushing'}
+                    className="h-5 px-1.5 text-[10px] flex items-center gap-1 rounded hover:bg-accent disabled:opacity-50"
+                  >
+                    <IconRefresh className="w-3 h-3" />
+                    Regenerate
+                  </button>
+                  {currentWorkspace && (
+                    <button
+                      type="button"
+                      onClick={handleOpenWorkspaceSettings}
+                      className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                      title="Edit commit prompt in workspace settings"
+                    >
+                      <IconSettings className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -242,6 +280,7 @@ export function SourceControlSection({
               ref={textareaRef}
               value={commitMessage}
               onChange={(e) => setCommitMessage(e.target.value)}
+              onKeyDown={handleCommitKeyDown}
               placeholder={flowState === 'generating' ? 'Generating...' : 'Enter commit message...'}
               className="min-h-[60px] text-xs resize-none"
               disabled={flowState === 'generating' || flowState === 'pushing'}

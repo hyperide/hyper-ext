@@ -96,7 +96,12 @@ export const useGitStore = create<GitState>((set, get) => ({
               staged: f.index !== ' ' && f.index !== '?',
             }),
           );
-          set({ changedFiles: files });
+          // Keep the summary fields (read by the Push-button badge in SidebarHeader)
+          // in sync with the detailed list so the count is correct on the initial
+          // fetch, not only after an SSE event. SSE fileCount == status.files.length
+          // (server/services/component-watcher.ts getGitStatus), so deriving from
+          // files.length here matches the event-driven path exactly.
+          set({ changedFiles: files, hasUnpushedChanges: files.length > 0, unpushedFileCount: files.length });
         }
       }
     } catch (error) {
@@ -258,6 +263,14 @@ export const useGitStore = create<GitState>((set, get) => ({
 
     window.addEventListener('git_status_changed', handler);
     window.addEventListener('components_updated', handler);
+
+    // Prime the count on mount: SSE only PUSHES updates, so without an initial
+    // fetch the Push-button badge stays empty until the first edit fires an event.
+    // fetchChangedFiles sets hasUnpushedChanges/unpushedFileCount, so the count
+    // shows immediately on project load. Runs once per listener setup (gated by
+    // activeProject?.path in CanvasEditor), so no loop.
+    void get().fetchChangedFiles();
+
     return () => {
       window.removeEventListener('git_status_changed', handler);
       window.removeEventListener('components_updated', handler);
