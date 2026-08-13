@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'bun:test';
 import type { FileIO } from '@lib/ast/file-io';
-import { createFileParser } from '@lib/ast/parser';
+import { createFileParser } from '@lib/ast/parser.node';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import { executeStyleWriteRequest, StyleWriteExecutor } from './style-write-executor';
 import { InMemoryFileIO } from './testing/in-memory-file-io';

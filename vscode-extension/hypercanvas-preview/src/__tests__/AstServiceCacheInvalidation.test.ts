@@ -145,7 +145,7 @@ describe('AstService cache invalidation (Task 3)', () => {
     // if the content matches what was cached, since invalidate signals a
     // forced re-parse for cases the content-equality check can't detect
     // (e.g. NodeMapService relies on a fresh AST instance).
-    const { createFileParser } = await import('@lib/ast/parser');
+    const { createFileParser } = await import('@lib/ast/parser.node');
     const fileIO = new InMemoryFileIO({ '/workspace/src/Foo.tsx': FIXTURE_V1 });
     const parser = createFileParser(fileIO);
 

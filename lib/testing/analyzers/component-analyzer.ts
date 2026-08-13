@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
 
-import { readAndParseFile } from '../../ast/parser';
+import { readAndParseFile } from '../../ast/parser.node';
 import { findAllJSXElements } from '../../ast/traverser';
 import type { ComponentAnalysis, CvaVariantInfo, PropDefinition, PropsInterfaceInfo } from '../types';
 import { toKebabCase } from '../utils/naming';

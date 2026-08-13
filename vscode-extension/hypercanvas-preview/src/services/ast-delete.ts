@@ -2,7 +2,7 @@ import type { NodeRef } from '@shared/element-tracing/types';
 import { resolveWorkspacePath } from './workspace-path';
 import type { AstOperationResult } from './ast-types';
 import type { FileIO } from '@lib/ast/file-io';
-import type { createFileParser } from '@lib/ast/parser';
+import type { createFileParser } from '@lib/ast/parser.node';
 import type { File } from '@babel/types';
 
 export interface DeleteElementsDeps {

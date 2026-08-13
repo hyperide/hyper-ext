@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { parseCode, printAST, readAndParseFile, writeAST } from './parser';
+import { parseCode, printAST } from './parser';
+import { readAndParseFile, writeAST } from './parser.node';
 
 describe('parseCode', () => {
   it('should parse simple JSX code', () => {

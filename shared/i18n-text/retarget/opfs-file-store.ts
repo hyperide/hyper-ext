@@ -38,8 +38,20 @@
  *   createWritable swap-on-close path here is the OPFS equivalent of temp+rename — chosen for the
  *   same reason.
  */
-import { createHash } from 'node:crypto';
 import type { FileStore } from './file-store';
+
+/**
+ * SHA-256 hex of a UTF-8 string via the Web Crypto API (crypto.subtle), so this module pulls ZERO
+ * node:* builtins and stays bundleable for the browser/webview (HYP-747). Byte-identical to the
+ * NodeFileStore's `createHash('sha256').update(content).digest('hex')`: both digest the same UTF-8
+ * bytes with SHA-256, so the cross-transport parity the FileStore seam relies on holds. Hash is
+ * telemetry-only (never a write gate), so the async digest fits the already-async `hash` signature.
+ */
+async function sha256Hex(content: string): Promise<string> {
+  const bytes = new TextEncoder().encode(content);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 /** The slice of LockManager.request we use; typed locally so a missing DOM lib decl can't break us. */
 type LockHeldCallback<T> = () => Promise<T>;
@@ -116,7 +128,7 @@ export class OpfsFileStore implements FileStore {
 
   async hash(path: string): Promise<string> {
     const content = await this.read(path);
-    return createHash('sha256').update(content).digest('hex');
+    return sha256Hex(content);
   }
 
   /**

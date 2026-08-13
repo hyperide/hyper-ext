@@ -1,0 +1,82 @@
+# rig.yaml — declarative dev-environment setup for hyper-saas, applied by `rig apply`.
+# COMMITTED BY DEFAULT: this file is the reproducible source of truth for repo guardrails.
+# Global defaults live at ~/.config/rig/config.yaml; this file overrides them.
+# See: rig status (drift), rig apply (converge). Schema in rig-cli docs/config-schema.md.
+#
+# Scope note for this monorepo:
+#   - skills + agent-hooks + dispatcher + the model-freshness schedule are MACHINE-LOCAL
+#     (they install under ~/, never committed) — applying rig is a no-op on the repo tree
+#     for those.
+#   - CI gates that land in .github/workflows/ are the only COMMITTED artifacts; we add ONLY
+#     gates hyper does not already have (codeql / pr-checklist / security-scan are hyper's
+#     own, hand-tuned — rig must not manage or clobber them).
+#   - harness auto-mode (permissions.defaultMode) is intentionally NOT provisioned here: it
+#     would write into a tracked .claude/settings.json. Auto-mode is a per-developer LOCAL
+#     decision (settings.local.json) and a CTO call for the product repo — left disabled.
+
+version: 1
+scope: both
+
+defaults:
+  skills_target: ~/.agents/skills
+  hooks_target: ~/.claude/hooks
+  ci_target: .github/workflows
+  mcp_target: ~/.claude/mcp
+  on_conflict: backup
+
+# ── Skills — all universal + the monorepo by-type bundle. harness_link (default true)
+# symlinks each into ~/.claude/skills so the harness actually lists/loads them. ──────────
+skills:
+  enabled: true
+  target: ~/.agents/skills
+  universal:
+    all: true
+    disable: []
+  by_type:
+    enable: [monorepo]
+
+# ── Agent-hooks — discipline + security guards (write to ~/.claude/hooks, machine-local) ─
+agent_hooks:
+  enabled: true
+  target: ~/.claude/hooks
+  target_kind: claude-code
+  all: true
+
+# ── Global git-hook dispatcher — one entry point, runs in every repo. Supersedes the
+# stand-alone lefthook wiring (the dispatcher composes the same hooks globally). ─────────
+git_hooks:
+  dispatcher:
+    enabled: true
+    dir: ~/.config/git/global-hooks.d
+    runner: ~/.config/git/run-global-hooks
+    set_global_hooks_path: true
+    install_local_retrofit_script: true
+    fragments:
+      secret-scan: { enabled: true }
+
+# ── CI gates — ONLY the net-new gates hyper lacks. codeql/pr-checklist/security-scan are
+# hyper's own and are deliberately NOT managed here (all:false + explicit enables). ──────
+ci:
+  enabled: true
+  target: .github/workflows
+  all: false
+  items:
+    secret-scan:       { enabled: true, tier: block }
+    dependency-review: { enabled: true, tier: block }
+    leftover-grep:     { enabled: true, tier: block }
+    review-threads:    { enabled: true, tier: block }
+
+# ── MCP — none provisioned for this repo (developers manage their own). ──────────────────
+mcp:
+  enabled: false
+
+# ── Harness auto-mode — DISABLED here (see scope note): it would write into a tracked
+# .claude/settings.json. Local opt-in only. ─────────────────────────────────────────────
+harness:
+  enabled: false
+
+# ── Model-freshness checker — daily local schedule (launchd/cron), machine-local. ───────
+models:
+  enabled: true
+  schedule:
+    time: '12:00'

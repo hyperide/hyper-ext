@@ -38,7 +38,7 @@ import {
 import { type MasterComponentResolution, resolveMasterComponent } from '@lib/ast/master-component-resolver';
 import { buildAliasMapFromTsconfig } from '@lib/ast/tsconfig-alias-map';
 import { cloneElement } from '@lib/ast/mutator';
-import { createFileParser } from '@lib/ast/parser';
+import { createFileParser } from '@lib/ast/parser.node';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import { traverseJSXElements } from '@lib/ast/traverser';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';

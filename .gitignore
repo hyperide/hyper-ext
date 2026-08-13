@@ -39,6 +39,9 @@ __pycache__/
 .claude/worktrees
 .claude/state.json
 .claude/tmp/
+# Harness auto/permission mode (rig writes permissions.defaultMode here) — LOCAL only,
+# never commit auto-mode/bypass into the product repo. Per-developer opt-in.
+.claude/settings.local.json
 
 # SOPS decrypted secrets (never commit!)
 *.dec.yaml

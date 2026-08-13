@@ -1,0 +1,45 @@
+# .gitleaksignore — per-finding allowlist for the secret-scan CI gate (gitleaks).
+#
+# Each line is a gitleaks FINGERPRINT (commit:path:rule:line). Listing a fingerprint
+# silences ONLY that exact finding — every new or moved secret still trips the gate.
+# This is the right tool for vetted false positives in HISTORY (test fixtures, doc
+# placeholders, protocol examples) that predate the secret-scan gate and cannot be
+# edited away without rewriting git history.
+#
+# RULE: only add a fingerprint here AFTER confirming by eye it is not a real secret.
+# Never silence a real leak — rotate it and scrub it instead.
+#
+# PATH-VARIANT NOTE: the `path` segment of a fingerprint is how git resolves the file in
+# that historical commit's diff — and that resolution DIFFERS between environments when the
+# file was later renamed (this monorepo moved proxy/ -> server/proxy/, specs/ -> docs/specs/,
+# components/ -> client/components/). macOS git (rename-detecting) reports the pre-rename
+# path; the GitHub Actions runner reports the current path. An unmatched fingerprint is a
+# harmless no-op, so we list BOTH variants for each finding to stay green in either env.
+#
+# All entries below are pre-existing findings in this repo's history, each verified by eye
+# to be a non-secret (see annotation). The first line of each pair is the CI-authoritative
+# (runner) path; the second is the local (rename-resolved) path.
+
+# RFC 6455 sample WebSocket nonce ("the sample nonce" base64). Not a credential.
+11e8344493a8b4b19c9704dc2f806072d6836681:hmr-plan.md:generic-api-key:33
+
+# Doc placeholder: GITHUB_APP_PRIVATE_KEY env example with a literal "MIIE..." ellipsis
+# in the setup instructions (header/body redacted). No real key material.
+247fb011d6a22be812b079e1097010cd5968a46d:docs/github-app-setup.md:private-key:130
+247fb011d6a22be812b079e1097010cd5968a46d:github-app-setup.md:private-key:130
+
+# Unit-test fixtures: TEST_JWT_SECRET = 'unit-test-jwt-secret' / 'stub-refresh-token'.
+ebb942009bf2ace3d1f9a945ef722c8d03f0120e:server/proxy/__tests__/ide-auth-gate.test.ts:generic-api-key:66
+ebb942009bf2ace3d1f9a945ef722c8d03f0120e:proxy/__tests__/ide-auth-gate.test.ts:generic-api-key:66
+ebb942009bf2ace3d1f9a945ef722c8d03f0120e:server/proxy/__tests__/proxy-auth-gate.test.ts:generic-api-key:86
+ebb942009bf2ace3d1f9a945ef722c8d03f0120e:proxy/__tests__/proxy-auth-gate.test.ts:generic-api-key:86
+
+# redactToken() unit-test fixture (asserts a fake token is stripped from output).
+07eeb1ee182805b26038f71f77b5fabb4b454377:server/services/__tests__/ai-agent-remote-git.test.ts:generic-api-key:289
+07eeb1ee182805b26038f71f77b5fabb4b454377:services/__tests__/ai-agent-remote-git.test.ts:generic-api-key:289
+
+# Spec doc + UI source: high-entropy non-secret strings flagged by generic-api-key.
+37818880e37e7ce7779c743b114f17211911a8f6:docs/specs/2026-06-11-style-write-verified-pipeline.md:generic-api-key:142
+37818880e37e7ce7779c743b114f17211911a8f6:specs/2026-06-11-style-write-verified-pipeline.md:generic-api-key:142
+3bff90dd9d496b28c82bf0bbc0d738d2f86498f5:client/components/RightSidebar/RightSidebar.tsx:generic-api-key:729
+3bff90dd9d496b28c82bf0bbc0d738d2f86498f5:components/RightSidebar/RightSidebar.tsx:generic-api-key:729

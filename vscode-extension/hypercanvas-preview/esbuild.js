@@ -56,10 +56,24 @@ function createResolveAliasesPlugin(extra) {
   };
 }
 
+/**
+ * Stub `os` / `node:os` to an empty module for browser bundles. recast's getLineTerminator()
+ * (lib/util.js) reads `require("os").EOL` ONLY behind an `isBrowser()` guard, so in the webview that
+ * branch is dead — but esbuild still resolves the static `require("os")` at bundle time and fails on
+ * `platform: 'browser'`. recast's own package.json "browser" field maps `fs:false` but NOT `os`, so
+ * we map it here. Empty `{}` is safe: the only access (`.EOL`) is never reached in a browser realm
+ * (HYP-747). Keep this bundler-level — never touch the AST core to dodge it.
+ */
+function stubOsForBrowser(build) {
+  build.onResolve({ filter: /^(node:)?os$/ }, (args) => ({ path: args.path, namespace: 'stub-os' }));
+  build.onLoad({ filter: /.*/, namespace: 'stub-os' }, () => ({ contents: 'export default {};', loader: 'js' }));
+}
+
 /** Shared esbuild plugins for webview builds (React singleton + authFetch stub) */
 function createWebviewPlugins() {
   return [
     createResolveAliasesPlugin((build) => {
+      stubOsForBrowser(build);
       // Force single React instance — prevent duplicate React from
       // @/ and @shared/ imports resolving to root node_modules
       const localNodeModules = path.resolve(__dirname, 'node_modules');
