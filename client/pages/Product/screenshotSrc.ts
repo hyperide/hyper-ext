@@ -1,4 +1,4 @@
-const SCREENSHOT_VERSION = '2026-05-02-hyperide-bulka';
+const SCREENSHOT_VERSION = '2026-06-12-hyper-explorer';
 
 export function screenshotSrc(path: string) {
   return `${path}?v=${SCREENSHOT_VERSION}`;
