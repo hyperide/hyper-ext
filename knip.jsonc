@@ -20,6 +20,41 @@
   // require adding fake entry points that mask real dead code — out of scope here
   // (HYP-416 is config SETUP; the unused-code cleanup is follow-up work).
   "ignore": ["templates/**", "server/docker/**"],
+  // -------------------------------------------------------------------------
+  // HYP-432: silence three knip false-positive categories WITHOUT hiding real
+  // dead code. (HYP-416's ~491 genuine dead exports remain out of scope.)
+  //
+  // Category 1 — cross-workspace @lib/ / @shared/ aliases — needs NO config here.
+  // The vscode-extension webview bundles import root lib/shared via esbuild
+  // @lib//@shared/ aliases, AND the extension tsconfig
+  // (vscode-extension/hypercanvas-preview/tsconfig.json) carries the matching
+  // compilerOptions.paths. knip resolves TS path aliases from tsconfig, so it
+  // already follows those imports into the root workspace: of 151 distinct
+  // lib/shared symbols imported by the extension, 146 are correctly seen as used.
+  // The 5 still-flagged are NOT alias misses — they are dead re-export chains
+  // (ext/src/types.ts re-exports a few @lib/types symbols nobody downstream
+  // consumes; the `callAI` re-export in lib/component-scanner; the unused
+  // CssSystemId convenience re-export in lib/style-write/types.ts). Those stay
+  // reported and are the spot-check that proves we don't hide dead code.
+  // Do NOT "fix" category 1 with knip `paths`/compilers — it isn't broken,
+  // and no upstream knip patch is needed.
+  //
+  // Categories 2 & 3 are handled with PRECISE per-export `@public` JSDoc tags
+  // (knip's `tags` config below + tags in the source), NOT broad file ignores —
+  // `ignoreExportsUsedInFile` was rejected because it hid 97 unrelated legit
+  // "over-export / de-export me" findings while suppressing none of the targets,
+  // and `entry`-ing a vocabulary file would also hide the genuinely-dead orphans
+  // that co-live in it (GET_CONTAINER_LOGS, CHECK_BUILD_STATUS, AIMessageRole, …).
+  // `tags: ["-public"]` => any export carrying a `@public` JSDoc tag is EXCLUDED
+  // from the report (treated as intentionally-public surface, i.e. "used").
+  // Used for BOTH category 3 (aggregate-catalog consts in shared/ai-agent-tools.ts)
+  // and category 2 (public vocabulary types in lib/style-read/types.ts +
+  // lib/style-write/types.ts). Per-export `@public` is deliberate over a broad
+  // `ignoreExportsUsedInFile` (which globally suppressed ~280 legit "de-export me"
+  // type findings and ~97 value findings — the exact signal HYP-423/#276 relies on)
+  // and over `entry` on the file (which would also hide the genuinely-dead orphan
+  // types co-located in style-read/types.ts: ComponentPropMapper, CssSystemDescriptor).
+  "tags": ["-public"],
   "workspaces": {
     ".": {
       "entry": [

@@ -19,6 +19,7 @@ export interface ToolDefinition {
 // File Tools
 // ============================================
 
+/** @public */
 export const READ_FILE: ToolDefinition = {
   name: 'read_file',
   description: 'Read contents of a file from the repository. You can optionally specify line range.',
@@ -42,6 +43,7 @@ export const READ_FILE: ToolDefinition = {
   },
 };
 
+/** @public */
 export const EDIT_FILE: ToolDefinition = {
   name: 'edit_file',
   description: 'Edit a file by replacing old content with new content. Use exact string matching.',
@@ -69,6 +71,7 @@ export const EDIT_FILE: ToolDefinition = {
   },
 };
 
+/** @public */
 export const GREP_SEARCH: ToolDefinition = {
   name: 'grep_search',
   description: 'Search for text patterns in files using grep. Supports regex patterns.',
@@ -96,6 +99,7 @@ export const GREP_SEARCH: ToolDefinition = {
   },
 };
 
+/** @public */
 export const GLOB_SEARCH: ToolDefinition = {
   name: 'glob_search',
   description: 'Find files by pattern (e.g., "**/*.ts", "src/**/*.tsx").',
@@ -115,6 +119,7 @@ export const GLOB_SEARCH: ToolDefinition = {
   },
 };
 
+/** @public */
 export const LIST_DIRECTORY: ToolDefinition = {
   name: 'list_directory',
   description: 'List directory contents with file details (type, size, modified date).',
@@ -134,6 +139,7 @@ export const LIST_DIRECTORY: ToolDefinition = {
   },
 };
 
+/** @public */
 export const TREE: ToolDefinition = {
   name: 'tree',
   description: 'Show directory tree structure. Useful for understanding project layout.',
@@ -156,6 +162,7 @@ export const TREE: ToolDefinition = {
   },
 };
 
+/** @public */
 export const WRITE_FILE: ToolDefinition = {
   name: 'write_file',
   description: 'Create a new file or overwrite existing file with content.',
@@ -179,6 +186,7 @@ export const WRITE_FILE: ToolDefinition = {
   },
 };
 
+/** @public */
 export const MOVE_FILE: ToolDefinition = {
   name: 'move_file',
   description: 'Move or rename a file or directory.',
@@ -202,6 +210,7 @@ export const MOVE_FILE: ToolDefinition = {
   },
 };
 
+/** @public */
 export const DELETE_FILE: ToolDefinition = {
   name: 'delete_file',
   description: 'Delete a file or empty directory. Use with caution.',
@@ -277,6 +286,7 @@ export const GIT_COMMAND: ToolDefinition = {
   },
 };
 
+/** @public */
 export const SHELL_TOOLS: ToolDefinition[] = [BASH_EXEC, GIT_COMMAND];
 
 // ============================================
@@ -304,12 +314,14 @@ export const ASK_USER: ToolDefinition = {
   },
 };
 
+/** @public */
 export const INTERACTIVE_TOOLS: ToolDefinition[] = [ASK_USER];
 
 // ============================================
 // Browser Tools (Playwright MCP)
 // ============================================
 
+/** @public */
 export const BROWSER_NAVIGATE: ToolDefinition = {
   name: 'browser_navigate',
   description: 'Navigate browser to URL. Use "preview" as url to open current component preview.',
@@ -325,6 +337,7 @@ export const BROWSER_NAVIGATE: ToolDefinition = {
   },
 };
 
+/** @public */
 export const BROWSER_TAKE_SCREENSHOT: ToolDefinition = {
   name: 'browser_take_screenshot',
   description: 'Take a screenshot of the current page or element.',
@@ -351,6 +364,7 @@ export const BROWSER_TAKE_SCREENSHOT: ToolDefinition = {
   },
 };
 
+/** @public */
 export const BROWSER_CLICK: ToolDefinition = {
   name: 'browser_click',
   description: 'Click an element on the page. Use browser_snapshot first to find element refs.',
@@ -370,6 +384,7 @@ export const BROWSER_CLICK: ToolDefinition = {
   },
 };
 
+/** @public */
 export const BROWSER_TYPE: ToolDefinition = {
   name: 'browser_type',
   description: 'Type text into an input field.',
@@ -393,6 +408,7 @@ export const BROWSER_TYPE: ToolDefinition = {
   },
 };
 
+/** @public */
 export const BROWSER_SNAPSHOT: ToolDefinition = {
   name: 'browser_snapshot',
   description:
@@ -403,6 +419,7 @@ export const BROWSER_SNAPSHOT: ToolDefinition = {
   },
 };
 
+/** @public */
 export const BROWSER_HOVER: ToolDefinition = {
   name: 'browser_hover',
   description: 'Hover over an element.',
@@ -422,6 +439,7 @@ export const BROWSER_HOVER: ToolDefinition = {
   },
 };
 
+/** @public */
 export const BROWSER_TOOLS: ToolDefinition[] = [
   BROWSER_NAVIGATE,
   BROWSER_TAKE_SCREENSHOT,
@@ -435,6 +453,7 @@ export const BROWSER_TOOLS: ToolDefinition[] = [
 // Canvas Tools (UX Flow)
 // ============================================
 
+/** @public */
 export const CANVAS_CREATE_INSTANCE: ToolDefinition = {
   name: 'canvas_create_instance',
   description:
@@ -473,6 +492,7 @@ export const CANVAS_CREATE_INSTANCE: ToolDefinition = {
   },
 };
 
+/** @public */
 export const CANVAS_UPDATE_INSTANCE: ToolDefinition = {
   name: 'canvas_update_instance',
   description: 'Update an existing instance props or position.',
@@ -504,6 +524,7 @@ export const CANVAS_UPDATE_INSTANCE: ToolDefinition = {
   },
 };
 
+/** @public */
 export const CANVAS_DELETE_INSTANCE: ToolDefinition = {
   name: 'canvas_delete_instance',
   description: 'Delete an instance from the canvas.',
@@ -523,6 +544,7 @@ export const CANVAS_DELETE_INSTANCE: ToolDefinition = {
   },
 };
 
+/** @public */
 export const CANVAS_LIST_INSTANCES: ToolDefinition = {
   name: 'canvas_list_instances',
   description: 'List all instances for a component on the canvas.',
@@ -538,6 +560,7 @@ export const CANVAS_LIST_INSTANCES: ToolDefinition = {
   },
 };
 
+/** @public */
 export const CANVAS_CONNECT_INSTANCES: ToolDefinition = {
   name: 'canvas_connect_instances',
   description: 'Create an arrow/connection between two instances to show flow.',
@@ -565,6 +588,7 @@ export const CANVAS_CONNECT_INSTANCES: ToolDefinition = {
   },
 };
 
+/** @public */
 export const CANVAS_ADD_ANNOTATION: ToolDefinition = {
   name: 'canvas_add_annotation',
   description: 'Add a text annotation to the canvas.',
@@ -583,6 +607,7 @@ export const CANVAS_ADD_ANNOTATION: ToolDefinition = {
   },
 };
 
+/** @public */
 export const CANVAS_MODIFY_MAP_ITEMS: ToolDefinition = {
   name: 'canvas_modify_map_items',
   description:
@@ -611,6 +636,7 @@ export const CANVAS_MODIFY_MAP_ITEMS: ToolDefinition = {
   },
 };
 
+/** @public */
 export const CANVAS_MODIFY_COND_ITEM: ToolDefinition = {
   name: 'canvas_modify_cond_item',
   description:
@@ -639,6 +665,7 @@ export const CANVAS_MODIFY_COND_ITEM: ToolDefinition = {
   },
 };
 
+/** @public */
 export const CANVAS_AUTO_GENERATE_VARIANTS: ToolDefinition = {
   name: 'canvas_auto_generate_variants',
   description:
@@ -670,6 +697,7 @@ export const CANVAS_AUTO_GENERATE_VARIANTS: ToolDefinition = {
   },
 };
 
+/** @public */
 export const ANALYZE_COMPONENT_PROPS: ToolDefinition = {
   name: 'analyze_component_props',
   description: 'Analyze a component to understand its props interface and possible states.',
@@ -685,6 +713,7 @@ export const ANALYZE_COMPONENT_PROPS: ToolDefinition = {
   },
 };
 
+/** @public */
 export const SUGGEST_FLOW_STATES: ToolDefinition = {
   name: 'suggest_flow_states',
   description: 'Analyze a component and suggest different states/instances for UX flow visualization.',
@@ -704,6 +733,7 @@ export const SUGGEST_FLOW_STATES: ToolDefinition = {
   },
 };
 
+/** @public */
 export const CANVAS_TOOLS: ToolDefinition[] = [
   CANVAS_CREATE_INSTANCE,
   CANVAS_UPDATE_INSTANCE,
@@ -722,6 +752,7 @@ export const CANVAS_TOOLS: ToolDefinition[] = [
 // Test Tools
 // ============================================
 
+/** @public */
 export const GENERATE_TESTS: ToolDefinition = {
   name: 'generate_tests',
   description:
@@ -750,6 +781,7 @@ export const GENERATE_TESTS: ToolDefinition = {
   },
 };
 
+/** @public */
 export const ANALYZE_COMPONENT_TESTS: ToolDefinition = {
   name: 'analyze_component_tests',
   description:
@@ -766,6 +798,7 @@ export const ANALYZE_COMPONENT_TESTS: ToolDefinition = {
   },
 };
 
+/** @public */
 export const RUN_TESTS: ToolDefinition = {
   name: 'run_tests',
   description:
@@ -787,12 +820,14 @@ export const RUN_TESTS: ToolDefinition = {
   },
 };
 
+/** @public */
 export const TEST_TOOLS: ToolDefinition[] = [GENERATE_TESTS, ANALYZE_COMPONENT_TESTS, RUN_TESTS];
 
 // ============================================
 // Server Management Tools
 // ============================================
 
+/** @public */
 export const RESTART_DEV_SERVER: ToolDefinition = {
   name: 'restart_dev_server',
   description:
@@ -808,6 +843,8 @@ export const RESTART_DEV_SERVER: ToolDefinition = {
   },
 };
 
+// NOTE: intentionally NOT tagged `@public` — never wired into any *_TOOLS / ALL_TOOLS
+// aggregate (orphaned, per HYP-423 / #276), so knip keeps reporting it as dead code.
 /** @deprecated Use GET_DIAGNOSTICS with sources: ['server'] instead */
 export const GET_CONTAINER_LOGS: ToolDefinition = {
   name: 'get_container_logs',
@@ -879,6 +916,7 @@ export const GET_DIAGNOSTICS: ToolDefinition = {
   },
 };
 
+/** @public */
 export const ADD_DEPENDENCY: ToolDefinition = {
   name: 'add_dependency',
   description:
@@ -905,12 +943,14 @@ export const ADD_DEPENDENCY: ToolDefinition = {
   },
 };
 
+/** @public */
 export const SERVER_TOOLS: ToolDefinition[] = [RESTART_DEV_SERVER, GET_DIAGNOSTICS, ADD_DEPENDENCY];
 
 // ============================================
 // Web Tools
 // ============================================
 
+/** @public */
 export const BRAVE_WEB_SEARCH: ToolDefinition = {
   name: 'brave_web_search',
   description:
@@ -931,6 +971,7 @@ export const BRAVE_WEB_SEARCH: ToolDefinition = {
   },
 };
 
+/** @public */
 export const URL_FETCH: ToolDefinition = {
   name: 'url_fetch',
   description:
@@ -951,12 +992,15 @@ export const URL_FETCH: ToolDefinition = {
   },
 };
 
+/** @public */
 export const WEB_TOOLS: ToolDefinition[] = [BRAVE_WEB_SEARCH, URL_FETCH];
 
 // ============================================
 // Extension-Only Tools (legacy — kept for backward compat, new code uses GET_DIAGNOSTICS)
 // ============================================
 
+// NOTE: intentionally NOT tagged `@public` — never wired into any *_TOOLS / ALL_TOOLS
+// aggregate (orphaned, per HYP-423 / #276), so knip keeps reporting it as dead code.
 /** @deprecated Use GET_DIAGNOSTICS with sources: ['build_status'] instead */
 export const CHECK_BUILD_STATUS: ToolDefinition = {
   name: 'check_build_status',

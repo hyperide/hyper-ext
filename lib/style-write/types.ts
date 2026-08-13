@@ -33,6 +33,7 @@ export type TargetStyleValue = string | number;
 
 // --- Write Plan Base ---
 
+/** @public */
 export interface StyleWritePlanBase {
   id: string;
   sourceForm: SourceForm;
@@ -73,6 +74,7 @@ export interface StyleWritePlanBase {
 
 // --- Plan Variants ---
 
+/** @public */
 export interface ClassNameLocation {
   filePath: string;
   line: number;
@@ -155,6 +157,7 @@ export interface PlainCssCreateRulePlan extends PlainCssFilePlanBase {
   };
 }
 
+/** @public */
 export type PlainCssFilePlan = PlainCssExistingOwnerPlan | PlainCssCreateRulePlan;
 export type CssFilePlan = CssModulesFilePlan | PlainCssFilePlan;
 
@@ -171,6 +174,7 @@ export interface ScriptObjectStylePlan extends StyleWritePlanBase {
   };
 }
 
+/** @public */
 export interface ScriptTemplateStylePlan extends StyleWritePlanBase {
   sourceForm: 'scriptNativeStyleRule';
   cssSystem: 'emotion' | 'styled-components';
@@ -254,6 +258,7 @@ export interface FrameworkStyleWriter {
   createPlan(input: { context: StyleWriteContext; sourceOwner: StyleSourceOwner }): StyleWritePlan;
 }
 
+/** @public */
 export interface FrameworkSourceResolver {
   resolve(input: {
     elementFacts: ElementStyleFacts;
@@ -262,14 +267,17 @@ export interface FrameworkSourceResolver {
   }): StyleSourceOwner | undefined;
 }
 
+/** @public */
 export interface FrameworkTokenResolver {
   resolveToken(input: { tokenId: string; property: string }): string | undefined;
 }
 
+/** @public */
 export interface FrameworkThemeResolver {
   resolveThemeValue(input: { property: string; themeCondition: StyleCondition }): StyleSourceOwner | undefined;
 }
 
+/** @public */
 export interface LayoutMutationStrategy {
   changeLayout(input: { elementRef: string; filePath: string; layoutType: string }): StyleWritePlan;
 }

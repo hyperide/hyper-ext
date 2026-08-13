@@ -21,6 +21,7 @@ export type CssSystemId =
   | 'mantine'
   | 'tamagui';
 
+/** @public */
 export type CssSystemTopology = 'flat' | 'cascade';
 
 export interface CssSystemDescriptor {
@@ -31,6 +32,7 @@ export interface CssSystemDescriptor {
 
 export type CssSyntaxId = 'css' | 'scss' | 'sass' | 'less' | 'stylus';
 
+/** @public */
 export type UiKitId =
   | 'shadcn-ui'
   | 'daisyui'
@@ -81,8 +83,10 @@ export type SourceConfidence = 'exact' | 'probable' | 'computed-only';
 
 export type StylePseudoState = 'base' | 'hover' | 'focus' | 'active' | 'focus-visible' | 'disabled';
 
+/** @public */
 export type StyleBreakpointKey = 'base' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | (string & {});
 
+/** @public */
 export type ResponsiveConditionSource =
   | 'tailwind-screens'
   | 'mui-theme-breakpoints'
@@ -92,6 +96,7 @@ export type ResponsiveConditionSource =
   | 'css-container-query'
   | 'custom';
 
+/** @public */
 export interface ViewportCondition {
   kind: 'viewport';
   key: StyleBreakpointKey;
@@ -101,6 +106,7 @@ export interface ViewportCondition {
   source: ResponsiveConditionSource;
 }
 
+/** @public */
 export interface ContainerCondition {
   kind: 'container';
   key?: StyleBreakpointKey;
@@ -111,6 +117,7 @@ export interface ContainerCondition {
   source: ResponsiveConditionSource;
 }
 
+/** @public */
 export interface MediaCondition {
   kind: 'media' | 'supports';
   query: string;
@@ -119,8 +126,10 @@ export interface MediaCondition {
 
 // --- Theme ---
 
+/** @public */
 export type ThemeAxisId = 'color-scheme' | 'brand' | 'density' | 'contrast' | 'platform' | (string & {});
 
+/** @public */
 export type ThemeConditionSource =
   | 'prefers-color-scheme'
   | 'tailwind-dark-selector'
@@ -147,6 +156,7 @@ export interface ThemeCondition {
   configPath?: string;
 }
 
+/** @public */
 export type SelectorConditionKind =
   | 'self-pseudo'
   | 'ancestor-selector'
@@ -159,6 +169,7 @@ export type SelectorConditionKind =
   | 'arbitrary-selector'
   | 'library-variant';
 
+/** @public */
 export interface SelectorCondition {
   kind: SelectorConditionKind;
   selector: string;
@@ -318,6 +329,7 @@ export interface ThemeContextResolver {
 
 // --- Theme Capabilities ---
 
+/** @public */
 export type ThemeMechanism =
   | 'prefers-color-scheme'
   | 'class-selector'
@@ -333,6 +345,7 @@ export type ThemeMechanism =
   | 'css-in-js-theme-callback'
   | 'script-branch';
 
+/** @public */
 export interface ThemeTokenSource {
   kind:
     | 'css-custom-property'
@@ -347,6 +360,7 @@ export interface ThemeTokenSource {
   owner?: string;
 }
 
+/** @public */
 export interface ThemeAxisCapability {
   id: ThemeAxisId;
   values: string[];
@@ -354,6 +368,7 @@ export interface ThemeAxisCapability {
   source: 'config' | 'css' | 'runtime' | 'library' | 'inferred';
 }
 
+/** @public */
 export interface ProjectThemeCapabilities {
   axes: ThemeAxisCapability[];
   mechanisms: ThemeMechanism[];
@@ -362,12 +377,14 @@ export interface ProjectThemeCapabilities {
 
 // --- Project & Element Capabilities ---
 
+/** @public */
 export interface PackageEvidence {
   packageName: string;
   version?: string;
   dependencyKind: 'dependencies' | 'devDependencies' | 'peerDependencies' | 'unknown';
 }
 
+/** @public */
 export interface ConfigEvidence {
   filePath: string;
   kind:
@@ -381,6 +398,7 @@ export interface ConfigEvidence {
     | 'other';
 }
 
+/** @public */
 export interface SourceEvidence {
   filePath: string;
   cssSyntax?: CssSyntaxId;
@@ -419,12 +437,14 @@ export interface StyleAttributeFacts {
   hasSpread: boolean;
 }
 
+/** @public */
 export interface ComponentFacts {
   importSource?: string;
   componentName?: string;
   intrinsicElement?: string;
 }
 
+/** @public */
 export interface ComponentPropSurfaceFacts {
   acceptsClassName: boolean;
   acceptsStyle: boolean;
@@ -435,18 +455,21 @@ export interface ComponentPropSurfaceFacts {
   semanticProps: string[];
 }
 
+/** @public */
 export interface ThemeVariableUsage {
   name: string;
   fallbackChain: string[];
   owners: StyleSourceOwner[];
 }
 
+/** @public */
 export interface ThemeTokenUsage {
   tokenPath: string;
   source: ThemeTokenSource['kind'];
   owners: StyleSourceOwner[];
 }
 
+/** @public */
 export interface ElementThemeFacts {
   activeRuntimeTheme: RuntimeThemeContext;
   sourceThemeConditions: ThemeCondition[];
@@ -507,6 +530,7 @@ export interface AvailableConditionAxes {
   containerKeys: StyleBreakpointKey[];
 }
 
+/** @public */
 export interface StyleReadDiagnostic {
   level: 'info' | 'warning';
   message: string;
@@ -527,6 +551,7 @@ export interface StyleReadManager {
 
 // --- Component Prop Mapper ---
 
+/** @public */
 export type ComponentPropMapperMatch =
   | {
       matched: true;
@@ -539,6 +564,7 @@ export type ComponentPropMapperMatch =
       reason: string;
     };
 
+/** @public */
 export interface ComponentPropStyleWriteTarget {
   sourceForm: 'adapterKnownElementProp' | 'scriptReactStyleRule' | 'elementClass' | 'cssStyleRule';
   props?: Record<string, unknown>;
@@ -546,6 +572,7 @@ export interface ComponentPropStyleWriteTarget {
   sourceOwner?: StyleSourceOwner;
 }
 
+/** @public */
 export interface ComponentPropMapperUnsupported {
   supported: false;
   reason: string;
