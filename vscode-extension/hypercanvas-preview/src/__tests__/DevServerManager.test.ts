@@ -483,5 +483,23 @@ describe('DevServerManager', () => {
 
       expect(setTargetPort).not.toHaveBeenCalled();
     });
+
+    it('detects low-numbered ports like :80', () => {
+      const setTargetPort = mock();
+      Object.assign(manager, { _previewProxy: { setTargetPort }, _port: 5174 });
+
+      firePortDetector(manager, 'Server listening at http://localhost:80');
+
+      expect(setTargetPort).toHaveBeenCalledWith(80);
+    });
+
+    it('rejects port > 65535', () => {
+      const setTargetPort = mock();
+      Object.assign(manager, { _previewProxy: { setTargetPort }, _port: 5174 });
+
+      firePortDetector(manager, 'Running at http://localhost:65536');
+
+      expect(setTargetPort).not.toHaveBeenCalled();
+    });
   });
 });

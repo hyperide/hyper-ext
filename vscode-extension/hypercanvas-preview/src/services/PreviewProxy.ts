@@ -393,7 +393,9 @@ export class PreviewProxy {
       return;
     }
 
-    const targetSocket = net.connect(this._targetPort, 'localhost', () => {
+    // Snapshot port before async ops — setTargetPort() may race with net.connect callback
+    const targetPort = this._targetPort;
+    const targetSocket = net.connect(targetPort, 'localhost', () => {
       // Forward the original HTTP upgrade request to target
       const requestLine = `${req.method} ${req.url} HTTP/1.1\r\n`;
       const headers = Object.entries(req.headers)
@@ -401,7 +403,7 @@ export class PreviewProxy {
         .map(([key, val]) => `${key}: ${val}`)
         .join('\r\n');
 
-      const hostHeader = `host: 127.0.0.1:${this._targetPort}`;
+      const hostHeader = `host: 127.0.0.1:${targetPort}`;
       targetSocket.write(`${requestLine}${hostHeader}\r\n${headers}\r\n\r\n`);
 
       if (head.length > 0) {
