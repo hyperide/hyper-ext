@@ -114,3 +114,61 @@ describe('PreviewProxy serving-state coupling (HYP-370 Phase 4)', () => {
     expect(res.body).toBe('UPSTREAM_OK');
   });
 });
+
+/**
+ * `process` shim. A previewed user app whose module graph reads `process.env` at
+ * module init (e.g. hyperide's `client/` → `@babel/traverse` → `@babel/types`)
+ * crashes with `ReferenceError: process is not defined` in the iframe. The proxy
+ * defines `process` BEFORE the user's deferred `<script type="module">` entry
+ * evaluates.
+ *
+ * The shim is exposed two ways: injected as a classic <script> at the start of
+ * <head> for App-Shell HTML, AND served as a virtual `/__hypercanvas/process-shim.js`
+ * endpoint (so Remix routes, which render their own scripts, can pull it).
+ *
+ * NB: the HTML-injection round-trip is asserted by the e2e harness
+ * (debug-hyperide-preview.mts), not here — the proxy forces `transfer-encoding:
+ * chunked` on injected HTML, which Bun's test-runtime HTTP client rejects with
+ * HPE_INVALID_HEADER_TOKEN (a Bun parser quirk; Chromium and Node accept it). The
+ * virtual endpoint serves with content-length (no chunked), so it round-trips
+ * cleanly under `bun test` and still proves the shim content.
+ */
+describe('PreviewProxy process-shim', () => {
+  let upstream: { port: number; close: () => Promise<void> };
+  let proxy: InstanceType<typeof PreviewProxy>;
+
+  beforeEach(async () => {
+    upstream = await startUpstream();
+  });
+
+  afterEach(async () => {
+    proxy?.stop();
+    await upstream.close();
+  });
+
+  it('serves the process shim as a virtual /__hypercanvas/process-shim.js endpoint', async () => {
+    proxy = new PreviewProxy(upstream.port);
+    proxy.setIsServing(() => true);
+    await proxy.start();
+
+    const res = await get(proxy.port ?? 0, '/__hypercanvas/process-shim.js');
+    expect(res.status).toBe(200);
+    // Must NOT hit the upstream — it's served from the in-extension script map.
+    expect(res.body).not.toContain('UPSTREAM_OK');
+    // The shim defines a browser-safe `process` with an env + NODE_ENV.
+    expect(res.body).toContain('process');
+    expect(res.body).toContain('env');
+    expect(res.body).toContain('NODE_ENV');
+  });
+
+  it('the shim is idempotent / non-destructive (guards before assigning)', async () => {
+    proxy = new PreviewProxy(upstream.port);
+    proxy.setIsServing(() => true);
+    await proxy.start();
+
+    const res = await get(proxy.port ?? 0, '/__hypercanvas/process-shim.js');
+    // Only define when absent — never clobber a real `process` an SSR shell provides.
+    expect(res.body).toContain("typeof g.process === 'undefined'");
+    expect(res.body).toContain("typeof g.process.env.NODE_ENV === 'undefined'");
+  });
+});

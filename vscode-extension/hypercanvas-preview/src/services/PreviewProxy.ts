@@ -35,8 +35,50 @@ const chromeDetectionScriptContent = `
   }, { once: true });
 })();
 `;
-const INJECTED_SCRIPTS = `<script data-hyper-inject="interaction">${interactionScriptContent}</script><script data-hyper-inject="error-detection">${errorDetectionScriptContent}</script><script data-hyper-inject="console-capture">${consoleCaptureScriptContent}</script>`;
+
+// Minimal `process` shim for the PREVIEWED USER APP (not the extension's own webview
+// bundles — those are kept @babel-free at build time via createWebviewPlugins/esbuild
+// `define`; see scripts/check-webview-bundles.mjs).
+//
+// Why this is needed and why it can't be a build-time define here: the previewed app is
+// the USER's project, built and served by THEIR dev server (Vite/etc.), proxied through
+// this PreviewProxy. We do not control that bundle's build, so we cannot esbuild-stub or
+// `define` into it. A user app whose module graph value-imports a node-ish library that
+// reads `process.env` at module init — e.g. hyperide's own `client/`:
+//   PlatformContext.tsx -> nodepodRetargetTransport -> @shared/i18n-text/retarget/core
+//   -> `import _traverse from '@babel/traverse'` -> @babel/types/lib/definitions/utils.js
+//   reads `process.env.BABEL_TYPES_8_BREAKING` at init
+// throws `ReferenceError: process is not defined` in the browser realm, blanking the whole
+// preview. The SaaS (hyperide.ai) doesn't hit this because its OWN production build
+// (Bun.build, target:'browser') shims `process` for it; a plain Vite dev serve does not.
+//
+// This classic <script> is injected at the very start of <head>, so it runs BEFORE Vite's
+// deferred `<script type="module">` entry evaluates the module graph. It's idempotent and
+// non-destructive: it only defines `globalThis.process` when absent, and only fills
+// `process.env` / `NODE_ENV` when missing — never clobbering a real `process` (e.g. SSR
+// hydration shells that already provide one). This makes EVERY previewed user app robust
+// to module-init `process.env` reads, not just hyperide.
+const processShimScriptContent = `
+(function () {
+  try {
+    var g = typeof globalThis !== 'undefined' ? globalThis : window;
+    if (typeof g.process === 'undefined' || g.process === null) {
+      g.process = { env: {} };
+    }
+    if (typeof g.process.env === 'undefined' || g.process.env === null) {
+      g.process.env = {};
+    }
+    if (typeof g.process.env.NODE_ENV === 'undefined') {
+      g.process.env.NODE_ENV = 'development';
+    }
+  } catch (e) {
+    /* never let the shim itself break the preview */
+  }
+})();
+`;
+const INJECTED_SCRIPTS = `<script data-hyper-inject="process-shim">${processShimScriptContent}</script><script data-hyper-inject="interaction">${interactionScriptContent}</script><script data-hyper-inject="error-detection">${errorDetectionScriptContent}</script><script data-hyper-inject="console-capture">${consoleCaptureScriptContent}</script>`;
 const HYPERCANVAS_SCRIPT_RESPONSES = new Map([
+  ['/__hypercanvas/process-shim.js', processShimScriptContent],
   ['/__hypercanvas/iframe-interaction.js', interactionScriptContent],
   ['/__hypercanvas/iframe-error-detection.js', errorDetectionScriptContent],
   ['/__hypercanvas/iframe-console-capture.js', consoleCaptureScriptContent],
