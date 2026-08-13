@@ -1,3 +1,4 @@
+import posthog from 'posthog-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -9,6 +10,20 @@ import AuthProvider from './components/AuthProvider';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ThemeProvider } from './components/ThemeProvider';
 import { PlatformProvider } from './lib/platform';
+
+// Initialize PostHog EU analytics only in production.
+// Token is a public project key — safe to commit.
+// Wrapped in try/catch so analytics failure never prevents the app from mounting.
+if (import.meta.env.PROD) {
+  try {
+    posthog.init('phc_zPBEBNdNyiie4jygsN7ZUkLjig5afSKCYTrPing5Ts7f', {
+      api_host: 'https://eu.i.posthog.com',
+      defaults: '2026-05-30',
+    });
+  } catch {
+    // Analytics init failure must not block the app.
+  }
+}
 
 // Lazy load pages for code splitting
 // EditorWrapper includes CanvasEngine, ComponentMetaProvider, and Index page
