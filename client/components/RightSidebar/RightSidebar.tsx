@@ -71,7 +71,13 @@ import {
   resolveInspectorStyleSourceTabs,
 } from './source-tabs';
 import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
-import { cssToPosition, findNodeById, mapShadowSizeToValues, parseHexWithAlpha } from './utils';
+import {
+  cssToPosition,
+  findNodeById,
+  mapShadowSizeToValues,
+  parseHexWithAlpha,
+  resolveVSCodeFrameLabel,
+} from './utils';
 
 export default function RightSidebar({
   onOpenSettings,
@@ -1272,9 +1278,11 @@ export default function RightSidebar({
 
   // Get frame type for display
   const getFrameType = useCallback(() => {
-    // VS Code mode: use tagType from style data
+    // VS Code mode: use tagType from style data. resolveVSCodeFrameLabel collapses the
+    // host's 'unknown' resolution sentinel (and an empty tag) to the generic 'Frame'
+    // label instead of leaking the raw debug token into the header (tg#5071).
     if (!engine) {
-      return tagType === 'div' ? 'Frame (div)' : tagType || 'Frame';
+      return resolveVSCodeFrameLabel(tagType);
     }
 
     // SaaS mode: look up in engine AST/registry

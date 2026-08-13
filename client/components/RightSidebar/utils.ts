@@ -87,6 +87,26 @@ export function cssToPosition(css: string): PositionType {
 }
 
 /**
+ * Resolve the inspector header label (VS Code mode) from the host-reported tag type.
+ *
+ * The style-read RPC reports `tagType: 'unknown'` as a SENTINEL whenever the selected
+ * element could not be resolved to a source JSX tag — selection lost after HMR, a bundle
+ * artifact, a parse/IO error, or an RPC transport failure (StyleReadService returns its
+ * `empty` result; useElementStyleData maps a failed RPC to the same sentinel). The header
+ * was written as `tagType || 'Frame'`, but the sentinel is a non-empty string, so the
+ * intended graceful fallback never fired and the raw lowercase token "unknown" leaked into
+ * the UI (tg#5071). Collapse both the sentinel and an empty tag to the generic 'Frame'
+ * label so the unresolved case reads cleanly. A real host tag ('div' → 'Frame (div)') and
+ * any resolved component / intrinsic name pass through verbatim — in particular a
+ * cross-package component name recovered by #557 must NOT be collapsed.
+ */
+export function resolveVSCodeFrameLabel(tagType: string | undefined): string {
+  if (tagType === 'div') return 'Frame (div)';
+  if (!tagType || tagType === 'unknown') return 'Frame';
+  return tagType;
+}
+
+/**
  * Helper to recursively find node by id in AST
  */
 export function findNodeById(nodes: ASTNode[], id: string): ASTNode | null {
