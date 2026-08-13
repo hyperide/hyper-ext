@@ -1,8 +1,13 @@
 # Agent Ecosystem Retrospective and Fix Strategy — 2026-07-01
 
 - **Ticket:** [HYP-858](https://linear.app/glide-vc/issue/HYP-858/agent-ecosystem-retrospective-spec-strategy-for-fixes-and-improvements)
-- **Status:** DRAFT — strategy proposal awaiting CTO review (per the CTO's scope brake, tg#5608:
-  "A reminder — for now we are only composing the strategy"; translated from Russian).
+- **Status:** Ratified (2026-07-12) — the CTO (Alex) ratified this retrospective's strategy and
+  direction via Telegram (2026-07-12). Ratification covers the strategy only; it does **not**
+  resolve the seven Open Decisions in Section 11 — those remain open and individually gated on
+  the CTO, and the scope-brake "proposal" framing (Section 11 header, tg#5608) still governs
+  each of them until it is separately decided.
+  (Previously DRAFT — strategy proposal awaiting CTO review, per the CTO's scope brake, tg#5608:
+  "A reminder — for now we are only composing the strategy"; translated from Russian.)
 - **Date:** 2026-07-01
 - **Commissioned by:** CTO directive (tg, 2026-07-01, translated): "Analyze everything that comes
   in — conversations, processes, rig status, code changes — and develop a strategy of fixes and
