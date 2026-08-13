@@ -2,6 +2,22 @@
 
 All notable changes to HyperCanvas Preview are documented here.
 
+## [0.1.56] — 2026-06-01
+
+### New features
+
+- **Monorepo support — HyperIDE Explorer now works with Nx, Turbo, pnpm workspaces, Lerna** — `detectRepoType()` identifies monorepo topology and scans sub-packages under `targets/`, `apps/`, `packages/`, `libs/`, `services/`. CSS frameworks (Tailwind, shadcn) are detected from sub-packages when not present at root (`b4b5d0b4`)
+- **Sub-package component scanning** — `ComponentScanner` now recursively discovers React components in monorepo sub-packages, including packages with `pages/` or `components/` at root instead of `src/` (`cde7a406`)
+- **Explorer sub-project accordion** — HyperIDE Explorer shows each sub-package as a collapsible accordion section with a color-coded badge. Supported packages (React) expand to show Pages/Atoms/Components. Unsupported packages (Vue, Express, etc.) show a brief reason inline. Shared libraries (react in peerDependencies only) show components instead of pages (`85eecc49`)
+
+### Bug fixes
+
+- **ConlocaCard no longer duplicated in Pages and Components** — `scanPagesDirectory` now skips directories already categorised as composites; `buildSubProject` passes `compositeDirPaths` as `excludeDirs` to the pages build call, mirroring the existing atom→composites exclusion pattern (`c51652e3`)
+- **SaaS accordion propagation** — `useComponentsData` now preserves `isMonorepo` and `subProjects` fields returned by the server; previously the hook silently dropped them by reconstructing only `atomGroups/compositeGroups/pageGroups` (`85eecc49`)
+- **Monorepo CSS fallback always fires** — removed `if (!packageJson)` guard in `detectCssSystem()` that prevented Tailwind detection in `apps/web/` when root `package.json` was pre-resolved (`85eecc49`)
+
+---
+
 ## [0.1.55] — 2026-05-29
 
 ### Bug fixes
