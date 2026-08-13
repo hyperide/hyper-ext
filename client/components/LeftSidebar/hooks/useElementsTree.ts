@@ -76,7 +76,14 @@ function buildTreeFromEngine(engine: CanvasEngine, store: StoreApi): TreeNode[] 
   return rootInstance.children.map((childId) => {
     const instance = engine.getInstance(childId);
     if (!instance) {
-      return { id: childId, type: 'element' as const, label: 'Unknown' };
+      // Orphaned child: the parent lists a child id the engine can't resolve to an
+      // instance (a transient state desync). Show the clean generic that matches the
+      // node's TreeNode type instead of leaking the uninformative 'Unknown' debug
+      // token into the explorer tree (sentinel-leak audit, same class as the #559
+      // inspector-header fix). No name is fabricated — just the intended generic.
+      // children: [] for shape consistency with resolved nodes — prevents TypeError
+      // on consumers iterating children without optional chaining.
+      return { id: childId, type: 'element' as const, label: 'Element', children: [] };
     }
 
     const componentDef = engine.registry.get(instance.type);

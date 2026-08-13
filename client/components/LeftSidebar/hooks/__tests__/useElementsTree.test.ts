@@ -31,8 +31,17 @@ type FakeRoot = {
 
 type Subscriber = () => void;
 
+type FakeInstance = {
+  id: string;
+  type: string;
+  parentId?: string | null;
+  children: string[];
+  metadata?: Record<string, unknown>;
+};
+
 const fakeStore = (() => {
   let updateCounter = 0;
+  let instances = new Map<string, FakeInstance>();
   const subs = new Set<Subscriber>();
   return {
     subscribe(cb: Subscriber) {
@@ -40,7 +49,10 @@ const fakeStore = (() => {
       return () => subs.delete(cb);
     },
     getState() {
-      return { instances: new Map(), _updateCounter: updateCounter };
+      return { instances, _updateCounter: updateCounter };
+    },
+    setInstances(next: Map<string, FakeInstance>) {
+      instances = next;
     },
     bump() {
       updateCounter += 1;
@@ -48,6 +60,7 @@ const fakeStore = (() => {
     },
     reset() {
       updateCounter = 0;
+      instances = new Map();
       subs.clear();
     },
   };
@@ -137,5 +150,28 @@ describe('useElementsTree — SaaS path reactivity', () => {
     });
 
     expect(result.current).toEqual([{ id: 'x2', type: 'element', label: 'New', children: [] }]);
+  });
+});
+
+// ─── SaaS path: orphaned (unresolvable) child must not leak a debug token ────
+
+describe('useElementsTree — SaaS orphaned-child label', () => {
+  it('labels an unresolvable child with the generic "Element", never the raw "Unknown" sentinel', () => {
+    // A parent instance lists a child id that engine.getInstance() cannot resolve
+    // (a transient state desync, e.g. mid-mutation). The fallback node must read as
+    // a clean generic — matching its TreeNode type 'element' — instead of leaking the
+    // uninformative "Unknown" token into the explorer tree (audit of the #559 class).
+    mockState.engine = fakeEngine; // getInstance: () => null  → child is unresolvable
+    mockState.store = fakeStore;
+    fakeRoot.metadata = {}; // no sample/astStructure → falls through to the instances path
+    fakeStore.setInstances(
+      new Map([['root', { id: 'root', type: 'root', parentId: null, children: ['orphan-1'] }]]),
+    );
+
+    const { result } = renderHook(() => useElementsTree());
+
+    // children: [] required — shape must be consistent with resolved nodes so consumers
+    // can iterate node.children without optional chaining (review finding, claude-opus-4-8).
+    expect(result.current).toEqual([{ id: 'orphan-1', type: 'element', label: 'Element', children: [] }]);
   });
 });
