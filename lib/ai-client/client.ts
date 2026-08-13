@@ -73,11 +73,19 @@ export async function callAI(config: ResolvedAIConfig, prompt: string, options?:
     messages: [{ role: 'user', content: prompt }],
   });
 
-  const content = response.content[0];
-  if (content.type !== 'text') {
+  // Shape-probe before indexing: a non-streaming request can hit a stream-only
+  // endpoint (e.g. the e2e mock) and the SDK then returns raw SSE text whose
+  // `.content` is undefined — guard it so callers get a clear throw, not a
+  // `Cannot read properties of undefined (reading '0')` (e2e #11).
+  const content = (response as { content?: unknown }).content;
+  if (!Array.isArray(content) || content.length === 0) {
+    throw new Error('Unexpected AI response shape: expected a non-empty content array');
+  }
+  const first = content[0] as { type?: string; text?: string };
+  if (first.type !== 'text' || typeof first.text !== 'string') {
     throw new Error('Unexpected AI response type');
   }
-  return content.text;
+  return first.text;
 }
 
 /**
@@ -167,9 +175,13 @@ async function callOpenAICompatible(
   }
 
   const data = (await response.json()) as {
-    choices: { message: { content: string } }[];
+    choices?: { message?: { content?: unknown } }[];
   };
-  return data.choices[0].message.content;
+  const message = Array.isArray(data.choices) ? data.choices[0]?.message : undefined;
+  if (typeof message?.content !== 'string') {
+    throw new Error('Unexpected AI response shape: expected choices[0].message.content string');
+  }
+  return message.content;
 }
 
 /**

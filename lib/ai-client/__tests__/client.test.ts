@@ -83,6 +83,40 @@ describe('callAI', () => {
     await expect(callAI(anthropicConfig, 'test')).rejects.toThrow('Unexpected AI response type');
   });
 
+  // e2e #11: a non-streaming request hitting a stream-only endpoint makes the SDK
+  // return raw SSE text whose `.content` is undefined. Must throw a clear shape
+  // error, not `Cannot read properties of undefined (reading '0')`.
+  it('should throw a shape error when content is undefined', async () => {
+    mockCreate.mockResolvedValue({} as never);
+    await expect(callAI(anthropicConfig, 'test')).rejects.toThrow('Unexpected AI response shape');
+  });
+
+  it('should throw a shape error when content is not an array', async () => {
+    mockCreate.mockResolvedValue({ content: 'event: message_start\ndata: ...' } as never);
+    await expect(callAI(anthropicConfig, 'test')).rejects.toThrow('Unexpected AI response shape');
+  });
+
+  it('should throw a shape error when content array is empty', async () => {
+    mockCreate.mockResolvedValue({ content: [] } as never);
+    await expect(callAI(anthropicConfig, 'test')).rejects.toThrow('Unexpected AI response shape');
+  });
+
+  it('should throw a shape error when openai choices is missing', async () => {
+    const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ id: 'x' }), { status: 200 }),
+    );
+    await expect(callAI(openaiConfig, 'test')).rejects.toThrow('Unexpected AI response shape');
+    fetchSpy.mockRestore();
+  });
+
+  it('should throw a shape error when openai message.content is not a string', async () => {
+    const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: {} }] }), { status: 200 }),
+    );
+    await expect(callAI(openaiConfig, 'test')).rejects.toThrow('Unexpected AI response shape');
+    fetchSpy.mockRestore();
+  });
+
   it('should call OpenAI-compatible API for openai provider', async () => {
     const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
