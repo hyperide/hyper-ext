@@ -2,17 +2,35 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      glob: '*.{ts,tsx,js,jsx}'
+      glob: "*.{ts,tsx,js,jsx}"
       run: npx oxlint --config .oxlintrc.json --no-error-on-unmatched-pattern {staged_files}
     format:
-      glob: '*.{ts,tsx,js,jsx,json,jsonc,css,md}'
+      glob: "*.{ts,tsx,js,jsx,json,jsonc,css,md}"
       run: npx oxfmt --write --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
     typecheck:
-      glob: '*.{ts,tsx}'
+      glob: "*.{ts,tsx}"
       # TODO: re-enable `&& npx tsgo --noEmit -p vscode-extension/hypercanvas-preview/tsconfig.json`
       # once pre-existing TS6059 rootDir errors (and missing @types/vscode in worktree) are resolved.
       run: npx tsgo --noEmit
     react-hooks-import:
-      glob: '*.{tsx,ts}'
+      glob: "*.{tsx,ts}"
       run: node scripts/check-react-hooks-import.cjs {staged_files}
+    no-conflict-markers:
+      glob: "*.{ts,tsx,js,jsx,json,md,yml,yaml,css,scss}"
+      run: |
+        FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -v "node_modules" | grep -E "\.(ts|tsx|js|jsx|json|md|yml|yaml|css|scss)$")
+        if [ -z "$FILES" ]; then exit 0; fi
+        FOUND=""
+        while IFS= read -r f; do
+          RESULT=$(git show ":$f" 2>/dev/null | grep -n "^<<<<<<< \|^=======$\|^>>>>>>> ")
+          if [ -n "$RESULT" ]; then
+            FOUND="$FOUND\n$f:\n$RESULT"
+          fi
+        done <<< "$FILES"
+        if [ -n "$FOUND" ]; then
+          echo "ERROR: Conflict markers found in staged index:"
+          printf "%b\n" "$FOUND"
+          exit 1
+        fi
+      stage_fixed: false
