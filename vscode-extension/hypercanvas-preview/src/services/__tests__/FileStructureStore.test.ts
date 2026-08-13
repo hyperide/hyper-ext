@@ -49,11 +49,31 @@ describe('FileProjectStructureStore', () => {
     expect(result).toEqual(PATHS);
   });
 
-  test('load() reads from disk when no pending data', async () => {
+  test('load() reads from disk when no pending data (auto-generated cache)', async () => {
+    // Auto-generated caches carry _generated + schemaVersion — load() verifies the version.
+    const payload = { _generated: true as const, schemaVersion: 1, ...PATHS };
+    mockFiles['/project/.hyperide/project-structure.json'] = JSON.stringify(payload);
+
+    const result = await store.load('/project');
+    expect(result).toEqual(PATHS);
+  });
+
+  test('load() trusts a user-authored config (no _generated flag) even without schemaVersion', async () => {
+    // Configs created via hypercanvas.openProjectStructure have no _generated marker.
+    // They must never be rejected regardless of schemaVersion absence (HYP-758 fix).
     mockFiles['/project/.hyperide/project-structure.json'] = JSON.stringify(PATHS);
 
     const result = await store.load('/project');
     expect(result).toEqual(PATHS);
+  });
+
+  test('load() discards an auto-generated cache with a mismatched schemaVersion', async () => {
+    // Only _generated caches are version-checked; a stale version causes re-analysis.
+    const stalePayload = { _generated: true as const, schemaVersion: 0, ...PATHS };
+    mockFiles['/project/.hyperide/project-structure.json'] = JSON.stringify(stalePayload);
+
+    const result = await store.load('/project');
+    expect(result).toBeNull();
   });
 
   test('load() returns null when no pending data and no file', async () => {
@@ -67,7 +87,10 @@ describe('FileProjectStructureStore', () => {
 
     expect(result).toBe(true);
     expect(mkdirCalls).toContain('/project/.hyperide');
-    expect(mockFiles['/project/.hyperide/project-structure.json']).toBe(JSON.stringify(PATHS, null, 2));
+    // flush() writes _generated + schemaVersion so future load() can version-check
+    // auto-generated caches without touching user-authored configs (HYP-758).
+    const expected = JSON.stringify({ _generated: true, schemaVersion: 1, ...PATHS }, null, 2);
+    expect(mockFiles['/project/.hyperide/project-structure.json']).toBe(expected);
   });
 
   test('flush() clears pending data after write', async () => {
@@ -85,6 +108,7 @@ describe('FileProjectStructureStore', () => {
     await store.save('/project', PATHS);
     await store.flush();
 
+    // flush() adds _generated + schemaVersion; load() must still return the paths
     const result = await store.load('/project');
     expect(result).toEqual(PATHS);
   });

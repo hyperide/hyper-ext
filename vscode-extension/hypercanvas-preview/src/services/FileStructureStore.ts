@@ -14,6 +14,18 @@ import type { ProjectStructurePaths, ProjectStructureStore } from '../../../../l
 const CONFIG_DIR = '.hyperide';
 const CONFIG_FILE = 'project-structure.json';
 
+/**
+ * Bump this when the heuristic changes in a way that might produce a different
+ * set of paths for an existing project (e.g. newly detected page dirs). Any
+ * auto-generated cache (_generated: true) whose version doesn't match is
+ * discarded and re-analyzed. User-authored configs (no _generated flag) are
+ * always trusted regardless of schemaVersion.
+ * Current version — 1: HYP-758 page-subdir detection in src/app/.
+ */
+const CACHE_SCHEMA_VERSION = 1;
+
+type CachePayload = ProjectStructurePaths & { schemaVersion?: number; _generated?: true };
+
 export class FileProjectStructureStore implements ProjectStructureStore {
   private _pending = new Map<string, ProjectStructurePaths>();
 
@@ -24,7 +36,16 @@ export class FileProjectStructureStore implements ProjectStructureStore {
     const configPath = path.join(projectRoot, CONFIG_DIR, CONFIG_FILE);
     try {
       const content = await fs.readFile(configPath, 'utf-8');
-      return JSON.parse(content) as ProjectStructurePaths;
+      const parsed = JSON.parse(content) as CachePayload;
+      // Only version-check auto-generated caches (_generated: true).
+      // User-authored configs (created via hypercanvas.openProjectStructure) have
+      // no _generated flag and must always be trusted as-is.
+      if (parsed._generated && parsed.schemaVersion !== CACHE_SCHEMA_VERSION) return null;
+      return {
+        atomComponentsPaths: parsed.atomComponentsPaths ?? [],
+        compositeComponentsPaths: parsed.compositeComponentsPaths ?? [],
+        pagesPaths: parsed.pagesPaths ?? [],
+      };
     } catch {
       return null;
     }
@@ -42,7 +63,8 @@ export class FileProjectStructureStore implements ProjectStructureStore {
       const dir = path.join(projectRoot, CONFIG_DIR);
       await fs.mkdir(dir, { recursive: true });
       const configPath = path.join(dir, CONFIG_FILE);
-      await fs.writeFile(configPath, JSON.stringify(paths, null, 2), 'utf-8');
+      const payload: CachePayload = { _generated: true, schemaVersion: CACHE_SCHEMA_VERSION, ...paths };
+      await fs.writeFile(configPath, JSON.stringify(payload, null, 2), 'utf-8');
     }
     this._pending.clear();
     return true;

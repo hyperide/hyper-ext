@@ -344,10 +344,17 @@ export class ComponentScanner {
           continue;
         }
 
-        // src/app/ in non-Next.js projects (common Vite+React pattern: all features under src/app/)
-        // Treat like components/ — ui/ subdir → atoms, everything else → composites
+        // src/app/ in non-Next.js projects. When feature-domain subdirs contain
+        // *Page.tsx / *Screen.tsx files (conloca pattern: src/app/auth/LoginScreen.tsx,
+        // src/app/account/AccountPage.tsx, …), those subdirs become pages. ui/ becomes
+        // atoms. src/app/ itself stays in composites for top-level files (App.tsx,
+        // CmsHost.tsx, …) and non-page subdirs (banners/, reconcile/, …).
+        // buildComponentsData / buildSubProject exclude page dirs from the composite
+        // scan to prevent double-listing (HYP-758).
+        // Fallback when no page subdirs are found: same as the old categorizeComponentsDir
+        // path — whole src/app/ is composites, ui/ is atoms.
         if (entryName === 'app' && dirName === 'src' && framework !== 'nextjs') {
-          this.categorizeComponentsDir(entryPath, atoms, composites);
+          this.categorizeAppDir(entryPath, atoms, composites, pages);
           continue;
         }
       }
@@ -512,6 +519,89 @@ export class ComponentScanner {
     }
   }
 
+  /**
+   * True when a directory directly contains at least one file whose name ends with
+   * `Page.tsx`, `Screen.tsx`, `Page.jsx`, or `Screen.jsx`. Only looks one level deep
+   * (direct children) — enough to classify the directory as a page-domain folder
+   * without recursing into nested subdirs (HYP-758).
+   */
+  private hasPagesOrScreenFiles(dirPath: string): boolean {
+    try {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      return entries.some(
+        (e) =>
+          e.isFile() &&
+          (e.name.endsWith('Page.tsx') ||
+            e.name.endsWith('Screen.tsx') ||
+            e.name.endsWith('Page.jsx') ||
+            e.name.endsWith('Screen.jsx')),
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Categorize `src/app/` in a non-Next.js Vite/React project whose app directory
+   * is a feature-domain hub rather than a plain components folder.
+   *
+   * Classification of immediate subdirectories:
+   *  - ATOM_DIR_NAMES (ui, atoms, …)           → atoms
+   *  - PAGE_DIR_NAMES (pages, routes, screens…) → pages
+   *  - Subdirs that contain *Page.tsx / *Screen.tsx files → pages (HYP-758)
+   *  - NON_COMPONENT_DIRS / SKIP_DIRS           → skipped
+   *  - Remaining subdirs                        → implicitly in composites
+   *
+   * `appPath` itself is always added to composites so that top-level .tsx files
+   * (App.tsx, CmsHost.tsx, …) and non-page subdirs (banners/, reconcile/, …) are
+   * still reachable. The callers of buildComponentsData / buildSubProject exclude
+   * detected page dir paths from the composite recursive scan to prevent pages
+   * from appearing in both panels.
+   */
+  private categorizeAppDir(
+    appPath: string,
+    atoms: string[],
+    composites: string[],
+    pages: string[],
+  ): void {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(appPath, { withFileTypes: true });
+    } catch {
+      composites.push(appPath);
+      return;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const entryName = entry.name.toLowerCase();
+      if (SKIP_DIRS.has(entry.name) || NON_COMPONENT_DIRS.has(entryName)) continue;
+
+      const entryPath = path.join(appPath, entry.name);
+
+      if (ATOM_DIR_NAMES.has(entryName)) {
+        atoms.push(entryPath);
+        continue;
+      }
+
+      if (PAGE_DIR_NAMES.has(entryName)) {
+        pages.push(entryPath);
+        continue;
+      }
+
+      if (this.hasPagesOrScreenFiles(entryPath)) {
+        pages.push(entryPath);
+        // Non-page subdirs fall through; they are covered by the composite appPath entry below.
+      }
+    }
+
+    // Keep appPath in composites: top-level .tsx files (App.tsx, CmsHost.tsx, …) live
+    // here, as do non-page feature subdirs (banners/, reconcile/, slots/, …). The
+    // buildGroups caller skips any page subdirs it finds in the exclude set, so they
+    // won't be double-counted.
+    composites.push(appPath);
+  }
+
   /** Check if a directory contains a specific file recursively (max 2 levels) */
   private hasFileRecursive(dirPath: string, fileName: string, depth = 0): boolean {
     if (depth > 2) return false;
@@ -635,11 +725,23 @@ export class ComponentScanner {
 
     // Collect atom directory paths so composites scanner can skip them
     const atomDirPaths = resolvePaths(paths.atomComponentsPaths);
+    // Collect page directory paths so the composite scanner skips them — prevents
+    // page components (e.g. src/app/auth/LoginScreen.tsx) from appearing in both
+    // Pages and Composites when src/app/ is a feature hub (HYP-758).
+    const pageDirPaths = resolvePaths(paths.pagesPaths);
     // Collect composite directory paths so pages scanner can skip them
     const compositeDirPaths = resolvePaths(paths.compositeComponentsPaths);
 
+    // Composites must skip both atom dirs AND page dirs to avoid double-listing.
+    const compositeExcludeDirs = new Set([...atomDirPaths, ...pageDirPaths]);
+
     const atomGroups = this.buildGroups(paths.atomComponentsPaths, projectRoot, 'component');
-    const compositeGroups = this.buildGroups(paths.compositeComponentsPaths, projectRoot, 'component', atomDirPaths);
+    const compositeGroups = this.buildGroups(
+      paths.compositeComponentsPaths,
+      projectRoot,
+      'component',
+      compositeExcludeDirs,
+    );
     const pageGroups = this.buildGroups(paths.pagesPaths, projectRoot, 'page', compositeDirPaths);
 
     const isMonorepo = this.isMonorepoRoot(projectRoot);
@@ -713,15 +815,21 @@ export class ComponentScanner {
     const atomDirPaths = new Set(
       structure.atomComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
     );
+    // Page dirs must also be excluded from the composite scan to prevent double-listing
+    // when src/app/ is a feature hub (same rationale as buildComponentsData, HYP-758).
+    const pageDirPaths = new Set(
+      structure.pagesPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
+    );
     const compositeDirPaths = new Set(
       structure.compositeComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
     );
+    const compositeExcludeDirs = new Set([...atomDirPaths, ...pageDirPaths]);
     const atomGroups = this.buildGroups(structure.atomComponentsPaths, projectRoot, 'component');
     const compositeGroups = this.buildGroups(
       structure.compositeComponentsPaths,
       projectRoot,
       'component',
-      atomDirPaths,
+      compositeExcludeDirs,
     );
     const pageGroups = this.buildGroups(structure.pagesPaths, projectRoot, 'page', compositeDirPaths);
 
@@ -818,13 +926,13 @@ export class ComponentScanner {
           continue;
         }
 
-        // src/app/ in non-Next.js sub-packages (conloca pattern: every feature under
-        // src/app/**). Mirror the non-scope detectProjectStructure() branch — treat
-        // src/app/ like components/: ui/ subdir → atoms, everything else → composites.
-        // Without this the in-scope scan finds no known dir and the Explorer shows
-        // ZERO components for the target (HYP-419).
+        // src/app/ in non-Next.js sub-packages — same heuristic as the non-scope
+        // detectProjectStructure() branch: categorizeAppDir promotes page-like subdirs
+        // to pagesPaths while keeping src/app/ in composites for top-level files and
+        // non-page subdirs. Without any handling here the in-scope scan finds no known
+        // dir and the Explorer shows ZERO components for the target (HYP-419).
         if (entryName === 'app' && srcDirName === 'src' && framework !== 'nextjs') {
-          this.categorizeComponentsDir(entryPath, atoms, composites);
+          this.categorizeAppDir(entryPath, atoms, composites, pages);
           continue;
         }
       }

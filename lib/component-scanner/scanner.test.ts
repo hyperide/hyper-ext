@@ -575,12 +575,12 @@ describe('ComponentScanner.detectProjectStructure', () => {
     expect(structure.compositeComponentsPaths).toContain(path.join(root, 'client', 'components'));
   });
 
-  it('should detect src/app/ as composites for Vite+React projects (conloca pattern)', () => {
-    const root = createProject('vite-react-src-app', ['src/app/account', 'src/app/workspace', 'src/app/ui'], {
+  it('should detect src/app/ as composites for Vite+React projects when no Page/Screen subdirs (conloca pattern)', () => {
+    // workspace/ only has WorkspaceRouter.tsx — no *Page.tsx / *Screen.tsx suffix → not a page subdir
+    const root = createProject('vite-react-src-app-no-pages', ['src/app/workspace', 'src/app/ui'], {
       'package.json': '{"dependencies":{"react":"19","vite":"5"}}',
       'src/main.tsx': 'import { render } from "react-dom";',
       'src/app/App.tsx': 'export function App() { return <div/>; }',
-      'src/app/account/AccountPage.tsx': 'export function AccountPage() { return <div/>; }',
       'src/app/workspace/WorkspaceRouter.tsx': 'export function WorkspaceRouter() { return <div/>; }',
       'src/app/ui/HostField.tsx': 'export function HostField() { return <div/>; }',
     });
@@ -588,12 +588,106 @@ describe('ComponentScanner.detectProjectStructure', () => {
     const scanner = new ComponentScanner(createMockStore(null));
     const structure = scanner.detectProjectStructure(root);
 
-    // src/app/ is treated as a composites root (like components/)
+    // src/app/ stays in composites (no page-like subdirs detected)
     expect(structure.compositeComponentsPaths).toContain(path.join(root, 'src', 'app'));
     // src/app/ui/ gets detected as atoms
     expect(structure.atomComponentsPaths).toContain(path.join(root, 'src', 'app', 'ui'));
-    // Must NOT appear as pages (it's not a Next.js project)
+    // src/app/ itself must NOT appear as pages (it's not a Next.js project)
     expect(structure.pagesPaths).not.toContain(path.join(root, 'src', 'app'));
+    // workspace/ has no *Page.tsx or *Screen.tsx → not a page subdir either
+    expect(structure.pagesPaths).not.toContain(path.join(root, 'src', 'app', 'workspace'));
+  });
+
+  it('promotes src/app/ subdirs with *Page.tsx / *Screen.tsx to pagesPaths (HYP-758)', () => {
+    // Mirrors the conloca-app shape: feature-domain subdirs containing page components
+    const root = createProject(
+      'vite-react-src-app-pages',
+      ['src/app/auth', 'src/app/account', 'src/app/workspace', 'src/app/banners', 'src/app/ui'],
+      {
+        'package.json': '{"dependencies":{"react":"19","vite":"5"}}',
+        'src/main.tsx': 'import App from "./app/App";',
+        'src/app/App.tsx': 'export default function App() { return <div/>; }',
+        'src/app/CmsHost.tsx': 'export default function CmsHost() { return <div/>; }',
+        // auth/ — multiple *Screen.tsx → page subdir
+        'src/app/auth/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+        'src/app/auth/SessionExpiredScreen.tsx': 'export function SessionExpiredScreen() { return <div/>; }',
+        // account/ — one *Page.tsx → page subdir
+        'src/app/account/AccountPage.tsx': 'export function AccountPage() { return <div/>; }',
+        'src/app/account/UserGitIdentityForm.tsx': 'export function UserGitIdentityForm() { return <div/>; }',
+        // workspace/ — only a plain component, no Page/Screen suffix → NOT a page subdir
+        'src/app/workspace/WorkspaceRouter.tsx': 'export function WorkspaceRouter() { return <div/>; }',
+        // banners/ — banner components, no Page/Screen suffix → NOT a page subdir
+        'src/app/banners/OfflineBanner.tsx': 'export function OfflineBanner() { return <div/>; }',
+        // ui/ — atom directory
+        'src/app/ui/HostField.tsx': 'export function HostField() { return <input/>; }',
+      },
+    );
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    // Page-like subdirs detected and promoted to pagesPaths
+    expect(structure.pagesPaths).toContain(path.join(root, 'src', 'app', 'auth'));
+    expect(structure.pagesPaths).toContain(path.join(root, 'src', 'app', 'account'));
+
+    // Non-page subdirs stay reachable via src/app/ composite entry
+    expect(structure.compositeComponentsPaths).toContain(path.join(root, 'src', 'app'));
+
+    // workspace/ and banners/ have no *Page.tsx / *Screen.tsx → not pages
+    expect(structure.pagesPaths).not.toContain(path.join(root, 'src', 'app', 'workspace'));
+    expect(structure.pagesPaths).not.toContain(path.join(root, 'src', 'app', 'banners'));
+
+    // INTENTIONAL: directory-level classification means ALL files in a page subdir
+    // land in Pages — including UserGitIdentityForm.tsx alongside AccountPage.tsx.
+    // This is by design: the whole account/ directory is a page domain; the form
+    // lives there and is co-located with the page. File-level filtering is not done.
+    expect(structure.pagesPaths).toContain(path.join(root, 'src', 'app', 'account'));
+
+    // ui/ is atoms
+    expect(structure.atomComponentsPaths).toContain(path.join(root, 'src', 'app', 'ui'));
+
+    // src/app/ itself must NOT appear as a page (it's not a Next.js app/ dir)
+    expect(structure.pagesPaths).not.toContain(path.join(root, 'src', 'app'));
+  });
+
+  it('pages from src/app/ page-subdirs are in pageGroups, not compositeGroups (no double-listing, HYP-758)', async () => {
+    const root = createProject(
+      'vite-react-src-app-no-double',
+      ['src/app/auth', 'src/app/banners', 'src/app/ui'],
+      {
+        'package.json': '{"dependencies":{"react":"19","vite":"5"}}',
+        'src/main.tsx': 'import App from "./app/App";',
+        'src/app/App.tsx': 'export default function App() { return <div/>; }',
+        'src/app/auth/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+        'src/app/banners/OfflineBanner.tsx': 'export function OfflineBanner() { return <div/>; }',
+        'src/app/ui/HostField.tsx': 'export function HostField() { return <input/>; }',
+      },
+    );
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    // c.name is path.relative(categoryRoot, fullPath) — exact values:
+    //   page scan of src/app/auth/  → 'LoginScreen.tsx'
+    //   composite scan of src/app/  → 'App.tsx', 'banners/OfflineBanner.tsx'
+    //   atom scan of src/app/ui/    → 'HostField.tsx'
+    const pageNames = result.pageGroups.flatMap((g) => g.components.map((c) => c.name));
+    const compositeNames = result.compositeGroups.flatMap((g) => g.components.map((c) => c.name));
+
+    // LoginScreen belongs to pages only — exact match, not substring
+    expect(pageNames).toContain('LoginScreen.tsx');
+    expect(compositeNames).not.toContain('LoginScreen.tsx');
+
+    // App.tsx (top-level in src/app/) stays in composites
+    expect(compositeNames).toContain('App.tsx');
+
+    // OfflineBanner (non-page subdir banners/) stays in composites
+    // name includes the subdir prefix since categoryRoot is src/app/
+    expect(compositeNames).toContain('banners/OfflineBanner.tsx');
+
+    // HostField stays in atoms
+    const atomNames = result.atomGroups.flatMap((g) => g.components.map((c) => c.name));
+    expect(atomNames).toContain('HostField.tsx');
   });
 
   it('should NOT treat app/ as composites for Next.js projects (next-router pattern)', () => {
@@ -889,6 +983,57 @@ describe('ComponentScanner.getComponentsData — sub-project grouping (HYP-391)'
     expect(allNames.some((n) => n.includes('HostField'))).toBe(true);
     // Deeply nested (src/app/slots/org-settings/) must surface too.
     expect(allNames.some((n) => n.includes('OrgSettingsSlot'))).toBe(true);
+  });
+
+  // HYP-758: buildSubProject also calls categorizeAppDir + excludes page dirs from
+  // composites. Verify the sub-project Groups (not just paths) are correct.
+  it('conloca sub-project: *Page/*Screen subdirs land in pageGroups, not compositeGroups (HYP-758)', async () => {
+    const root = createSubprojProject('hyp-758-subproj', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22","vite":"7"}}',
+      'targets/conloca-app/package.json': '{"dependencies":{"react":"19"},"devDependencies":{"@tailwindcss/vite":"4"}}',
+      'targets/conloca-app/src/main.tsx': 'import App from "./app/App";',
+      'targets/conloca-app/src/app/App.tsx': 'export default function App() { return <div/>; }',
+      // auth/ has Screen-suffix files → promoted to page subdir
+      'targets/conloca-app/src/app/auth/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+      'targets/conloca-app/src/app/auth/SessionExpiredScreen.tsx':
+        'export function SessionExpiredScreen() { return <div/>; }',
+      // account/ has a Page-suffix file → promoted to page subdir
+      'targets/conloca-app/src/app/account/AccountPage.tsx': 'export function AccountPage() { return <div/>; }',
+      // workspace/ has no *Page/*Screen → stays in composites via src/app/
+      'targets/conloca-app/src/app/workspace/WorkspaceRouter.tsx':
+        'export function WorkspaceRouter() { return <div/>; }',
+      // ui/ → atoms
+      'targets/conloca-app/src/app/ui/HostField.tsx': 'export function HostField() { return <input/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    expect(result.isMonorepo).toBe(true);
+    const appProject = result.subProjects?.find((p) => p.name === 'conloca-app');
+    expect(appProject).toBeDefined();
+    expect(appProject!.supported).toBe(true);
+
+    const pageNames = appProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name));
+    const compositeNames = appProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name));
+    const atomNames = appProject!.atomGroups.flatMap((g) => g.components.map((c) => c.name));
+
+    // Page-suffix files land in pageGroups
+    expect(pageNames).toContain('LoginScreen.tsx');
+    expect(pageNames).toContain('SessionExpiredScreen.tsx');
+    expect(pageNames).toContain('AccountPage.tsx');
+
+    // Page-suffix files must NOT appear in composites (no double-listing)
+    expect(compositeNames).not.toContain('LoginScreen.tsx');
+    expect(compositeNames).not.toContain('AccountPage.tsx');
+
+    // Non-page subdir (workspace/) reaches composites via src/app/ composite root
+    expect(compositeNames).toContain('workspace/WorkspaceRouter.tsx');
+
+    // ui/ → atoms, not pages
+    expect(atomNames).toContain('HostField.tsx');
+    expect(pageNames).not.toContain('HostField.tsx');
   });
 
   it('non-monorepo returns isMonorepo=false and no subProjects', async () => {
