@@ -24,6 +24,7 @@ import type { ColorProbeCandidate, ColorProbeRequest } from './services/color-pr
 import type { CssSystemId } from '@lib/style-read/types';
 import { ComponentService, type ScanResult } from './services/ComponentService';
 import { StyleReadService } from './services/StyleReadService';
+import { resolveContainedPath } from './services/workspace-path';
 import type { AstMessage, SharedEditorState } from './types';
 import { VSCodeFileIO } from './vscode-file-io';
 
@@ -220,6 +221,23 @@ export class PanelRouter {
    * would make undo-tracking MORE restrictive than the writes it's tracking,
    * silently dropping snapshots again the moment a write touches a monorepo
    * file the scanner hasn't (yet) enumerated as a sub-project.
+   *
+   * HYP-1131 note: `file:read`/`hypercanvas:resolveServerSourceMap` deliberately do NOT
+   * consume this widening (unlike AstBridge/UndoRedoService here). An earlier version of
+   * this fix threaded `monorepoRoot` into PanelRouter's own containment too, but every
+   * attempt at bounding that widening safely (ancestor-of-workspaceRoot checks, ABA-race
+   * guards, keeping it in sync with AstBridge across workspace switches) kept surfacing
+   * new gaps in review — `monorepoRoot` can legitimately be `/` or `$HOME`-adjacent, which
+   * an ancestor check cannot distinguish from a genuine monorepo root, and the widening
+   * would need its own lifecycle-correct home (ideally read through AstBridge rather than
+   * duplicated in a second field) to be sound. That's real design work belonging to a
+   * dedicated follow-up, not bolted onto a security-hotfix diff. Consequence: a
+   * `hypercanvas:resolveServerSourceMap` request for a sibling sub-project outside the
+   * opened leaf (the HYP-1104 cross-package dev-server scenario) resolves to `result:
+   * null` instead of the source location — a functional regression from the pre-fix
+   * "widen implicitly because there was no check at all" behavior, but a fail-safe one
+   * (worse UX, not a new read-outside-workspace hole). Tracked as
+   * https://linear.app/glide-vc/issue/HYP-1136.
    */
   async getComponentGroups(): Promise<ScanResult> {
     this._ensureCurrentWorkspace();
@@ -468,10 +486,16 @@ export class PanelRouter {
     }
 
     // File operations (local filesystem)
+    // Containment is mandatory here (HYP-1131): `path.resolve` ignores its base argument
+    // when `filePath` is itself absolute, so an unchecked resolve lets a caller read any
+    // file on disk (`/etc/passwd`, `../../../etc/passwd`, etc). `resolveContainedPath`
+    // rejects (lexically AND via realpath, closing the symlink-escape gap) any path that
+    // escapes `this._workspaceRoot`, and returns the safe path to read. Does NOT widen for
+    // a monorepo sibling (see getComponentGroups's doc comment) — deliberate, deferred.
     if (type === 'file:read') {
       const { requestId, filePath } = message as { requestId: string; filePath: string };
       try {
-        const resolved = path.resolve(this._workspaceRoot, filePath);
+        const resolved = await resolveContainedPath(this._workspaceRoot, filePath);
         const content = await fs.readFile(resolved, 'utf-8');
         webview.postMessage({ type: 'file:response', requestId, success: true, data: content });
       } catch (e) {
@@ -483,16 +507,39 @@ export class PanelRouter {
     // Approach B: server-side (RSC) source map resolution.
     // The iframe IIFE cannot fetch server chunk source maps (file:// paths, not browser-accessible).
     // PanelRouter reads the .map file from the local filesystem and decodes VLQ.
+    // Containment is mandatory here too (HYP-1131, sibling of the `file:read` bug): `filePath`
+    // is reachable today, sent by `iframe-interaction.ts` derived from a runtime error stack
+    // trace — an attacker-influenced stack trace could point `filePath` outside the workspace.
+    // Known limitation, not fixed here: `extractServerChunkFrames` (iframe-source-maps.ts)
+    // derives `filePath` from `new URL(fileUrl).pathname`, which on Windows yields a
+    // leading-slash form (`/C:/workspace/...`). `resolveContainedPath`/`assertPathLexicallyContained`
+    // treat a leading `/` as POSIX-absolute-and-final, so on Windows this could mis-resolve
+    // and reject a legitimate in-workspace map. Not a regression: before this fix there was
+    // no containment check at all, so the path was read as-is regardless of shape. Deferred
+    // to a Windows-specific follow-up rather than fixed blind on this (darwin-only) machine.
+    // Also does NOT widen for a monorepo sibling — same deliberate deferral as `file:read`
+    // above (see getComponentGroups's doc comment); a sibling-sub-project source map
+    // (HYP-1104 cross-package dev-server scenario) resolves to `result: null` here until
+    // that follow-up lands.
     if (type === 'hypercanvas:resolveServerSourceMap') {
       const { filePath, line, col } = message as { filePath: string; line: number; col: number };
       let result = null;
       try {
         const mapPath = filePath.endsWith('.map') ? filePath : `${filePath}.map`;
-        const content = await fs.readFile(mapPath, 'utf-8');
+        const resolvedMapPath = await resolveContainedPath(this._workspaceRoot, mapPath);
+        const content = await fs.readFile(resolvedMapPath, 'utf-8');
         const sm = JSON.parse(content) as SourceMapV3;
         result = resolveInSourceMap(sm, line, col);
-      } catch {
-        // File not found or parse error — result stays null
+      } catch (e) {
+        // File not found or parse error is routine (maps warm up asynchronously) — stays
+        // silent. A containment rejection is NOT routine — log it distinctly (extension
+        // host output, never the webview) so "server source maps stopped working" for a
+        // monorepo-sibling request (HYP-1136, the known, deliberate deferral) is
+        // diagnosable instead of indistinguishable from an ordinary cache miss.
+        if (e instanceof Error && e.message.startsWith('Path resolves outside workspace root')) {
+          console.warn('[PanelRouter] resolveServerSourceMap: containment rejected', filePath, e.message);
+        }
+        // result stays null either way — the iframe treats both as "not resolvable yet".
       }
       webview.postMessage({ type: 'serverSourceMapResult', filePath, line, col, result });
       return true;

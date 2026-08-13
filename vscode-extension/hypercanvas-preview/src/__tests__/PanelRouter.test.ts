@@ -260,17 +260,67 @@ describe('PanelRouter', () => {
     });
   });
 
-  it('routes file:read and returns file content', async () => {
+  it('routes file:read with a relative path and returns file content', async () => {
     const wv = createMockWebview();
     await router.routeMessage({ type: 'file:read', requestId: 'r2', filePath: 'src/App.tsx' }, wv as never);
     expect(wv.messages[0]).toEqual(
-      expect.objectContaining({
-        type: 'file:response',
-        requestId: 'r2',
-        success: true,
-        data: 'file content',
-      }),
+      expect.objectContaining({ type: 'file:response', requestId: 'r2', success: true, data: 'file content' }),
     );
+  });
+
+  // HYP-1131: path.resolve ignores its base argument when the second argument is
+  // absolute, so an unchecked `path.resolve(workspaceRoot, filePath)` let a caller
+  // read any file on disk. These assert the containment check added at the handler.
+  describe('file:read containment (HYP-1131)', () => {
+    it('rejects a `../` traversal that escapes the workspace root, without touching disk', async () => {
+      const { readFile } = await import('node:fs/promises');
+      (readFile as ReturnType<typeof mock>).mockClear();
+
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'file:read', requestId: 'r-trav', filePath: '../../../../etc/passwd' },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'file:response',
+          requestId: 'r-trav',
+          success: false,
+          error: expect.stringContaining('Path resolves outside workspace root'),
+        }),
+      );
+      // Proves containment actually blocked the read (not just that the response happens
+      // to look like a rejection) — the forbidden file must never reach fs.readFile.
+      expect(readFile).not.toHaveBeenCalled();
+    });
+
+    it('rejects an absolute-path escape outside the workspace root, without touching disk', async () => {
+      const { readFile } = await import('node:fs/promises');
+      (readFile as ReturnType<typeof mock>).mockClear();
+
+      const wv = createMockWebview();
+      await router.routeMessage({ type: 'file:read', requestId: 'r-abs', filePath: '/etc/passwd' }, wv as never);
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'file:response',
+          requestId: 'r-abs',
+          success: false,
+          error: expect.stringContaining('Path resolves outside workspace root'),
+        }),
+      );
+      expect(readFile).not.toHaveBeenCalled();
+    });
+
+    it('still allows a legitimate in-workspace absolute path', async () => {
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'file:read', requestId: 'r-legit', filePath: '/test-workspace/src/App.tsx' },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({ type: 'file:response', requestId: 'r-legit', success: true, data: 'file content' }),
+      );
+    });
   });
 
   it('routes styles:readClassName and returns result', async () => {
@@ -327,17 +377,26 @@ describe('PanelRouter', () => {
   });
 
   describe('hypercanvas:resolveServerSourceMap (Approach B)', () => {
+    // filePath is an in-workspace absolute path (`/test-workspace/...`, matching the
+    // `workspaceRoot: '/test-workspace'` these tests are constructed with) — since
+    // HYP-1131 the handler rejects any path outside the workspace root, so these fixtures
+    // must actually live under it for the "resolved" cases to still exercise a real read.
     it('returns serverSourceMapResult with null when readFile returns invalid JSON', async () => {
       // Default mock returns 'file content' which is not valid JSON → JSON.parse throws
       const wv = createMockWebview();
       await router.routeMessage(
-        { type: 'hypercanvas:resolveServerSourceMap', filePath: '/project/.next/server/hash.js', line: 1, col: 50 },
+        {
+          type: 'hypercanvas:resolveServerSourceMap',
+          filePath: '/test-workspace/.next/server/hash.js',
+          line: 1,
+          col: 50,
+        },
         wv as never,
       );
       expect(wv.messages[0]).toEqual(
         expect.objectContaining({
           type: 'serverSourceMapResult',
-          filePath: '/project/.next/server/hash.js',
+          filePath: '/test-workspace/.next/server/hash.js',
           line: 1,
           col: 50,
           result: null,
@@ -354,7 +413,12 @@ describe('PanelRouter', () => {
 
       const wv = createMockWebview();
       await router.routeMessage(
-        { type: 'hypercanvas:resolveServerSourceMap', filePath: '/project/.next/server/hash.js', line: 1, col: 1 },
+        {
+          type: 'hypercanvas:resolveServerSourceMap',
+          filePath: '/test-workspace/.next/server/hash.js',
+          line: 1,
+          col: 1,
+        },
         wv as never,
       );
       expect(wv.messages[0]).toEqual(
@@ -373,10 +437,52 @@ describe('PanelRouter', () => {
 
       const wv = createMockWebview();
       await router.routeMessage(
-        { type: 'hypercanvas:resolveServerSourceMap', filePath: '/project/.next/server/missing.js', line: 1, col: 1 },
+        {
+          type: 'hypercanvas:resolveServerSourceMap',
+          filePath: '/test-workspace/.next/server/missing.js',
+          line: 1,
+          col: 1,
+        },
         wv as never,
       );
       expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'serverSourceMapResult', result: null }));
+    });
+
+    // HYP-1131: reachable today via iframe-interaction.ts sending a filePath derived from
+    // a runtime error stack trace — an attacker-influenced stack trace could point outside
+    // the workspace. Both traversal shapes must resolve to `result: null`, never a read.
+    it('returns serverSourceMapResult with null for a `../` traversal outside the workspace, without touching disk', async () => {
+      const { readFile } = await import('node:fs/promises');
+      (readFile as ReturnType<typeof mock>).mockClear();
+
+      const wv = createMockWebview();
+      await router.routeMessage(
+        {
+          type: 'hypercanvas:resolveServerSourceMap',
+          filePath: '../../../../etc/passwd',
+          line: 1,
+          col: 1,
+        },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'serverSourceMapResult', result: null }));
+      // Proves containment actually blocked the read — the default readFile mock resolves
+      // to 'file content' (not valid JSON), so `result: null` alone doesn't distinguish
+      // "containment rejected this" from "containment was skipped and JSON.parse failed".
+      expect(readFile).not.toHaveBeenCalled();
+    });
+
+    it('returns serverSourceMapResult with null for an absolute-path escape outside the workspace, without touching disk', async () => {
+      const { readFile } = await import('node:fs/promises');
+      (readFile as ReturnType<typeof mock>).mockClear();
+
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'hypercanvas:resolveServerSourceMap', filePath: '/etc/passwd', line: 1, col: 1 },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'serverSourceMapResult', result: null }));
+      expect(readFile).not.toHaveBeenCalled();
     });
   });
 
