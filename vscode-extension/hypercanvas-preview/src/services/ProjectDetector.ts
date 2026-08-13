@@ -55,8 +55,6 @@ export async function detectProjectType(projectPath: string): Promise<ProjectTyp
   if (deps.next) return 'nextjs';
   if (deps['react-scripts']) return 'cra';
   if (deps['@remix-run/react']) return 'remix';
-  // Astro is Vite-powered — treat as 'vite' for dev server + HMR pipeline
-  if (deps.astro) return 'vite';
   if (deps.vite) return 'vite';
   if (deps.webpack || deps['webpack-dev-server'] || deps['webpack-cli']) return 'webpack';
 
@@ -73,9 +71,6 @@ export async function detectProjectType(projectPath: string): Promise<ProjectTyp
   if (await fileExists(path.join(projectPath, 'next.config.js'))) return 'nextjs';
   if (await fileExists(path.join(projectPath, 'next.config.mjs'))) return 'nextjs';
   if (await fileExists(path.join(projectPath, 'next.config.ts'))) return 'nextjs';
-  if (await fileExists(path.join(projectPath, 'astro.config.ts'))) return 'vite';
-  if (await fileExists(path.join(projectPath, 'astro.config.mjs'))) return 'vite';
-  if (await fileExists(path.join(projectPath, 'astro.config.js'))) return 'vite';
   if (await fileExists(path.join(projectPath, 'vite.config.ts'))) return 'vite';
   if (await fileExists(path.join(projectPath, 'vite.config.js'))) return 'vite';
   if (await fileExists(path.join(projectPath, 'webpack.config.js'))) return 'webpack';
@@ -251,8 +246,8 @@ export async function detectUIKit(
     return 'tamagui';
   }
 
-  // Check for Tailwind
-  if (deps.tailwindcss) {
+  // Check for Tailwind — bare dep or Astro integration (@astrojs/tailwind, @tailwindcss/vite)
+  if (deps.tailwindcss || deps['@astrojs/tailwind'] || deps['@tailwindcss/vite']) {
     return 'tailwind';
   }
 
@@ -304,7 +299,8 @@ export async function detectCssSystem(
   if (has('@fluentui/react-components') || has('@fluentui/react')) return 'fluentui';
 
   // Tailwind (bare — most common, check last so design systems win)
-  if (has('tailwindcss')) return 'tailwind';
+  // @astrojs/tailwind = Astro integration; @tailwindcss/vite = Tailwind v4 in Vite/Astro
+  if (has('tailwindcss') || has('@astrojs/tailwind') || has('@tailwindcss/vite')) return 'tailwind';
 
   // SASS/SCSS — detected by sass/node-sass dep. Extension treats it like
   // plain CSS (className-based, no special AST handling needed).
