@@ -1287,6 +1287,29 @@ describe('PreviewFileManager.ensurePreviewFiles', () => {
   });
 });
 
+describe('PreviewFileManager.ensureComponent — git exclude side-effect', () => {
+  it('writes git exclude after generating __canvas_preview__.tsx (monorepo: git root above projectRoot)', async () => {
+    // Simulates conloca-private monorepo: git root is /monorepo, project is /monorepo/targets/conloca-app
+    const io = new InMemoryFileIO();
+    // .git lives at monorepo root, not at projectRoot
+    io.files.set('/monorepo/.git/HEAD', 'ref: refs/heads/main\n');
+    io.files.set('/monorepo/targets/conloca-app/package.json', JSON.stringify({ dependencies: { vite: '^5.0.0' } }));
+    io.files.set('/monorepo/targets/conloca-app/src/Button.tsx', BUTTON_SOURCE);
+
+    const manager = new PreviewFileManager({
+      projectRoot: '/monorepo/targets/conloca-app',
+      io,
+    });
+    await manager.ensureComponent(['src/Button.tsx']);
+
+    // Exclude file must be at the monorepo git root, not at projectRoot
+    const content = io.files.get('/monorepo/.git/info/exclude');
+    expect(content).toBeDefined();
+    expect(content).toContain('__canvas_preview__.tsx');
+    expect(content).toContain('__canvas_preview_standalone__.tsx');
+  });
+});
+
 describe('PreviewFileManager.ensureGitExclude', () => {
   it('creates .git/info/exclude with all entries when file is missing', async () => {
     const io = new InMemoryFileIO();

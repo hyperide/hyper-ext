@@ -631,6 +631,10 @@ export class PreviewFileManager {
     }
 
     await this.io.writeFile(previewPath, content);
+    // Ensure __canvas_preview__.tsx is git-excluded regardless of framework type.
+    // Called here (after write) so it runs for vite-spa-jsx-router / webpack / bun
+    // which never go through ensurePreviewFiles(). Idempotent — no-op if already done.
+    await this.ensureGitExclude();
     return content;
   }
 
@@ -1119,6 +1123,8 @@ export class PreviewFileManager {
 
     await this.io.mkdir?.(previewDir);
     await this.io.writeFile(standaloneEntryPath, newContent);
+    // Ensure __canvas_preview_standalone__.tsx is git-excluded for all frameworks.
+    await this.ensureGitExclude();
   }
 
   /**
