@@ -7,11 +7,12 @@ import {
   getRouteFilePaths,
 } from '../framework-routing';
 
-function makeIO(pkg: Record<string, unknown>, files: string[] = []): FileIO {
-  const fileSet = new Set(files);
+function makeIO(pkg: Record<string, unknown>, files: string[] = [], contents: Record<string, string> = {}): FileIO {
+  const fileSet = new Set([...files, ...Object.keys(contents)]);
   return {
     async readFile(p: string) {
       if (p.endsWith('package.json')) return JSON.stringify(pkg);
+      if (p in contents) return contents[p];
       if (!fileSet.has(p)) throw new Error(`ENOENT: ${p}`);
       return '';
     },
@@ -115,9 +116,55 @@ describe('detectFramework — primary via package.json', () => {
     expect((await detectFramework(root, io)).framework).toBe('astro');
   });
 
+  it('detects Astro via astro.config.mts when astro is hoisted (not in this package.json)', async () => {
+    const io = makeIO({}, [`${root}/astro.config.mts`]);
+    expect((await detectFramework(root, io)).framework).toBe('astro');
+  });
+
+  it('detects Astro via astro.config.cts', async () => {
+    const io = makeIO({}, [`${root}/astro.config.cts`]);
+    expect((await detectFramework(root, io)).framework).toBe('astro');
+  });
+
   it('Astro takes precedence over bare vite dep', async () => {
     const io = makeIO({ devDependencies: { astro: '^4.0.0', vite: '^5.0.0' } });
     expect((await detectFramework(root, io)).framework).toBe('astro');
+  });
+
+  it('Astro with no srcDir in config leaves srcDir undefined (default src)', async () => {
+    const io = makeIO({ dependencies: { astro: '^4.0.0' } }, [], {
+      [`${root}/astro.config.mjs`]: `import { defineConfig } from 'astro/config';\nexport default defineConfig({ integrations: [] });\n`,
+    });
+    const result = await detectFramework(root, io);
+    expect(result.framework).toBe('astro');
+    expect(result.srcDir).toBeUndefined();
+  });
+
+  it('Astro reads custom srcDir from astro.config.mjs', async () => {
+    const io = makeIO({ dependencies: { astro: '^4.0.0' } }, [], {
+      [`${root}/astro.config.mjs`]: `import { defineConfig } from 'astro/config';\nexport default defineConfig({ srcDir: 'app' });\n`,
+    });
+    const result = await detectFramework(root, io);
+    expect(result.framework).toBe('astro');
+    expect(result.srcDir).toBe('app');
+  });
+
+  it('Astro reads custom srcDir from astro.config.ts and normalizes ./ and trailing /', async () => {
+    const io = makeIO({}, [], {
+      [`${root}/astro.config.ts`]: `export default { srcDir: './source/' };`,
+    });
+    const result = await detectFramework(root, io);
+    expect(result.framework).toBe('astro');
+    expect(result.srcDir).toBe('source');
+  });
+
+  it('Astro ignores a commented-out srcDir (stays default src)', async () => {
+    const io = makeIO({}, [`${root}/astro.config.mjs`], {
+      [`${root}/astro.config.mjs`]: `export default defineConfig({\n  // srcDir: 'app',\n  /* srcDir: 'legacy' */\n  integrations: [],\n});\n`,
+    });
+    const result = await detectFramework(root, io);
+    expect(result.framework).toBe('astro');
+    expect(result.srcDir).toBeUndefined();
   });
 
   it('detects Parcel via "parcel" dep', async () => {
@@ -207,6 +254,12 @@ describe('getRouteFilePaths', () => {
   it('returns src/pages/test-preview.astro for astro', () => {
     const paths = getRouteFilePaths({ framework: 'astro' }, '/project');
     expect(paths.routeFile).toBe('/project/src/pages/test-preview.astro');
+    expect(paths.layoutFile).toBeUndefined();
+  });
+
+  it('returns <srcDir>/pages/test-preview.astro for astro with custom srcDir', () => {
+    const paths = getRouteFilePaths({ framework: 'astro', srcDir: 'app' }, '/project');
+    expect(paths.routeFile).toBe('/project/app/pages/test-preview.astro');
     expect(paths.layoutFile).toBeUndefined();
   });
 });

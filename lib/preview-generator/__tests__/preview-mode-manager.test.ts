@@ -268,6 +268,82 @@ describe('PreviewModeManager — Tier 3: Next.js Isolated mode', () => {
   });
 });
 
+describe('PreviewModeManager — Astro Isolated mode (HYP-466)', () => {
+  /** Build an IO that genuinely deletes (so a route-deletion regression turns the test red). */
+  function makeAstroIO(files: Record<string, string>, written: Map<string, string>): FileIO {
+    return {
+      async readFile(p: string) {
+        if (p in files) return files[p];
+        throw new Error(`ENOENT: ${p}`);
+      },
+      async writeFile(p: string, c: string) {
+        written.set(p, c);
+        files[p] = c;
+      },
+      async access(p: string) {
+        const exists = p in files || Object.keys(files).some((k) => k.startsWith(`${p}/`));
+        if (!exists) throw new Error('ENOENT');
+      },
+      async deleteFile(p: string) {
+        delete files[p];
+        written.delete(p);
+      },
+      async mkdir() {},
+    };
+  }
+
+  const ROUTE_PATH = `${root}/src/pages/test-preview.astro`;
+  const PREVIEW_PATH = `${root}/src/__canvas_preview__.tsx`;
+
+  function astroFiles(): Record<string, string> {
+    return {
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { astro: '^6', react: '^19' } }),
+      [`${root}/astro.config.mjs`]: 'export default {};',
+      [PREVIEW_PATH]: 'const componentRegistry = {};\nexport default function CanvasPreview() {}\n',
+      // App Shell already generated the route (the common scenario before the user
+      // creates .hyperide/preview.tsx).
+      [ROUTE_PATH]: `---\n// @hyperide-managed\nimport CanvasPreview from '../__canvas_preview__';\n---\n<div id="root"><CanvasPreview client:only="react" /></div>\n`,
+      [`${root}/.hyperide/preview.tsx`]: 'export function PreviewWrapper({ children }) { return children; }',
+    };
+  }
+
+  it('stays in app-shell when a wrapper appears (route preserved, no 404, no proxy swap)', async () => {
+    const onModeChange = mock(() => {});
+    const files = astroFiles();
+    const written = new Map<string, string>();
+    const io = makeAstroIO(files, written);
+    const m = new PreviewModeManager({ projectRoot: root, io, onModeChange, watcherFactory: noopWatcher });
+
+    await m.onWrapperCreated();
+
+    // Astro does not support isolated mode — it must NOT transition. Entering isolated mode
+    // would fire onModeChange(true) → proxy Tier-1 script swap → clobbers the island script
+    // with a non-existent __canvas_preview_standalone__.tsx.
+    expect(m.mode).toBe('app-shell');
+    expect(onModeChange).not.toHaveBeenCalledWith(true);
+    // The route file must still exist — Astro 404s a deleted route (no SPA fallback),
+    // which would leave the proxy with no HTML entry to serve.
+    expect(files[ROUTE_PATH]).toBeDefined();
+    expect(files[ROUTE_PATH]).toContain('@hyperide-managed');
+  });
+
+  it('round-trips back to App Shell on wrapper deletion (route still present)', async () => {
+    const files = astroFiles();
+    const written = new Map<string, string>();
+    const io = makeAstroIO(files, written);
+    const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
+
+    await m.onWrapperCreated();
+    await m.onWrapperDeleted();
+
+    expect(m.mode).toBe('app-shell');
+    // Route still present and back to the plain App Shell island.
+    expect(files[ROUTE_PATH]).toBeDefined();
+    expect(files[ROUTE_PATH]).toContain('@hyperide-managed');
+    expect(files[ROUTE_PATH]).toContain('client:only="react"');
+  });
+});
+
 describe('PreviewModeManager — Tier 2: Webpack Isolated mode', () => {
   const ENTRY_SOURCE = `
 import React from 'react';

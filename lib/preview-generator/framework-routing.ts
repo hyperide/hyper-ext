@@ -31,6 +31,11 @@ export interface DetectionResult {
   pagesDir?: string;
   /** Actual routes dir found (e.g. 'app/routes' or 'src/routes'). Set for vite-spa-file-based and remix. */
   routesDir?: string;
+  /**
+   * Astro's `srcDir` from astro.config.* (default 'src'). Set for astro when a non-default
+   * srcDir is parsed from the config. The pages root is `<srcDir>/pages`.
+   */
+  srcDir?: string;
 }
 
 async function exists(io: FileIO, p: string): Promise<boolean> {
@@ -45,6 +50,42 @@ async function exists(io: FileIO, p: string): Promise<boolean> {
 interface PackageJson {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+}
+
+const ASTRO_CONFIG_FILES = [
+  'astro.config.ts',
+  'astro.config.mjs',
+  'astro.config.js',
+  'astro.config.cjs',
+  'astro.config.mts',
+  'astro.config.cts',
+] as const;
+
+/**
+ * Read Astro's `srcDir` from the first astro.config.* found. Astro defaults to 'src';
+ * when the config sets a custom srcDir the pages root moves to `<srcDir>/pages`.
+ * Returns the normalized dir (leading './' and trailing '/' stripped), or undefined
+ * when no config is present or srcDir is absent/unparseable — callers default to 'src'.
+ */
+async function readAstroSrcDir(projectRoot: string, io: FileIO): Promise<string | undefined> {
+  for (const configName of ASTRO_CONFIG_FILES) {
+    let source: string;
+    try {
+      source = await io.readFile(join(projectRoot, configName));
+    } catch {
+      continue; // config file not present — try next extension
+    }
+    // Strip comments first so a commented example (`// srcDir: 'app'`) isn't
+    // mistaken for a real setting (would route /test-preview to a 404 dir).
+    const stripped = source
+      .replace(/\/\*[\s\S]*?\*\//g, '') // block comments
+      .replace(/(^|[^:])\/\/.*$/gm, '$1'); // line comments (keep `://` in URLs intact)
+    const match = stripped.match(/\bsrcDir\s*:\s*['"`]([^'"`]+)['"`]/);
+    if (!match) return undefined;
+    const normalized = match[1].replace(/^\.\//, '').replace(/\/+$/, '');
+    return normalized || undefined;
+  }
+  return undefined;
 }
 
 export async function detectFramework(projectRoot: string, io: FileIO): Promise<DetectionResult> {
@@ -85,14 +126,18 @@ export async function detectFramework(projectRoot: string, io: FileIO): Promise<
   // (test-preview.astro) that mounts CanvasPreview as a `client:only="react"` island.
   // HYP-382 originally mapped Astro to vite-spa-jsx-router, which dead-ended: no router
   // found AND no entry file found → 'needs-patch' → a misleading "JSX router detected" toast.
-  const isAstro =
-    Boolean(deps.astro) ||
-    (await exists(io, join(projectRoot, 'astro.config.ts'))) ||
-    (await exists(io, join(projectRoot, 'astro.config.mjs'))) ||
-    (await exists(io, join(projectRoot, 'astro.config.js'))) ||
-    (await exists(io, join(projectRoot, 'astro.config.cjs')));
+  let isAstro = Boolean(deps.astro);
+  if (!isAstro) {
+    for (const configName of ASTRO_CONFIG_FILES) {
+      if (await exists(io, join(projectRoot, configName))) {
+        isAstro = true;
+        break;
+      }
+    }
+  }
   if (isAstro) {
-    return { framework: 'astro' };
+    const srcDir = await readAstroSrcDir(projectRoot, io);
+    return srcDir ? { framework: 'astro', srcDir } : { framework: 'astro' };
   }
 
   // 4. Vite — sub-classify via filesystem, preserve actual routes dir.
@@ -144,7 +189,7 @@ export interface RouteFilePaths {
  * Callers must pass the full DetectionResult so paths match the dirs that actually exist on disk.
  */
 export function getRouteFilePaths(result: DetectionResult, projectRoot: string): RouteFilePaths {
-  const { framework, appDir = 'app', pagesDir = 'pages', routesDir } = result;
+  const { framework, appDir = 'app', pagesDir = 'pages', routesDir, srcDir = 'src' } = result;
   switch (framework) {
     case 'nextjs-app-router':
       return {
@@ -157,10 +202,16 @@ export function getRouteFilePaths(result: DetectionResult, projectRoot: string):
     case 'vite-spa-file-based':
       return { routeFile: join(projectRoot, routesDir ?? 'app/routes', 'test-preview.tsx') };
     case 'astro':
-      // Astro file-based routing: src/pages/test-preview.astro. A static-segment route
-      // outranks the CMS catch-all (/[...slug]) in Astro's route priority, and coexists
-      // safely with fallback:'passthrough'.
-      return { routeFile: join(projectRoot, 'src/pages', 'test-preview.astro') };
+      // Astro file-based routing: <srcDir>/pages/test-preview.astro. srcDir defaults to
+      // 'src' but is configurable via astro.config.* (carried in DetectionResult.srcDir).
+      // A static-segment route outranks the CMS catch-all (/[...slug]) in Astro's route
+      // priority, and coexists safely with fallback:'passthrough'.
+      //
+      // NOTE: the generated __canvas_preview__.tsx still follows PreviewFileManager.
+      // getPreviewFilePath (default 'src/'), so for a custom srcDir the route imports it
+      // via a correct relative path but the module lives outside <srcDir> (a stray src/).
+      // Harmless — the import resolves — but co-locating it under <srcDir> is deferred.
+      return { routeFile: join(projectRoot, srcDir, 'pages', 'test-preview.astro') };
     default:
       // webpack, parcel, vite-spa-jsx-router, unknown — no file-based route
       return { routeFile: '' };

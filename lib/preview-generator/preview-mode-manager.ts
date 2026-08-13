@@ -221,6 +221,22 @@ export class PreviewModeManager {
       // blank App Shell layout must be removed before the isolated layout can be written.
       await this._fileManager.cleanupPreviewFiles();
       await this._fileManager.ensureIsolatedNextJsLayout(detection);
+    } else if (framework === 'astro') {
+      // Astro does NOT support Isolated mode (HYP-466). Two things matter here:
+      //   1. Do NOT cleanupPreviewFiles — Astro 404s a deleted route (no SPA fallback,
+      //      unlike the Tier-1 proxy-script-swap frameworks below), leaving the proxy with
+      //      no HTML entry. ensurePreviewFiles is idempotent — re-asserts the route, no delete.
+      //   2. Do NOT transition to isolated mode / fire onModeChange(true). The proxy's
+      //      Tier-1 script swap is gated solely on isolated mode and would rewrite the first
+      //      module script on /test-preview to __canvas_preview_standalone__.tsx — which
+      //      doesn't exist for Astro and would clobber the island's runtime script. Staying
+      //      in app-shell keeps the route rendering correctly.
+      //
+      // LIMITATION: the user's PreviewWrapper from .hyperide/preview.tsx is NOT applied in
+      // Astro previews. Full isolated support needs PreviewProxy taught to skip its
+      // script-swap for Astro (route-based isolation, not proxy-swap). Deferred — NEEDS LINEAR.
+      await this._fileManager.ensurePreviewFiles();
+      return; // stay in app-shell — do not fall through to _mode='isolated' / onModeChange(true)
     } else if (framework === 'webpack') {
       // Tier 2: patch entry to load standalone entry (which has createRoot + PreviewWrapper)
       await this._fileManager.ensureStandaloneEntry();
