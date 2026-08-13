@@ -899,3 +899,66 @@ describe('PreviewPanel stale-detection decision-token guard (HYP-588)', () => {
     expect(projectErrorOf(panel)?.type).toBe('react-native');
   });
 });
+
+// HYP-363 regression guard: the preview webview must open in ViewColumn.Two, never
+// ViewColumn.Beside. Beside resolves to "the next column", which in a single-column
+// E2E layout (the only editor group is column 1) is column 2 — a group that does not
+// exist yet — and VS Code parks the webview off-screen, so E2E specs see a blank
+// canvas. ViewColumn.Two forces a visible split in any layout. Fixed in 94077019
+// "fix(ext): keep preview webview visible (HYP-363)". The earlier suite passed an
+// explicit ViewColumn.Two into createOrShow, so the `column || ViewColumn.Two` DEFAULT
+// branch (the thing the fix actually changed) was never exercised — a revert to
+// `|| ViewColumn.Beside` stayed green. This guard calls createOrShow() with NO column
+// to pin the default.
+describe('PreviewPanel off-screen webview guard (HYP-363)', () => {
+  function buildPanel() {
+    const stateHub = {
+      state: { currentComponent: null, insertTargetId: null, selectedIds: [] },
+      applyUpdate: mock(),
+      register: mock(),
+      unregister: mock(),
+      sendInit: mock(),
+      onChange: mock(() => () => {}),
+    };
+    const mockPanel = createMockPreviewWebviewPanel();
+    const createWebviewPanel = mock(() => mockPanel);
+    Object.assign(vscode.window, {
+      createWebviewPanel,
+      onDidChangeActiveTextEditor: mock(() => ({ dispose: mock() })),
+      onDidChangeTextEditorSelection: mock(() => ({ dispose: mock() })),
+    });
+    Object.assign(vscode.workspace, {
+      onDidChangeConfiguration: mock(() => ({ dispose: mock() })),
+      workspaceFolders: [{ uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 }],
+    });
+
+    const panel = new PreviewPanel(
+      vscode.Uri.file('/extension'),
+      '/workspace',
+      stateHub as never,
+      { astBridge: { astService: {} }, setAstResponseTarget: mock() } as never,
+      { workspaceState: { get: mock(() => false), update: mock(() => Promise.resolve()) } } as never,
+    );
+    return { createWebviewPanel, panel };
+  }
+
+  it('createOrShow() with no column opens the webview in ViewColumn.Two (on-screen), never Beside', () => {
+    const { createWebviewPanel, panel } = buildPanel();
+
+    // No explicit column — exercises the `column || vscode.ViewColumn.Two` default.
+    panel.createOrShow();
+
+    expect(createWebviewPanel).toHaveBeenCalledTimes(1);
+    const columnArg = createWebviewPanel.mock.calls[0][2];
+    expect(columnArg).toBe(vscode.ViewColumn.Two);
+    expect(columnArg).not.toBe(vscode.ViewColumn.Beside);
+  });
+
+  it('an explicit column passed to createOrShow is honored', () => {
+    const { createWebviewPanel, panel } = buildPanel();
+
+    panel.createOrShow(vscode.ViewColumn.Three);
+
+    expect(createWebviewPanel.mock.calls[0][2]).toBe(vscode.ViewColumn.Three);
+  });
+});
