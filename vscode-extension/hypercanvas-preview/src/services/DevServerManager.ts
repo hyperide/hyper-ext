@@ -20,6 +20,27 @@ const MAX_LOG_ENTRIES = 200;
 const ANSI_ESCAPE_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[A-Z\\[\]^_@]/g;
 type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
 
+// Explicit dev-server lifecycle edges (HYP-370 Phase 2). The DevServerStatus enum
+// (types.ts) is the de facto state; this table makes it a guarded machine instead of
+// a passively-set field. Idempotent self-loops (to === from) are handled by transition()
+// and are always legal, so they are not listed here.
+//   stopped|error -> starting   start() begins a spawn
+//   starting      -> running     stdout/stderr ready or _waitForReady port poll
+//   starting      -> error       spawn 'error' event / start() catch
+//   running       -> error       process 'error' event after it was serving
+//   stopped       -> error       startup crash: the dev command exits during
+//                                _waitForReady() (exit handler sets `stopped`),
+//                                then start()'s catch surfaces the failure as `error`
+//                                with the message — without this edge the UI would
+//                                silently lose the failure state/message.
+//   starting|running|error -> stopped   exit handler / stop()
+const LEGAL_TRANSITIONS: Record<DevServerStatus, readonly DevServerStatus[]> = {
+  stopped: ['starting', 'error'],
+  starting: ['running', 'error', 'stopped'],
+  running: ['error', 'stopped'],
+  error: ['starting', 'stopped'],
+};
+
 export interface LogEntry {
   line: string;
   timestamp: number;
@@ -212,7 +233,7 @@ export class DevServerManager {
       return this.getState();
     }
 
-    this._updateStatus('starting');
+    this.transition('starting');
 
     // Reset logs and port detection on new start
     this._logs = [];
@@ -317,7 +338,7 @@ export class DevServerManager {
         // Detect when server is ready
         if (this._status === 'starting' && this._isServerReadyMessage(clean)) {
           console.log('[HyperIDE] DevServer ready detected via stdout');
-          this._updateStatus('running');
+          this.transition('running');
         }
 
         this._maybeResolveRecompileGate(clean);
@@ -335,7 +356,7 @@ export class DevServerManager {
 
         if (this._status === 'starting' && this._isServerReadyMessage(clean)) {
           console.log('[HyperIDE] DevServer ready detected via stderr');
-          this._updateStatus('running');
+          this.transition('running');
         }
 
         this._maybeResolveRecompileGate(clean);
@@ -349,7 +370,7 @@ export class DevServerManager {
         this._process = null;
         this._port = null;
         this._stopProxy();
-        this._updateStatus('stopped');
+        this.transition('stopped');
       });
 
       // Handle process error
@@ -357,7 +378,7 @@ export class DevServerManager {
         if (!isCurrentProcess()) return;
         console.error('[HyperIDE] DevServer process error:', error.message);
         this._outputChannel.appendLine(`[DevServer] Process error: ${error.message}`);
-        this._updateStatus('error', error.message);
+        this.transition('error', error.message);
       });
 
       // Wait for server to be ready (with timeout).
@@ -385,7 +406,7 @@ export class DevServerManager {
       }
 
       this._stopProxy();
-      this._updateStatus('error', errorMessage);
+      this.transition('error', errorMessage);
       return this.getState();
     }
   }
@@ -433,7 +454,7 @@ export class DevServerManager {
     }
 
     if (this._process === null) {
-      this._updateStatus('stopped');
+      this.transition('stopped');
     }
   }
 
@@ -708,7 +729,7 @@ export class DevServerManager {
       // truthiness check and the async _isPortOpen call
       const port = this._port;
       if (port && (await this._isPortOpen(port))) {
-        this._updateStatus('running');
+        this.transition('running');
         return;
       }
 
@@ -816,6 +837,26 @@ export class DevServerManager {
         this._onError?.(errorEntries.map((e) => e.line.replace(ANSI_ESCAPE_PATTERN, '')).join('\n'));
       }
     }
+  }
+
+  /**
+   * Guarded status transition (HYP-370 Phase 2). Consults LEGAL_TRANSITIONS and
+   * applies + publishes the new status only for legal edges. Idempotent self-loops
+   * (to === from) are always legal — this preserves today's always-fire behavior
+   * (e.g. stop() of a fresh instance re-publishing `stopped`). Illegal cross-state
+   * jumps are no-ops: the status is left unchanged and onStatusChange is NOT fired.
+   *
+   * Returns true if the transition was applied, false if rejected. All status-setting
+   * sites route through here; _updateStatus stays the set+notify primitive it calls.
+   */
+  private transition(to: DevServerStatus, error?: string): boolean {
+    const from = this._status;
+    if (to !== from && !LEGAL_TRANSITIONS[from].includes(to)) {
+      console.warn(`[HyperIDE] DevServer rejected illegal status transition: ${from} -> ${to}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+      return false;
+    }
+    this._updateStatus(to, error);
+    return true;
   }
 
   /**

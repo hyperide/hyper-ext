@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import type { DevServerStatus } from '../types';
 
 /**
  * DevServerManager test — focuses on log parsing, state machine,
@@ -444,6 +445,93 @@ describe('DevServerManager', () => {
       // Race the gate against a microtask; gate must still be pending.
       const settled = await Promise.race([manager.awaitRecompile().then(() => 'resolved'), Promise.resolve('pending')]);
       expect(settled).toBe('pending');
+    });
+  });
+
+  describe('status transition guard (HYP-370 Phase 2)', () => {
+    // The status field is now a guarded machine: only legal edges (plus idempotent
+    // self-loops) are applied + published; illegal cross-state jumps are no-ops and
+    // do NOT fire onStatusChange. Drive the private transition() directly.
+    function transition(mgr: InstanceType<typeof DevServerManager>, to: DevServerStatus, error?: string) {
+      (mgr as unknown as { transition(to: DevServerStatus, error?: string): boolean }).transition(to, error);
+    }
+    function statusOf(mgr: InstanceType<typeof DevServerManager>) {
+      return mgr.getState().status;
+    }
+
+    it('rejects an illegal cross-state jump (stopped -> running without starting) and does NOT fire onStatusChange', () => {
+      const cb = mock();
+      manager.onStatusChange(cb);
+
+      expect(statusOf(manager)).toBe('stopped');
+      transition(manager, 'running');
+
+      expect(statusOf(manager)).toBe('stopped'); // status unchanged
+      expect(cb).not.toHaveBeenCalled(); // listeners not notified
+    });
+
+    it('rejects running <- error and starting <- running jumps too', () => {
+      const cb = mock();
+      manager.onStatusChange(cb);
+
+      // error -> running is illegal
+      transition(manager, 'starting');
+      transition(manager, 'error', 'boom');
+      cb.mockClear();
+      transition(manager, 'running');
+      expect(statusOf(manager)).toBe('error');
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('applies a legal transition path and fires onStatusChange with the payload', () => {
+      const cb = mock();
+      manager.onStatusChange(cb);
+
+      transition(manager, 'starting');
+      expect(statusOf(manager)).toBe('starting');
+      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ status: 'starting' }));
+
+      cb.mockClear();
+      transition(manager, 'running');
+      expect(statusOf(manager)).toBe('running');
+      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ status: 'running' }));
+    });
+
+    it('preserves the error payload on a legal -> error transition (getState().error)', () => {
+      transition(manager, 'starting');
+      transition(manager, 'error', 'spawn failed');
+      const state = manager.getState();
+      expect(state.status).toBe('error');
+      expect(state.error).toBe('spawn failed');
+    });
+
+    it('startup crash path: starting -> stopped (exit) -> error (catch) still surfaces the error', () => {
+      // A dev command that exits before readiness: the exit handler sets `stopped`,
+      // then start()'s catch surfaces the failure as `error`. stopped -> error must
+      // be legal so the UI keeps the failure state + message (regression guard).
+      const cb = mock();
+      manager.onStatusChange(cb);
+
+      transition(manager, 'starting');
+      transition(manager, 'stopped'); // process exited during _waitForReady
+      cb.mockClear();
+      transition(manager, 'error', 'Server failed to start');
+
+      const state = manager.getState();
+      expect(state.status).toBe('error');
+      expect(state.error).toBe('Server failed to start');
+      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ status: 'error', error: 'Server failed to start' }));
+    });
+
+    it('allows the stopped -> stopped self-loop to re-publish (idempotent, contract-preserving)', () => {
+      const cb = mock();
+      manager.onStatusChange(cb);
+
+      expect(statusOf(manager)).toBe('stopped');
+      transition(manager, 'stopped');
+      expect(statusOf(manager)).toBe('stopped');
+      // Self-loop is legal — matches today's always-fire behavior on stop() of a fresh instance
+      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ status: 'stopped' }));
     });
   });
 
