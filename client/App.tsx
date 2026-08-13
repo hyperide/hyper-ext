@@ -25,6 +25,7 @@ const WorkspaceSettings = lazy(() => import('./pages/WorkspaceSettings'));
 const UserSettings = lazy(() => import('./pages/UserSettings'));
 const InviteAccept = lazy(() => import('./pages/InviteAccept'));
 const ProjectInviteAccept = lazy(() => import('./pages/ProjectInviteAccept'));
+const OAuthConsent = lazy(() => import('./pages/OAuthConsent'));
 
 const queryClient = new QueryClient();
 
@@ -58,6 +59,10 @@ const App = () => (
                   <Route path="/auth/error" element={<AuthError />} />
                   <Route path="/invite/:token" element={<InviteAccept />} />
                   <Route path="/project-invite/:token" element={<ProjectInviteAccept />} />
+                  {/* OAuth consent must be PUBLIC: the user may be unauthenticated on first
+                      landing (the page itself handles login + resume). Wrapping it in
+                      ProtectedRoute would re-stash a wrong auth_redirect and lose the ticket. */}
+                  <Route path="/oauth/consent" element={<OAuthConsent />} />
                   <Route path="/product" element={<Product />} />
 
                   {/* Protected routes */}

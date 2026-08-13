@@ -36,6 +36,24 @@ export default function AuthCallback() {
         const success = await checkAuth();
 
         if (success) {
+          // HYP-262 Phase 5: resume a pending OAuth /authorize request preserved across this
+          // first login. The server reads + clears the httpOnly oauth_pending_request cookie
+          // and rebuilds the /authorize URL with the host FIXED to our origin, so resumeUrl
+          // is never attacker-controlled. A full navigation re-hits the server /authorize,
+          // which this time finds the session. If there's no pending request, fall through.
+          try {
+            const pendingRes = await fetch('/api/oauth/consent/pending', { credentials: 'include' });
+            if (pendingRes.ok) {
+              const { resumeUrl } = (await pendingRes.json()) as { resumeUrl: string | null };
+              if (resumeUrl) {
+                window.location.href = resumeUrl;
+                return;
+              }
+            }
+          } catch {
+            // No pending OAuth request / endpoint disabled — fall through to normal redirect.
+          }
+
           // Redirect to projects page (or stored redirect)
           const redirectTo = sessionStorage.getItem('auth_redirect') || '/projects';
           sessionStorage.removeItem('auth_redirect');
