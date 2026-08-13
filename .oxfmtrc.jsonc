@@ -1,8 +1,9 @@
 {
-  // Mirrors biome.jsonc formatter settings.
+  // singleQuote matches the codebase's dominant single-quote style; keeping it
+  // true prevents oxfmt from rewriting source to double quotes on every run.
   "printWidth": 120,
   "tabWidth": 2,
   "useTabs": false,
-  "singleQuote": false,
+  "singleQuote": true,
   "trailingComma": "all",
 }
