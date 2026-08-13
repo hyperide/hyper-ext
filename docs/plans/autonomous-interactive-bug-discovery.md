@@ -268,6 +268,11 @@ before we trust it.
 
 ## 5. Tooling — build vs reuse
 
+> **Repo boundary:** `ext-test-projects/` paths throughout this document refer to the **sibling
+> checkout at `../ext-test-projects`** — the repository where CI and developers run the Playwright/
+> Apple-container e2e matrix. All new witnesses, the `qa-matrix.yaml`, and harness helpers go INTO
+> that sibling repo. Nothing in this section creates a duplicate harness inside the `hyperide` repo.
+
 **Reuse (do not rebuild — a new stand duplicates 34 fixtures):**
 
 - `ext-test-projects/e2e/setup/electron-app.ts` `launchVSCode()` (CDP-over-Electron, isolation,
