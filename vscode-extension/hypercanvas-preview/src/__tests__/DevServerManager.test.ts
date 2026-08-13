@@ -410,4 +410,69 @@ describe('DevServerManager', () => {
       expect(settled).toBe('pending');
     });
   });
+
+  describe('port auto-detection via _maybeUpdatePortFromOutput', () => {
+    function firePortDetector(mgr: InstanceType<typeof DevServerManager>, text: string) {
+      (mgr as unknown as { _maybeUpdatePortFromOutput(text: string): void })._maybeUpdatePortFromOutput(text);
+    }
+
+    it('updates proxy target when dev server binds to a different port than assigned', () => {
+      const setTargetPort = mock();
+      const proxy = { setTargetPort };
+      Object.assign(manager, { _previewProxy: proxy, _port: 5174 });
+
+      // Bun.serve output: "http://localhost:3000"
+      firePortDetector(manager, '✨ CMS dev server running at http://localhost:3000');
+
+      expect(setTargetPort).toHaveBeenCalledWith(3000);
+      expect((manager as unknown as { _port: number })._port).toBe(3000);
+    });
+
+    it('does not call setTargetPort when detected port matches assigned port', () => {
+      const setTargetPort = mock();
+      Object.assign(manager, { _previewProxy: { setTargetPort }, _port: 5173 });
+
+      firePortDetector(manager, 'Local: http://localhost:5173/');
+
+      expect(setTargetPort).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when _portDetected is already true', () => {
+      const setTargetPort = mock();
+      Object.assign(manager, { _previewProxy: { setTargetPort }, _port: 5174, _portDetected: true });
+
+      firePortDetector(manager, 'http://localhost:3000');
+
+      expect(setTargetPort).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when no port pattern in output', () => {
+      const setTargetPort = mock();
+      Object.assign(manager, { _previewProxy: { setTargetPort }, _port: 5174 });
+
+      firePortDetector(manager, 'TypeScript watch started');
+
+      expect(setTargetPort).not.toHaveBeenCalled();
+    });
+
+    it('matches 127.0.0.1 as well as localhost', () => {
+      const setTargetPort = mock();
+      Object.assign(manager, { _previewProxy: { setTargetPort }, _port: 5174 });
+
+      firePortDetector(manager, 'Listening on http://127.0.0.1:3000');
+
+      expect(setTargetPort).toHaveBeenCalledWith(3000);
+    });
+
+    it('only fires once — subsequent output does not re-update the port', () => {
+      const setTargetPort = mock();
+      Object.assign(manager, { _previewProxy: { setTargetPort }, _port: 5174 });
+
+      firePortDetector(manager, 'http://localhost:3000');
+      firePortDetector(manager, 'http://localhost:4000');
+
+      expect(setTargetPort).toHaveBeenCalledTimes(1);
+      expect(setTargetPort).toHaveBeenCalledWith(3000);
+    });
+  });
 });

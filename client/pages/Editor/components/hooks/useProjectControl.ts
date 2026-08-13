@@ -15,7 +15,6 @@ export interface ProjectData {
   path?: string;
   port?: number;
   framework?: string;
-  clientSideRuntime?: boolean;
   devCommand?: string;
   userRole?: 'editor' | 'viewer';
 }
@@ -142,8 +141,8 @@ export function useProjectControl({
         setIsStarting(false);
       }
 
-      // Auto-start if stopped (only once per project) — skip for NodePod/browser runtime projects
-      if (project.status === 'stopped' && !startAttemptedRef.current && !project.clientSideRuntime) {
+      // Auto-start if stopped (only once per project)
+      if (project.status === 'stopped' && !startAttemptedRef.current) {
         console.log('[useProjectControl] Auto-starting project...');
         startAttemptedRef.current = true;
         setIsStarting(true);

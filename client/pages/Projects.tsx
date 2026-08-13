@@ -1,5 +1,4 @@
 import {
-  IconBolt,
   IconBrandGit,
   IconBrandGithub,
   IconDots,
@@ -49,7 +48,6 @@ interface Project {
   port: number;
   internalPort: number;
   framework: string;
-  clientSideRuntime: boolean;
   packageManager: 'npm' | 'yarn' | 'pnpm' | 'bun';
   status: 'stopped' | 'building' | 'running' | 'error';
   createdAt: number;
@@ -917,12 +915,6 @@ export default function Projects() {
                             {project.creationStatus}
                           </span>
                         )}
-                      {project.clientSideRuntime && (
-                        <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full shrink-0 bg-violet-100 text-violet-700">
-                          <IconBolt className="w-3 h-3" />
-                          Serverless
-                        </span>
-                      )}
                     </div>
                     <div className="flex gap-2 shrink-0">
                       {project.status === 'running' || project.status === 'building' ? (

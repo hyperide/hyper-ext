@@ -35,7 +35,6 @@ import {
   findNearestSourceLocation,
   getFiberFromDOM,
   getItemIndexFromFiber,
-  stripNodePodPrefix,
 } from '@shared/element-tracing/fiber-internals';
 import { FiberSourceIndex, getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-index';
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
@@ -261,12 +260,7 @@ function findHostRootFiber(): Fiber | null {
 }
 
 function resolveSourceIndexFiberSource(fiber: Fiber): SourceLocation | null {
-  const loc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber) ?? getOwnFiberSourceLocation(fiber);
-  if (loc === null) return null;
-  // Strip NodePod virtual FS prefix: "/app/src/..." → "src/..."
-  // Fibers from Babel-transformed code inside NodePod carry absolute /app/ paths;
-  // extension lookups use workspace-relative paths (src/...).
-  return { ...loc, fileName: stripNodePodPrefix(loc.fileName) };
+  return resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber) ?? getOwnFiberSourceLocation(fiber);
 }
 
 function getSourceIndex(): FiberSourceIndex {

@@ -11,12 +11,10 @@ const mockAstService = {
   wrapElement: mock(() => Promise.resolve({ success: true, wrapperId: 'wrap-1' })),
   pasteElement: mock(() => Promise.resolve({ success: true, newId: 'paste-1' })),
   moveElement: mock(() => Promise.resolve({ success: true as const })),
-  updateI18nKey: mock(() => Promise.resolve({ success: true, resolvedPath: '/workspace/Greet.tsx' })),
 };
 
 mock.module('../services/AstService', () => ({
   AstService: class {
-    ensureInitialized = mock(() => Promise.resolve());
     updateStyles = mockAstService.updateStyles;
     updateProps = mockAstService.updateProps;
     insertElement = mockAstService.insertElement;
@@ -26,15 +24,6 @@ mock.module('../services/AstService', () => ({
     wrapElement = mockAstService.wrapElement;
     pasteElement = mockAstService.pasteElement;
     moveElement = mockAstService.moveElement;
-    updateI18nKey = mockAstService.updateI18nKey;
-    get nodeMapService() {
-      return {
-        resolveNodeRef: () => null,
-        resolveSourceLocation: () => null,
-        getNodeMap: () => [],
-        getTrackedFiles: () => [],
-      };
-    }
   },
 }));
 

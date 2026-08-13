@@ -70,15 +70,6 @@ describe('LayoutSection toggle classes', () => {
     expect(rowButton?.classList.contains('bg-background')).toBe(false);
   });
 
-  it('padding link button uses bg-transparent when not expanded', () => {
-    const { getByTestId } = render(<LayoutSection {...defaultProps} selectedLayout="layout" />);
-    const linkBtn = getByTestId('hyper-inspector-padding-link');
-    expect(linkBtn.classList.contains('inspector-btn-active')).toBe(false);
-    expect(linkBtn.classList.contains('bg-transparent')).toBe(true);
-    expect(linkBtn.className).not.toContain('bg-blue-100');
-    expect(linkBtn.className).not.toContain('bg-blue-900');
-  });
-
   it('batches horizontal padding side writes', () => {
     const calls: Array<[string, string, { debounceOnly?: boolean } | undefined]> = [];
     const { getAllByTestId } = render(

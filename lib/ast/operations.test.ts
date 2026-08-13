@@ -183,7 +183,7 @@ const App = () => (
 
     expect(result.wrapped).toBe(true);
     const output = printAST(ast);
-    expect(output).toContain("className='wrapper'");
+    expect(output).toContain('className="wrapper"');
   });
 });
 

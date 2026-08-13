@@ -1,87 +1,40 @@
 {
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
-  "version": "0.1.46",
+  "version": "0.1.47",
   "description": "Visual editor for React components",
-  "categories": [
-    "Other",
-    "Visualization"
-  ],
-  "keywords": [
-    "component-editor",
-    "preview",
-    "react",
-    "react-native",
-    "tailwind",
-    "tamagui",
-    "visual-editor"
-  ],
-  "homepage": "https://hyperide.ai",
-  "bugs": {
-    "url": "https://github.com/hyperide/hyper-ext/issues"
-  },
+  "version": "0.1.46",
+  "publisher": "hyperide",
   "license": "Elastic-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyperide/hyper-ext"
   },
-  "publisher": "hyperide",
+  "homepage": "https://hyperide.ai",
+  "bugs": {
+    "url": "https://github.com/hyperide/hyper-ext/issues"
+  },
+  "keywords": [
+    "react",
+    "visual-editor",
+    "preview",
+    "tailwind",
+    "component-editor",
+    "tamagui",
+    "react-native"
+  ],
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.106.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
-  "scripts": {
-    "vscode:prepublish": "npm run build",
-    "build": "node esbuild.js --production && tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
-    "build:css": "tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
-    "watch": "node esbuild.js --watch & tailwindcss --input src/webview/styles.css --output out/webview.css --watch",
-    "compile": "tsc -p ./",
-    "test": "bun test src/__tests__/",
-    "package": "npm run build && npx @vscode/vsce package"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
-    "@babel/generator": "^7.26.5",
-    "@babel/parser": "^7.26.3",
-    "@babel/traverse": "^7.26.5",
-    "@babel/types": "^7.26.5",
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "html2canvas": "^1.4.1",
-    "react-resizable-panels": "^4.6.5",
-    "recast": "^0.23.11",
-    "zod": "^4.3.6"
-  },
-  "devDependencies": {
-    "@radix-ui/react-dialog": "^1.1.2",
-    "@radix-ui/react-scroll-area": "^1.2.0",
-    "@radix-ui/react-slot": "^1.1.0",
-    "@radix-ui/react-tooltip": "^1.1.3",
-    "@tabler/icons-react": "^3.28.1",
-    "@types/babel__traverse": "^7.20.6",
-    "@types/node": "^18.0.0",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@types/vscode": "^1.74.0",
-    "@vscode/vsce": "^3.0.0",
-    "autoprefixer": "^10.4.20",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "esbuild": "^0.25.0",
-    "postcss": "^8.4.49",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-markdown": "^9.0.1",
-    "tailwind-merge": "^2.5.5",
-    "tailwindcss": "^3.4.17",
-    "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.0.0",
-    "zustand": "^5.0.2"
-  },
-  "resolutions": {
-    "fast-uri": ">=3.1.2",
-    "path-to-regexp": ">=8.4.0"
-  },
-  "overrides": {
-    "fast-uri": "^3.1.2",
-    "path-to-regexp": "^8.4.0"
-  },
   "contributes": {
     "mcpServerDefinitionProviders": [
       {
@@ -420,11 +373,51 @@
       }
     }
   },
-  "activationEvents": [
-    "onStartupFinished"
-  ],
-  "icon": "media/icon.png",
-  "engines": {
-    "vscode": "^1.106.0"
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production && tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
+    "build:css": "tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
+    "watch": "node esbuild.js --watch & tailwindcss --input src/webview/styles.css --output out/webview.css --watch",
+    "compile": "tsc -p ./",
+    "test": "bun test src/__tests__/",
+    "package": "npm run build && npx @vscode/vsce package"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@babel/generator": "^7.26.5",
+    "@babel/parser": "^7.26.3",
+    "@babel/traverse": "^7.26.5",
+    "@babel/types": "^7.26.5",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "html2canvas": "^1.4.1",
+    "react-resizable-panels": "^4.6.5",
+    "recast": "^0.23.11",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-scroll-area": "^1.2.0",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-tooltip": "^1.1.3",
+    "@tabler/icons-react": "^3.28.1",
+    "@types/babel__traverse": "^7.20.6",
+    "@types/node": "^18.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/vscode": "^1.74.0",
+    "@vscode/vsce": "^3.0.0",
+    "autoprefixer": "^10.4.20",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "esbuild": "^0.25.0",
+    "postcss": "^8.4.49",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "tailwind-merge": "^2.5.5",
+    "tailwindcss": "^3.4.17",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.0.0",
+    "zustand": "^5.0.2"
   }
 }

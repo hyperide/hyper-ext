@@ -180,7 +180,7 @@ export default function RightSidebar({
 
   // Elements tree for Inspector (VS Code only, when Explorer is hidden)
   const showTreeInInspector = isVSCode && explorerVisible !== true && !!componentPath;
-  const elementsTree = useElementsTree();
+  const elementsTree = useElementsTree(undefined);
   const elementSelection = useElementSelection(elementsTree);
   const handleFunctionNavigate = useFunctionNavigate(componentPath ?? undefined);
   const [elementsTreeCollapsed, setElementsTreeCollapsed] = useState(false);
@@ -286,11 +286,12 @@ export default function RightSidebar({
   // Note: pendingKeyWrite is NOT cleared here — HMR transiently sets selectedId to null, which
   // would prematurely drop the pending guard. The pendingKeyWrite useEffect handles cleanup when
   // selectedId is non-null and different from pendingKeyWrite.elementId.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on element change only
+  /* eslint-disable react-hooks/exhaustive-deps -- intentional reset on element change only */
   useEffect(() => {
     setI18nActiveLocale(undefined);
     lastWrittenI18nKeyRef.current = null;
   }, [selectedId]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Apply state filter to parsedStyles
   const effectiveParsed: Partial<ParsedStyles> = useMemo(() => {
@@ -876,7 +877,7 @@ export default function RightSidebar({
         }
       })();
     },
-    [i18nText, astOps, selectedId, i18nDispatch, availableI18nKeys, canvas],
+    [i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys, canvas],
   );
 
   const handleI18nResolvedTextChange = useCallback(
@@ -1241,13 +1242,14 @@ export default function RightSidebar({
 
   // Cancel pending i18n text write when selection changes — prevents a stale write
   // from element A firing (and setting writeInProgress) after user has moved to element B.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional cancel on element change only
+  /* eslint-disable react-hooks/exhaustive-deps -- intentional cancel on element change only */
   useEffect(() => {
     if (debouncedI18nWriteRef.current) {
       clearTimeout(debouncedI18nWriteRef.current);
       debouncedI18nWriteRef.current = null;
     }
   }, [selectedId]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Get frame type for display
   const getFrameType = useCallback(() => {

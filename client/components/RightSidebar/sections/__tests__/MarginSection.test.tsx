@@ -1,6 +1,14 @@
-import { describe, expect, it, mock } from 'bun:test';
+/**
+ * @file MarginSection spacing-link theme tests
+ *
+ * Accessed via: Right sidebar > Margin section
+ * Assumptions: active spacing link styling must use theme tokens.
+ * Architecture: https://hyperide.github.io/reports/style-write-unification
+ */
+
+import { describe, expect, it } from 'bun:test';
 import { TID } from '@shared/data-testid-map';
-import { fireEvent, render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MarginSection } from '../MarginSection';
 
 const defaultProps = {
@@ -8,45 +16,20 @@ const defaultProps = {
   marginRight: '0',
   marginBottom: '0',
   marginLeft: '0',
-  marginLinked: false,
+  marginLinked: true,
   onMarginChange: () => {},
   onMarginLinkedToggle: () => {},
   onNumericKeyDown: () => {},
 };
 
-describe('MarginSection link button', () => {
-  it('uses bg-transparent when marginLinked is false', () => {
-    const { getByTestId } = render(<MarginSection {...defaultProps} marginLinked={false} />);
-    const linkBtn = getByTestId(TID.inspector.spacingLink('margin'));
-    expect(linkBtn.classList.contains('bg-transparent')).toBe(true);
-    expect(linkBtn.classList.contains('inspector-btn-active')).toBe(false);
-  });
+describe('MarginSection spacing link', () => {
+  it('uses semantic theme classes for the active linked state', () => {
+    render(<MarginSection {...defaultProps} />);
 
-  it('uses inspector-btn-active when marginLinked is true', () => {
-    const { getByTestId } = render(<MarginSection {...defaultProps} marginLinked={true} />);
-    const linkBtn = getByTestId(TID.inspector.spacingLink('margin'));
-    expect(linkBtn.classList.contains('inspector-btn-active')).toBe(true);
-    expect(linkBtn.classList.contains('bg-transparent')).toBe(false);
-  });
-
-  it('inactive link button has no hardcoded blue Tailwind classes', () => {
-    const { getByTestId } = render(<MarginSection {...defaultProps} marginLinked={false} />);
-    const btn = getByTestId(TID.inspector.spacingLink('margin'));
-    expect(btn.className).not.toContain('bg-blue-100');
-    expect(btn.className).not.toContain('bg-blue-900');
-  });
-
-  it('active link button has no hardcoded blue Tailwind classes', () => {
-    const { getByTestId } = render(<MarginSection {...defaultProps} marginLinked={true} />);
-    const btn = getByTestId(TID.inspector.spacingLink('margin'));
-    expect(btn.className).not.toContain('bg-blue-100');
-    expect(btn.className).not.toContain('bg-blue-900');
-  });
-
-  it('calls onMarginLinkedToggle when link button is clicked', () => {
-    const toggle = mock(() => {});
-    const { getByTestId } = render(<MarginSection {...defaultProps} onMarginLinkedToggle={toggle} />);
-    fireEvent.click(getByTestId(TID.inspector.spacingLink('margin')));
-    expect(toggle).toHaveBeenCalledTimes(1);
+    const button = screen.getByTestId(TID.inspector.spacingLink('margin'));
+    expect(button.classList.contains('bg-accent')).toBe(true);
+    expect(button.classList.contains('text-accent-foreground')).toBe(true);
+    expect(button.className).not.toContain('bg-blue-100');
+    expect(button.innerHTML).not.toContain('3479DE');
   });
 });

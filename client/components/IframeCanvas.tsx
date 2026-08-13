@@ -1,6 +1,5 @@
 import { injectDesignStyles } from '@shared/canvas-interaction/style-injector';
 import type { SourceLocation } from '@shared/element-tracing/types';
-import { IFRAME_CONSOLE_CAPTURE_SCRIPT } from '@shared/scripts/iframe-console-capture-content';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IPHONE_SIZES } from '@/components/RightSidebar/constants';
 import { useComponentMeta } from '@/contexts/ComponentMetaContext';
@@ -8,7 +7,6 @@ import { useElementTracer } from '@/hooks/useElementTracer';
 import { useTracerSelectionSync } from '@/hooks/useTracerSelectionSync';
 import { useCanvasEngine } from '@/lib/canvas-engine';
 import { getActiveTracer as getActiveTracerInstance } from '@/lib/element-tracing/active-tracer';
-import { ElementTracer } from '@/lib/element-tracing/element-tracer';
 import { authFetch } from '@/utils/authFetch';
 import type { RuntimeError } from '../../shared/runtime-error';
 // Canvas composition loaded from server only (no localStorage cache)
@@ -445,32 +443,6 @@ export default function IframeCanvas({
     }
   }, [previewReady, boardModeActive, editorMode, canvasMode]);
 
-  // For NodePod iframes (overrideSrc): inject console capture script so browser logs
-  // flow into the Diagnostics panel via postMessage → useDiagnosticSync.
-  // Must listen to iframe 'load' directly — iframeLoadedCounter may not increment if the
-  // iframe navigates from about:blank to the real NodePod URL before the load listener attaches.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter re-attaches listener after iframe navigation
-  useEffect(() => {
-    if (!overrideSrc || !previewReady) return;
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-
-    const tryInject = () => {
-      const doc = iframe.contentDocument;
-      if (!doc || !doc.head) return;
-      if (doc.location.href === 'about:blank') return;
-      if (doc.querySelector('script[data-hyperide-console-capture]')) return;
-      const script = doc.createElement('script');
-      script.textContent = IFRAME_CONSOLE_CAPTURE_SCRIPT;
-      script.setAttribute('data-hyperide-console-capture', '1');
-      doc.head.appendChild(script);
-    };
-
-    tryInject(); // handles case where iframe already loaded real page
-    iframe.addEventListener('load', tryInject);
-    return () => iframe.removeEventListener('load', tryInject);
-  }, [overrideSrc, previewReady, iframeLoadedCounter]);
-
   // Apply instance sizes to DOM elements
   /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-apply after iframe reload */
   useEffect(() => {
@@ -610,15 +582,12 @@ export default function IframeCanvas({
               onElementClick(result.nodeRef, target, e, result.itemIndex, result.source);
               return;
             }
-            // Fiber gave source but no cached nodeRef (server round-trip pending).
-            // In NodePod mode (overrideSrc set), generate a synthetic nodeRef so the element
-            // gets selected immediately without a server round-trip that never completes.
+            // Fiber gave source but no cached nodeRef (server round-trip pending)
             const source = tracer.getSourceLocation(target);
             if (source) {
               const itemIndex = tracer.getItemIndex(target);
               setPendingSelection(source, itemIndex);
-              const effectiveNodeRef = overrideSrc ? ElementTracer.encodeSyntheticNodeRef(source, itemIndex) : null;
-              onElementClick(effectiveNodeRef, target, e, itemIndex, source);
+              onElementClick(null, target, e, itemIndex, source);
               return;
             }
           }
@@ -658,15 +627,6 @@ export default function IframeCanvas({
         if (result) {
           onElementHover(result.nodeRef, target, result.itemIndex, result.source);
           return;
-        }
-        // NodePod mode: no node maps — use synthetic nodeRef from fiber source
-        if (overrideSrc) {
-          const source = tracer.getSourceLocation(target);
-          if (source) {
-            const itemIndex = tracer.getItemIndex(target);
-            onElementHover(ElementTracer.encodeSyntheticNodeRef(source, itemIndex), target, itemIndex, source);
-            return;
-          }
         }
       }
 
@@ -852,7 +812,6 @@ export default function IframeCanvas({
     canvasMode,
     tracer,
     setPendingSelection,
-    overrideSrc,
   ]);
 
   // Update opacity of instances based on activeInstanceId
@@ -1027,9 +986,10 @@ export default function IframeCanvas({
 
       // Blank page detection: if React never mounted after sufficient time,
       // likely a module linking error (e.g., "does not provide an export named").
-      // Skip for overrideSrc (NodePod): the full app serves its own content and
-      // takes much longer to start than the 2s timeout — false positives otherwise.
-      if (!overrideSrc && Date.now() - effectStartTime > 2000) {
+      // Only check after 2s from effect start to avoid false positives during
+      // normal React mount time. Dynamic import() in iframe-console-capture.js
+      // provides the actual error message; this is a fallback.
+      if (Date.now() - effectStartTime > 2000) {
         const root = doc.getElementById('root') || doc.getElementById('__next') || doc.getElementById('app');
         if (root && root.children.length === 0) {
           return {

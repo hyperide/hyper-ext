@@ -68,6 +68,12 @@ export class PreviewProxy {
     return this._proxyPort;
   }
 
+  /** Update the target port when the dev server self-assigns a different port than requested. */
+  setTargetPort(port: number): void {
+    this._targetPort = port;
+    console.log(`[PreviewProxy] Target port updated to ${port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+  }
+
   /** Switch between App Shell and Isolated mode. Called by PreviewModeManager. */
   setIsolatedMode(isolated: boolean): void {
     this._isIsolatedMode = isolated;

@@ -26,39 +26,6 @@ export interface ClickResult {
   itemIndex: number;
 }
 
-/**
- * Synthetic nodeRef prefix for NodePod mode (no server-side AST).
- * Format: SYNTHETIC_PREFIX + fileName + ":" + line + ":" + column + ":" + itemIndex
- * Decoded by decodeSyntheticNodeRef() to recover the source location for fiber-based DOM lookup.
- */
-const SYNTHETIC_PREFIX = '__np__';
-
-function encodeSyntheticNodeRef(source: SourceLocation, itemIndex: number): string {
-  return `${SYNTHETIC_PREFIX}${source.fileName}:${source.line}:${source.column}:${itemIndex}`;
-}
-
-function decodeSyntheticNodeRef(nodeRef: string): { source: SourceLocation; itemIndex: number } | null {
-  if (!nodeRef.startsWith(SYNTHETIC_PREFIX)) return null;
-  const rest = nodeRef.slice(SYNTHETIC_PREFIX.length);
-  // Parse from end: ":<itemIndex>", ":<column>", ":<line>", then fileName
-  const i3 = rest.lastIndexOf(':');
-  if (i3 === -1) return null;
-  const itemIndex = Number.parseInt(rest.slice(i3 + 1), 10);
-  if (Number.isNaN(itemIndex)) return null;
-  const s3 = rest.slice(0, i3);
-  const i2 = s3.lastIndexOf(':');
-  if (i2 === -1) return null;
-  const column = Number.parseInt(s3.slice(i2 + 1), 10);
-  if (Number.isNaN(column)) return null;
-  const s2 = s3.slice(0, i2);
-  const i1 = s2.lastIndexOf(':');
-  if (i1 === -1) return null;
-  const line = Number.parseInt(s2.slice(i1 + 1), 10);
-  if (Number.isNaN(line)) return null;
-  const fileName = s2.slice(0, i1);
-  return { source: { fileName, line, column }, itemIndex };
-}
-
 export class ElementTracer implements TracingResolver {
   private readonly _adapter: FrameworkAdapter;
   private readonly _transport: TracingTransport;
@@ -170,22 +137,16 @@ export class ElementTracer implements TracingResolver {
     return this._adapter.findDOMElement(source, itemIndex);
   }
 
-  /** Encode a source location + itemIndex as a synthetic NodePod nodeRef (no server AST). */
-  static encodeSyntheticNodeRef(source: SourceLocation, itemIndex: number): string {
-    return encodeSyntheticNodeRef(source, itemIndex);
-  }
-
-  /** Look up source location for a nodeRef from cached node maps, or decode a synthetic nodeRef. */
+  /** Look up source location for a nodeRef from cached node maps. */
   getSourceByNodeRef(nodeRef: string): SourceLocation | null {
     for (const entries of this._nodeMaps.values()) {
       const entry = entries.find((e) => e.nodeRef === nodeRef);
       if (entry) return entry.loc;
     }
-    const decoded = decodeSyntheticNodeRef(nodeRef);
-    return decoded?.source ?? null;
+    return null;
   }
 
-  /** Resolve a nodeRef to a DOM element by looking up cached node maps, or decoding synthetic nodeRef. */
+  /** Resolve a nodeRef to a DOM element by looking up all cached node maps. */
   findDOMElementByNodeRef(nodeRef: string): HTMLElement | null {
     for (const entries of this._nodeMaps.values()) {
       const entry = entries.find((e) => e.nodeRef === nodeRef);
@@ -193,8 +154,6 @@ export class ElementTracer implements TracingResolver {
         return this._adapter.findDOMElement(entry.loc, 0);
       }
     }
-    const decoded = decodeSyntheticNodeRef(nodeRef);
-    if (decoded) return this._adapter.findDOMElement(decoded.source, decoded.itemIndex);
     return null;
   }
 
@@ -230,13 +189,6 @@ export class ElementTracer implements TracingResolver {
         }
         return elements;
       }
-    }
-    // Synthetic nodeRef (NodePod mode): decode source from the ID, use fiber adapter
-    const decoded = decodeSyntheticNodeRef(nodeRef);
-    if (decoded) {
-      const effectiveIndex = itemIndex ?? decoded.itemIndex;
-      const el = this._adapter.findDOMElement(decoded.source, effectiveIndex);
-      return el ? [el] : [];
     }
     return [];
   }

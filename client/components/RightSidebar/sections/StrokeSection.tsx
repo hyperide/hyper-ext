@@ -1,9 +1,3 @@
-/**
- * @file Stroke section of the right sidebar inspector
- *
- * Accessed via: Properties panel > Stroke section when an element is selected
- * Assumptions: strokes array holds at most one item (single border model)
- */
 import { TID } from '@shared/data-testid-map';
 import { IconMinus, IconPlus } from '@tabler/icons-react';
 import { memo, useCallback } from 'react';

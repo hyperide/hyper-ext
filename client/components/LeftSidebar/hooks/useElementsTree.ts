@@ -18,16 +18,14 @@ const NOOP_UNSUB = () => {};
 /**
  * Build elements tree from engine AST or SharedEditorState.
  * All hooks are called unconditionally to satisfy Rules of Hooks.
+ * @param componentName - used as dependency for SaaS re-render
  */
-export function useElementsTree(): TreeNode[] {
+export function useElementsTree(componentName: string | undefined): TreeNode[] {
   const engine = useCanvasEngineOptional();
   const context = useCanvasEngineContextOptional();
   const store = context?.store ?? null;
 
-  // Subscribe to canvas store updates reactively (no-op when store is null).
-  // `updateCounter` is the change-signal that engine state
-  // (`store.getState()`, `engine.getRoot().metadata`) was mutated without a new
-  // store/engine identity — buildTreeFromEngine reads both fresh on every recompute.
+  // Subscribe to canvas store updates reactively (no-op when store is null)
   const updateCounter = useSyncExternalStore(
     store ? (cb) => store.subscribe(cb) : () => NOOP_UNSUB,
     () => store?.getState()._updateCounter ?? 0,
@@ -37,14 +35,14 @@ export function useElementsTree(): TreeNode[] {
   // Always subscribe to shared state (VS Code path)
   const stateResult = useSharedEditorState((s) => s.astStructure);
 
+  /* eslint-disable react-hooks/exhaustive-deps -- componentName and updateCounter trigger re-render when engine AST changes */
   return useMemo<TreeNode[]>(() => {
     if (engine && store) {
       return buildTreeFromEngine(engine, store);
     }
     return (stateResult as TreeNode[] | null) ?? EMPTY_TREE;
-    // biome-ignore lint/correctness/useExhaustiveDependencies: updateCounter is the useSyncExternalStore change-signal — see useElementsTree.test.ts
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, store, updateCounter, stateResult]);
+  }, [engine, store, componentName, updateCounter, stateResult]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 }
 
 // --------------------------------------------------------------------------

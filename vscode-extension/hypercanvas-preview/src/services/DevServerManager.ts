@@ -76,6 +76,10 @@ export class DevServerManager {
   private _runtimeError: RuntimeError | null = null;
   private _onRuntimeErrorChangeListeners: Array<(error: RuntimeError | null) => void> = [];
 
+  // Port auto-detection — set once per start() when dev server stdout reveals
+  // the actual bound port (e.g. "http://localhost:3000"). Resets on each start().
+  private _portDetected = false;
+
   // Recompile gate — webpack-only. Armed by PreviewModeManager BEFORE it AST-rewrites
   // the entry file. Forces _waitForReady() / consumers to wait for a FRESH
   // "compiled successfully" message that arrives AFTER the patch was written, instead
@@ -188,9 +192,10 @@ export class DevServerManager {
 
     this._updateStatus('starting');
 
-    // Reset logs on new start
+    // Reset logs and port detection on new start
     this._logs = [];
     this._hasErrors = false;
+    this._portDetected = false;
 
     try {
       // Get project info
@@ -269,6 +274,8 @@ export class DevServerManager {
         this._outputChannel.append(text);
         this._appendLog(text);
 
+        this._maybeUpdatePortFromOutput(clean);
+
         // Detect when server is ready
         if (this._status === 'starting' && this._isServerReadyMessage(clean)) {
           console.log('[HyperIDE] DevServer ready detected via stdout');
@@ -285,6 +292,8 @@ export class DevServerManager {
         const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(text);
         this._appendLog(text);
+
+        this._maybeUpdatePortFromOutput(clean);
 
         if (this._status === 'starting' && this._isServerReadyMessage(clean)) {
           console.log('[HyperIDE] DevServer ready detected via stderr');
@@ -703,6 +712,31 @@ export class DevServerManager {
       // server that binds to IPv6.
       socket.connect(port, 'localhost');
     });
+  }
+
+  /**
+   * Parse the actual bound port from a dev server startup line and update the
+   * proxy target when it differs from the assigned port.
+   *
+   * Some dev servers (Bun.serve, custom scripts) ignore the PORT env var and
+   * bind to a hardcoded port. This method reads the port from output lines like
+   * "http://localhost:3000" or "Local: http://127.0.0.1:5173" and silently
+   * corrects the proxy target so requests reach the server. Called once per
+   * start(), subsequent calls are no-ops once _portDetected is set.
+   */
+  private _maybeUpdatePortFromOutput(text: string): void {
+    if (this._portDetected || !this._previewProxy) return;
+    const match = text.match(/(?:localhost|127\.0\.0\.1):(\d{4,5})/);
+    if (!match) return;
+    const detectedPort = Number(match[1]);
+    if (!Number.isFinite(detectedPort) || detectedPort <= 0) return;
+    this._portDetected = true;
+    if (detectedPort === this._port) return;
+    console.log(
+      `[HyperIDE] DevServer bound to port ${detectedPort} (assigned ${this._port}), correcting proxy target`,
+    ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    this._port = detectedPort;
+    this._previewProxy.setTargetPort(detectedPort);
   }
 
   /**

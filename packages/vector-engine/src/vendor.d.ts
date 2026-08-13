@@ -19,11 +19,11 @@ declare module 'opentype.js' {
   }
 
   // Tests pull in additional shapes loosely; widening to any keeps strict mode happy.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: vendored module lacks types
   const opentype: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: vendored module lacks types
   export const load: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: vendored module lacks types
   export const parse: any;
   export default opentype;
 }

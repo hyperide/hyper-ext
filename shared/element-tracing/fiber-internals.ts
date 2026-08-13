@@ -123,16 +123,6 @@ export function debugSourceToLocation(ds: DebugSource): SourceLocation {
   };
 }
 
-/**
- * Strip NodePod virtual FS prefix from a source file path.
- * NodePod mounts project files at /app inside its virtual FS, so fibers
- * produced by the Babel transform carry "/app/src/..." paths. Callers that
- * know they're in a NodePod context should apply this before storing the path.
- */
-export function stripNodePodPrefix(fileName: string): string {
-  return fileName.replace(/^\/app\//, '');
-}
-
 function sameLocation(a: SourceLocation, b: SourceLocation): boolean {
   return a.fileName === b.fileName && a.line === b.line && a.column === b.column;
 }
@@ -226,10 +216,6 @@ export function parseDebugStack(err: Error): SourceLocation | null {
     } catch {
       // Not an absolute URL — use as-is (relative path or file:// handled elsewhere)
     }
-
-    // Strip NodePod virtual path prefix: "__virtual__/{podId}/{port}/src/..."
-    // NodePod serves files via SW at /__virtual__/{randomId}/{vitePort}/...
-    fileName = fileName.replace(/^__virtual__\/[^/]+\/\d+\//, '');
 
     return {
       fileName,

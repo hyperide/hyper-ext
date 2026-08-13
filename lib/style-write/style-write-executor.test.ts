@@ -201,7 +201,7 @@ describe('StyleWriteExecutor', () => {
       plan: makeTailwindPlan(),
       mutatedFiles: [appPath],
     });
-    expect(fileIO.content(appPath)).toContain("className='text-red-500 pl-[16px]'");
+    expect(fileIO.content(appPath)).toContain('className="text-red-500 pl-[16px]"');
   });
 
   it('fails dynamic Tailwind plans with precise locations until location mapping exists', async () => {
@@ -274,9 +274,9 @@ export function App() {
       mutatedFiles: [appPath],
     });
     const content = fileIO.content(appPath);
-    expect(content).toContain("opacity: '0.5'");
+    expect(content).toContain('opacity: "0.5"');
     expect(content).toContain('color: "red"');
-    expect(content).toContain("paddingLeft: '16px'");
+    expect(content).toContain('paddingLeft: "16px"');
     expect(content).not.toContain('opacity: "0.2"');
   });
 
@@ -397,7 +397,7 @@ export function App() {
     });
 
     expect(result.success).toBe(true);
-    expect(fileIO.content(appPath)).toContain("className='text-red-500 pl-[16px]'");
+    expect(fileIO.content(appPath)).toContain('className="text-red-500 pl-[16px]"');
   });
 
   it('routes computed writes to inline styles when no class source exists', async () => {
@@ -427,7 +427,7 @@ export function App() {
     });
 
     expect(result.success).toBe(true);
-    expect(fileIO.content(appPath)).toContain("paddingLeft: '16px'");
+    expect(fileIO.content(appPath)).toContain('paddingLeft: "16px"');
   });
 
   it('rejects unsupported explicit source tabs instead of falling back to Tailwind mutation', async () => {

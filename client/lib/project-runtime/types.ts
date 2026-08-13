@@ -26,6 +26,4 @@ export interface ProjectRuntime {
   start(): Promise<void>;
   stop(): Promise<void>;
   restart(): Promise<void>;
-  /** Write a file to the project FS and OPFS. NodePod: triggers Vite HMR. Docker: no-op. */
-  writeFile(path: string, content: string): Promise<void>;
 }

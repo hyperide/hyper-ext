@@ -1,6 +1,5 @@
 import { TID } from '@shared/data-testid-map';
 import { IconBorderSides } from '@tabler/icons-react';
-import cn from 'clsx';
 import { memo } from 'react';
 import {
   getSpacingDisplayValue,
@@ -193,12 +192,13 @@ export const MarginSection = memo(function MarginSection({
           type="button"
           data-testid={TID.inspector.spacingLink('margin')}
           onClick={onMarginLinkedToggle}
-          className={cn(
-            'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
-            marginLinked ? 'inspector-btn-active' : 'bg-transparent',
-          )}
+          className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors ${
+            marginLinked
+              ? 'bg-accent text-accent-foreground'
+              : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
         >
-          <IconBorderSides className={cn('w-4 h-4', !marginLinked && 'text-foreground')} stroke={1.5} />
+          <IconBorderSides className="w-4 h-4" stroke={1.5} />
         </button>
       </div>
     </div>

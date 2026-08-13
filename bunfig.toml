@@ -1,10 +1,4 @@
 [test]
 preload = ["./test/setup.ts", "./test/mock-vscode.ts"]
 coverage = false
-pathIgnorePatterns = [
-  "vscode-extension/hypercanvas-preview/out/**",
-  "cloned-projects/**",
-  "templates/**",
-  ".claude/worktrees/**",
-  ".ralphex/worktrees/**",
-]
+exclude = ["vscode-extension/hypercanvas-preview/out/**"]

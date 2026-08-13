@@ -5,7 +5,6 @@
  * Uses in-memory FileIO so no real filesystem access is needed.
  */
 
-import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'bun:test';
 import type { FileIO } from '../../../lib/ast/file-io';
 import { resolveI18nResource } from '../resolve-i18n-resource';
@@ -515,8 +514,9 @@ describe('unreadable existing locale file', () => {
 // Real-filesystem: Bulka project — merged single-file translations.ts
 // ---------------------------------------------------------------------------
 
-const BULKA_ROOT = '/Users/ultra/work/ext-test-projects/bulka-the-dog';
-describe.skipIf(!existsSync(BULKA_ROOT))('Bulka project — real client/lib/translations.ts', () => {
+describe('Bulka project — real client/lib/translations.ts', () => {
+  const BULKA_ROOT = '/Users/ultra/work/ext-test-projects/bulka-the-dog';
+
   const realFileIO = {
     async readFile(path: string): Promise<string> {
       const { readFile } = await import('node:fs/promises');

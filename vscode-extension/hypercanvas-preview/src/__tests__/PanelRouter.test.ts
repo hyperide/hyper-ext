@@ -21,12 +21,7 @@ mock.module('../services/AstService', () => ({
     updateText = mock(() => Promise.resolve({ success: true }));
     wrapElement = mock(() => Promise.resolve({ success: true, wrapperId: 'w' }));
     get nodeMapService() {
-      return {
-        resolveNodeRef: () => null,
-        resolveSourceLocation: () => null,
-        getNodeMap: () => [],
-        getTrackedFiles: () => [],
-      };
+      return { resolveNodeRef: () => null, resolveSourceLocation: () => null };
     }
   },
 }));

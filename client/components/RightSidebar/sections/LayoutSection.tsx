@@ -404,10 +404,13 @@ export const LayoutSection = memo(function LayoutSection({
           onClick={handleAspectRatioToggle}
           className={cn(
             'w-6 h-6 rounded flex items-center justify-center',
-            aspectRatioLocked ? 'inspector-btn-active' : 'bg-transparent',
+            aspectRatioLocked ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent',
           )}
         >
-          <IconAspectRatio className={cn('w-4 h-4', !aspectRatioLocked && 'text-foreground')} stroke={1.5} />
+          <IconAspectRatio
+            className={cn('w-4 h-4', aspectRatioLocked ? 'text-[#3479DE]' : 'text-foreground')}
+            stroke={1.5}
+          />
         </button>
       </div>
 
@@ -617,10 +620,12 @@ export const LayoutSection = memo(function LayoutSection({
               onClick={() => setPaddingExpanded(!paddingExpanded)}
               className={cn(
                 'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
-                paddingExpanded ? 'inspector-btn-active' : 'bg-transparent',
+                paddingExpanded
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
-              <IconBorderSides className={cn('w-4 h-4', !paddingExpanded && 'text-foreground')} stroke={1.5} />
+              <IconBorderSides className="w-4 h-4" stroke={1.5} />
             </button>
           </div>
         </>
@@ -1042,10 +1047,12 @@ export const LayoutSection = memo(function LayoutSection({
               onClick={() => setPaddingExpanded(!paddingExpanded)}
               className={cn(
                 'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
-                paddingExpanded ? 'inspector-btn-active' : 'bg-transparent',
+                paddingExpanded
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
-              <IconBorderSides className={cn('w-4 h-4', !paddingExpanded && 'text-foreground')} stroke={1.5} />
+              <IconBorderSides className="w-4 h-4" stroke={1.5} />
             </button>
           </div>
         </>

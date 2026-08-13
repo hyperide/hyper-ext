@@ -191,13 +191,11 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch && canCreateKeys;
 
   const commitKey = (key: string) => {
-    // Compare against realKey, not currentKey (optimisticKey ?? realKey).
-    // optimisticKey can leak across test boundaries / silent write failures: when the
-    // source file stays at the original key (realKey unchanged), using currentKey blocks
-    // the retry write because optimisticKey already equals the requested key.
-    // Using realKey always allows the write when the file state differs from the requested
-    // key, which is the correct guard.
-    if (!key || key === realKey) {
+    // Guard against currentKey (optimisticKey ?? realKey), not realKey alone.
+    // After write N completes, pendingKeyWrite clears in `finally` before HMR fires —
+    // realKey is stale during that window. optimisticKey holds what the inspector last
+    // committed, so currentKey is the right "already written" value to compare against.
+    if (!key || key === currentKey) {
       setShowKeyDropdown(false);
       setKeySearch('');
       return;
@@ -305,7 +303,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
               if (e.key === 'Enter') {
                 e.preventDefault();
                 const v = (e.target as HTMLInputElement).value.trim();
-                if (v && v !== realKey) commitKey(v);
+                if (v && v !== currentKey) commitKey(v);
               } else if (e.key === 'Escape') {
                 (e.target as HTMLInputElement).value = currentKey;
                 (e.target as HTMLInputElement).blur();
@@ -313,7 +311,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
             }}
             onBlur={(e) => {
               const v = e.target.value.trim();
-              if (v && v !== realKey) commitKey(v);
+              if (v && v !== currentKey) commitKey(v);
               else e.target.value = currentKey;
             }}
             className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
