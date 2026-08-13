@@ -5,7 +5,8 @@ export type SupportLevel = 'supported' | 'planned' | 'not-planned';
  * Canonical list of frameworks and their HyperIDE preview support status.
  *
  * Consumers:
- *   - client/pages/Editor/components/PreviewSetupOverlay.tsx — SaaS unsupported-framework overlay
+ *   - client/pages/Editor/CanvasEditor.tsx — passed to the shared PreviewSetupOverlay
+ *     (shared/components/overlays) for the SaaS unsupported-framework overlay
  *   - vscode-extension/hypercanvas-preview/src/webview-preview-panel/UnsupportedFrameworkScreen.tsx
  *     — VS Code preview-panel compatibility table (HYP-442)
  *

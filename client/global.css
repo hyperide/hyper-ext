@@ -61,6 +61,32 @@
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /*
+     * SYNC: vscode-extension/hypercanvas-preview/src/webview/styles.css — overlay tokens
+     * Shared overlay components (shared/components/overlays) read these vars.
+     * In SaaS they resolve to Tailwind HSL tokens; in the extension webview the same
+     * names are mapped to `var(--vscode-*)` instead.
+     */
+    --overlay-bg: hsl(var(--background));
+    --overlay-fg: hsl(var(--foreground));
+    --overlay-muted: hsl(var(--muted-foreground));
+    --overlay-border: hsl(var(--border));
+    --overlay-accent: hsl(var(--primary));
+    --overlay-accent-fg: hsl(var(--primary-foreground));
+    --overlay-destructive: hsl(var(--destructive));
+    --overlay-link: hsl(var(--primary));
+    --overlay-input-bg: hsl(var(--input));
+    --overlay-input-fg: hsl(var(--foreground));
+    --overlay-input-border: hsl(var(--border));
+    --overlay-warning: #f59e0b;
+    --overlay-font: system-ui, -apple-system, sans-serif;
+    --overlay-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --overlay-backdrop: rgba(0, 0, 0, 0.85);
+    --overlay-codeframe-bg: rgba(0, 0, 0, 0.3);
+    --overlay-badge-supported: #22c55e;
+    --overlay-badge-planned: #3b82f6;
+
     /* SYNC: vscode-extension/hypercanvas-preview/src/webview/styles.css — toggle hierarchy tokens */
     --toggle-container: 210 40% 96.1%;
     --toggle-active: 0 0% 100%;

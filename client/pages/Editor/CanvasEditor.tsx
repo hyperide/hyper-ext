@@ -1,4 +1,13 @@
 import type { OverlayElementResolver } from '@shared/canvas-interaction/types';
+import {
+  ConnectionErrorOverlay,
+  LoadingOverlay,
+  NoComponentOverlay,
+  ParseErrorOverlay,
+  PreviewSetupOverlay,
+  RuntimeErrorOverlay,
+} from '@shared/components/overlays';
+import { FRAMEWORK_SUPPORT } from '@shared/framework-support';
 import { IconTerminal2 } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -45,7 +54,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
 import { DragResizeHandle } from '@/components/ui/drag-resize-handle';
 import { useComponentMeta } from '@/contexts/ComponentMetaContext';
 import { useDiagnosticSync } from '@/hooks/useDiagnosticSync';
@@ -61,6 +69,7 @@ import {
   useSelectedItemIndices,
 } from '@/lib/canvas-engine';
 
+import { useOpenAIChat } from '@/lib/platform/PlatformContext';
 import { useProjectRuntime } from '@/lib/project-runtime';
 import { loadPersistedState, savePersistedState } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
@@ -94,9 +103,7 @@ import { useSelectionOverlays } from './components/hooks/useSelectionOverlays';
 import { useViewportControls } from './components/hooks/useViewportControls';
 import { IframeFailed } from './components/IframeFailed';
 import { LogsPanel } from './components/LogsPanel';
-import { NoComponentsOverlay } from './components/NoComponentsOverlay';
 import { PendingCommentInputOverlay } from './components/PendingCommentInputOverlay';
-import { PreviewSetupOverlay } from './components/PreviewSetupOverlay';
 import { ProjectStartOverlay } from './components/ProjectStartOverlay';
 import { SizeSelectionDialog } from './components/SizeSelectionDialog';
 
@@ -121,6 +128,15 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     message: null,
     retryCount: 0,
   });
+  const openAIChat = useOpenAIChat();
+  // Dismissed runtime-error key: useIframeRuntimeErrors re-fires the same error every
+  // poll tick (2s), so plain setRuntimeError(null) would resurrect the overlay almost
+  // immediately. Track WHICH error was dismissed instead; clear when the error resolves
+  // so a future recurrence shows the overlay again.
+  const [dismissedRuntimeErrorKey, setDismissedRuntimeErrorKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!runtimeError) setDismissedRuntimeErrorKey(null);
+  }, [runtimeError]);
 
   // Project UI Kit detection (moved from RightSidebar for config error handling)
   // Pass activeProject so hook re-runs when project status changes to 'running'
@@ -732,7 +748,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                   availableComponents.isLoaded &&
                   availableComponents.atoms.length === 0 &&
                   availableComponents.composites.length === 0 ? (
-                    <NoComponentsOverlay />
+                    <NoComponentOverlay variant="no-components" />
                   ) : meta?.relativeFilePath && iframeReady ? (
                     <>
                       <div
@@ -833,47 +849,43 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 
                       {/* Iframe error overlay - outside pan&zoom transform so it's always visible */}
                       {iframeError.message && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-slate-100 dark:bg-slate-900 z-10">
-                          <div className="text-center max-w-md">
-                            <p className="text-destructive mb-2">{iframeError.message}</p>
-                            <p className="text-sm text-muted-foreground mb-1">
-                              Make sure the project is running and the component exists
-                            </p>
-                            {iframeError.retryCount > 0 && (
-                              <p className="text-xs text-muted-foreground mb-4">
-                                Connection attempts: {iframeError.retryCount}/10
-                              </p>
-                            )}
-                          </div>
-                        </div>
+                        <ConnectionErrorOverlay
+                          message={iframeError.message}
+                          retryCount={iframeError.retryCount}
+                          maxRetries={10}
+                        />
+                      )}
+
+                      {/* Runtime error overlay — shown when dev server reports a build/runtime error.
+                          LogsPanel still renders below for log history, but the overlay gives the
+                          user immediate visibility that the preview is broken.
+                          Precedence: ConnectionErrorOverlay (P1) wins over RuntimeErrorOverlay (P3),
+                          so this never renders while the iframe itself fails to load. */}
+                      {runtimeError && !iframeError.message && runtimeError.fullText !== dismissedRuntimeErrorKey && (
+                        <RuntimeErrorOverlay
+                          error={runtimeError}
+                          onDismiss={() => setDismissedRuntimeErrorKey(runtimeError.fullText)}
+                          onAutoFix={(prompt) => openAIChat({ prompt, forceNewChat: true })}
+                        />
                       )}
 
                       {/* LogsPanel moved outside scroll container — see below */}
                     </>
                   ) : previewSetup && previewSetup !== 'ok' ? (
                     <PreviewSetupOverlay
-                      status={previewSetup}
-                      needsPatchPrompt={needsPatchPrompt}
+                      status={previewSetup === 'needs-patch' ? 'needs-patch' : 'unsupported'}
+                      frameworkSupport={FRAMEWORK_SUPPORT}
                       onDismiss={() => setPreviewSetup(null)}
+                      onAutoFix={(fallbackPrompt) => {
+                        // needsPatchPrompt is pre-built by the server with project file context;
+                        // fall back to the overlay's generic prompt when unavailable.
+                        openAIChat({ prompt: needsPatchPrompt ?? fallbackPrompt, forceNewChat: true });
+                      }}
                     />
                   ) : parseError ? (
-                    <div className="h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">
-                      <div className="text-center max-w-md">
-                        <div className="text-destructive text-4xl mb-4">⚠</div>
-                        <p className="text-sm text-destructive font-medium mb-2">Failed to parse component</p>
-                        <p className="text-xs text-muted-foreground mb-4 break-words">{parseError}</p>
-                        <Button variant="outline" size="sm" onClick={handleRetryLoad}>
-                          Retry
-                        </Button>
-                      </div>
-                    </div>
+                    <ParseErrorOverlay error={parseError} onRetry={handleRetryLoad} />
                   ) : (
-                    <div className="h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">
-                      <div className="text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
-                        <p className="text-sm text-slate-400">Loading component...</p>
-                      </div>
-                    </div>
+                    <LoadingOverlay />
                   )
                 ) : activeProject && (activeProject.status === 'error' || runtime.status === 'error') ? (
                   <div className="h-full flex flex-col bg-slate-100 dark:bg-slate-900">

@@ -5,8 +5,8 @@
  * bundler/framework (projectError.type === 'framework'). Replaces the old
  * "unsupported project type" warning toast (HYP-442): the toast was redundant
  * with this authoritative compatibility table, which lists every framework and
- * its HyperIDE preview-support status. Mirrors the SaaS PreviewSetupOverlay's
- * unsupported state (client/pages/Editor/components/PreviewSetupOverlay.tsx),
+ * its HyperIDE preview-support status. Mirrors the shared PreviewSetupOverlay's
+ * unsupported state (shared/components/overlays/PreviewSetupOverlay.tsx),
  * reusing the same shared FRAMEWORK_SUPPORT source of truth.
  */
 

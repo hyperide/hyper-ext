@@ -50,6 +50,31 @@ body.vscode-light {
   --popover-foreground: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
   --card: var(--vscode-editorWidget-background, var(--vscode-dropdown-background));
   --card-foreground: var(--vscode-foreground);
+
+  /*
+   * SYNC: client/global.css — overlay tokens
+   * Shared overlay components (shared/components/overlays) read these vars.
+   * In the extension webview they map to `var(--vscode-*)`; in SaaS the same
+   * names are mapped to `hsl(var(--background))` etc. instead.
+   */
+  --overlay-bg: var(--vscode-editor-background);
+  --overlay-fg: var(--vscode-editor-foreground, var(--vscode-foreground));
+  --overlay-muted: var(--vscode-descriptionForeground);
+  --overlay-border: var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+  --overlay-accent: var(--vscode-button-background);
+  --overlay-accent-fg: var(--vscode-button-foreground);
+  --overlay-destructive: var(--vscode-errorForeground);
+  --overlay-link: var(--vscode-textLink-foreground);
+  --overlay-input-bg: var(--vscode-input-background);
+  --overlay-input-fg: var(--vscode-input-foreground);
+  --overlay-input-border: var(--vscode-input-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.2)));
+  --overlay-warning: var(--vscode-editorWarning-foreground, #f59e0b);
+  --overlay-font: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
+  --overlay-font-mono: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, monospace);
+  --overlay-backdrop: rgba(0, 0, 0, 0.85);
+  --overlay-codeframe-bg: rgba(0, 0, 0, 0.3);
+  --overlay-badge-supported: #22c55e;
+  --overlay-badge-planned: #3b82f6;
 }
 
 /* SYNC: client/global.css — toggle hierarchy tokens */
