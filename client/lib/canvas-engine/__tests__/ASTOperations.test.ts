@@ -31,7 +31,8 @@ mock.module('@/lib/dom-utils', () => ({
     };
   },
   getElementFromIframe: () => mockIframeElement as unknown as HTMLElement | null,
-  PREVIEW_IFRAME_ID: 'preview-iframe',
+  getDOMClassesFromIframe: () => '',
+  getComputedStylesFromIframe: () => null,
 }));
 
 // Import after mocking

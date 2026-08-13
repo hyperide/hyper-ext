@@ -10,10 +10,12 @@ import { CanvasEngine } from '../core/CanvasEngine';
 import type { ComponentDefinition } from '../models/types';
 import { MockASTApiService } from './mocks/MockASTApiService';
 
-// Mock getPreviewIframe (used by ASTUpdate operations)
+// Mock full dom-utils export surface (HYP-580: partial mocks leak into later test files)
 mock.module('@/lib/dom-utils', () => ({
   getPreviewIframe: () => null,
-  PREVIEW_IFRAME_ID: 'preview-iframe',
+  getElementFromIframe: () => null,
+  getDOMClassesFromIframe: () => '',
+  getComputedStylesFromIframe: () => null,
 }));
 
 describe('CanvasEngine AST Integration', () => {

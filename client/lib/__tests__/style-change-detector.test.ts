@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 let mockComputedStyle: CSSStyleDeclaration | null = null;
 
 mock.module('../dom-utils', () => ({
+  getPreviewIframe: () => null,
+  getElementFromIframe: () => null,
+  getDOMClassesFromIframe: () => '',
   getComputedStylesFromIframe: (_elementId: string, _instanceId?: string | null) => {
     if (!mockComputedStyle) return null;
     return mockComputedStyle;
   },
-  getPreviewIframe: () => null,
 }));
 
 // Import after mocking

@@ -47,6 +47,8 @@ mock.module('@/lib/dom-utils', () => ({
           },
         }
       : null,
+  getDOMClassesFromIframe: () => '',
+  getComputedStylesFromIframe: () => null,
 }));
 
 import { FastPatchService } from '../fast-patch-service';

@@ -35,7 +35,12 @@ const mockIframe = {
   contentDocument: mockIframeDoc,
 };
 
-mock.module('@/lib/dom-utils', () => ({ getPreviewIframe: () => mockIframe }));
+mock.module('@/lib/dom-utils', () => ({
+  getPreviewIframe: () => mockIframe,
+  getElementFromIframe: () => null,
+  getDOMClassesFromIframe: () => '',
+  getComputedStylesFromIframe: () => null,
+}));
 mock.module('@/utils/authFetch', () => ({
   authFetch: () => Promise.resolve({ ok: true, json: async () => ({ commentsUpdated: 0 }) }),
 }));
