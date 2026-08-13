@@ -1,5 +1,13 @@
+/**
+ * @file PropsForm deterministic generation availability tests.
+ *
+ * Accessed via: preview error overlay > Props form (SaaS + VS Code extension).
+ * Covers the pure helpers `canGenerateSomeValue` (is the "Generate values" button
+ * meaningful at all) and `getGenerateAllAvailability` (disabled state + tooltip).
+ */
+
 import { describe, expect, it } from 'bun:test';
-import { canGenerateSomeValue } from '../PropsForm';
+import { canGenerateSomeValue, getGenerateAllAvailability } from '../PropsForm';
 
 describe('canGenerateSomeValue', () => {
   it('returns false for empty fields', () => {
@@ -121,5 +129,24 @@ describe('canGenerateSomeValue', () => {
   it('button is disabled when all fields are functions — zero generatable fields', () => {
     const fields = [{ name: 'onPress', typeInfo: { type: 'function' as const, required: false } }];
     expect(canGenerateSomeValue(fields)).toBe(false);
+  });
+});
+
+describe('getGenerateAllAvailability', () => {
+  it('disables generation when no concrete prop value can be generated', () => {
+    const availability = getGenerateAllAvailability([
+      { name: 'className', typeInfo: { type: 'unknown', required: false } },
+    ]);
+
+    expect(availability.disabled).toBe(true);
+    expect(availability.tooltip).toContain('No supported props');
+  });
+
+  it('allows generation for variant fields even when parser only reports unknown type', () => {
+    const availability = getGenerateAllAvailability([
+      { name: 'variant', typeInfo: { type: 'unknown', required: false } },
+    ]);
+
+    expect(availability.disabled).toBe(false);
   });
 });

@@ -1,18 +1,25 @@
+/**
+ * @file PropsForm inline styles. Uses `--overlay-*` CSS custom properties only
+ *   (no Tailwind, no `--vscode-*`) so the form renders identically in the SaaS
+ *   editor and the VS Code extension webview. Each platform maps the overlay
+ *   tokens to its own palette — see `shared/components/overlays/theme.ts`.
+ */
+
 import type { CSSProperties } from 'react';
 
 export const formContainerStyle: CSSProperties = {
-  background: 'var(--vscode-input-background, #252525)',
+  background: 'var(--overlay-input-bg)',
   borderRadius: 8,
   padding: 16,
   marginBottom: 16,
-  border: '1px solid var(--vscode-widget-border, #333)',
+  border: '1px solid var(--overlay-border)',
   display: 'flex',
   flexDirection: 'column',
   gap: 10,
 };
 
 export const formLabelStyle: CSSProperties = {
-  color: 'var(--vscode-editor-foreground, #a0aec0)',
+  color: 'var(--overlay-fg)',
   fontSize: 12,
   fontWeight: 500,
 };
@@ -22,15 +29,15 @@ export const generateAllButtonStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 500,
   background: 'transparent',
-  color: 'var(--vscode-textLink-foreground, #a78bfa)',
-  border: '1px solid var(--vscode-textLink-foreground, #a78bfa)',
+  color: 'var(--overlay-link)',
+  border: '1px solid var(--overlay-link)',
   borderRadius: 4,
   cursor: 'pointer',
 };
 
 export const generateAllButtonDisabledStyle: CSSProperties = {
-  color: 'var(--vscode-disabledForeground, #777)',
-  borderColor: 'var(--vscode-widget-border, #444)',
+  color: 'var(--overlay-disabled-fg)',
+  borderColor: 'var(--overlay-border)',
   cursor: 'not-allowed',
   opacity: 0.75,
 };
@@ -52,10 +59,10 @@ export const fieldColumnStyle: CSSProperties = {
 };
 
 export const fieldNameStyle: CSSProperties = {
-  color: 'var(--vscode-editor-foreground, #e2e8f0)',
+  color: 'var(--overlay-fg)',
   fontSize: 12,
   minWidth: 100,
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  fontFamily: 'var(--overlay-font-mono)',
   display: 'flex',
   alignItems: 'center',
   gap: 4,
@@ -69,8 +76,8 @@ export const genButtonInlineStyle: CSSProperties = {
   padding: '1px 6px',
   fontSize: 10,
   fontWeight: 500,
-  background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
-  color: 'var(--vscode-button-secondaryForeground, #ccc)',
+  background: 'var(--overlay-secondary-bg)',
+  color: 'var(--overlay-secondary-fg)',
   border: 'none',
   borderRadius: 3,
   cursor: 'pointer',
@@ -79,17 +86,17 @@ export const genButtonInlineStyle: CSSProperties = {
 
 export const typeBadgeStyle: CSSProperties = {
   fontSize: 10,
-  color: 'var(--vscode-descriptionForeground, #718096)',
-  background: 'var(--vscode-badge-background, #333)',
+  color: 'var(--overlay-muted)',
+  background: 'var(--overlay-badge-bg)',
   padding: '1px 4px',
   borderRadius: 3,
-  fontFamily: 'var(--vscode-font-family, system-ui)',
+  fontFamily: 'var(--overlay-font)',
   fontWeight: 400,
 };
 
 export const nonEditableStyle: CSSProperties = {
   fontSize: 11,
-  color: 'var(--vscode-descriptionForeground, #718096)',
+  color: 'var(--overlay-muted)',
   fontStyle: 'italic',
 };
 
@@ -97,24 +104,24 @@ export const inputStyle: CSSProperties = {
   flex: 1,
   padding: '4px 8px',
   fontSize: 12,
-  background: 'var(--vscode-input-background, #1e1e1e)',
-  color: 'var(--vscode-input-foreground, #e2e8f0)',
-  border: '1px solid var(--vscode-input-border, #444)',
+  background: 'var(--overlay-input-bg)',
+  color: 'var(--overlay-input-fg)',
+  border: '1px solid var(--overlay-input-border)',
   borderRadius: 4,
   outline: 'none',
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  fontFamily: 'var(--overlay-font-mono)',
 };
 
 export const selectStyle: CSSProperties = {
   flex: 1,
   padding: '4px 8px',
   fontSize: 12,
-  background: 'var(--vscode-input-background, #1e1e1e)',
-  color: 'var(--vscode-input-foreground, #e2e8f0)',
-  border: '1px solid var(--vscode-input-border, #444)',
+  background: 'var(--overlay-input-bg)',
+  color: 'var(--overlay-input-fg)',
+  border: '1px solid var(--overlay-input-border)',
   borderRadius: 4,
   outline: 'none',
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  fontFamily: 'var(--overlay-font-mono)',
 };
 
 export const checkboxLabelStyle: CSSProperties = {
@@ -125,7 +132,7 @@ export const checkboxLabelStyle: CSSProperties = {
 };
 
 export const checkboxStyle: CSSProperties = {
-  accentColor: 'var(--vscode-button-background, #3182ce)',
+  accentColor: 'var(--overlay-accent)',
   width: 14,
   height: 14,
   cursor: 'pointer',
@@ -133,8 +140,8 @@ export const checkboxStyle: CSSProperties = {
 
 export const checkboxTextStyle: CSSProperties = {
   fontSize: 12,
-  color: 'var(--vscode-editor-foreground, #e2e8f0)',
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  color: 'var(--overlay-fg)',
+  fontFamily: 'var(--overlay-font-mono)',
 };
 
 export const arrayContainerStyle: CSSProperties = {
@@ -142,7 +149,7 @@ export const arrayContainerStyle: CSSProperties = {
   flexDirection: 'column',
   gap: 4,
   paddingLeft: 12,
-  borderLeft: '2px solid var(--vscode-widget-border, #333)',
+  borderLeft: '2px solid var(--overlay-border)',
 };
 
 export const arrayItemRowStyle: CSSProperties = {
@@ -154,7 +161,7 @@ export const arrayItemRowStyle: CSSProperties = {
 export const arrayRemoveButtonStyle: CSSProperties = {
   background: 'transparent',
   border: 'none',
-  color: 'var(--vscode-errorForeground, #f44747)',
+  color: 'var(--overlay-destructive)',
   fontSize: 16,
   cursor: 'pointer',
   padding: '2px 6px',
@@ -164,8 +171,8 @@ export const arrayRemoveButtonStyle: CSSProperties = {
 
 export const arrayAddButtonStyle: CSSProperties = {
   background: 'transparent',
-  border: '1px dashed var(--vscode-widget-border, #444)',
-  color: 'var(--vscode-textLink-foreground, #a78bfa)',
+  border: '1px dashed var(--overlay-border)',
+  color: 'var(--overlay-link)',
   fontSize: 11,
   cursor: 'pointer',
   padding: '3px 8px',
@@ -177,31 +184,31 @@ export const popoverTriggerStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: 6,
-  background: 'var(--vscode-input-background, #1e1e1e)',
-  border: '1px solid var(--vscode-input-border, #444)',
+  background: 'var(--overlay-input-bg)',
+  border: '1px solid var(--overlay-input-border)',
   borderRadius: 4,
   cursor: 'pointer',
   padding: '3px 8px',
-  color: 'var(--vscode-editor-foreground, #e2e8f0)',
+  color: 'var(--overlay-fg)',
   fontSize: 12,
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  fontFamily: 'var(--overlay-font-mono)',
   flex: 1,
 };
 
 export const popoverTriggerActiveStyle: CSSProperties = {
-  borderColor: 'var(--vscode-focusBorder, #007fd4)',
-  background: 'var(--vscode-list-activeSelectionBackground, #094771)',
+  borderColor: 'var(--overlay-accent)',
+  background: 'var(--overlay-accent)',
 };
 
 export const popoverTriggerCountStyle: CSSProperties = {
   fontSize: 11,
-  color: 'var(--vscode-descriptionForeground, #718096)',
+  color: 'var(--overlay-muted)',
   flex: 1,
 };
 
 export const popoverTriggerArrowStyle: CSSProperties = {
   fontSize: 9,
-  color: 'var(--vscode-descriptionForeground, #718096)',
+  color: 'var(--overlay-muted)',
   userSelect: 'none',
 };
 
@@ -210,8 +217,8 @@ export const popoverContainerStyle: CSSProperties = {
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  background: 'var(--vscode-editorWidget-background, #252526)',
-  border: '1px solid var(--vscode-editorWidget-border, #454545)',
+  background: 'var(--overlay-bg)',
+  border: '1px solid var(--overlay-border)',
   borderRadius: 6,
   padding: 0,
   boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
@@ -228,20 +235,20 @@ export const popoverHeaderStyle: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: '8px 12px',
-  borderBottom: '1px solid var(--vscode-widget-border, #333)',
+  borderBottom: '1px solid var(--overlay-border)',
 };
 
 export const popoverTitleStyle: CSSProperties = {
   fontWeight: 600,
   fontSize: 12,
-  color: 'var(--vscode-editor-foreground, #e2e8f0)',
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  color: 'var(--overlay-fg)',
+  fontFamily: 'var(--overlay-font-mono)',
 };
 
 export const popoverCloseButtonStyle: CSSProperties = {
   background: 'transparent',
   border: 'none',
-  color: 'var(--vscode-descriptionForeground, #718096)',
+  color: 'var(--overlay-muted)',
   fontSize: 16,
   cursor: 'pointer',
   padding: '0 4px',
@@ -261,19 +268,19 @@ export const popoverFieldsStyle: CSSProperties = {
 export const jsonTextareaStyle: CSSProperties = {
   padding: '6px 8px',
   fontSize: 12,
-  background: 'var(--vscode-input-background, #1e1e1e)',
-  color: 'var(--vscode-input-foreground, #e2e8f0)',
-  border: '1px solid var(--vscode-input-border, #444)',
+  background: 'var(--overlay-input-bg)',
+  color: 'var(--overlay-input-fg)',
+  border: '1px solid var(--overlay-input-border)',
   borderRadius: 4,
   outline: 'none',
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  fontFamily: 'var(--overlay-font-mono)',
   resize: 'vertical' as const,
   minHeight: 60,
 };
 
 export const jsonErrorStyle: CSSProperties = {
   fontSize: 10,
-  color: 'var(--vscode-errorForeground, #f44747)',
+  color: 'var(--overlay-destructive)',
   fontStyle: 'italic',
 };
 
@@ -287,16 +294,16 @@ export const calloutStyle: CSSProperties = {
 };
 
 export const calloutTextStyle: CSSProperties = {
-  color: 'var(--vscode-editorWarning-foreground, #cca700)',
+  color: 'var(--overlay-warning)',
 };
 
 export const calloutLinkStyle: CSSProperties = {
   background: 'none',
   border: 'none',
-  color: 'var(--vscode-textLink-foreground, #3794ff)',
+  color: 'var(--overlay-link)',
   cursor: 'pointer',
   padding: 0,
   fontSize: 11,
   textDecoration: 'underline',
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  fontFamily: 'var(--overlay-font-mono)',
 };

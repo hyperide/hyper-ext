@@ -8,11 +8,11 @@
  * - extension -> canvas interaction: forwards state patches for overlay rendering
  */
 
+import type { SimplePropInfo } from '@shared/components/overlays';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
 import type { UnsupportedProjectError } from '../types';
 import { postToPreviewIframe } from './postToPreviewIframe';
-import type { SimplePropInfo } from './PropsForm';
 
 interface UsePreviewBridgeOptions {
   iframeEl: HTMLIFrameElement | null;
@@ -35,6 +35,12 @@ export interface ComponentError {
    * highlights these as "needs attention".
    */
   unsatisfiedProps?: string[];
+  /**
+   * True when the component file already contains a `SampleDefault` export.
+   * Gates `useAutoCreateEmptySample` — prevents silently overwriting a real
+   * (possibly broken) sample for components with generic runtime errors (HYP-648 P1 fix).
+   */
+  hasSample?: boolean;
 }
 
 interface UsePreviewBridgeResult {
@@ -276,7 +282,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
               canvas.sendEvent({
                 type: 'errorBoundary:getPropsSchema',
                 componentPath: msg.componentPath,
-              } as unknown as PlatformMessage);
+              });
             }
             return {
               componentPath: msg.componentPath,
@@ -385,6 +391,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         // Small delay: wait for iframe scripts to initialize their message listeners
         setTimeout(() => {
           postToPreviewIframe(iframeEl, { type: 'hypercanvas:setComponent', component: comp });
+          // HYP-649: a non-initial load means the source was edited (HMR full reload)
+          // or the iframe re-navigated. Bump the generated CanvasPreview's retryCount
+          // so its ErrorBoundary remounts and a now-fixed component clears any stale
+          // error overlay without a manual refresh.
+          postToPreviewIframe(iframeEl, { type: 'hypercanvas:retryRender' });
         }, 100);
       }
     }
@@ -696,6 +707,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
                   ...prev,
                   propsSchema: msg.propsSchema as SimplePropInfo[],
                   unsatisfiedProps: (msg as { unsatisfiedProps?: string[] }).unsatisfiedProps ?? [],
+                  hasSample: (msg as { hasSample?: boolean }).hasSample ?? false,
                 }
               : prev,
           );

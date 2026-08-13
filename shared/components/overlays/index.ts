@@ -4,13 +4,16 @@
  * Accessed via: `@shared/components/overlays` imports from SaaS (client/) and
  *   the VS Code extension webview (vscode-extension/.../webview-preview-panel/).
  *
- * Note: ComponentErrorOverlay + PropsForm are NOT here yet — they move to shared
- *   together with the extension wiring (see HYP-359 follow-up tickets).
+ * This barrel is the EXTERNAL surface. Intra-package files (e.g.
+ *   ComponentErrorOverlay importing PropsForm) and tests import siblings via
+ *   their direct paths to avoid a circular dependency through the barrel.
  */
 
+export { ComponentErrorOverlay } from './ComponentErrorOverlay';
 export { ConnectionErrorOverlay } from './ConnectionErrorOverlay';
 export { LoadingOverlay } from './LoadingOverlay';
 export { NoComponentOverlay } from './NoComponentOverlay';
 export { ParseErrorOverlay } from './ParseErrorOverlay';
 export { PreviewSetupOverlay } from './PreviewSetupOverlay';
+export type { SimplePropInfo } from './PropsForm';
 export { RuntimeErrorOverlay } from './RuntimeErrorOverlay';

@@ -389,6 +389,8 @@ export class PreviewPanel {
       panelRouter: this._panelRouter,
       context: this._context,
       currentComponent: this._currentComponent,
+      previewComponent: this._previewComponent,
+      workspaceRoot: this._workspaceRoot,
       panel: this._panel,
       onScopeChange: this._onScopeChange,
       onRuntimeErrorCallback: this._onRuntimeErrorCallback,

@@ -86,6 +86,12 @@
     --overlay-codeframe-bg: rgba(0, 0, 0, 0.3);
     --overlay-badge-supported: #22c55e;
     --overlay-badge-planned: #3b82f6;
+    /* PropsForm + ComponentErrorOverlay (HYP-648) */
+    --overlay-disabled-fg: hsl(var(--muted-foreground));
+    --overlay-secondary-bg: hsl(var(--muted));
+    --overlay-secondary-fg: hsl(var(--muted-foreground));
+    --overlay-badge-bg: hsl(var(--muted));
+    --overlay-code-bg: rgba(127, 127, 127, 0.12);
 
     /* SYNC: vscode-extension/hypercanvas-preview/src/webview/styles.css — toggle hierarchy tokens */
     --toggle-container: 210 40% 96.1%;

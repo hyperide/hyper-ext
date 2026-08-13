@@ -284,7 +284,20 @@ export type PlatformMessage =
   // Right panel input focus guard (sidebar webview → extension host)
   // Used to set `hypercanvas.rightPanelInputFocused` context variable so
   // canvas keybindings don't fire while the user types in inspector fields.
-  | { type: 'panel:inputFocus'; active: boolean };
+  | { type: 'panel:inputFocus'; active: boolean }
+
+  // Component-error overlay actions (preview webview → extension host).
+  // Emitted by the shared ComponentErrorOverlay when the user creates a sample
+  // from filled props, asks to configure an AI key, or when the overlay needs
+  // the component's prop schema to render typed fields (HYP-648).
+  | {
+      type: 'errorBoundary:createSample';
+      componentPath: string;
+      sampleName: string;
+      propValues?: Record<string, unknown>;
+    }
+  | { type: 'errorBoundary:configureAIKey' }
+  | { type: 'errorBoundary:getPropsSchema'; componentPath: string };
 
 // Helper type to extract message by type
 export type MessageOfType<T extends PlatformMessage['type']> = Extract<PlatformMessage, { type: T }>;

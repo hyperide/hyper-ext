@@ -5,10 +5,10 @@
  * Manages iframe preview, overlay rendering, and context menu.
  */
 
-import { LoadingOverlay, NoComponentOverlay } from '@shared/components/overlays';
+import { ComponentErrorOverlay, LoadingOverlay, NoComponentOverlay } from '@shared/components/overlays';
 import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
 import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import {
@@ -24,9 +24,9 @@ import type { UnsupportedProjectError } from '../types';
 import { DisconnectedScreen } from './DisconnectedScreen';
 import { PreviewLoadErrorOverlay } from './PreviewLoadErrorOverlay';
 import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
-import { PropsForm } from './PropsForm';
-import { UnsupportedFrameworkScreen } from './UnsupportedFrameworkScreen';
+import { useAutoCreateEmptySample } from './useAutoCreateEmptySample';
 import { useCanvasInteraction } from './useCanvasInteraction';
+import { UnsupportedFrameworkScreen } from './UnsupportedFrameworkScreen';
 import { usePreviewBridge } from './usePreviewBridge';
 
 // ============================================================================
@@ -97,6 +97,32 @@ function PreviewContent() {
     iframeEl,
     canvas,
     onStateUpdate: updateState,
+  });
+
+  // Create a sample for the errored component (host writes the sample file).
+  // Shared by the overlay's "Create Sample" button and the auto-create hook below.
+  const createSample = useCallback(
+    (componentPath: string, sampleName: string, propValues?: Record<string, unknown>) => {
+      canvas.sendEvent({ type: 'errorBoundary:createSample', componentPath, sampleName, propValues });
+    },
+    [canvas],
+  );
+
+  // HYP-649: when the errored component truly has no props (schema resolved to []
+  // and the error names none), skip the overlay and silently create an empty
+  // SampleDefault. The created sample re-renders and the error clears via the
+  // retryRender path. No-op while componentError is null.
+  useAutoCreateEmptySample({
+    componentPath: componentError?.componentPath ?? '',
+    error: componentError?.error,
+    errorSeq: componentError?.errorSeq,
+    propsSchema: componentError?.propsSchema,
+    hasSample: componentError?.hasSample,
+    onCreateSample: useCallback(
+      (sampleName: string, propValues?: Record<string, unknown>) =>
+        componentError && createSample(componentError.componentPath, sampleName, propValues),
+      [componentError, createSample],
+    ),
   });
 
   // Readonly mode: when CSS system is unsupported for editing but preview renders.
@@ -255,18 +281,11 @@ function PreviewContent() {
           error={componentError.error}
           propsSchema={componentError.propsSchema}
           unsatisfiedProps={componentError.unsatisfiedProps}
-          onCreateSample={(sampleName: string, propValues?: Record<string, unknown>) => {
-            canvas.sendEvent({
-              type: 'errorBoundary:createSample',
-              componentPath: componentError.componentPath,
-              sampleName,
-              propValues,
-            } as unknown as import('@/lib/platform/types').PlatformMessage);
-          }}
+          onCreateSample={(sampleName: string, propValues?: Record<string, unknown>) =>
+            createSample(componentError.componentPath, sampleName, propValues)
+          }
           onConfigureAIKey={() => {
-            canvas.sendEvent({
-              type: 'errorBoundary:configureAIKey',
-            } as unknown as import('@/lib/platform/types').PlatformMessage);
+            canvas.sendEvent({ type: 'errorBoundary:configureAIKey' });
           }}
           onClose={clearComponentError}
         />
@@ -489,284 +508,6 @@ function UnsupportedProjectScreen({ error, onFix }: { error: UnsupportedProjectE
 }
 
 // ============================================================================
-// Component Error Overlay (shown over iframe when ErrorBoundary catches)
-// ============================================================================
-
-/** Per-component prop values cache — persists across component switches, cleared on sample creation */
-const propsCache = new Map<string, Record<string, unknown>>();
-
-interface ComponentErrorOverlayProps {
-  componentPath: string;
-  errorSeq?: number;
-  error: string;
-  propsSchema?: import('./PropsForm').SimplePropInfo[] | null;
-  /**
-   * Required props the auto-sample generator could not satisfy (feature #210).
-   * Highlighted in the overlay as "needs attention".
-   */
-  unsatisfiedProps?: string[];
-  onCreateSample: (sampleName: string, propValues?: Record<string, unknown>) => void;
-  onConfigureAIKey: () => void;
-  onClose: () => void;
-}
-
-/**
- * Compute the overlay's "needs attention" list, kept CONSISTENT with the editable
- * Props panel: never flag a prop the user can't act on.
- *
- * The raw candidates are the union of (a) required props the auto-sample generator
- * couldn't satisfy and (b) prop names regex-scraped out of the runtime error. (b)
- * can name props that don't exist in the prop schema (e.g. `name` scraped from a
- * `reading 'name'` crash), for which PropsForm renders NO field. We drop those.
- *
- * The editable field set mirrors PropsForm: when a schema is present (even empty)
- * the fields come from the schema; otherwise from the extracted prop names.
- */
-export function computeAttentionProps(input: {
-  unsatisfiedProps: readonly string[];
-  extractedProps: readonly string[];
-  propsSchema: import('./PropsForm').SimplePropInfo[] | null | undefined;
-}): string[] {
-  const { unsatisfiedProps, extractedProps, propsSchema } = input;
-  const editableFieldNames = new Set(propsSchema ? propsSchema.map((p) => p.name) : extractedProps);
-  const candidates = [...new Set([...unsatisfiedProps, ...extractedProps])];
-  return candidates.filter((name) => editableFieldNames.has(name));
-}
-
-/**
- * Extract prop names from common React error messages.
- * - "Cannot read properties of undefined (reading 'likes')" → ['likes']
- * - "Cannot read properties of null (reading 'name')" → ['name']
- * - "tweet is not defined" → ['tweet']
- * - "props.title is not a function" → ['title']
- * - Multiple "reading 'x'" in one message → all extracted
- */
-function extractPropsFromError(errorMsg: string): string[] {
-  // "Cannot read properties of undefined/null (reading 'propName')"
-  const readingMatches = [...errorMsg.matchAll(/reading '(\w+)'/g)];
-  if (readingMatches.length > 0) {
-    return [...new Set(readingMatches.map((m) => m[1]))];
-  }
-
-  // "someVar is not defined" / "someVar is undefined"
-  const undefinedMatch = errorMsg.match(/(\w+) is (?:not defined|undefined)/);
-  if (undefinedMatch) return [undefinedMatch[1]];
-
-  // "props.X is not a function" / "Cannot read X of undefined"
-  const propsDotMatch = errorMsg.match(/props\.(\w+)/);
-  if (propsDotMatch) return [propsDotMatch[1]];
-
-  return [];
-}
-
-function ComponentErrorOverlay({
-  componentPath,
-  error,
-  propsSchema,
-  unsatisfiedProps,
-  onCreateSample,
-  onConfigureAIKey,
-  onClose,
-}: ComponentErrorOverlayProps) {
-  const componentName =
-    componentPath
-      .split('/')
-      .pop()
-      ?.replace(/\.tsx?$/, '') ?? componentPath;
-
-  const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
-  // Feature #210 — props that need the user's attention: the union of props the
-  // auto-sample generator couldn't satisfy and prop names parsed out of the actual
-  // render error. Filtered to props that have an editable field, so the
-  // "needs attention" list stays consistent with the Props panel (HYP-453).
-  const attentionProps = useMemo(
-    () => computeAttentionProps({ unsatisfiedProps: unsatisfiedProps ?? [], extractedProps, propsSchema }),
-    [unsatisfiedProps, extractedProps, propsSchema],
-  );
-  const cachedValues = useMemo(() => propsCache.get(componentPath), [componentPath]);
-  const propValuesRef = useRef<Record<string, unknown>>(cachedValues ?? {});
-  const [allRequiredFilled, setAllRequiredFilled] = useState(false);
-  const [sampleCreated, setSampleCreated] = useState(false);
-  const [formKey, setFormKey] = useState(0);
-  const [sampleName, setSampleName] = useState('SampleDefault');
-
-  const [hasAnyProps, setHasAnyProps] = useState(false);
-
-  // Listen for sample deletion from file watcher.
-  // This message arrives from the VS Code extension host over the webview channel,
-  // whose origin is the opaque vscode-webview://<session-id> — origin-string
-  // comparison is meaningless here, so we validate by message shape instead.
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (event.data?.type === 'errorOverlay:sampleDeleted') {
-        setSampleCreated(false);
-      }
-    };
-    // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview host channel (opaque vscode-webview:// origin); validated by message shape
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, []);
-
-  const handlePropsChange = useCallback(
-    (values: Record<string, unknown>) => {
-      propValuesRef.current = values;
-      propsCache.set(componentPath, values);
-      const hasFilled = Object.values(values).some((v) => {
-        if (v == null) return false;
-        if (typeof v === 'string') return v.trim() !== '';
-        if (Array.isArray(v)) return v.length > 0;
-        return true;
-      });
-      setHasAnyProps(hasFilled);
-    },
-    [componentPath],
-  );
-
-  const handleCreateSample = useCallback(() => {
-    const filled = Object.entries(propValuesRef.current).filter(([, v]) => {
-      if (v == null) return false;
-      if (typeof v === 'string') return v.trim() !== '';
-      if (Array.isArray(v)) return v.length > 0;
-      return true;
-    });
-    onCreateSample(sampleName, filled.length > 0 ? Object.fromEntries(filled) : undefined);
-    propsCache.delete(componentPath);
-    // Auto-close overlay for SampleDefault — preview will re-render with the sample
-    if (sampleName === 'SampleDefault') {
-      onClose();
-    } else {
-      setSampleCreated(true);
-    }
-  }, [onCreateSample, sampleName, componentPath, onClose]);
-
-  const sampleCountRef = useRef(1);
-  const handleCreateNew = useCallback(() => {
-    sampleCountRef.current += 1;
-    setSampleCreated(false);
-    setAllRequiredFilled(false);
-    setHasAnyProps(false);
-    setSampleName(`Sample${sampleCountRef.current}`);
-    propValuesRef.current = {};
-    setFormKey((k) => k + 1);
-  }, []);
-
-  const hasProps = (propsSchema && propsSchema.length > 0) || extractedProps.length > 0;
-
-  return (
-    <div data-testid={TID.preview.componentErrorOverlay} style={errorOverlayBackdropStyle}>
-      <div style={errorOverlayCardStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <h3 style={errorOverlayTitleStyle}>{componentName}</h3>
-          {sampleCreated && (
-            <button type="button" onClick={onClose} style={errorOverlayCloseButtonStyle} title="Close">
-              &times;
-            </button>
-          )}
-        </div>
-        <p style={errorOverlaySubtitleStyle}>
-          {attentionProps.length > 0
-            ? 'Auto-generated sample props were not enough to render this component.'
-            : 'This component requires props to render.'}
-        </p>
-
-        {attentionProps.length > 0 && (
-          <p data-testid={TID.preview.componentErrorAttentionProps} style={errorOverlayAttentionStyle}>
-            Needs attention:{' '}
-            {attentionProps.map((name, i) => (
-              <span key={name}>
-                {i > 0 ? ', ' : ''}
-                <code style={errorOverlayAttentionCodeStyle}>{name}</code>
-              </span>
-            ))}
-          </p>
-        )}
-
-        {hasProps && (
-          <>
-            <PropsForm
-              propsSchema={propsSchema ?? null}
-              extractedPropNames={extractedProps}
-              onChange={handlePropsChange}
-              onAllRequiredFilled={setAllRequiredFilled}
-              resetKey={formKey}
-              initialValues={cachedValues}
-            />
-            <p style={errorOverlayHintStyle}>
-              Fill props here, edit them in the code editor, or combine both approaches.
-            </p>
-          </>
-        )}
-
-        {!hasProps && (
-          <p style={errorOverlayNoPropsHintStyle}>
-            Could not detect required prop names from the error. The sample file will include a TODO placeholder.
-          </p>
-        )}
-
-        {sampleCountRef.current > 1 && (
-          <div style={sampleNameRowStyle}>
-            <label htmlFor="sample-name" style={sampleNameLabelStyle}>
-              Name
-            </label>
-            <input
-              id="sample-name"
-              type="text"
-              value={sampleName}
-              onChange={(e) => setSampleName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
-              placeholder="SampleDefault"
-              style={sampleNameInputStyle}
-            />
-          </div>
-        )}
-
-        {sampleCreated ? (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              data-testid={TID.preview.componentErrorCreateSample}
-              style={allRequiredFilled ? errorOverlayPrimaryButtonStyle : errorOverlaySecondaryButtonStyle}
-              onClick={handleCreateSample}
-            >
-              Update Sample
-            </button>
-            <button type="button" onClick={handleCreateNew} style={errorOverlayLinkButtonStyle}>
-              Create New...
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              data-testid={TID.preview.componentErrorCreateSample}
-              style={allRequiredFilled ? errorOverlayPrimaryButtonStyle : errorOverlaySecondaryButtonStyle}
-              onClick={handleCreateSample}
-            >
-              {hasAnyProps ? 'Create Sample' : 'Create Empty Sample'}
-            </button>
-            <span style={{ color: 'var(--vscode-descriptionForeground, #666)', fontSize: 12 }}>or</span>
-            <button
-              type="button"
-              data-testid={TID.preview.componentErrorConfigureAI}
-              style={allRequiredFilled ? errorOverlaySecondaryButtonStyle : errorOverlayPrimaryButtonStyle}
-              onClick={onConfigureAIKey}
-            >
-              Configure AI Key
-            </button>
-          </div>
-        )}
-
-        <p style={errorOverlayAIHintStyle}>
-          <button type="button" onClick={onConfigureAIKey} style={errorOverlayAIHintLinkStyle}>
-            Configure an AI provider
-          </button>{' '}
-          to auto-generate sample files with realistic data.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
 // Mode Toolbar (floating at bottom of preview, matching SaaS Toolbar)
 // ============================================================================
 
@@ -955,155 +696,4 @@ const warningIconStyle: React.CSSProperties = {
   marginBottom: 12,
   color: 'var(--vscode-editorWarning-foreground, #e5a100)',
   lineHeight: 1,
-};
-
-// ============================================================================
-// Component Error Overlay styles
-// ============================================================================
-
-const errorOverlayBackdropStyle: CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  zIndex: 100,
-  background: 'rgba(0, 0, 0, 0.85)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontFamily: 'var(--vscode-font-family, system-ui, -apple-system, sans-serif)',
-};
-
-const errorOverlayCardStyle: CSSProperties = {
-  padding: 32,
-  maxWidth: 520,
-  width: '90%',
-  background: 'var(--vscode-editor-background, #1e1e1e)',
-  borderRadius: 12,
-  border: '1px solid var(--vscode-widget-border, #333)',
-};
-
-const errorOverlayTitleStyle: CSSProperties = {
-  color: 'var(--vscode-editor-foreground, #e2e8f0)',
-  margin: '0 0 4px',
-  fontSize: 15,
-  fontWeight: 600,
-};
-
-const errorOverlaySubtitleStyle: CSSProperties = {
-  color: 'var(--vscode-descriptionForeground, #718096)',
-  fontSize: 12,
-  margin: '0 0 20px',
-};
-
-const errorOverlayNoPropsHintStyle: CSSProperties = {
-  color: 'var(--vscode-descriptionForeground, #718096)',
-  fontSize: 12,
-  margin: '0 0 16px',
-  lineHeight: 1.6,
-};
-
-const sampleNameRowStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  marginBottom: 12,
-};
-
-const sampleNameLabelStyle: CSSProperties = {
-  color: 'var(--vscode-descriptionForeground, #718096)',
-  fontSize: 12,
-  minWidth: 40,
-};
-
-const sampleNameInputStyle: CSSProperties = {
-  flex: 1,
-  padding: '4px 8px',
-  fontSize: 12,
-  background: 'var(--vscode-input-background, #1e1e1e)',
-  color: 'var(--vscode-input-foreground, #e2e8f0)',
-  border: '1px solid var(--vscode-input-border, #444)',
-  borderRadius: 4,
-  outline: 'none',
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
-};
-
-const errorOverlayHintStyle: CSSProperties = {
-  color: 'var(--vscode-descriptionForeground, #718096)',
-  fontSize: 11,
-  margin: '0 0 12px',
-  lineHeight: 1.5,
-};
-
-const errorOverlayAttentionStyle: CSSProperties = {
-  color: 'var(--vscode-editorWarning-foreground, #cca700)',
-  fontSize: 12,
-  margin: '0 0 12px',
-  lineHeight: 1.5,
-};
-
-const errorOverlayAttentionCodeStyle: CSSProperties = {
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
-  background: 'var(--vscode-textCodeBlock-background, rgba(255,255,255,0.06))',
-  padding: '1px 5px',
-  borderRadius: 3,
-};
-
-const errorOverlayLinkButtonStyle: CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: 'var(--vscode-textLink-foreground, #3794ff)',
-  cursor: 'pointer',
-  padding: 0,
-  fontSize: 13,
-  textDecoration: 'underline',
-};
-
-const errorOverlayCloseButtonStyle: CSSProperties = {
-  background: 'transparent',
-  border: 'none',
-  color: 'var(--vscode-descriptionForeground, #718096)',
-  fontSize: 20,
-  cursor: 'pointer',
-  padding: '0 4px',
-  lineHeight: 1,
-  borderRadius: 4,
-  marginTop: -4,
-};
-
-const errorOverlayAIHintStyle: CSSProperties = {
-  color: 'var(--vscode-descriptionForeground, #718096)',
-  fontSize: 11,
-  margin: '12px 0 0',
-  lineHeight: 1.5,
-};
-
-const errorOverlayAIHintLinkStyle: CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: 'var(--vscode-textLink-foreground, #3794ff)',
-  cursor: 'pointer',
-  padding: 0,
-  fontSize: 11,
-  textDecoration: 'underline',
-};
-
-const errorOverlayPrimaryButtonStyle: CSSProperties = {
-  padding: '8px 16px',
-  background: 'var(--vscode-button-background, #3182ce)',
-  color: 'var(--vscode-button-foreground, white)',
-  border: 'none',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
-  fontWeight: 500,
-};
-
-const errorOverlaySecondaryButtonStyle: CSSProperties = {
-  padding: '8px 16px',
-  background: 'transparent',
-  color: 'var(--vscode-textLink-foreground, #a78bfa)',
-  border: '1px solid var(--vscode-textLink-foreground, #a78bfa)',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
-  fontWeight: 500,
 };

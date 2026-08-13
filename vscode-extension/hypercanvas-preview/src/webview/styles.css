@@ -75,6 +75,12 @@ body.vscode-light {
   --overlay-codeframe-bg: rgba(0, 0, 0, 0.3);
   --overlay-badge-supported: #22c55e;
   --overlay-badge-planned: #3b82f6;
+  /* PropsForm + ComponentErrorOverlay (HYP-648) */
+  --overlay-disabled-fg: var(--vscode-disabledForeground, #777);
+  --overlay-secondary-bg: var(--vscode-button-secondaryBackground, #3a3d41);
+  --overlay-secondary-fg: var(--vscode-button-secondaryForeground, #ccc);
+  --overlay-badge-bg: var(--vscode-badge-background, #333);
+  --overlay-code-bg: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.06));
 }
 
 /* SYNC: client/global.css — toggle hierarchy tokens */

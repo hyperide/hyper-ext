@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { computeAttentionProps } from '../PreviewPanelApp';
+import { computeAttentionProps } from '../ComponentErrorOverlay';
 import type { SimplePropInfo } from '../PropsForm';
 
 function p(name: string): SimplePropInfo {

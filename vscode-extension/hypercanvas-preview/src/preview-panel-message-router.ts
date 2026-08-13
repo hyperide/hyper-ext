@@ -8,6 +8,7 @@ import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
 import type { DevServerRuntimeError } from './types';
 import { generateSamplePropValues } from '@lib/preview-generator';
+import { deriveSubProjectPrefix, resolveComponentAbsPath } from './bridges/monorepo-path-translate';
 
 /**
  * Focused dependency surface for the message router. Built inside PreviewPanel
@@ -19,6 +20,8 @@ export interface MessageRouterDeps {
   panelRouter: PanelRouter;
   context: vscode.ExtensionContext;
   currentComponent: string | undefined;
+  previewComponent: string | undefined;
+  workspaceRoot: string | undefined;
   panel: vscode.WebviewPanel | undefined;
   onScopeChange?: (scope: 'full-app' | 'component-only') => Promise<void>;
   onRuntimeErrorCallback: ((error: DevServerRuntimeError | null) => void) | null;
@@ -154,11 +157,29 @@ export async function routeMessage(deps: MessageRouterDeps, message: unknown, we
     if (componentPath) {
       const props = await deps.panelRouter.componentService.getComponentDefinitions(componentPath);
       const unsatisfiedProps = props && props.length > 0 ? generateSamplePropValues(props).unsatisfied : [];
+      // Check if an existing SampleDefault already exists so the webview can skip
+      // auto-create for components with a real (possibly broken) sample — prevents
+      // silently overwriting an existing sample on generic runtime errors (HYP-648 P1).
+      let hasSample = false;
+      if (deps.workspaceRoot) {
+        try {
+          const subProjectPrefix = deriveSubProjectPrefix(deps.currentComponent, deps.previewComponent);
+          const absPath = resolveComponentAbsPath(componentPath, deps.workspaceRoot, subProjectPrefix);
+          const fileUri = vscode.Uri.file(absPath);
+          const bytes = await vscode.workspace.fs.readFile(fileUri);
+          const sourceCode = Buffer.from(bytes).toString('utf-8');
+          hasSample = /export\s+const\s+SampleDefault\s*=/.test(sourceCode);
+        } catch {
+          // File unreadable — treat as no sample; auto-create will create it
+          hasSample = false;
+        }
+      }
       webview.postMessage({
         type: 'errorBoundary:propsSchema',
         componentPath,
         propsSchema: props,
         unsatisfiedProps,
+        hasSample,
       });
     }
     return;

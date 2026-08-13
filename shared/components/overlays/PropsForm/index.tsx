@@ -1,6 +1,6 @@
 import type { PropTypeInfo } from '@shared/types/props';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { humanize, toPropTypeInfo } from './prop-type-utils';
+import { humanize, type SimplePropInfo, toPropTypeInfo } from './prop-type-utils';
 import { generateObjectValues, getGenerateAllAvailability, getStringFieldGenerator } from './prop-generators';
 import {
   arrayAddButtonStyle,
@@ -43,7 +43,7 @@ export type { SimplePropInfo } from './prop-type-utils';
 export { canGenerateSomeValue, getGenerateAllAvailability } from './prop-generators';
 
 interface PropsFormProps {
-  propsSchema: import('./prop-type-utils').SimplePropInfo[] | null;
+  propsSchema: SimplePropInfo[] | null;
   extractedPropNames: string[];
   onChange: (values: Record<string, unknown>) => void;
   onAllRequiredFilled?: (allFilled: boolean) => void;

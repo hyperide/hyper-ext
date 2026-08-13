@@ -283,8 +283,12 @@ function buildErrorBoundary(): string[] {
     "    }, '*');",
     '  }',
     '  override componentDidUpdate(prevProps: { componentPath: string; propsReady?: boolean }) {',
+    '    // HYP-649: componentPath changes are handled by the errorBoundaryKey remount',
+    '    // (key includes componentPath), so the only in-place reset left here is the',
+    '    // generated-props-arrived case (#210). Keeping a componentPath clause too would',
+    '    // double-reset and race the key remount.',
     '    const propsJustArrived = !prevProps.propsReady && this.props.propsReady === true;',
-    '    if ((prevProps.componentPath !== this.props.componentPath || propsJustArrived) && this.state.error) {',
+    '    if (propsJustArrived && this.state.error) {',
     '      this.setState({ error: null });',
     '    }',
     '  }',
@@ -337,6 +341,31 @@ function buildGeneratedPropsState(): string[] {
   ];
 }
 
+/**
+ * HYP-649 — re-render-after-error recovery. The host posts `hypercanvas:retryRender`
+ * after an HMR full reload (and on demand). Bumping `retryCount` changes the
+ * ErrorBoundary `key` (see `errorBoundaryKey` in buildCanvasPreviewBody), so React
+ * remounts the boundary with fresh (non-error) state — a fixed component clears its
+ * stale overlay without a full page reload. Key-remount is the single source of
+ * truth for componentPath-driven resets (the boundary no longer resets in
+ * componentDidUpdate on componentPath change, to avoid a double-reset race).
+ */
+function buildRetryRenderState(): string[] {
+  return [
+    '  const [retryCount, setRetryCount] = React.useState(0);',
+    '  React.useEffect(() => {',
+    '    function onRetryRender(e: MessageEvent) {',
+    "      if (e.data?.type === 'hypercanvas:retryRender') {",
+    '        setRetryCount((c) => c + 1);',
+    '      }',
+    '    }',
+    "    window.addEventListener('message', onRetryRender);",
+    "    return () => window.removeEventListener('message', onRetryRender);",
+    '  }, []);',
+    '',
+  ];
+}
+
 function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig, ssrRoutes?: Set<string>): string[] {
   return [
     'interface CanvasPreviewProps {',
@@ -349,6 +378,7 @@ function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig, ssrRoute
     "  const [mode, setMode] = React.useState<'single' | 'multi'>(modeProp ?? 'single');",
     '',
     ...buildGeneratedPropsState(),
+    ...buildRetryRenderState(),
     '  React.useEffect(() => {',
     '    if (componentProp != null) setComponentPath(componentProp);',
     '  }, [componentProp]);',
@@ -391,6 +421,7 @@ function buildCanvasPreviewNextPages(providerWrap?: ProviderWrapConfig, ssrRoute
     '  const [componentPath, setComponentPath] = React.useState(router.query.component as string);',
     '',
     ...buildGeneratedPropsState(),
+    ...buildRetryRenderState(),
     '  React.useEffect(() => {',
     '    if (router.query.component) setComponentPath(router.query.component as string);',
     '  }, [router.query.component]);',
@@ -450,6 +481,9 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '  const sampleRenderers = sampleRenderersMap[componentPath] || {};',
     '  const generatedProps = generatedPropsMap[componentPath] ?? {};',
     '  const generatedPropsReady = Object.prototype.hasOwnProperty.call(generatedPropsMap, componentPath);',
+    '  // HYP-649: re-keying the ErrorBoundary on retryCount (or componentPath) remounts',
+    '  // it with fresh state, clearing a stale error after the source is fixed.',
+    '  const errorBoundaryKey = `${componentPath}-${retryCount}`;',
     '',
     "  if (mode !== 'multi') {",
     '    const SampleDefault = sampleRenderMap[componentPath];',
@@ -468,13 +502,13 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '        </div>',
     '      );',
     '    }',
-    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath} propsReady={generatedPropsReady}><div style={${singleWrapperStyle}}>${singleRender}<_ComponentSuccessSignal componentPath={componentPath} /></div></ComponentErrorBoundary>${wc};`,
+    `    return ${wo}<ComponentErrorBoundary key={errorBoundaryKey} componentPath={componentPath} propsReady={generatedPropsReady}><div style={${singleWrapperStyle}}>${singleRender}<_ComponentSuccessSignal componentPath={componentPath} /></div></ComponentErrorBoundary>${wc};`,
     '  }',
     '',
     '  const instances = ((window.parent as unknown) as { __CANVAS_INSTANCES__?: Record<string, InstanceEntry> }).__CANVAS_INSTANCES__ || {};',
     '',
     '  return (',
-    `    ${wo}<ComponentErrorBoundary componentPath={componentPath}>`,
+    `    ${wo}<ComponentErrorBoundary key={errorBoundaryKey} componentPath={componentPath}>`,
     "    <div style={{ position: 'relative', width: 10000, height: 10000 }}>",
     '      {Object.entries(instances).map(([id, instance]: [string, InstanceEntry]) => {',
     '        const { x = 0, y = 0, props } = instance;',

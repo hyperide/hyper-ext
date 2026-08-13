@@ -40,7 +40,18 @@ export type OverlayCSSVarName =
   | '--overlay-codeframe-bg'
   // Framework support badges in PreviewSetupOverlay
   | '--overlay-badge-supported'
-  | '--overlay-badge-planned';
+  | '--overlay-badge-planned'
+  // PropsForm + ComponentErrorOverlay (HYP-648): tokens the type-aware props form
+  // and the error card need beyond the base error-overlay palette.
+  // Disabled "Generate values" button text
+  | '--overlay-disabled-fg'
+  // Inline "gen"/"rand" button chip background + foreground
+  | '--overlay-secondary-bg'
+  | '--overlay-secondary-fg'
+  // Type badge ("array", "object (JSON)") background
+  | '--overlay-badge-bg'
+  // Inline `<code>` background for "needs attention" prop names
+  | '--overlay-code-bg';
 
 /** Strict mapping from each overlay CSS var name to its value — used for typed inline styles */
 export type OverlayCSSVars = { [K in OverlayCSSVarName]?: string };
