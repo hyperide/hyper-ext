@@ -21,6 +21,13 @@ export class NodeFileIO implements FileIO {
     await fs.access(absolutePath);
   }
 
+  // Used by the B0 write-transaction rollback to undo a CREATED file (delete it rather than leave an
+  // empty stub). `force: true` makes deleting an already-absent file a no-op, which matches the
+  // transaction's "already gone → reverted" path. (HYP-722 T1a.)
+  async deleteFile(absolutePath: string): Promise<void> {
+    await fs.rm(absolutePath, { force: true });
+  }
+
   async mkdir(dirPath: string): Promise<void> {
     await fs.mkdir(dirPath, { recursive: true });
   }

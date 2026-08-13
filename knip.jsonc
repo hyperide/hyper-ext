@@ -110,6 +110,18 @@
         // barrel (it imports playwright-core) and only referenced by the
         // knip-invisible scripts/*.tsx proof path, so it is entried directly.
         "lib/visual-verify/capture-and-verify.ts",
+        // B0 write-transaction public surface (style-editing master spec §9.1, HYP-722
+        // T1a). The lib-level snapshot/journal/rollback saga that brackets every style
+        // write. Two curated barrels: `index.ts` is the BROWSER-SAFE surface (no
+        // node:crypto / NodeFileIO — the serverless/OPFS realm imports it and injects its
+        // own FileIO + hasher); `index.node.ts` adds the Node-realm pieces
+        // (`runStyleWriteTransaction`, the node:crypto `hashContent`) for the SaaS update
+        // routes + the VS Code AstBridge, which wire the transaction as the convergence
+        // task lands (spec §9.1 "realms differ ONLY in the FS transport beneath one shared
+        // lib/ writeId/rollback API"). Both are entried to keep the curated public surface
+        // intact rather than churn the future callsites into subpath imports.
+        "lib/style-write/transaction/index.ts",
+        "lib/style-write/transaction/index.node.ts",
         "**/*.test.{ts,tsx}",
         // `bun test --isolate` (package.json "test") also collects *.spec.{ts,tsx}
         // (e.g. client/lib/utils.spec.ts). Without this glob knip flags the spec
