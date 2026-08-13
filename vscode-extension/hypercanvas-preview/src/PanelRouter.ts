@@ -114,13 +114,19 @@ export class PanelRouter {
    *  - ast:* — filePath + element-id fields (edits).
    *  - editor:goToCode / editor:openFile — `path` (Go-to-Code navigation).
    *  - styles:readClassName — elementId + componentPath (inspector style read).
-   * No-op when the prefix is empty. Returns a shallow clone; never mutates the
-   * caller's object. `componentFilePath` (insertElement, repo-rooted picker) and
-   * already-repo-relative paths are left untouched.
+   * The sub-project PREFIX is empty when the project is opened directly at the
+   * sub-project/target root, but the translators still run: they ALSO strip Vite's
+   * `@fs/<absolute>` serving prefix, which leaks into the id of a cross-package
+   * library component (served from OUTSIDE the target root) regardless of the
+   * sub-project prefix. Skipping translation on an empty prefix used to leave `@fs/`
+   * intact, so the resolver prepended the target root (`<root>/@fs/...`) and the
+   * style write/read 404'd with "Element not found" — while element-ops (AstBridge
+   * public methods, which translate unconditionally) worked. Returns a shallow clone
+   * for the handled families; never mutates the caller's object. `componentFilePath`
+   * (insertElement, repo-rooted picker) and already-repo-relative paths are untouched.
    */
   private _reRootMessage(message: unknown): unknown {
     const prefix = this._subProjectPrefix;
-    if (!prefix) return message;
     const m = message as { type?: string; [k: string]: unknown };
     const type = m?.type;
     if (!type) return message;

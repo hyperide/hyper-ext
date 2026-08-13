@@ -424,6 +424,54 @@ describe('PanelRouter', () => {
       expect(updateStylesArgs(router)?.[1]).toBe('targets/conloca-app/src/app/page.tsx:9:2');
     });
 
+    it('strips Vite @fs/ from a cross-package elementId when the sub-project prefix is empty', async () => {
+      // Bug: a monorepo opened DIRECTLY at the sub-project/target root has an EMPTY
+      // sub-project prefix. A cross-package library component (e.g. @conloca-mini/ui's
+      // <Button>) is served by Vite from OUTSIDE that root via `@fs/<absolute>`, and that
+      // URL leaks into the selected elementId. Element-ops strip `@fs/` unconditionally
+      // (AstBridge public methods), but the style path went through _reRootMessage, which
+      // used to early-return on an empty prefix and so left `@fs/` intact — the resolver
+      // then prepended the target root (`<root>/@fs/...`) and the write 404'd with
+      // "Element not found". The strip must run regardless of prefix.
+      // No setSubProjectPrefix() call → prefix is empty (project opened at target root).
+      const wv = createMockWebview();
+
+      await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-fs',
+          filePath: 'src/app/HomeScreen.tsx',
+          elementId: '@fs/Users/me/repo/packages/ui/src/Button.tsx:19:4',
+          styles: { borderRadius: '24px' },
+        },
+        wv as never,
+      );
+
+      // The AST write must receive the recovered absolute path, NOT the raw `@fs/` URL.
+      expect(updateStylesArgs(router)?.[1]).toBe('/Users/me/repo/packages/ui/src/Button.tsx:19:4');
+    });
+
+    it('leaves an in-project elementId byte-identical when the prefix is empty (no regression)', async () => {
+      // Regression guard: removing the empty-prefix early-return must not alter in-project
+      // ids. stripViteFsPrefix is a no-op on non-@fs paths and toRepoRelativeElementId
+      // returns the original string when nothing changed.
+      const wv = createMockWebview();
+
+      await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-inproj',
+          filePath: 'src/components/Card.tsx',
+          elementId: 'src/components/Card.tsx:9:2',
+          styles: { borderRadius: '24px' },
+        },
+        wv as never,
+      );
+
+      expect(updateStylesArgs(router)?.[0]).toBe('src/components/Card.tsx');
+      expect(updateStylesArgs(router)?.[1]).toBe('src/components/Card.tsx:9:2');
+    });
+
     it('threads the selected item index (repeated .map() site) to the provider', async () => {
       // At a repeated JSX site the selected occurrence is N>0; the iframe must read the live
       // class off that instance, not always index 0. PanelRouter sources the index from
@@ -637,16 +685,43 @@ describe('PanelRouter', () => {
       expect(out.componentPath).toBe('targets/conloca-app/src/app/page.tsx');
     });
 
+    it('strips Vite @fs/ from styles:readClassName fields on an empty prefix (inspector style READ)', () => {
+      // The READ half of the cross-package regression: StyleReadService.readElementClassName
+      // got the raw `@fs/` id/path and failed with ENOENT (`<root>/@fs/...`). The empty-prefix
+      // strip must recover the absolute path for the read just like for the write.
+      router.setSubProjectPrefix('');
+      const out = reRoot(router)({
+        type: 'styles:readClassName',
+        requestId: 'r-fs-read',
+        elementId: '@fs/Users/me/repo/packages/ui/src/Button.tsx:19:4',
+        componentPath: '@fs/Users/me/repo/packages/ui/src/Button.tsx',
+      });
+      expect(out.elementId).toBe('/Users/me/repo/packages/ui/src/Button.tsx:19:4');
+      expect(out.componentPath).toBe('/Users/me/repo/packages/ui/src/Button.tsx');
+    });
+
     it('does not double-prefix an already repo-relative path', () => {
       router.setSubProjectPrefix('targets/conloca-app/');
       const out = reRoot(router)({ type: 'editor:openFile', path: 'targets/conloca-app/src/app/page.tsx' });
       expect(out.path).toBe('targets/conloca-app/src/app/page.tsx');
     });
 
-    it('is an identity no-op for single-package projects (empty prefix)', () => {
+    it('preserves in-project path VALUES on an empty prefix but still strips Vite @fs/', () => {
+      // Single-package projects (and monorepos opened at the sub-project/target root)
+      // have an empty prefix. The prefix-prepending is then a no-op — an in-project path
+      // keeps its VALUE — but the prefix-INDEPENDENT `@fs/` strip must still run so a
+      // cross-package library path resolves. (Reference identity is no longer guaranteed
+      // for handled message families; only the VALUE contract matters.)
       router.setSubProjectPrefix('');
-      const msg = { type: 'editor:goToCode', path: 'src/App.tsx', line: 1, column: 1 };
-      expect(reRoot(router)(msg)).toBe(msg);
+      const inProject = reRoot(router)({ type: 'editor:goToCode', path: 'src/App.tsx', line: 1, column: 1 });
+      expect(inProject.path).toBe('src/App.tsx');
+      expect(inProject.line).toBe(1);
+
+      const crossPackage = reRoot(router)({
+        type: 'editor:goToCode',
+        path: '@fs/Users/me/repo/packages/ui/src/Button.tsx',
+      });
+      expect(crossPackage.path).toBe('/Users/me/repo/packages/ui/src/Button.tsx');
     });
 
     it('leaves unrelated message types untouched', () => {
