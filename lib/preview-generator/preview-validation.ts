@@ -37,6 +37,35 @@ export function isValidTypeScript(code: string): boolean {
 }
 
 /**
+ * Extract the component paths in a generated preview's `appEntrySet` (the set of paths
+ * previewed AS AN APP). Returns the literal keys exactly as written (with extension). An
+ * empty set — or a file with no appEntrySet (an older generator) — yields an empty set.
+ * Used to detect an app-mode toggle on the `ensureComponent` fast path.
+ */
+export function parseAppEntrySet(content: string): Set<string> {
+  const result = new Set<string>();
+  let ast: ReturnType<typeof parse>;
+  try {
+    ast = parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'], errorRecovery: true });
+  } catch {
+    return result;
+  }
+  for (const decl of iterateVarDeclarators(ast.program.body)) {
+    if (decl.id.type !== 'Identifier' || decl.id.name !== 'appEntrySet') continue;
+    // `new Set<string>([ '<path>', ... ])` — read the array argument's string-literal elements.
+    const init = decl.init;
+    if (!init || init.type !== 'NewExpression') continue;
+    const arg = init.arguments[0];
+    if (!arg || arg.type !== 'ArrayExpression') continue;
+    for (const el of arg.elements) {
+      const value = el ? getStringValue(el) : null;
+      if (value) result.add(value);
+    }
+  }
+  return result;
+}
+
+/**
  * Parse an existing __canvas_preview__.tsx to extract registered component entries.
  * Uses @babel/parser AST to correctly handle comments, string literals,
  * type annotations with `=>`, and nested braces.

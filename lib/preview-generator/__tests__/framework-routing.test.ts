@@ -323,6 +323,10 @@ describe('generateRouteFileContent', () => {
     // (window is undefined during SSR in Next.js App Router)
     expect(content).toContain("params.get('component')");
     expect(content).toContain("params.get('mode')");
+    // App-mode must propagate too (props bypass CanvasPreview's URL parsing, so the wrapper
+    // has to translate ?app=1 into mode='app' itself).
+    expect(content).toContain("params.get('app') === '1'");
+    expect(content).toContain("'app'");
   });
 
   it('nextjs-pages-router route renders CanvasPreview directly', () => {
@@ -342,6 +346,7 @@ describe('generateRouteFileContent', () => {
     expect(content).toContain('useSearchParams');
     expect(content).toContain("params.get('component')");
     expect(content).toContain("params.get('mode')");
+    expect(content).toContain("params.get('app') === '1'");
     expect(content).toContain('/__hypercanvas/iframe-interaction.js');
     expect(content).not.toContain('suppressHydrationWarning');
   });

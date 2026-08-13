@@ -1,7 +1,7 @@
 {
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
-  "version": "0.1.58",
+  "version": "0.1.60",
   "description": "Visual editor for React components",
   "categories": [
     "Other",
@@ -172,6 +172,10 @@
       {
         "command": "hypercanvas.goToVisual",
         "title": "Hyper: Go to Visual"
+      },
+      {
+        "command": "hypercanvas.previewAsApp",
+        "title": "Hyper: Preview as App"
       },
       {
         "command": "hypercanvas.startDevServer",
@@ -360,6 +364,11 @@
       "editor/context": [
         {
           "command": "hypercanvas.goToVisual",
+          "group": "navigation",
+          "when": "editorTextFocus && resourceExtname =~ /\\.(tsx|jsx)$/"
+        },
+        {
+          "command": "hypercanvas.previewAsApp",
           "group": "navigation",
           "when": "editorTextFocus && resourceExtname =~ /\\.(tsx|jsx)$/"
         }

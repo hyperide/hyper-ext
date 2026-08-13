@@ -14,6 +14,7 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { normalizeSampleComponentName } from '@lib/preview-generator';
+import type { RouteSuggestion } from '@lib/preview-generator/route-heuristics';
 import type { ColorProbeCandidate, ColorProbeRequest } from './services/color-probe-types';
 import { handleEditorMessage } from './EditorBridge';
 import {
@@ -182,6 +183,13 @@ export class PreviewPanel {
 
   // Whether dev server is actually running
   private _devServerRunning = false;
+
+  // App-mode entry path (sub-project-relative, the iframe ?component= form) for which
+  // app-mode is currently active, or null when off. When set and it matches the current
+  // preview component, the iframe URL gets `&app=1` so the generated preview renders the
+  // entry root raw (its own router + providers) and shows the address bar. Set/cleared by
+  // setAppMode/clearAppMode; the extension host owns activation (the previewAsApp command).
+  private _appModeEntryPreviewPath: string | null = null;
 
   // Unsupported project error (React Native / Tamagui), sent to webview on ready
   private _projectError: UnsupportedProjectError | null = null;
@@ -896,7 +904,16 @@ export class PreviewPanel {
       this._componentState.repoPath && this._componentState.previewPath ? this._componentState.previewPath : component;
 
     const baseUrl = `${this._previewBaseUrl}/test-preview`;
-    const url = `${baseUrl}?component=${encodeURIComponent(previewComponent)}`;
+    let url = `${baseUrl}?component=${encodeURIComponent(previewComponent)}`;
+
+    // App-mode: the generated preview reads `&app=1` to render the entry root raw
+    // (its own router + providers) instead of in component-isolation. Only append it
+    // when app-mode is active for THIS exact preview component — a switch to another
+    // component leaves _appModeEntryPreviewPath stale until clearAppMode runs, so the
+    // path match keeps the flag from leaking onto an unrelated component's URL.
+    if (this._appModeEntryPreviewPath && this._appModeEntryPreviewPath === previewComponent) {
+      url += '&app=1';
+    }
 
     console.log('[HyperIDE] Updating URL:', url);
 
@@ -1377,6 +1394,49 @@ export class PreviewPanel {
     callback: (entries: Array<{ level: string; args: string[]; timestamp: number }>) => void,
   ): void {
     this._onConsoleCaptureCallback = callback;
+  }
+  /**
+   * Activate app-mode for the SPA entry root. Records the entry's preview (iframe
+   * ?component=) path so `_updatePreviewUrl` appends `&app=1` for it, posts the
+   * `appMode` message so the webview shows the address bar with the code-derived route
+   * suggestions, then reloads the iframe with the app-mode URL. The extension host owns
+   * the activation flow (resolve entry → enableAppEntry → rebuild → here).
+   *
+   * @param entryPreviewPath sub-project-relative path of the entry root — the same form
+   *   that lands in the `?component=` URL and the preview registry key.
+   */
+  public setAppMode(payload: {
+    entryPreviewPath: string;
+    routeSuggestions: RouteSuggestion[];
+    currentRoute?: string;
+  }): void {
+    this._appModeEntryPreviewPath = payload.entryPreviewPath;
+    this._panel?.webview.postMessage({
+      type: 'appMode',
+      enabled: true,
+      entryPath: payload.entryPreviewPath,
+      routeSuggestions: payload.routeSuggestions,
+      currentRoute: payload.currentRoute ?? '/',
+    });
+    // Reload the iframe so the generated preview re-enters with `&app=1`.
+    this._updatePreviewUrl();
+  }
+  /**
+   * Tear app-mode down: forget the active entry path (so `_updatePreviewUrl` stops
+   * appending `&app=1`) and tell the webview to hide the address bar. Safe to call when
+   * app-mode was never on — a no-op `appMode:false` just keeps the bar hidden.
+   */
+  public clearAppMode(): void {
+    this._appModeEntryPreviewPath = null;
+    this._panel?.webview.postMessage({ type: 'appMode', enabled: false });
+  }
+  /**
+   * Public trigger for the otherwise-private iframe URL refresh. Lets the extension host
+   * reload the preview after a state change it owns (e.g. app-mode activation) without
+   * exposing the URL-building internals.
+   */
+  public refreshPreviewUrl(): void {
+    this._updatePreviewUrl();
   }
   /**
    * Send Go to Visual command to webview

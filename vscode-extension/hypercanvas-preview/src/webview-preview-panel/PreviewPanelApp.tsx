@@ -6,6 +6,7 @@
  */
 
 import { ComponentErrorOverlay, LoadingOverlay, NoComponentOverlay } from '@shared/components/overlays';
+import { AddressBar } from '@shared/components/preview-chrome';
 import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -88,6 +89,8 @@ function PreviewContent() {
     projectError,
     projectCapabilities,
     componentError,
+    appMode,
+    navigateAppRoute,
     clearComponentError,
     handleStartDevServer,
     autoStart,
@@ -246,6 +249,16 @@ function PreviewContent() {
   return (
     <div data-testid={TID.preview.surface} style={surfaceStyle}>
       {isReadonly && readonlyDismissed && <ReadonlyBadge cssSystem={projectCapabilities.cssSystem} />}
+      {appMode && (
+        <div style={addressBarRowStyle}>
+          <AddressBar
+            value={appMode.currentRoute}
+            suggestions={appMode.routeSuggestions}
+            onNavigate={navigateAppRoute}
+            testId={TID.preview.addressBar}
+          />
+        </div>
+      )}
       <div style={wrapperStyle}>
         <iframe
           // Remount on retry — recreating the element forces a fresh fetch
@@ -612,6 +625,19 @@ const wrapperStyle: React.CSSProperties = {
   position: 'relative',
   width: '100%',
   height: '100%',
+};
+
+// Floating top-centered address-bar row (app-mode only). Mirrors the ModeToolbar's
+// float-over-the-preview pattern so it never reflows the iframe; sits above overlays.
+const addressBarRowStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: 8,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  zIndex: 20,
+  display: 'flex',
+  justifyContent: 'center',
+  width: 'min(420px, calc(100% - 32px))',
 };
 
 const surfaceStyle: React.CSSProperties = {

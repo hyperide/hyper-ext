@@ -3,6 +3,7 @@ export const TID = {
   preview: {
     iframe: 'hyper-preview-iframe',
     surface: 'hyper-preview-surface',
+    addressBar: 'hyper-preview-address-bar',
     startServerButton: 'hyper-preview-start-server',
     unsupportedRoot: 'hyper-preview-unsupported',
     unsupportedFixButton: 'hyper-preview-unsupported-fix',

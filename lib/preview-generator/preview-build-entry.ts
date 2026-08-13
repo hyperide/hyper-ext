@@ -20,6 +20,14 @@ interface BuildEntryOptions {
   allowRouterShell?: boolean;
   entryRootPaths?: Set<string>;
   /**
+   * Project-relative paths (extension-stripped) that the caller wants previewed AS AN APP.
+   * A path in this set is the SPA entry root and is built as an app entry (`isAppEntry: true`):
+   * the provider-shell and router-shell exclusions are skipped so the routed root enters the
+   * registry, and app-mode renders it raw. This is the broad, discoverable counterpart to the
+   * narrow `App.web.tsx`-only `allowRouterShell` opt-in.
+   */
+  appEntryPaths?: Set<string>;
+  /**
    * The monorepo workspace root, when `projectRoot` is a re-rooted sub-project
    * (an app target whose dev server hosts the preview, HYP-420/HYP-441). A
    * cross-package library component selected from another package resolves to a
@@ -96,24 +104,36 @@ export async function buildEntry(
     return null;
   }
 
-  // Also skip extension-managed files (e.g. app/test-preview/page.tsx) to prevent
-  // self-referential imports that cause circular Client Component chains.
+  // Skip extension-managed files (e.g. app/test-preview/page.tsx) to prevent self-referential
+  // imports that cause circular Client Component chains. This also (correctly) excludes a
+  // vite-spa-jsx-router root that the patcher injected the preview route into: rendering such
+  // a root raw in app-mode would mount its <BrowserRouter> INSIDE the already-mounted app
+  // router (the preview iframe loads at the patched `/test-preview` route), a nested-router
+  // crash. App-mode therefore supports roots whose router lives OUTSIDE the patched file
+  // (the common case: router in main.tsx, a clean App.tsx) — those carry no marker.
   if (sourceCode.includes('@hyperide-managed')) {
     return null;
   }
 
+  // App-mode opt-in: the caller explicitly requested THIS entry root previewed as an app.
+  // Bypass the provider/router-shell exclusions below and mark the entry so the generator
+  // renders it raw (own router + providers run) instead of prop-injecting it.
+  const normalizedPath = componentPath.replace(/\.[jt]sx?$/, '');
+  const isAppEntry = options.appEntryPaths?.has(normalizedPath) ?? false;
+  const allowShell = options.allowRouterShell || isAppEntry;
+
   // HYP-546 — exclude SPA entry-root provider shells (the createRoot bootstrap
   // target wrapping the app in providers/router). They are not renderable
-  // components and pollute the preview registry. Gated by !allowRouterShell so
-  // an explicit web-app shell can still opt in.
+  // components and pollute the preview registry. Gated by !allowShell so
+  // an explicit web-app shell or app-mode target can still opt in.
   let isProviderShell = false;
   try {
     isProviderShell = detectProviderShell(sourceCode);
   } catch {
     isProviderShell = false;
   }
-  if (!options.allowRouterShell && isProviderShell && options.entryRootPaths) {
-    if (options.entryRootPaths.has(componentPath.replace(/\.[jt]sx?$/, ''))) {
+  if (!allowShell && isProviderShell && options.entryRootPaths) {
+    if (options.entryRootPaths.has(normalizedPath)) {
       return null;
     }
   }
@@ -127,7 +147,7 @@ export async function buildEntry(
     // These files wrap the whole app with a router provider and, when included alongside
     // the page components they import, cause a Vite/ESM temporal dead zone (TDZ) error
     // in the generated __canvas_preview__.tsx registry.
-    if (detectRouterShell(sourceCode) && !options.allowRouterShell) {
+    if (detectRouterShell(sourceCode) && !allowShell) {
       return null;
     }
 
@@ -205,6 +225,7 @@ export async function buildEntry(
     ...(syntheticSampleDefault && { syntheticSampleDefault }),
     ...(detectedExports && detectedExports.length > 0 && { detectedExports }),
     ...(declaredPropNames !== undefined && { declaredPropNames }),
+    ...(isAppEntry && { isAppEntry: true }),
   };
 }
 

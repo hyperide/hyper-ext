@@ -3,6 +3,7 @@ import {
   detectCompoundExports,
   detectExportStyle,
   detectProviderShell,
+  detectPushStateRouterShell,
   detectRouterShell,
   detectSSRHooks,
   escapeRegex,
@@ -396,6 +397,100 @@ describe('detectRouterShell', () => {
       export default App;
     `;
     expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns true for a data-router root (createBrowserRouter + RouterProvider)', () => {
+    // The common react-router v6.4+ data-router shape: the router config is built with
+    // createBrowserRouter and mounted via <RouterProvider>. This App owns the whole app's
+    // routing just like <BrowserRouter>, so it must qualify as a "preview as app" entry.
+    const source = `
+      import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+      const router = createBrowserRouter([
+        { path: '/', element: <Home /> },
+        { path: '/settings', element: <Settings /> },
+      ]);
+      export default function App() { return <RouterProvider router={router} />; }
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns FALSE for createHashRouter (hash routers are not pushState-navigable from the address bar)', () => {
+    // A hash router reads location.hash; the app-preview driver only navigates via
+    // pushState/location.pathname, so the address bar cannot drive it. We therefore do NOT mark a
+    // createHashRouter root as a "preview as app" candidate (hash-route nav is a deferred follow-up).
+    const source = `
+      import { createHashRouter, RouterProvider } from 'react-router-dom';
+      const router = createHashRouter([{ path: '/', element: <Home /> }]);
+      export default function App() { return <RouterProvider router={router} />; }
+    `;
+    expect(detectRouterShell(source)).toBe(false);
+  });
+
+  it('returns FALSE for a config-only router file (createBrowserRouter without a RouterProvider)', () => {
+    // A `router.tsx` that only builds + exports the config (no component, no <RouterProvider>) is
+    // NOT a previewable app root — rendering it raw would render nothing. The two-signal rule needs
+    // the provider too, so the builder alone does not flag it (this was the import-name overmatch).
+    const source = `
+      import { createBrowserRouter } from 'react-router-dom';
+      export const router = createBrowserRouter([{ path: '/', element: <Home /> }]);
+    `;
+    expect(detectRouterShell(source)).toBe(false);
+  });
+
+  it('returns true for createBrowserRouter imported from react-router (v6.4+ package split)', () => {
+    const source = `
+      import { createBrowserRouter, RouterProvider } from 'react-router';
+      const router = createBrowserRouter([{ path: '/', element: <Home /> }]);
+      export default function App() { return <RouterProvider router={router} />; }
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns false for RouterProvider ALONE (a leaf with a createMemoryRouter-backed sample)', () => {
+    // The data-router signal is the CONFIG BUILDER (createBrowserRouter/createHashRouter), not
+    // RouterProvider — because createMemoryRouter samples are also mounted via RouterProvider.
+    // A leaf component that isolates its SampleDefault in createMemoryRouter + RouterProvider must
+    // NOT be flagged an app shell (rendering it raw would drop its sample's router context).
+    const leafWithRouterSample = `
+      import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+      export default function FillPicker() { return <div />; }
+      export const SampleDefault = () => {
+        const router = createMemoryRouter([{ path: '/', element: <FillPicker /> }]);
+        return <RouterProvider router={router} />;
+      };
+    `;
+    expect(detectRouterShell(leafWithRouterSample)).toBe(false);
+
+    const memoryOnly = `
+      import { createMemoryRouter } from 'react-router-dom';
+      export default function FillPicker() { return <div />; }
+    `;
+    expect(detectRouterShell(memoryOnly)).toBe(false);
+
+    const routerProviderOnly = `
+      import { RouterProvider } from 'react-router-dom';
+      export default function Widget() { return <div />; }
+    `;
+    expect(detectRouterShell(routerProviderOnly)).toBe(false);
+  });
+
+  it('KNOWN BOUNDARY: a leaf using a REAL createBrowserRouter + RouterProvider in a sample is flagged (rare)', () => {
+    // The two-signal data-router rule (browser/hash BUILDER + RouterProvider in one file) is import-
+    // level, so it cannot tell apart "both at the app root" from "both inside SampleDefault". This
+    // residual edge — a leaf wrapping its sample in a REAL createBrowserRouter (not the isolation
+    // idiom createMemoryRouter, which carries no browser/hash builder and is correctly NOT flagged) —
+    // is a code smell and near-nonexistent in practice (a real BrowserRouter in a sample hijacks the
+    // page URL). Distinguishing it needs call-graph analysis (does the builder feed a ROOT-rendered
+    // RouterProvider?) and is deferred. The realistic createMemoryRouter sample is handled above.
+    const leafWithBrowserRouterSample = `
+      import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+      export default function Widget() { return <div />; }
+      export const SampleDefault = () => {
+        const router = createBrowserRouter([{ path: '/', element: <Widget /> }]);
+        return <RouterProvider router={router} />;
+      };
+    `;
+    expect(detectRouterShell(leafWithBrowserRouterSample)).toBe(true);
   });
 
   it('returns false for plain page component that only imports Link', () => {
@@ -808,5 +903,70 @@ export default memo(Card);`;
       const source = `export default function Button({ variant, children }) { return <button>{children}</button>; }`;
       expect(extractDeclaredPropNames(source, 'Button', 'default-named')).toEqual(['variant', 'children']);
     });
+  });
+});
+
+describe('detectPushStateRouterShell', () => {
+  // The NARROW app-mode-candidacy detector: only routers the address-bar driver can drive via
+  // pushState/popstate. Distinct from detectRouterShell, which stays broad for registry exclusion.
+  it('returns true for BrowserRouter (pushState-navigable)', () => {
+    const source = `
+      import { BrowserRouter, Routes, Route } from 'react-router-dom';
+      export default () => <BrowserRouter><Routes><Route path="/" element={<div />} /></Routes></BrowserRouter>;
+    `;
+    expect(detectPushStateRouterShell(source)).toBe(true);
+  });
+
+  it('returns true for a data-router root (createBrowserRouter + RouterProvider)', () => {
+    const source = `
+      import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+      const router = createBrowserRouter([{ path: '/', element: <Home /> }]);
+      export default function App() { return <RouterProvider router={router} />; }
+    `;
+    expect(detectPushStateRouterShell(source)).toBe(true);
+  });
+
+  it('keeps true when BrowserRouter coexists with StaticRouter (SSR Bulka pattern)', () => {
+    const source = `
+      import { BrowserRouter } from 'react-router-dom';
+      import { StaticRouter } from 'react-router-dom/server';
+      export default () => (typeof window !== 'undefined' ? <BrowserRouter /> : <StaticRouter location="/" />);
+    `;
+    expect(detectPushStateRouterShell(source)).toBe(true);
+  });
+
+  it('returns FALSE for HashRouter (driver only touches location.pathname, never hash)', () => {
+    const source = `
+      import { HashRouter } from 'react-router-dom';
+      export default function App() { return <HashRouter><div /></HashRouter>; }
+    `;
+    // detectRouterShell would (correctly, for registry exclusion) say true here — the NARROW gate
+    // must say false so app-mode is not offered for a router the address bar cannot drive.
+    expect(detectRouterShell(source)).toBe(true);
+    expect(detectPushStateRouterShell(source)).toBe(false);
+  });
+
+  it('returns FALSE for StaticRouter alone (non-navigable SSR router)', () => {
+    const source = `
+      import { StaticRouter } from 'react-router-dom/server';
+      export default () => <StaticRouter location="/"><div /></StaticRouter>;
+    `;
+    expect(detectPushStateRouterShell(source)).toBe(false);
+  });
+
+  it('returns FALSE for React Navigation (NavigationContainer — native, not pushState)', () => {
+    const source = `
+      import { NavigationContainer } from '@react-navigation/native';
+      export default () => <NavigationContainer><div /></NavigationContainer>;
+    `;
+    expect(detectPushStateRouterShell(source)).toBe(false);
+  });
+
+  it('returns FALSE for a config-only createBrowserRouter (no RouterProvider)', () => {
+    const source = `
+      import { createBrowserRouter } from 'react-router-dom';
+      export const router = createBrowserRouter([{ path: '/', element: <Home /> }]);
+    `;
+    expect(detectPushStateRouterShell(source)).toBe(false);
   });
 });

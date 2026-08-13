@@ -1,6 +1,64 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { detectPreviewPrefix } from '@shared/components/preview-chrome';
 import { authFetch } from '@/utils/authFetch';
 import type { CanvasComposition, CanvasMode } from '../../../shared/types/canvas';
+
+/**
+ * Reboot the preview iframe to the canonical proxied URL, carrying the current in-app route.
+ *
+ * The iframe's declarative `src` is always `/project-preview/<id>/test-preview?…` — but in app-mode
+ * `history-bridge` only the SRC stays proxied; the iframe DOCUMENT has navigated to an unprefixed
+ * route (e.g. `/settings?tab=1#x`). We capture that current route and reboot the canonical src with
+ * `route=<current>` so the boot driver restores it (a plain `iframe.src = iframe.src` would reboot
+ * to `/`, losing the route). Returns the URL it assigned (for tests), or null if no proxy prefix.
+ */
+function rebootOnProxy(iframe: HTMLIFrameElement, currentRoute: string): string | null {
+  try {
+    const url = new URL(iframe.src, window.location.origin);
+    const prefix = detectPreviewPrefix(url.pathname);
+    if (!prefix) return null; // off-proxy / ext — no canonical preview URL to rebuild
+    url.pathname = `${prefix}/test-preview`;
+    if (currentRoute && currentRoute !== '/') url.searchParams.set('route', currentRoute);
+    iframe.src = url.toString();
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reload the preview iframe, staying ON the proxy.
+ *
+ * Normally `contentWindow.location.reload()` re-requests the iframe's CURRENT URL — correct while
+ * it's on the proxy. But in app-mode `history-bridge` the iframe document navigated to an UNPREFIXED
+ * app route, so `location.reload()` would request that route off the proxy and break. In that case
+ * we reboot the canonical proxied src carrying `route=<current>` (see rebootOnProxy).
+ */
+export function reloadPreviewIframe(iframe: HTMLIFrameElement): void {
+  let offProxyRoute: string | null = null;
+  try {
+    const cw = iframe.contentWindow;
+    if (cw && detectPreviewPrefix(cw.location.pathname) === '') {
+      offProxyRoute = cw.location.pathname + cw.location.search + cw.location.hash;
+    }
+  } catch {
+    // cross-origin read blocked — assume on-proxy and use the cheap reload below.
+    offProxyRoute = null;
+  }
+  if (offProxyRoute !== null) {
+    // Navigated off the prefix (history-bridge) → reboot the canonical proxied URL with the route.
+    if (rebootOnProxy(iframe, offProxyRoute) === null) {
+      iframe.src = iframe.src; // eslint-disable-line no-self-assign -- fallback reload
+    }
+    return;
+  }
+  try {
+    iframe.contentWindow?.location.reload();
+  } catch {
+    // cross-origin reload blocked → fall back to re-assigning the canonical src.
+    iframe.src = iframe.src; // eslint-disable-line no-self-assign -- reassigning src reloads the iframe
+  }
+}
 
 interface UseIframeCanvasParams {
   projectId?: string;
@@ -105,7 +163,7 @@ export function useIframeCanvas({
     console.log('[IframeCanvas] Reloading iframe, retry count:', retryCount);
     setLoading(true);
     setError(null);
-    iframe.contentWindow.location.reload();
+    reloadPreviewIframe(iframe);
     setRetryCount((prev) => prev + 1);
   }, [retryCount, serverOffline, iframeRef]);
 
@@ -285,7 +343,7 @@ export function useIframeCanvas({
         console.log('[IframeCanvas] Server back online, reloading iframe');
         setError(null);
         setLoading(true);
-        iframeRef.current?.contentWindow?.location.reload();
+        if (iframeRef.current) reloadPreviewIframe(iframeRef.current);
       }
     }
   }, [serverOffline, checkForGatewayError, error, iframeRef]);

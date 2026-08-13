@@ -103,6 +103,15 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('};');
   lines.push('');
 
+  // appEntrySet — paths previewable AS AN APP (rendered raw, own router/providers run).
+  // app-mode looks these up here so it can skip prop-injection/sample-wrapping for them.
+  lines.push('const appEntrySet = new Set<string>([');
+  for (const entry of registryEntries) {
+    if (entry.isAppEntry) lines.push(`  ${jsStr(entry.componentPath)},`);
+  }
+  lines.push(']);');
+  lines.push('');
+
   // sampleRenderMap
   lines.push('const sampleRenderMap: Record<string, React.FC> = {');
   for (const entry of registryEntries) {
@@ -186,6 +195,8 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push(...buildComponentSuccessSignal());
   lines.push('');
   lines.push(...buildComponentMissingSignal());
+  lines.push('');
+  lines.push(...buildAppRouteDriver());
   lines.push('');
 
   // CanvasPreview component
@@ -276,6 +287,174 @@ function buildComponentMissingSignal(): string[] {
     "    window.parent.postMessage({ type: 'hypercanvas:componentMissing', componentPath }, '*');",
     '  }, [componentPath]);',
     '  return null;',
+    '}',
+  ];
+}
+
+/**
+ * The strategy-aware navigation PRIMITIVE emitted into the preview. Given an UNPREFIXED in-app
+ * path (`/settings`), it drives the previewed app's OWN router to match that route under the SaaS
+ * proxy prefix `/project-preview/<id>/…`. The strategy is read from the iframe URL's `?nav=`:
+ *
+ *   - 'history-bridge' (default): put the UNPREFIXED path into window.location using the bridge's
+ *     ORIGINAL (un-patched) pushState (`window.__hyperOriginalPushState`), so the proxy bridge does
+ *     NOT re-prefix it. A no-basename <BrowserRouter> then reads `/settings` and matches. Assets/HMR
+ *     keep working because the bridge's fetch/WS patches use a FROZEN prefix, not window.location.
+ *   - 'basename': the router runs WITH `basename=<prefix>`, so it expects the PREFIXED path in
+ *     location. Use the NORMAL (patched) pushState — it prefixes `/settings` → location becomes
+ *     `/project-preview/<id>/settings`, which the basename router strips back to `/settings`.
+ *   - 'src-swap': host-driven hard nav owns inter-page moves; this primitive only runs for the BOOT
+ *     route, where it behaves like history-bridge (unprefixed) to match without a basename.
+ *
+ * Outside the proxy (the VS Code ext: no prefix, no bridge globals) every branch degrades to a
+ * plain `history.pushState(route)` — there is nothing to prefix, so the router matches directly.
+ *
+ * SYNC: this emits an inline JS MIRROR of `applyPreviewRoute` in
+ * shared/components/preview-chrome/nav-strategy.ts (the iframe bundle can't import shared code at
+ * runtime). The shared function is unit-tested against a real <BrowserRouter>; keep the two in
+ * lockstep when changing the navigation semantics.
+ */
+function buildNavPrimitive(): string[] {
+  return [
+    'function _hyperNavStrategy(): string {',
+    '  // CACHE the strategy on first read. _driveInitialAppRoute navigates immediately and DROPS the',
+    '  // query string (the boot route has no `?nav=`), so a later read of window.location.search',
+    '  // would lose `nav=` and wrongly fall back to history-bridge — breaking e.g. a basename router',
+    '  // on the second navigation. Memoize on a window global so it survives the history rewrite.',
+    '  const w = window as unknown as { __hyperNavStrategy?: string };',
+    '  if (w.__hyperNavStrategy) return w.__hyperNavStrategy;',
+    '  // Whitelist + default MUST match the bridge (server/proxy-path-bridge.js VALID_NAV) so a bogus',
+    '  // `nav=` is normalized the same on both sides — otherwise the bridge prefixes history while we',
+    "  // navigate unprefixed (or vice-versa) and the app's own <Link> breaks the no-basename router.",
+    '  const VALID: Record<string, number> = { basename: 1, "history-bridge": 1, "src-swap": 1 };',
+    '  let strategy = "history-bridge";',
+    '  try {',
+    "    const raw = new URLSearchParams(window.location.search).get('nav');",
+    '    // Object.prototype.hasOwnProperty (not a bare VALID[raw] lookup) so `nav=toString` etc.',
+    "    // can't pass as valid via an inherited key — must match the bridge's Object.hasOwn check.",
+    '    strategy = raw && Object.prototype.hasOwnProperty.call(VALID, raw) ? raw : "history-bridge";',
+    '  } catch { /* malformed search — keep default */ }',
+    '  w.__hyperNavStrategy = strategy;',
+    '  return strategy;',
+    '}',
+    '',
+    'function _hyperApplyRoute(route: string): void {',
+    '  // route is an UNPREFIXED in-app path (e.g. "/settings"). Push it so the app router matches.',
+    "  const target = route.startsWith('/') ? route : '/' + route;",
+    '  const w = window as unknown as {',
+    '    __hyperOriginalPushState?: (s: unknown, t: string, u: string) => void;',
+    '    __hyperPreviewProxyPrefix?: string;',
+    '  };',
+    '  const strategy = _hyperNavStrategy();',
+    '  if (strategy === "basename") {',
+    '    // Router has basename=<prefix> → it wants the PREFIXED path. The PATCHED pushState',
+    '    // prefixes for us; the router strips the basename back off to match. Compare path AND',
+    '    // search AND hash so a query/hash-only change (/settings?tab=1 or /settings#x → /settings)',
+    '    // is not dropped as a no-op (stale query/hash would linger).',
+    '    const cur = window.location.pathname.replace(w.__hyperPreviewProxyPrefix || "", "") + window.location.search + window.location.hash;',
+    '    if (cur !== target) {',
+    "      window.history.pushState({}, '', target);",
+    "      window.dispatchEvent(new PopStateEvent('popstate'));",
+    '    }',
+    '    return;',
+    '  }',
+    '  // history-bridge / src-swap boot: put the UNPREFIXED path into location WITHOUT re-prefixing,',
+    '  // using the bridge-exposed original pushState when present (SaaS), else plain (ext).',
+    '  const push = w.__hyperOriginalPushState || window.history.pushState.bind(window.history);',
+    '  if (window.location.pathname + window.location.search + window.location.hash !== target) {',
+    "    push({}, '', target);",
+    "    window.dispatchEvent(new PopStateEvent('popstate'));",
+    '  }',
+    '}',
+  ];
+}
+
+/**
+ * App-mode shared bridge — rendered in BOTH app-mode branches. Two responsibilities:
+ *   1. Install the `hypercanvas:navigateRoute` listener at the WINDOW level (idempotent global,
+ *      NOT a React effect) so it SURVIVES any component unmount (app-mode B navigates away from
+ *      `/test-preview`, unmounting the preview tree; the listener must outlive it).
+ *   2. On mount, drive the app router OFF the `/test-preview` mount path to a real route (the
+ *      `?route=` address, or `/`). Both modes need this: in app-mode A the raw app's
+ *      BrowserRouter would otherwise see `/test-preview` and match no route; in app-mode B it is
+ *      how the patched app renders its real page.
+ * All navigation goes through `_hyperApplyRoute` (strategy-aware); a no-op for apps with no router.
+ */
+function buildAppRouteDriver(): string[] {
+  return [
+    ...buildNavPrimitive(),
+    '',
+    "// Report the app's CURRENT route to the host so the address bar stays in sync when the user",
+    '// navigates INSIDE the preview (clicks an app <Link>, browser back/forward), not just via the bar.',
+    '// The route is reported UNPREFIXED (strip the proxy prefix) since that is what the bar shows.',
+    'function _reportRouteToHost() {',
+    '  try {',
+    '    const w = window as unknown as { __hyperPreviewProxyPrefix?: string };',
+    '    const prefix = w.__hyperPreviewProxyPrefix || "";',
+    '    let path = window.location.pathname;',
+    '    if (prefix && path.startsWith(prefix)) path = path.slice(prefix.length) || "/";',
+    '    if (path.indexOf("/test-preview") === 0) return; // still on the mount path — not a real route',
+    '    // Include the hash so `<Link to="/settings#billing">` reports the full address (the bar would',
+    '    // otherwise show just /settings).',
+    '    const full = path + window.location.search + window.location.hash;',
+    "    window.parent.postMessage({ type: 'hypercanvas:appRouteChanged', route: full }, '*');",
+    '  } catch { /* no parent / cross-origin — nothing to report */ }',
+    '}',
+    '',
+    'function _installPersistentRouteListener() {',
+    '  const w = window as unknown as { __hyperRouteNavInstalled?: boolean };',
+    '  if (w.__hyperRouteNavInstalled) return;',
+    '  w.__hyperRouteNavInstalled = true;',
+    '  window.addEventListener("message", function (e: MessageEvent) {',
+    '    if (e.source !== window.parent) return;',
+    "    if (e.data?.type !== 'hypercanvas:navigateRoute') return;",
+    "    const route = typeof e.data.route === 'string' ? e.data.route : null;",
+    '    if (!route) return;',
+    '    try { _hyperApplyRoute(route); }',
+    '    catch { /* malformed address — free text is allowed but may not parse */ }',
+    '  });',
+    '  // Report app-initiated navigation back to the host. popstate covers back/forward; we also wrap',
+    '  // pushState/replaceState (React Router <Link> calls those WITHOUT firing popstate) to report.',
+    "  window.addEventListener('popstate', function () { _reportRouteToHost(); });",
+    '  const hist = window.history as unknown as { pushState: (...a: unknown[]) => void; replaceState: (...a: unknown[]) => void };',
+    '  const origPush = hist.pushState.bind(window.history);',
+    '  const origReplace = hist.replaceState.bind(window.history);',
+    '  hist.pushState = function (...args: unknown[]) { const r = origPush(...args); _reportRouteToHost(); return r; };',
+    '  hist.replaceState = function (...args: unknown[]) { const r = origReplace(...args); _reportRouteToHost(); return r; };',
+    '}',
+    '',
+    'function _driveInitialAppRoute() {',
+    '  try {',
+    '    const params = new URLSearchParams(window.location.search);',
+    "    const requested = params.get('route');",
+    '    if (requested && requested.startsWith("/")) { _hyperApplyRoute(requested); return; }',
+    '    // No explicit ?route=. Only drive OFF the `/test-preview` mount path (or an unprefixed root)',
+    '    // to "/". If the app is ALREADY on a real route — e.g. the user navigated to "/settings" and',
+    '    // the preview later remounts (HMR / sample switch / retry) and reruns this bridge — do NOT',
+    '    // shove it back to "/" (that would fight the address bar, which still shows /settings).',
+    '    const w = window as unknown as { __hyperPreviewProxyPrefix?: string };',
+    '    const prefix = w.__hyperPreviewProxyPrefix || "";',
+    '    const path = prefix && window.location.pathname.startsWith(prefix)',
+    '      ? (window.location.pathname.slice(prefix.length) || "/")',
+    '      : window.location.pathname;',
+    '    const onMountPath = path === "/" || path === "" || path.indexOf("/test-preview") === 0;',
+    '    if (onMountPath) _hyperApplyRoute("/");',
+    '  } catch { /* app has no history router — nothing to drive */ }',
+    '}',
+    '',
+    'function _AppModeBridge() {',
+    '  React.useEffect(() => {',
+    '    _installPersistentRouteListener();',
+    '    _driveInitialAppRoute();',
+    '  }, []);',
+    '  return null;',
+    '}',
+    '',
+    'function _AppRouteDriver() {',
+    '  return (<>',
+    '    <_AppModeBridge />',
+    "    <div style={{ padding: 20, fontFamily: 'sans-serif', color: '#888' }}>Loading app…</div>",
+    '  </>);',
     '}',
   ];
 }
@@ -384,19 +563,49 @@ function buildRetryRenderState(): string[] {
   ];
 }
 
+/**
+ * App-mode route navigation. The address bar (host webview/canvas) posts
+ * `hypercanvas:navigateRoute` with an in-app path. We drive the previewed app's OWN router
+ * (BrowserRouter / createBrowserRouter / Next) via `_hyperApplyRoute`, which is strategy-aware
+ * (history-bridge / basename / src-swap) and re-reads `window.location` by firing `popstate`.
+ * Router-agnostic and a no-op for apps without a router. Component-mode never receives the
+ * message, so this stays inert outside app-mode.
+ */
+function buildRouteNavigationEffect(): string[] {
+  return [
+    '  React.useEffect(() => {',
+    '    function onNavigateRoute(e: MessageEvent) {',
+    '      // Only the embedding host (the preview panel / canvas) may drive the app router.',
+    '      // Reject messages from any other sender (a nested iframe, an injected script) so an',
+    '      // embedded page in the previewed app cannot pushState the top-level app around.',
+    '      if (e.source !== window.parent) return;',
+    "      if (e.data?.type !== 'hypercanvas:navigateRoute') return;",
+    "      const route = typeof e.data.route === 'string' ? e.data.route : null;",
+    '      if (!route) return;',
+    '      try { _hyperApplyRoute(route); }',
+    '      catch { /* ignore malformed addresses — free text is allowed but may not parse */ }',
+    '    }',
+    "    window.addEventListener('message', onNavigateRoute);",
+    "    return () => window.removeEventListener('message', onNavigateRoute);",
+    '  }, []);',
+    '',
+  ];
+}
+
 function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig, ssrRoutes?: Set<string>): string[] {
   return [
     'interface CanvasPreviewProps {',
     '  component?: string | null;',
-    "  mode?: 'single' | 'multi' | null;",
+    "  mode?: 'single' | 'multi' | 'app' | null;",
     '}',
     '',
     'export default function CanvasPreview({ component: componentProp, mode: modeProp }: CanvasPreviewProps = {}) {',
     '  const [componentPath, setComponentPath] = React.useState<string | null>(componentProp ?? null);',
-    "  const [mode, setMode] = React.useState<'single' | 'multi'>(modeProp ?? 'single');",
+    "  const [mode, setMode] = React.useState<'single' | 'multi' | 'app'>(modeProp ?? 'single');",
     '',
     ...buildGeneratedPropsState(),
     ...buildRetryRenderState(),
+    ...buildRouteNavigationEffect(),
     '  React.useEffect(() => {',
     '    if (componentProp != null) setComponentPath(componentProp);',
     '  }, [componentProp]);',
@@ -407,7 +616,8 @@ function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig, ssrRoute
     "    const urlComponent = params.get('component');",
     '    if (urlComponent) setComponentPath(urlComponent);',
     "    const urlMode = params.get('mode');",
-    "    if (urlMode) setMode(urlMode as 'single' | 'multi');",
+    "    if (urlMode === 'single' || urlMode === 'multi' || urlMode === 'app') setMode(urlMode);",
+    "    if (params.get('app') === '1') setMode('app');",
     '  }, []);',
     '',
     '  React.useEffect(() => {',
@@ -435,11 +645,12 @@ function buildCanvasPreviewNextPages(providerWrap?: ProviderWrapConfig, ssrRoute
   return [
     'export default function CanvasPreview() {',
     '  const router = useRouter();',
-    "  const mode = router.query.mode as 'single' | 'multi';",
+    "  const mode = (router.query.app === '1' ? 'app' : router.query.mode) as 'single' | 'multi' | 'app';",
     '  const [componentPath, setComponentPath] = React.useState(router.query.component as string);',
     '',
     ...buildGeneratedPropsState(),
     ...buildRetryRenderState(),
+    ...buildRouteNavigationEffect(),
     '  React.useEffect(() => {',
     '    if (router.query.component) setComponentPath(router.query.component as string);',
     '  }, [router.query.component]);',
@@ -502,6 +713,28 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '  // HYP-649: re-keying the ErrorBoundary on retryCount (or componentPath) remounts',
     '  // it with fresh state, clearing a stale error after the source is fixed.',
     '  const errorBoundaryKey = `${componentPath}-${retryCount}`;',
+    '',
+    "  if (mode === 'app') {",
+    '    // App-mode A — registerable entry root (router via RouterProvider / createBrowserRouter,',
+    '    // or a clean App.tsx whose router lives in main.tsx): render it RAW. Its own router +',
+    '    // providers run, so the address bar drives them via the route-navigation effect above.',
+    '    // No provider wrap, no prop injection, no sample, full-bleed.',
+    '    if (appEntrySet.has(componentPath) && Component) {',
+    '      return (',
+    '        <ComponentErrorBoundary key={errorBoundaryKey} componentPath={componentPath}>',
+    '          <_AppModeBridge />',
+    '          <Component />',
+    '          <_ComponentSuccessSignal componentPath={componentPath} />',
+    '        </ComponentErrorBoundary>',
+    '      );',
+    '    }',
+    '    // App-mode B — the entry root is the vite-spa-jsx-router file the patcher injected this',
+    "    // very `/test-preview` route into, so it can't be rendered raw (nested router). But the",
+    '    // PATCHED app is already mounted around us. Drive its OWN router off `/test-preview` to a',
+    '    // real route (the address, default `/`); the app then renders its real page, unmounting',
+    '    // this preview. The route-navigation effect handles subsequent address-bar navigation.',
+    '    return <_AppRouteDriver />;',
+    '  }',
     '',
     "  if (mode !== 'multi') {",
     '    const SampleDefault = sampleRenderMap[componentPath];',

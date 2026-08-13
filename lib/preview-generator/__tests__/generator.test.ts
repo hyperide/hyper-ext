@@ -336,6 +336,81 @@ describe('generatePreviewContent', () => {
     });
   });
 
+  describe('app-mode route driver (preview-as-app navigation)', () => {
+    const APP_ENTRY: PreviewComponentEntry = {
+      componentPath: 'src/App',
+      componentName: 'App',
+      exportStyle: 'default-named',
+      sampleExports: [],
+      importPath: './App',
+      isAppEntry: true,
+    };
+
+    it('emits the strategy-aware navigation primitive and keeps the file valid TS/TSX', () => {
+      const content = generatePreviewContent([APP_ENTRY]);
+      // The strategy-aware primitive + its three branches must be present.
+      expect(content).toContain('function _hyperApplyRoute(');
+      expect(content).toContain('function _hyperNavStrategy(');
+      expect(content).toContain('__hyperOriginalPushState'); // history-bridge: original (un-prefixing) push
+      expect(content).toContain('strategy === "basename"'); // basename branch
+      // The app entry is registered so app-mode renders it raw.
+      expect(content).toContain("const appEntrySet = new Set<string>([\n  'src/App',\n]);");
+      // Generated source must still parse.
+      expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
+    });
+
+    it('routes both the persistent listener and the React effect through _hyperApplyRoute', () => {
+      const content = generatePreviewContent([APP_ENTRY]);
+      // Both navigation paths delegate to the shared primitive (no hardcoded raw pushState left).
+      const applyCalls = content.split('_hyperApplyRoute(route)').length - 1;
+      expect(applyCalls).toBeGreaterThanOrEqual(2);
+    });
+
+    it('CACHES the nav strategy so it survives the boot route rewrite (query-string drop)', () => {
+      const content = generatePreviewContent([APP_ENTRY]);
+      // _driveInitialAppRoute navigates immediately and drops `?nav=`; the strategy must be memoized
+      // on a window global before that, so a later navigate (e.g. basename) doesn't fall back to
+      // history-bridge. The driver reads/writes `__hyperNavStrategy`.
+      expect(content).toContain('__hyperNavStrategy');
+      expect(content).toContain('if (w.__hyperNavStrategy) return w.__hyperNavStrategy;');
+    });
+
+    it('the boot driver only drives off the mount path — it does not shove a navigated route back to /', () => {
+      const content = generatePreviewContent([APP_ENTRY]);
+      // _driveInitialAppRoute must NO-OP when the app is already on a real route (a remount/HMR after
+      // the user navigated to /settings must not reset to "/"). It only drives "/" from the
+      // /test-preview mount path (or the unprefixed root).
+      expect(content).toContain('const onMountPath =');
+      expect(content).toContain('path.indexOf("/test-preview") === 0');
+      expect(content).toContain('if (onMountPath) _hyperApplyRoute("/");');
+      expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
+    });
+
+    it('reports app-initiated navigation back to the host (keeps the address bar in sync)', () => {
+      const content = generatePreviewContent([APP_ENTRY]);
+      // The driver wraps pushState/replaceState + listens to popstate to post the UNPREFIXED route
+      // to the host on in-preview navigation (app <Link> / back-forward), so the bar follows.
+      expect(content).toContain('function _reportRouteToHost()');
+      expect(content).toContain("'hypercanvas:appRouteChanged'");
+      expect(content).toContain("window.addEventListener('popstate', function () { _reportRouteToHost(); });");
+      expect(content).toContain('hist.pushState = function');
+      // The reported route includes the hash so `<Link to="/x#frag">` updates the bar fully.
+      expect(content).toContain('path + window.location.search + window.location.hash');
+      expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
+    });
+
+    it('normalizes the nav strategy with a hasOwnProperty whitelist (matches the bridge; bogus/inherited → default)', () => {
+      const content = generatePreviewContent([APP_ENTRY]);
+      // The driver and the bridge MUST whitelist/default `nav=` identically so a bogus value is
+      // treated the same on both sides (else the app's own <Link> re-prefixes and breaks matching).
+      // Uses Object.prototype.hasOwnProperty (not a bare VALID[raw]) so `nav=toString` can't pass.
+      expect(content).toContain(
+        'const VALID: Record<string, number> = { basename: 1, "history-bridge": 1, "src-swap": 1 };',
+      );
+      expect(content).toContain('Object.prototype.hasOwnProperty.call(VALID, raw)');
+    });
+  });
+
   it('should generate default import for default export with samples', () => {
     const entries: PreviewComponentEntry[] = [
       {

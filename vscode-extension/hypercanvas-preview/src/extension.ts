@@ -421,6 +421,24 @@ export function activate(context: vscode.ExtensionContext) {
   // and back can retry.
   const providerErrorAttempts = new Set<string>();
 
+  // App-mode (app-preview address bar): the sub-project-relative preview path of the
+  // entry root currently being previewed AS AN APP, or null when off. Tracked here so a
+  // component switch can disable that exact entry on the (possibly re-rooted) preview
+  // manager and tell the panel to hide the address bar. The previewAsApp command sets it;
+  // teardown on component select / the command itself for a new entry clears the old one.
+  let activeAppModeEntry: { previewPath: string; manager: PreviewFileManager } | null = null;
+
+  // Disable any active app-mode entry on its owning manager and hide the address bar.
+  // Idempotent: a no-op when app-mode was never on. Used by component-switch teardown
+  // and by the previewAsApp command before activating a fresh entry.
+  const clearActiveAppMode = (): void => {
+    if (activeAppModeEntry) {
+      activeAppModeEntry.manager.disableAppEntry(activeAppModeEntry.previewPath);
+      activeAppModeEntry = null;
+    }
+    previewPanel?.clearAppMode();
+  };
+
   if (devServerManager) {
     aiChatProvider.setDevServerManager(devServerManager);
 
@@ -719,6 +737,65 @@ export function activate(context: vscode.ExtensionContext) {
     reroot: (projectRoot) => rerootPreviewPipeline(projectRoot),
   });
 
+  // Resolve the component to preview as an app: the currently-selected one. Returns its
+  // sub-project-relative preview path (the ?component= form / preview-registry key) and
+  // repo-relative path (astBridge identity), re-rooting the pipeline to the owning target
+  // first so previewManager points at the right sub-project. Null when nothing is selected.
+  const resolveAppEntryTarget = async (): Promise<{ previewPath: string; repoPath: string } | null> => {
+    const componentPath = stateHub?.state.currentComponent?.path;
+    if (!componentPath) return null;
+    syncWorkspaceRuntime();
+    const repoRoot = workspaceFolderRoot();
+    const absComponent = isAbsolute(componentPath) ? componentPath : join(repoRoot, componentPath);
+    const { stale } = await resolveAndRerootToComponent(absComponent);
+    if (stale) return null;
+    return {
+      previewPath: relative(activeWorkspaceRoot, absComponent),
+      repoPath: relative(repoRoot, absComponent),
+    };
+  };
+
+  // Hyper: Preview as App — render the active entry root AS AN APP (its own router +
+  // providers) and show the address bar. Registered here (not in registerCommands) because
+  // it closes over previewManager/activeWorkspaceRoot/the reroot helpers, which live in
+  // this activate() scope and are reassigned on a monorepo sub-project switch.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.previewAsApp', async () => {
+      const target = await resolveAppEntryTarget();
+      if (!target) {
+        void vscode.window.showWarningMessage('HyperIDE: select a component first to preview it as an app.');
+        return;
+      }
+      // Gate to real app entries: only a detected SPA root or a router/provider shell can be
+      // previewed as an app. Block leaf components so they can't be rendered raw (which would
+      // bypass their sample/fallback props).
+      const isCandidate = await previewManager.isAppEntryCandidate(target.previewPath).catch(() => false);
+      if (!isCandidate) {
+        void vscode.window.showWarningMessage(
+          'HyperIDE: this file is not an app entry (no router/provider root). Open your App.tsx / routed root to preview as an app.',
+        );
+        return;
+      }
+      // Switch the active entry: drop any previous app-mode (possibly on another manager)
+      // before marking this one, so only one entry is ever flagged isAppEntry at a time.
+      clearActiveAppMode();
+      previewManager.enableAppEntry(target.previewPath);
+      activeAppModeEntry = { previewPath: target.previewPath, manager: previewManager };
+      try {
+        // Rebuild so the entry is generated with isAppEntry (not excluded as a shell).
+        await previewManager.forceRefreshComponent(target.previewPath);
+        await devServerManager?.awaitRecompile();
+        const routeSuggestions = await previewManager.getRouteSuggestions();
+        // setAppMode posts the `appMode` message AND reloads the iframe with `&app=1`.
+        previewPanel?.setAppMode({ entryPreviewPath: target.previewPath, routeSuggestions, currentRoute: '/' });
+      } catch (err) {
+        clearActiveAppMode();
+        const msg = err instanceof Error ? err.message : String(err);
+        void vscode.window.showErrorMessage(`HyperIDE: failed to preview as app: ${msg}`);
+      }
+    }),
+  );
+
   /**
    * Make the dev-server start path monorepo-aware for the start-BEFORE-select gap
    * (HYP-431). The designed flow re-roots the preview/dev axis on component select
@@ -919,6 +996,11 @@ export function activate(context: vscode.ExtensionContext) {
     previewAbortController = ac;
     componentMissingRetries.clear();
     providerErrorAttempts.clear();
+    // A genuine component switch always exits app-mode: the address bar belongs to the
+    // previewed app entry, not to an ordinary component. Disable the previous entry on
+    // its owning manager and hide the bar before the normal component-preview pipeline
+    // runs (which rebuilds without the isAppEntry flag and posts a plain ?component= URL).
+    clearActiveAppMode();
 
     // Two roots coexist (HYP-420):
     //  - relativePath: relative to the active sub-project root → drives previewManager

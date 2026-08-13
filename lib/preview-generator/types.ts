@@ -13,6 +13,13 @@ export interface PreviewComponentEntry {
   syntheticSampleDefault?: ContainerSampleJsxBody;
   detectedExports?: string[];
   declaredPropNames?: string[];
+  /**
+   * The SPA entry root (the routed/provider app shell mounted by main.tsx). Previewed
+   * AS AN APP in app-mode: rendered raw (own router + providers run), no prop injection or
+   * sample wrapping. Normally these are excluded as non-renderable shells (HYP-546); app-mode
+   * opts the explicitly-requested entry root back in so `App.tsx` is previewable as an app.
+   */
+  isAppEntry?: boolean;
 }
 
 export interface SSRMockConfig {

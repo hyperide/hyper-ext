@@ -9,10 +9,24 @@
  */
 
 import type { SimplePropInfo } from '@shared/components/overlays';
+import type { RouteSuggestionItem } from '@shared/components/preview-chrome';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
 import type { UnsupportedProjectError } from '../types';
 import { postToPreviewIframe } from './postToPreviewIframe';
+
+/**
+ * App-mode preview state — set by the extension host's `appMode` message when the user
+ * previews the SPA entry root AS AN APP. Drives the address bar in the panel chrome.
+ */
+export interface AppModeState {
+  /** Project-relative path of the app entry being previewed (the `?component=` target). */
+  entryPath: string;
+  /** Code-derived route suggestions for the address-bar dropdown (empty → no dropdown). */
+  routeSuggestions: RouteSuggestionItem[];
+  /** The in-app address currently shown (resting value of the address bar). */
+  currentRoute: string;
+}
 
 interface UsePreviewBridgeOptions {
   iframeEl: HTMLIFrameElement | null;
@@ -58,6 +72,10 @@ interface UsePreviewBridgeResult {
   componentError: ComponentError | null;
   /** Current value of hypercanvas.devServer.autoStart setting */
   autoStart: boolean;
+  /** Non-null when previewing an app entry AS AN APP (shows the address bar). */
+  appMode: AppModeState | null;
+  /** Navigate the previewed app to an in-app address (posts into the iframe's own router). */
+  navigateAppRoute: (route: string) => void;
   handleStartDevServer: () => void;
   handleRefresh: () => void;
   clearComponentError: () => void;
@@ -98,6 +116,21 @@ export function applyComponentRenderSucceeded(
   return prev?.componentPath === componentPath ? null : prev;
 }
 
+/**
+ * Reduce a `hypercanvas:appRouteChanged` message into app-mode state: reflect the route the
+ * previewed app navigated to internally (a `<Link>` click or browser back/forward) in the address
+ * bar. A no-op (returns `prev` unchanged) when app-mode is off or the route already matches, so it
+ * never resurrects a closed app-mode session and skips a needless re-render.
+ */
+export function applyAppRouteChanged(prev: AppModeState | null, route: string): AppModeState | null {
+  // Reject anything that is not an in-app absolute path. Project code runs INSIDE the preview
+  // iframe and can post an arbitrary `hypercanvas:appRouteChanged` payload, so only a `/`-rooted
+  // route is a legitimate address-bar value (mirrors the SaaS useAppPreviewMode guard). A no-op
+  // (returns `prev`) when app-mode is off, the payload is not a route, or the route already matches.
+  if (!prev || !route.startsWith('/') || prev.currentRoute === route) return prev;
+  return { ...prev, currentRoute: route };
+}
+
 export function canUpdatePreviewComponentInPlace(
   currentSrc: string | null | undefined,
   nextSrc: string | null | undefined,
@@ -107,7 +140,12 @@ export function canUpdatePreviewComponentInPlace(
   try {
     const currentUrl = new URL(currentSrc);
     const nextUrl = new URL(nextSrc);
+    // Entering/leaving app-mode flips the `app` param, which the generated preview reads
+    // ONLY at mount to choose the render mode. An in-place setComponent would keep the old
+    // mode, so a change in `app` forces a real navigation (full iframe reload) instead.
+    const sameAppFlag = currentUrl.searchParams.get('app') === nextUrl.searchParams.get('app');
     return (
+      sameAppFlag &&
       currentUrl.origin === nextUrl.origin &&
       currentUrl.pathname === nextUrl.pathname &&
       currentUrl.searchParams.has('component') &&
@@ -127,6 +165,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [projectCapabilities, setProjectCapabilities] = useState<import('../types').ProjectCapabilities | null>(null);
   const [componentError, setComponentError] = useState<ComponentError | null>(null);
   const [autoStart, setAutoStart] = useState(false);
+  const [appMode, setAppMode] = useState<AppModeState | null>(null);
   // Track whether we were previously connected (for reconnecting banner)
   const wasConnectedRef = useRef(false);
   const [disconnected, setDisconnected] = useState(false);
@@ -300,6 +339,14 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             type: 'hypercanvas:componentMissing',
             componentPath: msg.componentPath,
           } as unknown as PlatformMessage);
+        } else if (msg.type === 'hypercanvas:appRouteChanged') {
+          // The previewed app navigated INTERNALLY (a <Link> click or browser back/forward); the
+          // generated bridge posts the new UNPREFIXED route. Mirror it into the address bar so the
+          // bar doesn't show a stale route until the user types one. (The SaaS canvas already does
+          // this in useAppPreviewMode; this is the VS Code-panel counterpart.)
+          if (typeof msg.route === 'string') {
+            setAppMode((prev) => applyAppRouteChanged(prev, msg.route));
+          }
         }
         return;
       }
@@ -699,6 +746,29 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           );
           break;
 
+        case 'appMode': {
+          // Extension host (de)activated app-mode for the SPA entry root. `enabled: false`
+          // (or absent payload) tears the address bar down; `true` shows it with the
+          // code-derived suggestions. Zero suggestions still shows the bar — the dropdown
+          // (not the bar) is what hides on an empty list.
+          const enabled = (msg as { enabled?: boolean }).enabled === true;
+          if (!enabled) {
+            setAppMode(null);
+            break;
+          }
+          const m = msg as {
+            entryPath?: string;
+            routeSuggestions?: RouteSuggestionItem[];
+            currentRoute?: string;
+          };
+          setAppMode({
+            entryPath: typeof m.entryPath === 'string' ? m.entryPath : '',
+            routeSuggestions: Array.isArray(m.routeSuggestions) ? m.routeSuggestions : [],
+            currentRoute: typeof m.currentRoute === 'string' ? m.currentRoute : '/',
+          });
+          break;
+        }
+
         case 'errorBoundary:propsSchema':
           // Extension responded with prop type schema — enrich existing componentError
           setComponentError((prev) =>
@@ -767,6 +837,15 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
   const clearComponentError = useCallback(() => setComponentError(null), []);
 
+  // Drive the previewed app's own router by posting into the iframe. The generated
+  // CanvasPreview handles `hypercanvas:navigateRoute` (pushState + popstate). We also
+  // update the resting address locally so the bar reflects the new route immediately.
+  const navigateAppRoute = useCallback((route: string) => {
+    const target = route.startsWith('/') ? route : `/${route}`;
+    postToPreviewIframe(iframeElRef.current, { type: 'hypercanvas:navigateRoute', route: target });
+    setAppMode((prev) => (prev ? { ...prev, currentRoute: target } : prev));
+  }, []);
+
   return {
     devServerRunning,
     devServerUrl,
@@ -777,6 +856,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     projectCapabilities,
     componentError,
     autoStart,
+    appMode,
+    navigateAppRoute,
     handleStartDevServer,
     handleRefresh: doRefresh,
     clearComponentError,

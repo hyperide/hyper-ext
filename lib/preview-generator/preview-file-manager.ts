@@ -8,7 +8,7 @@
  * Architecture: https://hyperide.github.io/reports/preview-routing
  */
 
-import { basename, dirname, join, posix, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve } from 'node:path';
 import { parse } from '@babel/parser';
 import { builders as b, namedTypes } from 'ast-types';
 import * as recast from 'recast';
@@ -32,7 +32,13 @@ import {
 } from './generator';
 import { ensureGitExclude, ensureStandaloneEntry } from './preview-file-ops';
 import { buildEntry, computeImportPath } from './preview-build-entry';
-import { detectProviderShell, extractMountedRootImportSources, scanSampleExports } from './scanner';
+import {
+  detectProviderShell,
+  detectPushStateRouterShell,
+  extractMountedRootImportSources,
+  scanSampleExports,
+} from './scanner';
+import { getRouteSuggestions, type RouteSuggestion } from './route-heuristics/index';
 import { isExplicitWebAppShell, isFrameworkReserved, isPreviewIneligibleByName } from './preview-constants';
 import { RECAST_PARSER } from './preview-ast-helpers';
 import {
@@ -42,7 +48,7 @@ import {
   normalizeImportPath,
 } from './preview-path-utils';
 import { isValidTypeScript, PreviewGenerationError } from './preview-validation';
-import { parseExistingPreview } from './preview-validation';
+import { parseAppEntrySet, parseExistingPreview } from './preview-validation';
 
 export { PreviewGenerationError } from './preview-validation';
 export { isValidTypeScript } from './preview-validation';
@@ -76,6 +82,12 @@ export class PreviewFileManager {
   private _ssrMockPromise: Promise<void> | null = null;
   /** Memoized set of project-relative paths of components mounted by the entry's createRoot. */
   private _entryRootPathsPromise: Promise<Set<string>> | null = null;
+  /**
+   * Extension-stripped project-relative paths to build as APP ENTRIES (previewable as an app).
+   * Set via `enableAppEntry`; consumed by `_initPreviewFile` so the entry root enters the
+   * registry as `isAppEntry` instead of being excluded as a non-renderable shell (HYP-546).
+   */
+  private _appEntryPaths: Set<string> = new Set();
 
   constructor(config: PreviewFileManagerConfig) {
     this.projectRoot = config.projectRoot;
@@ -112,6 +124,80 @@ export class PreviewFileManager {
   /** Block until provider detection and SSR mock detection complete (no-op if none pending). */
   private async _awaitProviders(): Promise<void> {
     await Promise.all([this._providerWrapPromise, this._ssrMockPromise]);
+  }
+
+  /**
+   * Mark a path as previewable AS AN APP. The next `ensureComponent`/`forceRefreshComponent`
+   * builds it as an app entry (`isAppEntry`) instead of excluding it as a shell, so `App.tsx`
+   * renders with its own router + providers. Pass the project-relative path (extension optional).
+   */
+  enableAppEntry(componentPath: string): void {
+    this._appEntryPaths.add(componentPath.replace(/\.[jt]sx?$/, ''));
+  }
+
+  /** Stop previewing a path as an app (reverts to component-mode on the next build). */
+  disableAppEntry(componentPath: string): void {
+    this._appEntryPaths.delete(componentPath.replace(/\.[jt]sx?$/, ''));
+  }
+
+  /** True when the given path is currently configured to preview as an app. */
+  isAppEntryEnabled(componentPath: string): boolean {
+    return this._appEntryPaths.has(componentPath.replace(/\.[jt]sx?$/, ''));
+  }
+
+  /**
+   * The project-relative paths of the SPA entry roots (App.tsx / main's mounted root).
+   * Surfaced so a caller can decide what to offer "preview as app" for. Empty for
+   * file-routed frameworks (Next/Remix/Astro) that have no single createRoot bootstrap.
+   */
+  async getAppEntryCandidates(): Promise<string[]> {
+    const roots = await this._getEntryRootComponentPaths();
+    return [...roots];
+  }
+
+  /**
+   * Whether `componentPath` is a sensible "preview as app" target — gating the UI/command so an
+   * ordinary leaf (or a provider-only wrapper) can't be rendered raw and crash. A path qualifies
+   * ONLY when its OWN source is a ROUTER shell (imports `<BrowserRouter>` / `createBrowserRouter`
+   * / `RouterProvider` / a navigator factory). app-mode renders the entry RAW, so it must own its
+   * router: an App that only wraps PROVIDERS while the router lives in `main.tsx` would crash
+   * outside that router context (being the createRoot target is NOT enough). The router-shell
+   * check also covers entries the createRoot scan misses (ViteReactSSG's `ViteReactSSG(<App/>)`,
+   * whose router lives in App.tsx). A CLEAN router shell previews raw (app-mode A); a PATCHED
+   * vite-spa-jsx-router shell previews by driving the already-mounted app router (app-mode B).
+   * Best-effort: an unreadable/unparsable file is not a candidate.
+   */
+  async isAppEntryCandidate(componentPath: string): Promise<boolean> {
+    // Defense in depth: never resolve a path that escapes the project root, even if a caller
+    // forgot to sanitize. A `..` segment or absolute path is not a previewable component.
+    if (isAbsolute(componentPath) || componentPath.split(/[\\/]/).includes('..')) return false;
+    let source: string;
+    try {
+      source = await this.io.readFile(join(this.projectRoot, componentPath));
+    } catch {
+      return false;
+    }
+    try {
+      // Require the entry to OWN a PUSHSTATE-navigable router (<BrowserRouter> or
+      // createBrowserRouter+<RouterProvider>). App-mode renders the entry RAW, so it must be
+      // self-contained: an App that merely wraps PROVIDERS while the router lives in main.tsx would
+      // crash outside that router context. We gate on the NARROW pushState-router signal (not the
+      // broad detectRouterShell): the address bar drives navigation via pushState/popstate, so a
+      // HashRouter/StaticRouter/React-Navigation root would be offered "preview as app" and then
+      // fail to navigate. Provider-only and hash-router roots are rejected.
+      return detectPushStateRouterShell(source);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Best-effort code-derived route suggestions for the previewed app's address bar.
+   * Delegates to the shared route heuristics. Returns `[]` on any failure or zero matches —
+   * the address bar renders no dropdown for an empty list.
+   */
+  async getRouteSuggestions(): Promise<RouteSuggestion[]> {
+    return getRouteSuggestions(this.projectRoot, this.io);
   }
 
   /** Determine the preview file path based on project structure */
@@ -216,7 +302,10 @@ export class PreviewFileManager {
 
     for (const entry of entries) {
       const canonical = canonicalizeComponentPath(entry.componentPath, canonicalPaths);
-      if (!entryRootPaths.has(canonical.replace(/\.[jt]sx?$/, ''))) continue;
+      const normalized = canonical.replace(/\.[jt]sx?$/, '');
+      if (!entryRootPaths.has(normalized)) continue;
+      // App-mode keeps the entry root in the registry (as an app entry), so it is NOT stale.
+      if (this._appEntryPaths.has(normalized)) continue;
       let source: string;
       try {
         source = await this.io.readFile(join(this.projectRoot, canonical));
@@ -347,7 +436,18 @@ export class PreviewFileManager {
         staleShellPaths.has(canonicalizeComponentPath(e.componentPath, canonicalPaths)) ||
         hasPathCaseMismatch(e.componentPath, canonicalPaths);
       const needsSampleUpdate = await this.hasSampleExportMismatch(componentPaths, existingEntries, canonicalPaths);
-      if (!existingEntries.some(isStale) && !needsProviderUpdate && !needsGeneratorUpdate && !needsSampleUpdate) {
+      // App-mode toggled since the file was last written: an entry enabled/disabled as an app
+      // entry must regenerate so `appEntrySet` (and the entry's `isAppEntry`) match. Without
+      // this, the SaaS fast path keeps an `appEntrySet`-less preview and app-mode silently
+      // falls through to component rendering even with `?app=1`.
+      const needsAppEntryUpdate = await this._appEntrySetMismatch(existingContent);
+      if (
+        !existingEntries.some(isStale) &&
+        !needsProviderUpdate &&
+        !needsGeneratorUpdate &&
+        !needsSampleUpdate &&
+        !needsAppEntryUpdate
+      ) {
         return existingContent;
       }
 
@@ -381,6 +481,45 @@ export class PreviewFileManager {
       .map((e) => canonicalizeComponentPath(e.componentPath, canonicalPaths));
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
     return this._initPreviewFile(previewPath, previewDir, allPaths, discoveredPaths);
+  }
+
+  /**
+   * True when the existing preview's `appEntrySet` does not match the manager's current
+   * `_appEntryPaths` — i.e. app-mode was toggled (enabled or disabled) for some path since
+   * the file was last generated. Used by the `ensureComponent` fast path to force a regen so
+   * the generated `isAppEntry`/`appEntrySet` reflect the toggle (the SaaS path relies on this;
+   * the ext uses `forceRefreshComponent`, which already bypasses the fast path).
+   */
+  private async _appEntrySetMismatch(existingContent: string): Promise<boolean> {
+    // Compare extension-stripped on both sides: `_appEntryPaths` is already stripped, the
+    // parsed `appEntrySet` keys carry an extension (e.g. `client/App.tsx`).
+    const existing = new Set([...parseAppEntrySet(existingContent)].map((p) => p.replace(/\.[jt]sx?$/, '')));
+    // Only paths that CAN enter the set matter — a patched (managed) router root previews via
+    // app-mode B (drive the running app router) and never registers, so it would otherwise read
+    // as a perpetual mismatch and churn regeneration on every ensureComponent call.
+    const wanted = new Set<string>();
+    for (const p of this._appEntryPaths) {
+      if (await this._isRegisterableAppEntry(p)) wanted.add(p);
+    }
+    if (existing.size !== wanted.size) return true;
+    for (const p of wanted) {
+      if (!existing.has(p)) return true;
+    }
+    return false;
+  }
+
+  /** True when an app-entry path is buildable as a registry entry (app-mode A): readable, no
+   *  managed marker (a patched root is app-mode B and never registers). */
+  private async _isRegisterableAppEntry(normalizedPath: string): Promise<boolean> {
+    for (const ext of ['.tsx', '.jsx', '.ts', '.js']) {
+      try {
+        const source = await this.io.readFile(join(this.projectRoot, `${normalizedPath}${ext}`));
+        return !source.includes('@hyperide-managed');
+      } catch {
+        // try next extension
+      }
+    }
+    return false;
   }
 
   private async hasSampleExportMismatch(
@@ -464,6 +603,7 @@ export class PreviewFileManager {
       const entry = await buildEntry(this.projectRoot, this.io, this.ssrMock?.framework, compPath, previewDir, {
         allowRouterShell: isExplicitWebAppShell(compPath),
         entryRootPaths,
+        appEntryPaths: this._appEntryPaths,
         workspaceRoot: this.workspaceRoot,
       });
       if (entry) requestedEntries.push(entry);
@@ -478,6 +618,7 @@ export class PreviewFileManager {
       if (requestedPathSet.has(compPath)) continue;
       const entry = await buildEntry(this.projectRoot, this.io, this.ssrMock?.framework, compPath, previewDir, {
         entryRootPaths,
+        appEntryPaths: this._appEntryPaths,
         workspaceRoot: this.workspaceRoot,
       });
       if (entry) extraEntries.push(entry);

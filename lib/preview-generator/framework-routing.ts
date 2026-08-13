@@ -238,7 +238,9 @@ import CanvasPreview from '${previewImportPath}';
 
 function PreviewContent() {
   const params = useSearchParams();
-  return <CanvasPreview component={params.get('component')} mode={params.get('mode') as 'single' | 'multi'} />;
+  // app=1 selects app-mode (render the entry root raw); otherwise honor an explicit mode param.
+  const mode = params.get('app') === '1' ? 'app' : (params.get('mode') as 'single' | 'multi' | 'app' | null);
+  return <CanvasPreview component={params.get('component')} mode={mode} />;
 }
 
 export default function TestPreviewPage() {
@@ -291,11 +293,12 @@ function HyperCanvasScripts() {
 
 export default function TestPreviewRoute() {
   const [params] = useSearchParams();
+  const mode = params.get('app') === '1' ? 'app' : (params.get('mode') as 'single' | 'multi' | 'app' | null);
 
   return (
     <div id="root">
       <HyperCanvasScripts />
-      <CanvasPreview component={params.get('component')} mode={params.get('mode') as 'single' | 'multi'} />
+      <CanvasPreview component={params.get('component')} mode={mode} />
     </div>
   );
 }

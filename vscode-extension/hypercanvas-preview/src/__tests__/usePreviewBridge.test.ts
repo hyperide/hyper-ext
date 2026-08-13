@@ -165,6 +165,31 @@ describe('preview bridge URL helpers', () => {
     ).toBe(false);
   });
 
+  it('forces a real navigation when toggling app-mode (the app= param changes)', () => {
+    // Entering app-mode: app=1 appears. The mode is read at iframe mount, so an in-place
+    // setComponent would keep component-mode — must reload.
+    expect(
+      canUpdatePreviewComponentInPlace(
+        'http://localhost:5173/test-preview?component=client%2FApp.tsx',
+        'http://localhost:5173/test-preview?component=client%2FApp.tsx&app=1',
+      ),
+    ).toBe(false);
+    // Leaving app-mode: app=1 disappears — also a real navigation.
+    expect(
+      canUpdatePreviewComponentInPlace(
+        'http://localhost:5173/test-preview?component=client%2FApp.tsx&app=1',
+        'http://localhost:5173/test-preview?component=client%2FApp.tsx',
+      ),
+    ).toBe(false);
+    // Same app flag on both sides still allows an in-place component swap.
+    expect(
+      canUpdatePreviewComponentInPlace(
+        'http://localhost:5173/test-preview?component=client%2FApp.tsx&app=1',
+        'http://localhost:5173/test-preview?component=client%2FOther.tsx&app=1',
+      ),
+    ).toBe(true);
+  });
+
   it('does not treat shared StateHub component sync as iframe navigation readiness', () => {
     expect(shouldNavigateFromSharedStateMessage('state:init')).toBe(false);
     expect(shouldNavigateFromSharedStateMessage('state:update')).toBe(false);

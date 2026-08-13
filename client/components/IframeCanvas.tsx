@@ -1,3 +1,4 @@
+import { type NavStrategy } from '@shared/components/preview-chrome';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import { useRef } from 'react';
 import { useComponentMeta } from '@/contexts/ComponentMetaContext';
@@ -44,6 +45,16 @@ interface IframeCanvasProps {
   onRuntimeError?: (error: RuntimeError | null) => void;
   onErrorChange?: (error: string | null, retryCount: number) => void;
   overrideSrc?: string;
+  /** When true, preview the component AS AN APP — adds `app=1` to the iframe src so the
+   *  generated preview renders the entry root raw (its own router/providers run). */
+  appMode?: boolean;
+  /** In-preview navigation strategy. Emitted as `nav=<strategy>` so the generated app-route driver
+   *  knows how to reach the app router under the proxy prefix. Only used in app-mode. */
+  navStrategy?: NavStrategy;
+  /** Initial in-app route the app should boot at (app-mode only). Carried as `route=<path>`; the
+   *  generated boot driver reads it. Used by the src-swap strategy (which reloads the iframe to
+   *  navigate) and as the initial address for the others. */
+  appRoute?: string;
 }
 
 export default function IframeCanvas({
@@ -66,6 +77,9 @@ export default function IframeCanvas({
   onRuntimeError,
   onErrorChange,
   overrideSrc,
+  appMode,
+  navStrategy,
+  appRoute,
 }: IframeCanvasProps) {
   const { meta } = useComponentMeta();
   const engine = useCanvasEngine();
@@ -169,6 +183,21 @@ export default function IframeCanvas({
                 params.set('component', componentPath);
                 if (canvasMode === 'multi') {
                   params.set('mode', 'multi');
+                }
+                // App-mode: the generated preview reads `app=1` and renders the entry root raw
+                // (its own router/providers run); the address bar then drives that router. `nav`
+                // selects the in-preview navigation strategy.
+                if (appMode) {
+                  params.set('app', '1');
+                  if (navStrategy) params.set('nav', navStrategy);
+                  // `route` belongs in the SRC only for src-swap, whose navigation IS a reload at
+                  // the new route — so the declarative src must track currentRoute (otherwise a
+                  // re-render would revert the imperative iframe.src set). history-bridge/basename
+                  // navigate WITHOUT reloading (postMessage), so putting a changing `route` in the
+                  // src would force a full reload on every navigation and defeat the whole point.
+                  if (navStrategy === 'src-swap' && appRoute && appRoute !== '/') {
+                    params.set('route', appRoute);
+                  }
                 }
                 return `${baseUrl}?${params.toString()}`;
               })()

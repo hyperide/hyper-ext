@@ -23,7 +23,8 @@ export type PreviewSetupStatus = 'ok' | 'unsupported' | 'needs-patch';
 interface ComponentMetaContextType {
   meta: ComponentMeta | null;
   setMeta: (meta: ComponentMeta) => void;
-  loadComponent: (componentPath: string, sampleName?: string) => Promise<void>;
+  /** Resolves `true` when the component parsed/rebuilt successfully, `false` on a handled failure. */
+  loadComponent: (componentPath: string, sampleName?: string, appMode?: boolean) => Promise<boolean>;
   loadingComponent: string | null;
   parseError: string | null;
   setParseError: (error: string | null) => void;
@@ -52,47 +53,59 @@ export function ComponentMetaProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const loadComponent = useCallback(async (componentPath: string, sampleName?: string) => {
-    try {
-      setLoadingComponent(componentPath);
-      setParseError(null);
-      setPreviewSetup(null);
-      setNeedsPatchPrompt(null);
+  const loadComponent = useCallback(
+    async (componentPath: string, sampleName?: string, appMode?: boolean): Promise<boolean> => {
+      try {
+        setLoadingComponent(componentPath);
+        setParseError(null);
+        setPreviewSetup(null);
+        setNeedsPatchPrompt(null);
 
-      const effectiveSampleName = sampleName ?? 'default';
-      setCurrentSampleName(effectiveSampleName);
+        const effectiveSampleName = sampleName ?? 'default';
+        setCurrentSampleName(effectiveSampleName);
 
-      let url = `/api/parse-component?path=${encodeURIComponent(componentPath)}`;
-      url += `&sampleName=${encodeURIComponent(effectiveSampleName)}`;
-
-      const response = await authFetch(url);
-      const data = await response.json();
-
-      if (data.success) {
-        // Don't setMeta here - let App.tsx do it after updating metadata
-        // This ensures metadata is updated before LeftSidebar re-renders
-
-        const validStatuses: PreviewSetupStatus[] = ['ok', 'unsupported', 'needs-patch'];
-        if (data.previewSetup && data.previewSetup !== 'ok' && validStatuses.includes(data.previewSetup)) {
-          setPreviewSetup(data.previewSetup as PreviewSetupStatus);
-          setNeedsPatchPrompt(typeof data.needsPatchPrompt === 'string' ? data.needsPatchPrompt : null);
-        } else {
-          setPreviewSetup(null);
-          setNeedsPatchPrompt(null);
+        let url = `/api/parse-component?path=${encodeURIComponent(componentPath)}`;
+        url += `&sampleName=${encodeURIComponent(effectiveSampleName)}`;
+        // App-mode: the server marks this path as an app entry (enableAppEntry) before rebuilding
+        // the preview, so `?component=…&app=1` renders the entry root raw instead of being rejected.
+        if (appMode) {
+          url += '&app=1';
         }
 
-        // Emit event для перезагрузки canvas
-        window.dispatchEvent(new CustomEvent('component-loaded', { detail: data }));
-      } else if (data.error) {
-        setParseError(data.error);
+        const response = await authFetch(url);
+        const data = await response.json();
+
+        if (data.success) {
+          // Don't setMeta here - let App.tsx do it after updating metadata
+          // This ensures metadata is updated before LeftSidebar re-renders
+
+          const validStatuses: PreviewSetupStatus[] = ['ok', 'unsupported', 'needs-patch'];
+          if (data.previewSetup && data.previewSetup !== 'ok' && validStatuses.includes(data.previewSetup)) {
+            setPreviewSetup(data.previewSetup as PreviewSetupStatus);
+            setNeedsPatchPrompt(typeof data.needsPatchPrompt === 'string' ? data.needsPatchPrompt : null);
+          } else {
+            setPreviewSetup(null);
+            setNeedsPatchPrompt(null);
+          }
+
+          // Emit event для перезагрузки canvas
+          window.dispatchEvent(new CustomEvent('component-loaded', { detail: data }));
+          return true;
+        }
+        if (data.error) {
+          setParseError(data.error);
+        }
+        return false;
+      } catch (error) {
+        console.error('Failed to load component:', error);
+        setParseError(error instanceof Error ? error.message : 'Failed to parse component');
+        return false;
+      } finally {
+        setLoadingComponent(null);
       }
-    } catch (error) {
-      console.error('Failed to load component:', error);
-      setParseError(error instanceof Error ? error.message : 'Failed to parse component');
-    } finally {
-      setLoadingComponent(null);
-    }
-  }, []);
+    },
+    [],
+  );
 
   return (
     <ComponentMetaContext.Provider

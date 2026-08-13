@@ -2734,3 +2734,276 @@ export const SampleDefault = () => <HostClientProvider><span>x</span></HostClien
     expect(isValidTypeScript(content)).toBe(true);
   });
 });
+
+describe('PreviewFileManager — app-mode (preview as app)', () => {
+  const ROUTED_APP_SHELL = `
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+export default function App() {
+  return <BrowserRouter><Routes><Route path="/" element={<Home/>} /></Routes></BrowserRouter>;
+}`;
+  const LEAF = `import React from 'react';
+export function Button() { return <button>x</button>; }`;
+
+  it('isAppEntryCandidate: true for a router/provider shell, false for a leaf component', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', ROUTED_APP_SHELL);
+    io.files.set('/project/src/Button.tsx', LEAF);
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('src/App.tsx')).toBe(true);
+    expect(await manager.isAppEntryCandidate('src/Button.tsx')).toBe(false);
+  });
+
+  it('isAppEntryCandidate: FALSE for non-pushState routers (Hash/Static/React-Navigation)', async () => {
+    // The UI gate must reject routers the address bar cannot drive — the driver only navigates via
+    // pushState/location.pathname. Guards against reverting the gate back to broad detectRouterShell.
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/HashApp.tsx',
+      `import { HashRouter } from 'react-router-dom';
+export default function App() { return <HashRouter><div/></HashRouter>; }`,
+    );
+    io.files.set(
+      '/project/src/StaticApp.tsx',
+      `import { StaticRouter } from 'react-router-dom/server';
+export default () => <StaticRouter location="/"><div/></StaticRouter>;`,
+    );
+    io.files.set(
+      '/project/src/NativeApp.tsx',
+      `import { NavigationContainer } from '@react-navigation/native';
+export default () => <NavigationContainer><div/></NavigationContainer>;`,
+    );
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('src/HashApp.tsx')).toBe(false);
+    expect(await manager.isAppEntryCandidate('src/StaticApp.tsx')).toBe(false);
+    expect(await manager.isAppEntryCandidate('src/NativeApp.tsx')).toBe(false);
+  });
+
+  it('isAppEntryCandidate: false for a provider-importing LEAF that is not the entry root', async () => {
+    // A leaf wrapper that merely imports a provider (e.g. QueryClientProvider) but is NOT the
+    // SPA entry root must not be offered "preview as app" (it would render raw, wrongly).
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/main.tsx',
+      `import { createRoot } from 'react-dom/client';
+import App from './App';
+createRoot(document.getElementById('root')!).render(<App />);`,
+    );
+    io.files.set(
+      '/project/src/App.tsx',
+      `import { BrowserRouter } from 'react-router-dom';
+export default function App() { return <BrowserRouter><div/></BrowserRouter>; }`,
+    );
+    io.files.set(
+      '/project/src/CardList.tsx',
+      `import { QueryClientProvider } from '@tanstack/react-query';
+export function CardList() { return <QueryClientProvider client={undefined as never}><ul/></QueryClientProvider>; }`,
+    );
+    const manager = createManager(io);
+    // App owns a router → candidate; the provider-only leaf is NOT an entry root → not a candidate.
+    expect(await manager.isAppEntryCandidate('src/App.tsx')).toBe(true);
+    expect(await manager.isAppEntryCandidate('src/CardList.tsx')).toBe(false);
+  });
+
+  it('isAppEntryCandidate: false for an entry root whose router/providers live in main.tsx', async () => {
+    // App is the createRoot target but does NOT own a router/provider — main.tsx wraps it.
+    // Rendering it raw would crash outside that context, so it must NOT be a candidate.
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/main.tsx',
+      `import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import App from './App';
+createRoot(document.getElementById('root')!).render(<BrowserRouter><App /></BrowserRouter>);`,
+    );
+    io.files.set('/project/src/App.tsx', `export default function App() { return <div>home</div>; }`);
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('src/App.tsx')).toBe(false);
+  });
+
+  it('isAppEntryCandidate: false for a PROVIDER-shell entry root whose ROUTER is in main.tsx', async () => {
+    // The exact split the review flagged: main.tsx owns <BrowserRouter>, App owns only providers
+    // + <Routes>. App IS the createRoot entry root AND a provider shell, but it does NOT own the
+    // router — raw-rendering it crashes ("useRoutes may be used only in the context of a Router").
+    // Router-only gating must reject it.
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/main.tsx',
+      `import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import App from './App';
+createRoot(document.getElementById('root')!).render(<BrowserRouter><App /></BrowserRouter>);`,
+    );
+    io.files.set(
+      '/project/src/App.tsx',
+      `import { AuthProvider } from './AuthProvider';
+import { Routes, Route } from 'react-router-dom';
+export default function App() {
+  return <AuthProvider><Routes><Route path="/" element={<Home/>} /></Routes></AuthProvider>;
+}`,
+    );
+    const manager = createManager(io);
+    // Imports Routes/Route + AuthProvider but NOT BrowserRouter → not a router shell → rejected.
+    expect(await manager.isAppEntryCandidate('src/App.tsx')).toBe(false);
+  });
+
+  it('isAppEntryCandidate: true for a PATCHED (@hyperide-managed) router root — drives app-mode B', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/App.tsx',
+      `import P from './__canvas_preview__'; // @hyperide-managed\n${ROUTED_APP_SHELL}`,
+    );
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('src/App.tsx')).toBe(true);
+  });
+
+  it('isAppEntryCandidate: false for a traversal / absolute path (no read outside project root)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', ROUTED_APP_SHELL);
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('../../../etc/passwd')).toBe(false);
+    expect(await manager.isAppEntryCandidate('/etc/passwd')).toBe(false);
+    expect(await manager.isAppEntryCandidate('src/../../secret/Evil.tsx')).toBe(false);
+  });
+
+  it('enableAppEntry puts a clean router root into the generated appEntrySet (app-mode A)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', ROUTED_APP_SHELL);
+    io.files.set('/project/src/Button.tsx', LEAF);
+    const manager = createManager(io);
+    manager.enableAppEntry('src/App.tsx');
+    const content = await manager.forceRefreshComponent('src/App.tsx');
+    expect(content).toContain("const appEntrySet = new Set<string>([\n  'src/App.tsx',\n]);");
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('ensureComponent fast path regenerates when app-mode is toggled (appEntrySet mismatch)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', ROUTED_APP_SHELL);
+    io.files.set('/project/src/Button.tsx', LEAF);
+    const manager = createManager(io);
+    // First build in component-mode — App is a router shell, excluded; only Button registers.
+    const before = await manager.ensureComponent(['src/Button.tsx']);
+    expect(before).toContain('const appEntrySet = new Set<string>([\n]);');
+    // Enable app-mode for App and ensure again — the fast path must NOT short-circuit.
+    manager.enableAppEntry('src/App.tsx');
+    const after = await manager.ensureComponent(['src/Button.tsx']);
+    expect(after).toContain("'src/App.tsx',");
+  });
+});
+
+describe('PreviewFileManager — app-mode B (patched router root) no regen churn', () => {
+  const PATCHED_ROOT = `import P from './__canvas_preview__'; // @hyperide-managed
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+export default function App() {
+  return <BrowserRouter><Routes><Route path="/" element={<H/>} /></Routes></BrowserRouter>;
+}`;
+  const LEAF = `import React from 'react';
+export function Button() { return <button>x</button>; }`;
+
+  it('a patched (managed) app entry never enters appEntrySet and does not force perpetual regen', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', PATCHED_ROOT);
+    io.files.set('/project/src/Button.tsx', LEAF);
+    const manager = createManager(io);
+    // Enable app-mode for the patched root, then build once.
+    manager.enableAppEntry('src/App.tsx');
+    const first = await manager.ensureComponent(['src/Button.tsx']);
+    // Patched root is excluded from the registry (managed marker) — appEntrySet stays empty.
+    expect(first).toContain('const appEntrySet = new Set<string>([\n]);');
+    // A second ensureComponent must NOT regenerate (no app-entry mismatch churn): identical content.
+    const second = await manager.ensureComponent(['src/Button.tsx']);
+    expect(second).toBe(first);
+  });
+});
+
+describe('PreviewFileManager.isAppEntryCandidate', () => {
+  const BROWSER_ROUTER_APP = `import { BrowserRouter, Routes, Route } from 'react-router-dom';
+export default function App() {
+  return <BrowserRouter><Routes><Route path="/" element={<Home/>} /></Routes></BrowserRouter>;
+}`;
+
+  // react-router v6.4+ data-router root: config via createBrowserRouter, mounted via RouterProvider.
+  // This is the shape the foundation's detectRouterShell missed; fix #2 makes it a candidate.
+  const DATA_ROUTER_APP = `import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+const router = createBrowserRouter([
+  { path: '/', element: <Home/> },
+  { path: '/settings', element: <Settings/> },
+]);
+export default function App() { return <RouterProvider router={router} />; }`;
+
+  const PROVIDER_ONLY_APP = `import { AuthProvider } from './auth';
+export default function App() { return <AuthProvider><Dashboard/></AuthProvider>; }`;
+
+  const LEAF = `import React from 'react';
+export default function Button() { return <button>x</button>; }`;
+
+  it('returns true for a <BrowserRouter> root', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', BROWSER_ROUTER_APP);
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('src/App.tsx')).toBe(true);
+  });
+
+  it('returns true for a data-router root (createBrowserRouter + RouterProvider)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', DATA_ROUTER_APP);
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('src/App.tsx')).toBe(true);
+  });
+
+  it('returns false for a provider-only root (router lives elsewhere — would crash rendered raw)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', PROVIDER_ONLY_APP);
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('src/App.tsx')).toBe(false);
+  });
+
+  it('returns false for an ordinary leaf component', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/Button.tsx', LEAF);
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('src/Button.tsx')).toBe(false);
+  });
+
+  it('returns false for an unreadable path (best-effort, never throws)', async () => {
+    const io = new InMemoryFileIO();
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('src/Missing.tsx')).toBe(false);
+  });
+
+  it('returns false for a path that escapes the project root (defense in depth)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', BROWSER_ROUTER_APP);
+    const manager = createManager(io);
+    expect(await manager.isAppEntryCandidate('../secrets/App.tsx')).toBe(false);
+  });
+
+  it('KNOWN LIMITATION: a SPLIT data-router root (router config in a sibling file) is not detected', async () => {
+    // App.tsx renders <RouterProvider router={router} /> but imports `router` from ./router, which
+    // is where createBrowserRouter lives. The data-router signal requires BOTH the browser/hash
+    // builder AND a RouterProvider in the SAME file; here App.tsx has only the provider and
+    // router.tsx has only the builder, so neither is a candidate. isAppEntryCandidate also scans
+    // only the selected file's own imports (no cross-file resolution — mirrors
+    // _resolveEntryRootComponentPaths, which follows only DIRECT entry imports, never a sibling).
+    // Resolving local router imports is a deferred follow-up; the common case (createBrowserRouter
+    // AND RouterProvider together in App.tsx) is covered by the data-router test above.
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/App.tsx',
+      `import { RouterProvider } from 'react-router-dom';
+import { router } from './router';
+export default function App() { return <RouterProvider router={router} />; }`,
+    );
+    io.files.set(
+      '/project/src/router.tsx',
+      `import { createBrowserRouter } from 'react-router-dom';
+export const router = createBrowserRouter([{ path: '/', element: <Home/> }]);`,
+    );
+    const manager = createManager(io);
+    // App.tsx: RouterProvider only (no builder) → not a candidate.
+    expect(await manager.isAppEntryCandidate('src/App.tsx')).toBe(false);
+    // router.tsx: builder only (no RouterProvider, no component) → correctly NOT a candidate either.
+    expect(await manager.isAppEntryCandidate('src/router.tsx')).toBe(false);
+  });
+});

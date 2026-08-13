@@ -450,12 +450,31 @@ function isCreateContextCall(expression: Extract<VariableDeclaratorNode['init'],
 // in SampleDefault wrappers, not a production app-shell router. Including it
 // would falsely exclude previewable components that wrap their samples in
 // MemoryRouter for isolated rendering.
+// Single-signal app shells: importing any of these IS the app-shell signal on its own — they are
+// top-level routing containers/navigators that only an app root mounts.
 const ROUTER_SHELL_IMPORTS: ReadonlySet<string> = new Set([
   'BrowserRouter',
   'HashRouter',
   'NavigationContainer',
   'StaticRouter',
 ]);
+
+// Data-router roots need TWO signals in the SAME file: the BROWSER config BUILDER
+// (createBrowserRouter) AND a rendered `<RouterProvider>`. This is the react-router v6.4+ shape
+// `const router = createBrowserRouter([...]); <RouterProvider router={router}/>`. Requiring both
+// avoids two false positives an import-name-only check would hit:
+//   - a config-only `router.tsx` that just `export const router = createBrowserRouter([...])` with
+//     NO component to render (builder present, RouterProvider absent) — not a previewable root;
+//   - a leaf whose SampleDefault wraps itself in `createMemoryRouter` + `<RouterProvider>`
+//     (RouterProvider present, browser BUILDER absent — createMemoryRouter is deliberately excluded,
+//     as MemoryRouter is above) — rendering it raw would drop the sample's router context.
+//
+// `createHashRouter` (and `HashRouter`) are deliberately NOT data-router-navigable: a hash router
+// reads `location.hash`, but the app-preview driver navigates via `pushState`/`location.pathname`
+// only, so the address bar could not drive a hash router. Marking them candidates would offer
+// "preview as app" and then fail to navigate. Hash-route navigation is a deferred follow-up.
+const DATA_ROUTER_BUILDERS: ReadonlySet<string> = new Set(['createBrowserRouter']);
+const ROUTER_PROVIDER_IMPORT = 'RouterProvider';
 
 const ROUTER_SHELL_SOURCES = new Set(['react-router-dom', 'react-router-dom/server', 'react-router']);
 
@@ -477,6 +496,9 @@ const REACT_NAVIGATION_SOURCES = new Set([
  */
 export function detectRouterShell(sourceCode: string): boolean {
   const ast = parseSource(sourceCode);
+  // The data-router signal needs BOTH a browser/hash builder and a RouterProvider in this file.
+  let hasDataRouterBuilder = false;
+  let hasRouterProvider = false;
   for (const node of ast.program.body) {
     if (node.type !== 'ImportDeclaration') continue;
     if (node.importKind === 'type') continue;
@@ -486,11 +508,51 @@ export function detectRouterShell(sourceCode: string): boolean {
       if (spec.type !== 'ImportSpecifier') continue;
       if (spec.importKind === 'type') continue;
       const name = spec.imported.type === 'Identifier' ? spec.imported.name : null;
-      if (name && ROUTER_SHELL_IMPORTS.has(name)) return true;
-      if (REACT_NAVIGATION_SOURCES.has(source) && name && /^create[A-Z].*Navigator$/.test(name)) return true;
+      if (!name) continue;
+      if (ROUTER_SHELL_IMPORTS.has(name)) return true;
+      if (REACT_NAVIGATION_SOURCES.has(source) && /^create[A-Z].*Navigator$/.test(name)) return true;
+      if (DATA_ROUTER_BUILDERS.has(name)) hasDataRouterBuilder = true;
+      if (name === ROUTER_PROVIDER_IMPORT) hasRouterProvider = true;
     }
   }
+  // Data-router app root: builder + provider together (config-only files and MemoryRouter samples
+  // each carry only one of the two, so neither is misclassified).
+  if (hasDataRouterBuilder && hasRouterProvider) return true;
   return false;
+}
+
+// pushState-navigable web routers ONLY — the SUBSET of router shells the app-preview address bar
+// can actually drive. The driver navigates via `pushState`/`location.pathname` + `popstate`, so:
+//   - `BrowserRouter` and `createBrowserRouter`+`RouterProvider` (data router) ARE drivable;
+//   - `HashRouter` reads `location.hash` (driver never touches it) → would offer "preview as app"
+//     then fail to navigate;
+//   - `StaticRouter` is non-navigable (SSR), `NavigationContainer`/React Navigation is native.
+// Used to GATE app-mode candidacy (isAppEntryCandidate). NOTE: this is intentionally narrower than
+// `detectRouterShell`, which stays broad for its OTHER job — excluding ALL router shells from the
+// component registry to avoid TDZ/native-module failures.
+const PUSHSTATE_ROUTER_SHELL_IMPORTS: ReadonlySet<string> = new Set(['BrowserRouter']);
+
+export function detectPushStateRouterShell(sourceCode: string): boolean {
+  const ast = parseSource(sourceCode);
+  let hasDataRouterBuilder = false;
+  let hasRouterProvider = false;
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    if (node.importKind === 'type') continue;
+    const source = node.source.value as string;
+    // Web react-router sources only — React Navigation (native) is never pushState-navigable here.
+    if (!ROUTER_SHELL_SOURCES.has(source)) continue;
+    for (const spec of node.specifiers) {
+      if (spec.type !== 'ImportSpecifier') continue;
+      if (spec.importKind === 'type') continue;
+      const name = spec.imported.type === 'Identifier' ? spec.imported.name : null;
+      if (!name) continue;
+      if (PUSHSTATE_ROUTER_SHELL_IMPORTS.has(name)) return true;
+      if (DATA_ROUTER_BUILDERS.has(name)) hasDataRouterBuilder = true;
+      if (name === ROUTER_PROVIDER_IMPORT) hasRouterProvider = true;
+    }
+  }
+  return hasDataRouterBuilder && hasRouterProvider;
 }
 
 /**
