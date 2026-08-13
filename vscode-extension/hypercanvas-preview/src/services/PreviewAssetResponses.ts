@@ -81,3 +81,32 @@ export function shouldSwallowStaleBundleResponse(proxyPath: string, statusCode: 
   if (statusCode !== 403 && statusCode !== 404) return false;
   return isHashedBundlePath(proxyPath);
 }
+
+/**
+ * Max retry count for `/test-preview` 404/403/503 responses, before the proxy gives
+ * up. Backoff is `min(200 * 1.7^N, 4000)`ms per retry (see PreviewProxy._handleHttp).
+ *
+ * HYP-370 Phase 5 — walk back the inflated budget. Phases 2-4 added the webpack
+ * recompile gate (DevServerManager.awaitRecompile), which the iframe-loader
+ * callsites await BEFORE navigating the iframe after an entry-file patch. That
+ * serializes webpack's post-patch second compile OUT of this retry path, so the
+ * inflated 90-retry budget (~342s, b89b2e55) that masked the pre-gate race can be
+ * removed.
+ *
+ * The gate is webpack/parcel-only (armed via onBeforeWebpackEntryPatch; no-op for
+ * vite/remix/next). Remix SSR cold-start returns 403 for ~90-155s while routes
+ * compile, and the gate does NOT cover it — so Remix keeps its known-good
+ * pre-inflation budget (60 ≈ 222s, 682fdf22). 60 is a deliberate floor for Remix:
+ * tightening it further needs the SSR cold-start root-caused, which is out of scope
+ * for Phase 5.
+ *
+ * Everything else (webpack/Vite/Next) drops to the tight base bound (16 ≈ 46s) —
+ * the value all frameworks shared BEFORE Remix forced 60 and webpack forced 90.
+ * webpack is additionally gate-protected; Vite/Next rest on this restored
+ * historical-known-good base (they reach /test-preview after their fast initial
+ * compile, so the base FSWatch-lag budget suffices). The separate 504 retry path
+ * covers Vite's on-demand-transform 504s on module requests, not /test-preview.
+ */
+export function testPreviewRetryBudget(isRemixProject: boolean): number {
+  return isRemixProject ? 60 : 16;
+}

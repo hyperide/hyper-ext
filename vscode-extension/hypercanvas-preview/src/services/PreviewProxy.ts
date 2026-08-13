@@ -18,6 +18,7 @@ import {
   shouldRetryAssetResponse,
   shouldReturnEmptyAssetResponse,
   shouldSwallowStaleBundleResponse,
+  testPreviewRetryBudget,
 } from './PreviewAssetResponses';
 
 // Read pre-built iframe scripts (built by esbuild as IIFE bundles)
@@ -246,23 +247,30 @@ export class PreviewProxy {
       }
 
       // Retry for /test-preview 404/403/503 — handles dev server FSWatch lag after
-      // route file creation AND webpack-dev-server's second-compile gap (after
-      // _patchEntryFile, webpack rebuilds while iframe requests; retry budget
-      // must cover full recompile, not just FS watch). Also covers Remix SSR route
-      // compilation: dev server reports "ready" quickly but returns 403 while SSR
-      // routes are still compiling (~90-155s cold start).
-      // Exponential backoff: 200ms × 1.7^N caps at 4000ms per retry.
-      // 90 retries ≈ 342s total budget: 16 geometric + 74 × 4s = 46 + 296s.
-      // Extended from 60 (222s) to cover webpack second-compile gap: after
-      // patchEntryFile() writes __canvas_preview__.tsx, webpack triggers a second
-      // full compile (20-40s under Docker load), during which /test-preview returns
-      // 404. The first "compiled successfully" already fired, so DevServerManager
-      // declared ready, but the proxy was still hitting the pre-patch bundle.
+      // route file creation. Exponential backoff: 200ms × 1.7^N caps at 4000ms per
+      // retry. The budget is framework-split (see testPreviewRetryBudget):
+      //
+      // HYP-370 Phase 5 — the budget previously inflated to 90 retries (~342s) to
+      // mask the webpack second-compile gap: after _patchEntryFile writes
+      // __canvas_preview__.tsx, webpack triggers a second full compile (20-40s under
+      // Docker load) during which /test-preview returns 404. Phases 2-4 fixed the
+      // root ordering — the iframe-loader callsites now await DevServerManager's
+      // recompile gate (armRecompileGate / awaitRecompile) BEFORE navigating the
+      // iframe, so the post-patch compile is serialized out of this retry path for
+      // webpack. With that masking removed, the bound drops to a tight base of 16
+      // (~46s) for non-Remix — the value all frameworks shared before Remix/webpack
+      // forced inflation.
+      //
+      // The gate is webpack/parcel-only (no-op for vite/remix/next), and does NOT
+      // cover Remix SSR cold-start (403 for ~90-155s while routes compile), so Remix
+      // keeps its known-good pre-inflation budget of 60 (~222s, 682fdf22). Vite/Next
+      // also use 16 (gate is a no-op for them but their fast initial compile fits
+      // the base budget); webpack is additionally gate-protected.
       if (
         (proxyRes.statusCode === 404 || proxyRes.statusCode === 403 || proxyRes.statusCode === 503) &&
         proxyPath.startsWith('/test-preview') &&
         clientReq.method === 'GET' &&
-        retryCount < 90
+        retryCount < testPreviewRetryBudget(this._isRemixProject)
       ) {
         proxyRes.resume(); // drain response
         if (!clientReq.destroyed && !clientRes.headersSent) {

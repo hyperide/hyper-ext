@@ -12,7 +12,19 @@ import {
   shouldRetryAssetResponse,
   shouldReturnEmptyAssetResponse,
   shouldSwallowStaleBundleResponse,
+  testPreviewRetryBudget,
 } from '../PreviewAssetResponses';
+
+// Mirror of the proxy retry backoff: delay = min(200 * 1.7^N, 4000)ms, summed over N
+// retries. Lets the test assert the wall-clock budget the bound buys, proving a
+// never-succeeding request gives up in seconds, not the old ~342s.
+function totalRetryBudgetMs(retryLimit: number): number {
+  let total = 0;
+  for (let n = 0; n < retryLimit; n++) {
+    total += Math.min(200 * 1.7 ** n, 4000);
+  }
+  return total;
+}
 
 describe('PreviewAssetResponses', () => {
   it('classifies hashed Webpack script and stylesheet asset paths', () => {
@@ -60,5 +72,41 @@ describe('PreviewAssetResponses', () => {
     // Query params don't matter — pathname-only check.
     expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc.js?t=123', 403)).toBe(true);
     expect(shouldSwallowStaleBundleResponse('/main.dab7e2e77da0b120b394.css?cache=1', 404)).toBe(true);
+  });
+});
+
+describe('testPreviewRetryBudget (HYP-370 Phase 5 walk-back)', () => {
+  // Phases 2-4 added the webpack recompile gate (DevServerManager.awaitRecompile),
+  // which the iframe-loader callsites (extension.ts) await BEFORE navigating the
+  // iframe after an entry-file patch. That serializes the post-patch second compile
+  // OUT of the proxy's retry path for webpack — so the inflated 90-retry budget
+  // (~342s) that masked the pre-gate race can be walked back to a tight bound.
+  //
+  // The gate is webpack/parcel-only (armed via onBeforeWebpackEntryPatch; no-op for
+  // vite/remix/next). Remix SSR cold-start 403s (~90-155s) are NOT covered by the
+  // gate, so Remix keeps its known-good pre-inflation budget (60), while everything
+  // else drops to the tight base bound (16).
+  it('non-Remix projects get the tight base bound (gate-protected webpack + Vite 504 retry)', () => {
+    expect(testPreviewRetryBudget(false)).toBe(16);
+  });
+
+  it('Remix projects keep the known-good pre-inflation SSR cold-start bound', () => {
+    // Walked back from the inflated 90 to 60 — the gate does not cover Remix SSR
+    // compilation, so this is restored to its 682fdf22 value, not the base bound.
+    expect(testPreviewRetryBudget(true)).toBe(60);
+  });
+
+  it('a never-succeeding non-Remix request gives up in seconds, not the old ~342s', () => {
+    const tightMs = totalRetryBudgetMs(testPreviewRetryBudget(false));
+    // 16 geometric retries ≈ 46s — comfortably under a minute, and far below the
+    // ~342s the inflated 90-retry budget would burn before giving up.
+    expect(tightMs).toBeLessThan(60_000);
+    expect(totalRetryBudgetMs(90)).toBeGreaterThan(300_000); // sanity: the old bound really was ~342s
+  });
+
+  it('Remix bound stays bounded (no unbounded retry) and below the old inflated budget', () => {
+    const remixMs = totalRetryBudgetMs(testPreviewRetryBudget(true));
+    expect(remixMs).toBeLessThan(totalRetryBudgetMs(90));
+    expect(remixMs).toBeGreaterThan(totalRetryBudgetMs(16)); // still covers SSR cold-start
   });
 });
