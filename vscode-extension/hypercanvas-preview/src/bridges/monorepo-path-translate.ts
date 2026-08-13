@@ -25,7 +25,7 @@
 
 import { isAbsolute, join } from 'node:path';
 
-import { stripViteFsPrefix } from '@shared/element-tracing/path-normalization';
+import { stripViteFsPrefix, toProjectRelative } from '@shared/element-tracing/path-normalization';
 
 /** Convert any backslash separators to forward slashes. */
 function toForwardSlashes(p: string): string {
@@ -94,15 +94,48 @@ export function toRepoRelativePath(filePath: string, subProjectPrefix: string): 
  * Ids that don't match the `fileName:line:column` shape (e.g. synthetic refs)
  * are returned unchanged.
  */
-export function toRepoRelativeElementId(elementId: string, subProjectPrefix: string): string {
+/**
+ * Rewrite the `fileName` part of an element id / nodeRef (`fileName:line:column`)
+ * with `mapFileName`, preserving the `line:column` tail verbatim. Ids that don't
+ * match the shape (UUIDs, synthetic refs) are returned unchanged, as are ids whose
+ * mapped fileName is identical to the input.
+ */
+function mapElementIdFileName(elementId: string, mapFileName: (fileName: string) => string): string {
   if (!elementId) return elementId;
   const m = elementId.match(/^(.+):(\d+):(\d+)$/);
   if (!m) return elementId;
+  const mapped = mapFileName(m[1]);
+  if (mapped === m[1]) return elementId;
+  return `${mapped}:${m[2]}:${m[3]}`;
+}
+
+export function toRepoRelativeElementId(elementId: string, subProjectPrefix: string): string {
   // toRepoRelativePath strips `/@fs/` unconditionally (HYP-443) and applies the
   // sub-project prefix when present, so this works even for an empty prefix.
-  const translated = toRepoRelativePath(m[1], subProjectPrefix);
-  if (translated === m[1]) return elementId;
-  return `${translated}:${m[2]}:${m[3]}`;
+  return mapElementIdFileName(elementId, (fileName) => toRepoRelativePath(fileName, subProjectPrefix));
+}
+
+/**
+ * Normalize the `fileName` part of an element id / nodeRef (`fileName:line:column`)
+ * to PROJECT-relative when it carries an absolute filesystem path rooted under
+ * `workspaceRoot` — e.g. a `file://`-absolute source-map path leaking through the
+ * fiber resolution on Tamagui/vite projects (HYP-1173: `/abs/root/App.web.tsx:10:6`
+ * → `App.web.tsx:10:6`). A raw `file://` scheme prefix is stripped first (the
+ * source-map resolver normally does this upstream, but unmapped fallback paths can
+ * commit scheme-carrying values).
+ *
+ * Ids that are already relative, UUID-shaped, synthetic, or absolute OUTSIDE the
+ * workspace root are returned unchanged (fail closed — containment is enforced
+ * downstream by AstService/resolveContainedPath). Out of scope, documented: the
+ * Turbopack dropped-leading-slash shape (`test-workspace/src/App.tsx:10:6`,
+ * HYP-268) can't be distinguished from a genuinely relative path here and is
+ * handled by EditorBridge's restore-slash heuristic instead.
+ */
+export function toProjectRelativeElementId(elementId: string, workspaceRoot: string): string {
+  return mapElementIdFileName(elementId, (fileName) => {
+    const schemeStripped = fileName.startsWith('file://') ? fileName.replace(/^file:\/\//, '') : fileName;
+    return toProjectRelative(schemeStripped, workspaceRoot);
+  });
 }
 
 /**

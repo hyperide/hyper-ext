@@ -154,6 +154,84 @@ describe('fs-injection seam', () => {
     expect(isTamaguiProject(base, host)).toBe(false);
   });
 
+  test('mid-write truncated artifact recovers on re-read, without console.error (HYP-1173)', () => {
+    // Tamagui's compiler rewrites .tamagui/tamagui.config.json while the dev server
+    // starts; a concurrent read can see a truncated file (SyntaxError). The extractor
+    // must re-read once and must not log at error level for this transient state —
+    // the e2e fixture gate treats any console.error as a test failure.
+    const base = '/virt/project';
+    const artifact = `${base}/.tamagui/tamagui.config.json`;
+    const good = JSON.stringify(SAMPLE_ARTIFACT);
+    const host = makeMemHost({ [artifact]: good }, base);
+    const origRead = host.readFile;
+    let reads = 0;
+    host.readFile = (p: string) => {
+      const content = origRead(p);
+      reads++;
+      return reads === 1 ? content.slice(0, Math.floor(content.length / 2)) : content;
+    };
+    const errors: unknown[] = [];
+    const origError = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args);
+    };
+    try {
+      const { tokens } = extractTamaguiTokens(base, host);
+      expect(tokens.color).toContain('$blue1');
+      expect(errors).toHaveLength(0);
+    } finally {
+      console.error = origError;
+    }
+  });
+
+  test('persistently malformed artifact returns empty tokens with info, no console.error (HYP-1173)', () => {
+    const base = '/virt/project';
+    const artifact = `${base}/.tamagui/tamagui.config.json`;
+    const host = makeMemHost({ [artifact]: '{"tamaguiConfig": <truncated' }, base);
+    const errors: unknown[] = [];
+    const origError = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args);
+    };
+    try {
+      const result = extractTamaguiTokens(base, host);
+      expect(result.tokens).toEqual({ color: [], size: [], space: [] });
+      expect(result.info).toContain('Failed to parse');
+      expect(errors).toHaveLength(0);
+    } finally {
+      console.error = origError;
+    }
+  });
+
+  test('artifact vanishing mid-read (unlink+rename rewrite) is transient, no console.error (HYP-1173)', () => {
+    const base = '/virt/project';
+    const artifact = `${base}/.tamagui/tamagui.config.json`;
+    const host = makeMemHost({ [artifact]: JSON.stringify(SAMPLE_ARTIFACT) }, base);
+    const origRead = host.readFile;
+    let reads = 0;
+    host.readFile = (p: string) => {
+      reads++;
+      if (reads === 1) {
+        const err = new Error(`ENOENT: no such file or directory, open '${p}'`) as NodeJS.ErrnoException;
+        err.code = 'ENOENT';
+        throw err;
+      }
+      return origRead(p);
+    };
+    const errors: unknown[] = [];
+    const origError = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args);
+    };
+    try {
+      const { tokens } = extractTamaguiTokens(base, host);
+      expect(tokens.color).toContain('$blue1');
+      expect(errors).toHaveLength(0);
+    } finally {
+      console.error = origError;
+    }
+  });
+
   test('lazy readDir error during iteration is swallowed, not thrown (missing apps/packages)', () => {
     // Regression: a generator-backed readDir throws on first iteration, not at the call site.
     // The walk must treat a missing workspace dir as "skip", never propagate ENOENT.

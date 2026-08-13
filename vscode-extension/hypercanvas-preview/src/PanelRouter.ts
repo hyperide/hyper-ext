@@ -15,7 +15,11 @@ import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/so
 import type { I18nLibrary } from '@shared/i18n-text/types';
 import * as vscode from 'vscode';
 import { AstBridge } from './bridges/AstBridge';
-import { toRepoRelativeElementId, toRepoRelativePath } from './bridges/monorepo-path-translate';
+import {
+  toProjectRelativeElementId,
+  toRepoRelativeElementId,
+  toRepoRelativePath,
+} from './bridges/monorepo-path-translate';
 import { type EditorMessage, handleEditorMessage } from './EditorBridge';
 import type { StateHub } from './StateHub';
 import type { AstService } from './services/AstService';
@@ -193,6 +197,38 @@ export class PanelRouter {
     return message;
   }
 
+  /**
+   * Normalize fiber-derived element ids in a selection patch to project-relative
+   * form before they enter StateHub (the canonical selection store every consumer
+   * reads). Tamagui/vite source maps can leak a `file://`-absolute fiber path into
+   * iframe-emitted ids (`/abs/root/App.web.tsx:10:6`); AstService keys its node map
+   * project-relative, and e2e bridge readers join the id onto the project dir —
+   * both break on the absolute form (HYP-1173). Ids already relative, UUID-shaped,
+   * or absolute outside the workspace pass through unchanged.
+   */
+  private _normalizeSelectionPatch(patch: Partial<SharedEditorState>): Partial<SharedEditorState> {
+    if (!patch || typeof patch !== 'object') return patch;
+    const root = this._workspaceRoot;
+    const normalizeId = (id: unknown): unknown => (typeof id === 'string' ? toProjectRelativeElementId(id, root) : id);
+    const next: Partial<SharedEditorState> = { ...patch };
+    if (Array.isArray(patch.selectedIds)) {
+      next.selectedIds = patch.selectedIds.map((id) => normalizeId(id) as string);
+    }
+    if ('hoveredId' in next) next.hoveredId = normalizeId(patch.hoveredId) as string | null;
+    if ('insertTargetId' in next) next.insertTargetId = normalizeId(patch.insertTargetId) as string | null;
+    // The record is keyed by the same raw element id as selectedIds — leave the
+    // keys unnormalized and every `selectedItemIndices[selectedId]` lookup misses
+    // (map-row context silently lost on Tamagui absolute-id leaks).
+    if (patch.selectedItemIndices && typeof patch.selectedItemIndices === 'object') {
+      const remapped: Record<string, number | null> = {};
+      for (const [key, value] of Object.entries(patch.selectedItemIndices)) {
+        remapped[normalizeId(key) as string] = value;
+      }
+      next.selectedItemIndices = remapped;
+    }
+    return next;
+  }
+
   get componentService(): ComponentService {
     this._ensureCurrentWorkspace();
     return this._componentService;
@@ -325,7 +361,7 @@ export class PanelRouter {
     // State sync
     if (type === 'state:update') {
       const { patch } = message as { patch: Partial<SharedEditorState> };
-      this._stateHub.applyUpdate(patch);
+      this._stateHub.applyUpdate(this._normalizeSelectionPatch(patch));
       return true;
     }
 

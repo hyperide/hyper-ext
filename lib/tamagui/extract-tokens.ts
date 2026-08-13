@@ -277,18 +277,39 @@ export function extractTamaguiTokens(
     };
   }
 
-  try {
-    const size = fs.statSize(artifactPath);
-    if (size > MAX_ARTIFACT_BYTES) {
-      return { tokens: { ...EMPTY_TOKENS }, info: 'Tamagui config artifact too large to parse.' };
+  // The Tamagui compiler rewrites the artifact while the dev server starts, so a
+  // concurrent read can catch a truncated file (JSON SyntaxError at some mid-file
+  // offset). Re-read once before giving up; a persistently malformed artifact still
+  // degrades to empty tokens, but neither case is user-actionable, so neither logs
+  // at error level (HYP-1173 — an Extension Host console.error here tripped the e2e
+  // iframe/diagnostic error gate on every Tamagui project).
+  const MAX_READ_ATTEMPTS = 2;
+  for (let attempt = 0; attempt < MAX_READ_ATTEMPTS; attempt++) {
+    try {
+      const size = fs.statSize(artifactPath);
+      if (size > MAX_ARTIFACT_BYTES) {
+        return { tokens: { ...EMPTY_TOKENS }, info: 'Tamagui config artifact too large to parse.' };
+      }
+      const raw = fs.readFile(artifactPath);
+      const parsed = JSON.parse(raw);
+      return { tokens: extractTamaguiTokensFromArtifact(parsed) };
+    } catch (error) {
+      // Transient mid-write states: truncated JSON (truncate+write) or the file
+      // vanishing between discovery and read (unlink+rename rewrite). Both self-heal
+      // once the compiler finishes — retry once, then degrade quietly.
+      const code = (error as NodeJS.ErrnoException)?.code;
+      const transient = error instanceof SyntaxError || code === 'ENOENT' || code === 'EBUSY' || code === 'EPERM';
+      if (!transient) {
+        console.error('[extractTamaguiTokens] Failed to read/parse artifact:', error);
+        return { tokens: { ...EMPTY_TOKENS }, info: 'Failed to parse Tamagui config artifact.' };
+      }
     }
-    const raw = fs.readFile(artifactPath);
-    const parsed = JSON.parse(raw);
-    return { tokens: extractTamaguiTokensFromArtifact(parsed) };
-  } catch (error) {
-    console.error('[extractTamaguiTokens] Failed to read/parse artifact:', error);
-    return { tokens: { ...EMPTY_TOKENS }, info: 'Failed to parse Tamagui config artifact.' };
   }
+  // The race self-healed or the artifact is genuinely corrupt — either way the caller
+  // gets the empty-token fallback with an explanatory info string; no console output
+  // (the e2e unexpected-console gate counts any console.* as a failure, and this
+  // degraded path is expected during compiler rewrites).
+  return { tokens: { ...EMPTY_TOKENS }, info: 'Failed to parse Tamagui config artifact.' };
 }
 
 /**

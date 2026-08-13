@@ -127,6 +127,81 @@ describe('PanelRouter', () => {
     expect(stateHub.applyUpdate).toHaveBeenCalledWith({ hoveredId: 'x' });
   });
 
+  it('normalizes absolute file paths in selection ids to project-relative on state:update (HYP-1173)', async () => {
+    // Tamagui/vite source maps can leak a file://-absolute fiber path into the
+    // iframe-emitted element id (`/abs/root/App.web.tsx:10:6`). StateHub is the
+    // canonical selection store — every consumer (AstService, e2e bridge reads)
+    // expects project-relative ids, so normalize at the ingest choke point.
+    const wv = createMockWebview();
+    const handled = await router.routeMessage(
+      {
+        type: 'state:update',
+        patch: {
+          selectedIds: ['/test-workspace/App.web.tsx:10:6'],
+          hoveredId: '/test-workspace/src/screens/HomeScreen.tsx:20:4',
+        },
+      },
+      wv as never,
+    );
+    expect(handled).toBe(true);
+    expect(stateHub.applyUpdate).toHaveBeenCalledWith({
+      selectedIds: ['App.web.tsx:10:6'],
+      hoveredId: 'src/screens/HomeScreen.tsx:20:4',
+    });
+  });
+
+  it('remaps selectedItemIndices keys and insertTargetId alongside selectedIds (HYP-1173)', async () => {
+    // The record is keyed by element id; normalizing only selectedIds would orphan
+    // the per-element map-row context (consumers look up selectedItemIndices[selectedId]).
+    const wv = createMockWebview();
+    const handled = await router.routeMessage(
+      {
+        type: 'state:update',
+        patch: {
+          selectedIds: ['/test-workspace/src/HomeScreen.tsx:5:2'],
+          selectedItemIndices: { '/test-workspace/src/HomeScreen.tsx:5:2': 3 },
+          insertTargetId: '/test-workspace/src/HomeScreen.tsx:5:2',
+        },
+      },
+      wv as never,
+    );
+    expect(handled).toBe(true);
+    expect(stateHub.applyUpdate).toHaveBeenCalledWith({
+      selectedIds: ['src/HomeScreen.tsx:5:2'],
+      selectedItemIndices: { 'src/HomeScreen.tsx:5:2': 3 },
+      insertTargetId: 'src/HomeScreen.tsx:5:2',
+    });
+  });
+
+  it('strips a raw file:// scheme before normalizing selection ids (HYP-1173)', async () => {
+    const wv = createMockWebview();
+    const handled = await router.routeMessage(
+      { type: 'state:update', patch: { selectedIds: ['file:///test-workspace/App.web.tsx:10:6'] } },
+      wv as never,
+    );
+    expect(handled).toBe(true);
+    expect(stateHub.applyUpdate).toHaveBeenCalledWith({ selectedIds: ['App.web.tsx:10:6'] });
+  });
+
+  it('leaves relative, UUID, and out-of-workspace ids untouched on state:update', async () => {
+    const wv = createMockWebview();
+    const handled = await router.routeMessage(
+      {
+        type: 'state:update',
+        patch: {
+          selectedIds: ['src/App.tsx:1:1', '4a17a946-6cb6-4ed4-9ce1-ce47861b657f', '/other/root/App.tsx:3:2'],
+          hoveredId: null,
+        },
+      },
+      wv as never,
+    );
+    expect(handled).toBe(true);
+    expect(stateHub.applyUpdate).toHaveBeenCalledWith({
+      selectedIds: ['src/App.tsx:1:1', '4a17a946-6cb6-4ed4-9ce1-ce47861b657f', '/other/root/App.tsx:3:2'],
+      hoveredId: null,
+    });
+  });
+
   it('broadcasts iframe:scrollToElement through stateHub instead of echoing to sender', async () => {
     // Regression: prior implementation called webview.postMessage(message) which only
     // echoed back to the sending panel (LeftPanel webview). The PreviewPanel webview
