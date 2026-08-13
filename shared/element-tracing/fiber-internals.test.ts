@@ -79,6 +79,33 @@ describe('parseDebugStackFrames', () => {
     ].join('\n');
     expect(parseDebugStackFrames(err)).toEqual([]);
   });
+
+  it('drops the Vite dep pre-bundling cache frame (single-package: node_modules/.vite/deps/)', () => {
+    const err = new Error();
+    err.stack = [
+      'Error: react-stack-top-frame',
+      '    at exports.jsxDEV (http://localhost:5173/node_modules/.vite/deps/react_jsx-dev-runtime.js:246:30)',
+      '    at MyComponent (http://localhost:5173/src/MyComponent.tsx:12:5)',
+    ].join('\n');
+    expect(parseDebugStackFrames(err)).toEqual([{ fileName: 'src/MyComponent.tsx', line: 12, column: 4 }]);
+  });
+
+  it('drops the Vite dep cache frame even with a monorepo sub-project segment inserted (HYP-897)', () => {
+    // Vite's default cacheDir for a monorepo workspace sub-project is
+    // `node_modules/.vite/<subProjectName>/deps/`, not the single-package
+    // `node_modules/.vite/deps/` — a fixed literal substring match misses this
+    // shape, so jsxDEV's own internal frame (always first) was wrongly kept as
+    // the "source", collapsing every element in the app onto that one bogus
+    // internal location (conloca-app, live-reproduced).
+    const err = new Error();
+    err.stack = [
+      'Error: react-stack-top-frame',
+      '    at exports.jsxDEV (http://localhost:55513/@fs/Users/ultra/work/conloca-private/node_modules/.vite/targets/conloca-app/deps/react_jsx-dev-runtime.js?v=bec84ed6:246:30)',
+      '    at HostRoutePage (http://localhost:55513/src/app/ui/HostRoutePage.tsx:17:26)',
+      '    at Object.react_stack_bottom_frame (http://localhost:55513/@fs/Users/ultra/work/conloca-private/node_modules/.vite/targets/conloca-app/deps/react-dom_client.js?v=bec84ed6:18509:20)',
+    ].join('\n');
+    expect(parseDebugStackFrames(err)).toEqual([{ fileName: 'src/app/ui/HostRoutePage.tsx', line: 17, column: 25 }]);
+  });
 });
 
 describe('recoverNonSyntheticSourceLocation', () => {

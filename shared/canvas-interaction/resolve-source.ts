@@ -15,6 +15,7 @@ import {
   type Fiber,
   getItemIndexFromFiber,
   isRenderedFilePath,
+  parseDebugStack,
   recoverNonSyntheticSourceLocation,
 } from '../element-tracing/fiber-internals';
 import { isSyntheticPreviewPath } from '../element-tracing/synthetic-preview';
@@ -73,7 +74,28 @@ export function resolveCallSiteTarget(
   // rendered component's source from the fiber tree; if it isn't reachable,
   // recoverNonSyntheticSourceLocation returns null and we keep the synthetic directSource
   // as a retry sentinel (the click path defers it to the source-map warm-retry).
-  if (isSyntheticPreviewPath(directSource.fileName)) {
+  // Recovery (above) already runs a thorough, React-19-aware ancestor+descendant scan
+  // (walkFiberSourceCandidates / findDescendantSource, every _debugStack frame). If the
+  // direct source STARTED synthetic and that scan still found nothing, the call-site
+  // walk below must NOT retry with a looser "first different file" match — that would
+  // commit an unrelated ancestor frame (e.g. the app entry) instead of deferring to the
+  // warm-retry sentinel (HYP-424's "does NOT settle for an unrelated ancestor frame",
+  // still green after this change).
+  //
+  // Gating the walk on `directSourceWasSynthetic` (rather than on "recovery found
+  // nothing") is safe because recovery success already short-circuits BEFORE the walk
+  // is reached: `recoverNonSyntheticSourceLocation`'s own acceptance predicate is
+  // `!isSyntheticPreviewPath(loc) && isRenderedFilePath(loc, renderedFile)`, so any
+  // `recovered !== null` result is BY CONSTRUCTION already in the rendered file — the
+  // `isFromRenderedFile` early-return two lines below always fires first in that case,
+  // in both the pre- and post-this-change code. The gate below only ever changes
+  // behavior on the "recovery found nothing, directSource stayed synthetic" path —
+  // covered by resolve-source.test.ts's "does NOT settle for an unrelated ancestor
+  // frame ... (HYP-424)", which already exercises a `_debugStack`-only ancestor
+  // (React 19 shape) and still asserts the synthetic direct source is kept, not
+  // "main.tsx" — that test stays green after this diff's `_debugStack` support.
+  const directSourceWasSynthetic = isSyntheticPreviewPath(directSource.fileName);
+  if (directSourceWasSynthetic) {
     const recovered = recoverNonSyntheticSourceLocation(fiber, renderedFile);
     if (recovered !== null) directSource = recovered;
   }
@@ -88,11 +110,22 @@ export function resolveCallSiteTarget(
 
   // Source is from an imported component (e.g. Button.tsx internal <button>).
   // Walk up fiber to find the CALL SITE — first source from a DIFFERENT file.
-  let current = fiber.return;
-  for (let i = 0; i < 30 && current; i++) {
-    if (current._debugSource) {
-      const callerSource = debugSourceToLocation(current._debugSource);
-      if (callerSource.fileName !== directSource.fileName) {
+  // Skipped when directSource started synthetic (see comment above).
+  if (!directSourceWasSynthetic) {
+    let current = fiber.return;
+    for (let i = 0; i < 30 && current; i++) {
+      // React 18 sets `_debugSource`; React 19 sets `_debugStack` instead (never both) —
+      // an ancestor carrying only `_debugStack` was previously invisible here, so for a
+      // React 19 app the call site was never found and the element's own (wrong-file)
+      // source was committed, silently mismatching the AST-computed nodeRef (HYP-897:
+      // Explorer-tree selection on an imported component never showed a selection
+      // overlay, e.g. conloca-app's <HostRoutePage> — a real recurring product bug).
+      const callerSource = current._debugSource
+        ? debugSourceToLocation(current._debugSource)
+        : current._debugStack
+          ? parseDebugStack(current._debugStack)
+          : null;
+      if (callerSource && callerSource.fileName !== directSource.fileName) {
         // The synthetic preview entry (__canvas_preview__.tsx) imports and renders
         // the user component, so it is the first cross-file ancestor — but it is
         // never a valid go-to-code target. When the call site is the synthetic
@@ -101,8 +134,8 @@ export function resolveCallSiteTarget(
         if (isSyntheticPreviewPath(callerSource.fileName)) break;
         return { source: callerSource, itemIndex: getItemIndexFromFiber(current) };
       }
+      current = current.return;
     }
-    current = current.return;
   }
 
   // No cross-file match — use direct source as fallback

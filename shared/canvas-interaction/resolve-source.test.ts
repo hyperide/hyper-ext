@@ -294,6 +294,65 @@ describe('resolveCallSiteTarget', () => {
     expect(result.source).toEqual(syntheticDirect);
   });
 
+  it('finds the call site via _debugStack when the imported component ancestor has no _debugSource — React 19 (HYP-897)', () => {
+    // Real-world repro (conloca-app, live-verified): OrgSettingsPage.tsx renders
+    // <HostRoutePage> (an imported, cross-file component). HostRoutePage's own
+    // implementation lives in a different file and returns a host <div> directly —
+    // in React 19 that div's nearest ancestor with source info is the HostRoutePage
+    // component fiber itself, which carries ONLY `_debugStack` (React 19 never sets
+    // `_debugSource`). The old call-site walk checked `current._debugSource`
+    // exclusively, so for a React 19 app it silently found no cross-file ancestor
+    // and fell through to the direct (wrong-file) source — the Explorer-tree
+    // selection's nodeRef (computed from the AST call site "OrgSettingsPage.tsx:56:4")
+    // then never matched the FiberSourceIndex key built from this resolution,
+    // so `findElementsByRef` missed and the selection overlay never rendered.
+    const hostRoutePage = makeStackFiber('src/app/org-settings/OrgSettingsPage.tsx', 56, 5, {
+      tag: 0,
+      type: function HostRoutePage() {},
+    });
+    const internalDiv = makeStackFiber('src/app/ui/HostRoutePage.tsx', 12, 4, {
+      tag: 5,
+      type: 'div',
+      return: hostRoutePage,
+    });
+    hostRoutePage.child = internalDiv;
+
+    const directSource = source({ fileName: 'src/app/ui/HostRoutePage.tsx', line: 12, column: 3 });
+    const result = resolveCallSiteTarget(directSource, internalDiv, 'src/app/org-settings/OrgSettingsPage.tsx', 0);
+
+    expect(result.source).toEqual({
+      fileName: 'src/app/org-settings/OrgSettingsPage.tsx',
+      line: 56,
+      column: 4,
+    });
+  });
+
+  it('does not use a _debugStack-only ancestor as the call site when directSource started synthetic and recovery found nothing (gate x React 19, HYP-897)', () => {
+    // Directly locks in the interaction this diff introduces: adding `_debugStack`
+    // support to the call-site walk must NOT resurrect the HYP-424 "unrelated ancestor"
+    // regression for a React 19 app. Same shape as the pre-existing HYP-424 "does NOT
+    // settle for an unrelated ancestor frame" test above (an ancestor whose ONLY source
+    // is `_debugStack`, e.g. an app entry point that isn't the rendered file), asserted
+    // here under its own name so the gate x _debugStack interaction has a direct test,
+    // not just a shared inference from an older test.
+    const appEntry = makeStackFiber('src/main.tsx', 10, 92, { tag: 0, type: function App() {} });
+    const clickedDiv = makeStackFiber('src/__canvas_preview__.tsx', 969, 31, {
+      tag: 5,
+      type: 'div',
+      return: appEntry,
+    });
+    appEntry.child = clickedDiv;
+
+    const syntheticDirect = source({ fileName: 'src/__canvas_preview__.tsx', line: 969, column: 30 });
+    const result = resolveCallSiteTarget(syntheticDirect, clickedDiv, 'src/components/ChatInputBar.tsx', 0);
+
+    // appEntry has ONLY `_debugStack` (no `_debugSource`) — before this diff it was
+    // invisible to the call-site walk entirely; after this diff the walk CAN read it,
+    // but the synthetic-direct-source gate must still keep it from being committed.
+    expect(result.source.fileName).not.toContain('main.tsx');
+    expect(result.source).toEqual(syntheticDirect);
+  });
+
   it('uses the rendered-file ancestor item index when clicking a nested child inside a map item', () => {
     const buttonSource: DebugSource = {
       fileName: '/app/src/components/Sidebar.tsx',

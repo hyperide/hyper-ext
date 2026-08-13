@@ -183,8 +183,6 @@ const REACT_INTERNAL_PATTERNS = [
   'node_modules/react-dom/',
   'node_modules\\react-dom\\',
   'node_modules/scheduler/',
-  'node_modules/.vite/deps/',
-  'node_modules\\.vite\\deps\\',
   // Next.js URL paths (served via HTTP): compiled chunks — not source files
   '_next/static/chunks/',
   '_next/server/chunks/',
@@ -196,9 +194,23 @@ const REACT_INTERNAL_PATTERNS = [
   'webpack-internal:',
 ];
 
+// Vite's dep pre-bundling cache. In a single-package repo this is
+// `node_modules/.vite/deps/`, but Vite's default `cacheDir` for a monorepo
+// WORKSPACE/sub-project includes an extra path segment naming that
+// sub-project — e.g. `node_modules/.vite/targets/conloca-app/deps/`. A fixed
+// literal substring match missed that shape entirely, so `jsxDEV`'s own
+// internal frame (always the first frame of a React 19 `_debugStack`) was
+// never recognized as internal: `parseDebugStack` then returned THIS
+// bundler-internal frame as the "source" for every single element in the
+// app, collapsing the FiberSourceIndex onto one bogus location and making
+// every Explorer-tree selection miss (no selection overlay ever rendered) —
+// HYP-897, live-reproduced against conloca-app's monorepo dev server.
+const VITE_DEPS_CACHE_PATTERN = /node_modules[\\/]\.vite[\\/](?:[^\\/]+[\\/])*deps[\\/]/;
+
 function isInternalUrl(url: string): boolean {
   // <anonymous> appears for eval'd code, unnamed scripts, and some SSR contexts
   if (url.startsWith('<')) return true;
+  if (VITE_DEPS_CACHE_PATTERN.test(url)) return true;
   return REACT_INTERNAL_PATTERNS.some((p) => url.includes(p));
 }
 
