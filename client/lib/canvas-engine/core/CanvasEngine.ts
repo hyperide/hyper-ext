@@ -377,10 +377,12 @@ export class CanvasEngine {
       instanceId?: string;
       state?: string;
       selectedSourceTabId?: string;
+      elementLoc?: { line: number; column: number; endLine?: number; endColumn?: number };
     },
   ): Promise<void> | undefined {
     const operation = new ASTStyleOperation(this.api, {
       elementId,
+      elementLoc: options?.elementLoc,
       filePath,
       styles,
       domClasses: options?.domClasses,

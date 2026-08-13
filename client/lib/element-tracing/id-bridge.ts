@@ -81,6 +81,29 @@ export function resolveNodeRefToUuid(id: string, engine: CanvasEngine): string {
 }
 
 /**
+ * Get the Babel source location of an AST node by its UUID.
+ * Feeds the style-write loc fallback (HYP-593): the server cross-checks this loc
+ * against its node map when the selected id is a parse UUID it cannot resolve.
+ */
+export function getElementLocByUuid(
+  id: string,
+  engine: CanvasEngine,
+): { line: number; column: number; endLine?: number; endColumn?: number } | null {
+  let astNode: ASTNode | null = null;
+  for (const tree of getAstTrees(engine)) {
+    astNode = findNodeById(tree, id);
+    if (astNode) break;
+  }
+  if (!astNode?.loc) return null;
+  return {
+    line: astNode.loc.start.line,
+    column: astNode.loc.start.column,
+    endLine: astNode.loc.end.line,
+    endColumn: astNode.loc.end.column,
+  };
+}
+
+/**
  * Resolve a UUID to the corresponding nodeRef.
  * Returns the original id unchanged if resolution fails or id is already a nodeRef.
  */

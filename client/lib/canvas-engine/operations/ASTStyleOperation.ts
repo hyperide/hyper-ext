@@ -12,6 +12,7 @@ import { BaseOperation } from './Operation';
 
 interface ASTStyleOperationParams {
   elementId: string;
+  elementLoc?: { line: number; column: number; endLine?: number; endColumn?: number };
   filePath: string;
   styles: Record<string, string>;
   domClasses?: string;
@@ -69,6 +70,7 @@ export class ASTStyleOperation extends BaseOperation {
     // Apply style changes — middleware saves pre-mutation snapshot automatically
     const result = await this.api.updateStyles({
       selectedId: this.params.elementId,
+      elementLoc: this.params.elementLoc,
       filePath: this.params.filePath,
       styles: this.params.styles,
       domClasses: this.params.domClasses,

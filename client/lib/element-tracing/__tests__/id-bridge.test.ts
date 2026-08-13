@@ -1,6 +1,12 @@
 import { describe, expect, it, mock } from 'bun:test';
 import type { ASTNode } from '../../canvas-engine/types/ast';
-import { findAstNodeBySourceLoc, resolveIdsToUuids, resolveNodeRefToUuid, resolveUuidToNodeRef } from '../id-bridge';
+import {
+  findAstNodeBySourceLoc,
+  getElementLocByUuid,
+  resolveIdsToUuids,
+  resolveNodeRefToUuid,
+  resolveUuidToNodeRef,
+} from '../id-bridge';
 
 // Mock active tracer
 const mockGetSourceByNodeRef = mock();
@@ -126,6 +132,34 @@ describe('resolveUuidToNodeRef', () => {
 
     const result = resolveUuidToNodeRef('uuid-div-1', mockEngine as never);
     expect(result).toBe('uuid-div-1');
+  });
+});
+
+// --------------------------------------------------------------------------
+// getElementLocByUuid
+// --------------------------------------------------------------------------
+
+describe('getElementLocByUuid', () => {
+  it('should return start and end source location for a known UUID', () => {
+    const result = getElementLocByUuid('uuid-button-1', mockEngine as never);
+    expect(result).toEqual({ line: 7, column: 6, endLine: 7, endColumn: 30 });
+  });
+
+  it('should return null for an unknown UUID', () => {
+    const result = getElementLocByUuid('nonexistent-uuid', mockEngine as never);
+    expect(result).toBeNull();
+  });
+
+  it('should return null when the node has no loc', () => {
+    const noLocEngine = {
+      getRoot: () => ({
+        metadata: { sampleStructure: [{ id: 'uuid-no-loc', type: 'div' }] as ASTNode[] },
+        children: [],
+      }),
+      getInstance: () => null,
+    };
+    const result = getElementLocByUuid('uuid-no-loc', noLocEngine as never);
+    expect(result).toBeNull();
   });
 });
 

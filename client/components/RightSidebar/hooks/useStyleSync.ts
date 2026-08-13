@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasEngine } from '@/lib/canvas-engine';
 import type { StyleAdapter } from '@/lib/canvas-engine/adapters/StyleAdapter';
 import { getDOMClassesFromIframe } from '@/lib/dom-utils';
+import { getElementLocByUuid, resolveUuidToNodeRef } from '@/lib/element-tracing/id-bridge';
 import type { AstOperations } from '@/lib/platform/types';
 import {
   captureComputedStyles,
@@ -113,6 +114,12 @@ export function useStyleSync({
       return;
     }
 
+    // Tree selection stores parse UUIDs the server can never resolve (HYP-593):
+    // convert to a tracer nodeRef when possible, and carry the AST loc so the
+    // server can fall back to a node-map loc match when conversion misses.
+    const writeId = engine ? resolveUuidToNodeRef(selectedId, engine) : selectedId;
+    const elementLoc = engine ? (getElementLocByUuid(selectedId, engine) ?? undefined) : undefined;
+
     const styles = Object.fromEntries(styleQueueRef.current);
     styleQueueRef.current.clear();
 
@@ -127,7 +134,7 @@ export function useStyleSync({
     const skipVerification = !!currentState || cssProperties.length === 0;
 
     // Capture before-snapshot (before engine call)
-    const beforeSnapshot = !skipVerification ? captureComputedStyles(selectedId, cssProperties) : null;
+    const beforeSnapshot = !skipVerification ? captureComputedStyles(writeId, cssProperties) : null;
 
     setIsStyleSyncing(true);
     onSyncStart?.();
@@ -137,20 +144,21 @@ export function useStyleSync({
         // SaaS browser mode: route through engine for undo/redo support
         console.log('[useStyleSync] Syncing style changes via engine:', styles);
 
-        const domClasses = getDOMClassesFromIframe(selectedId);
+        const domClasses = getDOMClassesFromIframe(writeId);
 
         let backendPromise: Promise<void> | undefined;
 
         if (styleAdapter.writeMode === 'props' && styleAdapter.convertToProps) {
           const rnProps = styleAdapter.convertToProps(styles);
-          engine.updateASTProps(selectedId, filePath, rnProps);
+          engine.updateASTProps(writeId, filePath, rnProps);
         } else {
-          backendPromise = engine.updateASTStyles(selectedId, filePath, styles, {
+          backendPromise = engine.updateASTStyles(writeId, filePath, styles, {
             domClasses,
             instanceProps: {},
             instanceId: selectedId,
             state: currentState,
             selectedSourceTabId,
+            elementLoc,
           });
         }
 
@@ -161,7 +169,7 @@ export function useStyleSync({
         } else {
           // Start verification pipeline
           verificationCleanupRef.current = startStyleVerification({
-            elementId: selectedId,
+            elementId: writeId,
             filePath,
             styles,
             cssProperties,

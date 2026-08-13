@@ -124,8 +124,17 @@ export interface PasteElementResult {
   error?: string;
 }
 
+/** Babel source loc of the element, as known to the client AST (HYP-593 server fallback). */
+interface ElementSourceLoc {
+  line: number;
+  column: number;
+  endLine?: number;
+  endColumn?: number;
+}
+
 export interface UpdateStylesParams {
   selectedId: string;
+  elementLoc?: ElementSourceLoc;
   filePath: string;
   styles: Record<string, string>;
   domClasses?: string;
