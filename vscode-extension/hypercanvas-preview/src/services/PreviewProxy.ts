@@ -12,6 +12,7 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as net from 'node:net';
 import * as path from 'node:path';
+import { listenLoopback } from './netProbe';
 import {
   getPreviewAssetContentType,
   shouldRetryAssetResponse,
@@ -125,22 +126,22 @@ export class PreviewProxy {
       this._handleUpgrade(req, socket as net.Socket, head);
     });
 
-    // Find random port and listen
-    await new Promise<void>((resolve, reject) => {
-      this._server?.listen(0, 'localhost', () => {
-        const addr = this._server?.address();
-        if (addr && typeof addr === 'object') {
-          this._proxyPort = addr.port;
-          // Server-side startup log — useful for debugging proxy configuration in extension host
-          console.log(`[PreviewProxy] Listening on port ${this._proxyPort}, proxying to ${this._targetPort}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-        }
-        resolve();
-      });
-      this._server?.on('error', (err) => {
-        this._server = null;
-        reject(err);
-      });
-    });
+    // Find random port and listen on loopback ('localhost', same as before) via
+    // the shared net-probe util. The webview addresses the proxy by 'localhost'
+    // (see get url()); binding 'localhost' keeps it loopback-only and reachable
+    // by that client.
+    const server = this._server;
+    if (!server) {
+      throw new Error('PreviewProxy server not initialized');
+    }
+    try {
+      this._proxyPort = await listenLoopback(server, 0, 'localhost');
+      // Server-side startup log — useful for debugging proxy configuration in extension host
+      console.log(`[PreviewProxy] Listening on port ${this._proxyPort}, proxying to ${this._targetPort}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    } catch (err) {
+      this._server = null;
+      throw err;
+    }
   }
 
   /**

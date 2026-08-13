@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { listenLoopback } from '../services/netProbe';
 import { registerAstTools } from './tools/ast-tools';
 import { registerComponentTools } from './tools/component-tools';
 import { registerExtensionTools } from './tools/extension-tools';
@@ -93,19 +94,13 @@ export class HyperMcpServer {
 
     const httpServer = this._httpServer;
 
-    return new Promise((resolve, reject) => {
-      httpServer.listen(0, '127.0.0.1', () => {
-        const addr = httpServer.address();
-        if (addr && typeof addr !== 'string') {
-          this._port = addr.port;
-          console.log(`[HyperMCP] Server started on http://127.0.0.1:${this._port}/mcp`);
-          resolve(this._port);
-        } else {
-          reject(new Error('Failed to get server address'));
-        }
-      });
-
-      httpServer.on('error', reject);
+    // Bind loopback (127.0.0.1) via the shared net-probe util — same host as
+    // before, now through the shared address-extraction plumbing. Stays
+    // loopback-only so the MCP endpoint is not reachable from the LAN.
+    return listenLoopback(httpServer, 0).then((port) => {
+      this._port = port;
+      console.log(`[HyperMCP] Server started on http://127.0.0.1:${this._port}/mcp`);
+      return port;
     });
   }
 

@@ -6,11 +6,11 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
-import * as net from 'node:net';
 import * as vscode from 'vscode';
 import { ERROR_PATTERNS, SUCCESS_PATTERNS } from '../../../../shared/log-patterns';
 import type { RuntimeError } from '../../../../shared/runtime-error';
 import type { DevServerState, DevServerStatus } from '../types';
+import { findFreePort, probeOpen } from './netProbe';
 import { PreviewProxy } from './PreviewProxy';
 import { detectPackageManager, getPackageScripts, getProjectInfo } from './ProjectDetector';
 
@@ -594,30 +594,12 @@ export class DevServerManager {
   }
 
   /**
-   * Find a free port starting from default
+   * Find a free port starting from default. Delegates to the shared IPv6-aware
+   * net-probe util so the bind and the liveness probe agree on the same surface
+   * (127.0.0.1 AND ::1), instead of disagreeing on an IPv6-only bind.
    */
-  private async _findFreePort(startPort: number): Promise<number> {
-    const isPortFree = (port: number): Promise<boolean> => {
-      return new Promise((resolve) => {
-        const server = net.createServer();
-        server.once('error', () => resolve(false));
-        server.once('listening', () => {
-          server.close();
-          resolve(true);
-        });
-        server.listen(port, '127.0.0.1');
-      });
-    };
-
-    let port = startPort;
-    while (!(await isPortFree(port))) {
-      port++;
-      if (port > startPort + 100) {
-        throw new Error('Could not find free port');
-      }
-    }
-
-    return port;
+  private _findFreePort(startPort: number): Promise<number> {
+    return findFreePort(startPort);
   }
 
   /**
@@ -737,34 +719,14 @@ export class DevServerManager {
   }
 
   /**
-   * Check if port is accepting connections
+   * Check if port is accepting connections. Delegates to the shared net-probe
+   * util, which connects to both 127.0.0.1 and ::1 so a dev server bound to
+   * either loopback family is detected (previously this connected to
+   * 'localhost' while _findFreePort bound '127.0.0.1', disagreeing on an
+   * IPv6-only bind).
    */
   private _isPortOpen(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const socket = new net.Socket();
-      socket.setTimeout(1000);
-
-      socket.on('connect', () => {
-        socket.destroy();
-        resolve(true);
-      });
-
-      socket.on('error', () => {
-        socket.destroy();
-        resolve(false);
-      });
-
-      socket.on('timeout', () => {
-        socket.destroy();
-        resolve(false);
-      });
-
-      // Use 'localhost' instead of '127.0.0.1' — modern systems resolve
-      // localhost to IPv6 ::1, and Vite/Next.js bind to localhost by default.
-      // Hardcoding 127.0.0.1 caused "Server failed to start" on any dev
-      // server that binds to IPv6.
-      socket.connect(port, 'localhost');
-    });
+    return probeOpen(port);
   }
 
   /**
