@@ -38,6 +38,13 @@
     //   server/main.ts, served at /__hypercanvas/iframe-console-capture.js, and
     //   bundled as an esbuild entryPoint in the extension (esbuild.js).
     "shared/scripts/iframe-console-capture.js",
+    // - process-shim.js / chrome-detection.js: read via readFileSync in
+    //   server/proxy/hypercanvas-scripts.ts and served at /__hypercanvas/*.js for
+    //   SaaS-hosted Remix previews (HYP-758). Same runtime-load case — knip can't
+    //   see the readFileSync ref. Their behavioral twins live inline in the
+    //   extension's PreviewProxy.ts (SYNC-noted in each source).
+    "shared/scripts/process-shim.js",
+    "shared/scripts/chrome-detection.js",
     // DOUBTFUL — pending CTO decision (HYP-489 follow-up ticket). NOT confirmed
     // dead; do not delete without a product call:
     // (useNetworkAwarePolling was here — now consumed by useDiagnosticSync, HYP-518.)
