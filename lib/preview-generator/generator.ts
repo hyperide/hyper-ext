@@ -14,7 +14,10 @@ import type { ExportStyle } from './scanner';
 // old output forever (the marker + provider-imports fast-path bails before regen).
 // v10 -> v11: HYP-446 — single-mode wrapper gained a definite-height flex column for RN
 // (minHeight:100vh) so react-native-web FlatList rows render at non-zero height.
-export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v11';
+// v11 -> v12: HYP-463 — emit `// @ts-nocheck` as line 1 + `override` on ErrorBoundary
+// lifecycle methods so the generated artifact opts out of the user's `tsc --build`.
+// Bump forces already-generated (still-erroring) files to regenerate WITH @ts-nocheck.
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v12';
 
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
@@ -212,6 +215,13 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   const lines: string[] = [];
 
   // 1. React import + InstanceEntry type for multi-instance mode
+  // @ts-nocheck MUST be the first line: this is a @hyperide-managed generated
+  // artifact, not authored source, so it must opt out of the user's project
+  // build. The emitted JSX is heuristic (default vs named exports, required-prop
+  // compounds, children acceptance) and cannot be made to type-check for arbitrary
+  // user components; runtime errors still surface via ComponentErrorBoundary +
+  // the hypercanvas:componentError postMessage. (HYP-463)
+  lines.push('// @ts-nocheck');
   lines.push(`// ${PREVIEW_GENERATOR_SCHEMA_MARKER}`);
   lines.push("import React from 'react';");
 
@@ -939,14 +949,14 @@ function buildErrorBoundary(): string[] {
     '  static getDerivedStateFromError(error: Error) {',
     '    return { error };',
     '  }',
-    '  componentDidCatch(error: Error) {',
+    '  override componentDidCatch(error: Error) {',
     '    window.parent.postMessage({',
     "      type: 'hypercanvas:componentError',",
     '      componentPath: this.props.componentPath,',
     '      error: error.message,',
     "    }, '*');",
     '  }',
-    '  componentDidUpdate(prevProps: { componentPath: string; propsReady?: boolean }) {',
+    '  override componentDidUpdate(prevProps: { componentPath: string; propsReady?: boolean }) {',
     '    // Reset error state when switching to a different component OR when feature',
     '    // #210 generated props arrive for the first time (propsReady false→true).',
     '    // The latter clears a crash from a bare first render that happened before',
@@ -956,7 +966,7 @@ function buildErrorBoundary(): string[] {
     '      this.setState({ error: null });',
     '    }',
     '  }',
-    '  render() {',
+    '  override render() {',
     '    if (this.state.error) {',
     '      return null;',
     '    }',

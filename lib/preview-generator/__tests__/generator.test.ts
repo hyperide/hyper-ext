@@ -154,6 +154,43 @@ describe('generatePreviewContent', () => {
     expect(content).toContain(PREVIEW_GENERATOR_SCHEMA_MARKER);
   });
 
+  it('should advance the schema marker version so stale already-generated files regenerate (HYP-463)', () => {
+    // The @ts-nocheck format change must bump the marker; otherwise the fast path in
+    // PreviewFileManager.ensureComponent treats existing (still-erroring) files as
+    // current and never rewrites them with @ts-nocheck.
+    const versionMatch = PREVIEW_GENERATOR_SCHEMA_MARKER.match(/-v(\d+)$/);
+    expect(versionMatch).not.toBeNull();
+    expect(Number(versionMatch?.[1])).toBeGreaterThanOrEqual(12);
+  });
+
+  it('should emit @ts-nocheck as the very first line so the generated artifact opts out of the user build (HYP-463)', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Button.tsx', 'Button')];
+    const content = generatePreviewContent(entries);
+
+    // @ts-nocheck only applies file-wide when it is the first line. The schema
+    // marker must follow it (still present, still its own line for detection).
+    expect(content.split('\n')[0]).toBe('// @ts-nocheck');
+    expect(content).toContain(PREVIEW_GENERATOR_SCHEMA_MARKER);
+  });
+
+  it('should keep @ts-nocheck on line 1 for the standalone entry too (HYP-463)', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Button.tsx', 'Button')];
+    const content = generateStandaloneEntry(entries, '../.hyperide/preview');
+
+    expect(content.split('\n')[0]).toBe('// @ts-nocheck');
+    // The standalone bootstrap carries the @hyperide-managed marker.
+    expect(content).toContain('@hyperide-managed');
+  });
+
+  it('should mark ErrorBoundary lifecycle methods with override (noImplicitOverride, HYP-463)', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Button.tsx', 'Button')];
+    const content = generatePreviewContent(entries);
+
+    expect(content).toContain('override componentDidCatch(');
+    expect(content).toContain('override componentDidUpdate(');
+    expect(content).toContain('override render()');
+  });
+
   it('should include React Navigation fallback props', () => {
     const entries: PreviewComponentEntry[] = [
       {

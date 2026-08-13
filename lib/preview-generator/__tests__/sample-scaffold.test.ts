@@ -164,6 +164,31 @@ describe('normalizeSampleComponentName', () => {
   it('normalizes path-like names to JSX-safe identifiers', () => {
     expect(normalizeSampleComponentName('components/user-card.tsx')).toBe('UserCard');
   });
+
+  // Regression: a bare filename with no directory prefix that starts with an
+  // uppercase letter (e.g. a top-level `ConlocaLogo.tsx`) used to early-return
+  // verbatim, because `isValidJsxComponentName` treats `Foo.tsx` as a valid
+  // dotted member expression. That leaked the `.tsx` extension into the JSX
+  // tag name → `<ConlocaLogo.tsx />`. The extension must be stripped first.
+  it('strips a trailing source-file extension from a bare uppercase filename', () => {
+    expect(normalizeSampleComponentName('ConlocaLogo.tsx')).toBe('ConlocaLogo');
+  });
+
+  it('strips every supported source-file extension', () => {
+    expect(normalizeSampleComponentName('index.tsx')).toBe('Index');
+    expect(normalizeSampleComponentName('foo.jsx')).toBe('Foo');
+    expect(normalizeSampleComponentName('Foo.ts')).toBe('Foo');
+    expect(normalizeSampleComponentName('Foo.mjs')).toBe('Foo');
+    expect(normalizeSampleComponentName('Foo.cjs')).toBe('Foo');
+  });
+
+  it('preserves a legit member expression that is not a filename', () => {
+    expect(normalizeSampleComponentName('Accordion.Item')).toBe('Accordion.Item');
+  });
+
+  it('still normalizes a path-prefixed component file to its basename identifier', () => {
+    expect(normalizeSampleComponentName('components/Sidebar.tsx')).toBe('Sidebar');
+  });
 });
 
 describe('buildContainerSampleJsxBody', () => {

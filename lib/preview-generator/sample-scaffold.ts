@@ -35,7 +35,14 @@ function toPascalIdentifier(value: string): string {
 }
 
 export function normalizeSampleComponentName(componentName: string): string {
-  if (isValidJsxComponentName(componentName) && /^[A-Z]/.test(componentName)) return componentName;
+  // Strip a trailing source-file extension before the validity check. A bare
+  // filename like `ConlocaLogo.tsx` matches isValidJsxComponentName (the regex
+  // permits dotted member expressions, e.g. `Accordion.Item`), so without this
+  // it would early-return verbatim and leak `.tsx` into the JSX tag name
+  // (`<ConlocaLogo.tsx />`). A real member expression has no file-ext suffix,
+  // so it is left untouched.
+  const withoutExtension = componentName.replace(/\.(?:tsx?|jsx?|mjs|cjs)$/i, '');
+  if (isValidJsxComponentName(withoutExtension) && /^[A-Z]/.test(withoutExtension)) return withoutExtension;
   const fileName = componentName.split(/[\\/]/).pop() ?? componentName;
   const candidate = toPascalIdentifier(fileName);
   return isValidJsxComponentName(candidate) ? candidate : 'Component';

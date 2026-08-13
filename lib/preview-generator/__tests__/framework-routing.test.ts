@@ -95,29 +95,29 @@ describe('detectFramework — primary via package.json', () => {
     expect((await detectFramework(root, io)).framework).toBe('webpack');
   });
 
-  it('detects Astro via "astro" dep as vite-spa-jsx-router', async () => {
+  it('detects Astro via "astro" dep as astro', async () => {
     const io = makeIO({ devDependencies: { astro: '^4.0.0' } });
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+    expect((await detectFramework(root, io)).framework).toBe('astro');
   });
 
   it('detects Astro via astro.config.mjs when no deps (monorepo sub-package)', async () => {
     const io = makeIO({}, [`${root}/astro.config.mjs`]);
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+    expect((await detectFramework(root, io)).framework).toBe('astro');
   });
 
   it('detects Astro via astro.config.ts', async () => {
     const io = makeIO({}, [`${root}/astro.config.ts`]);
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+    expect((await detectFramework(root, io)).framework).toBe('astro');
   });
 
   it('detects Astro via astro.config.cjs', async () => {
     const io = makeIO({}, [`${root}/astro.config.cjs`]);
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+    expect((await detectFramework(root, io)).framework).toBe('astro');
   });
 
   it('Astro takes precedence over bare vite dep', async () => {
     const io = makeIO({ devDependencies: { astro: '^4.0.0', vite: '^5.0.0' } });
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+    expect((await detectFramework(root, io)).framework).toBe('astro');
   });
 
   it('detects Parcel via "parcel" dep', async () => {
@@ -135,6 +135,18 @@ describe('detectFramework — primary via package.json', () => {
   it('keeps Vite precedence when a Vite project uses Bun as package manager', async () => {
     const io = makeIO({ dependencies: { vite: '^5.0.0' } }, [`${root}/bun.lock`]);
     expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  });
+
+  it('detects Vite via vite.config.ts when vite is hoisted (monorepo sub-package, no explicit vite dep)', async () => {
+    const io = makeIO({ dependencies: { react: '^19.0.0' } }, [`${root}/vite.config.ts`]);
+    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  });
+
+  it('detects Vite via vite.config.js / .mjs config variants', async () => {
+    expect((await detectFramework(root, makeIO({}, [`${root}/vite.config.js`]))).framework).toBe('vite-spa-jsx-router');
+    expect((await detectFramework(root, makeIO({}, [`${root}/vite.config.mjs`]))).framework).toBe(
+      'vite-spa-jsx-router',
+    );
   });
 
   it('returns unknown when no known deps and no config files', async () => {
@@ -191,6 +203,12 @@ describe('getRouteFilePaths', () => {
     const paths = getRouteFilePaths({ framework: 'remix', routesDir: 'src/routes' }, '/project');
     expect(paths.routeFile).toBe('/project/src/routes/test-preview.tsx');
   });
+
+  it('returns src/pages/test-preview.astro for astro', () => {
+    const paths = getRouteFilePaths({ framework: 'astro' }, '/project');
+    expect(paths.routeFile).toBe('/project/src/pages/test-preview.astro');
+    expect(paths.layoutFile).toBeUndefined();
+  });
 });
 
 describe('generateRouteFileContent', () => {
@@ -227,6 +245,18 @@ describe('generateRouteFileContent', () => {
     expect(content).toContain("params.get('mode')");
     expect(content).toContain('/__hypercanvas/iframe-interaction.js');
     expect(content).not.toContain('suppressHydrationWarning');
+  });
+
+  it('astro route mounts CanvasPreview as a client:only React island', () => {
+    const content = generateRouteFileContent('astro', '../__canvas_preview__');
+    expect(content).toContain('@hyperide-managed');
+    expect(content).toContain('CanvasPreview');
+    expect(content).toContain('../__canvas_preview__');
+    // Astro frontmatter import + React island directive (no SSR — CanvasPreview reads
+    // window.location.search client-side, which is undefined during Astro SSR).
+    expect(content).toContain('client:only="react"');
+    // Astro components have no React default export — must be frontmatter + template, not JSX export.
+    expect(content).not.toContain('export default function');
   });
 });
 

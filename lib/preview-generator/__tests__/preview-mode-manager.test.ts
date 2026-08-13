@@ -67,6 +67,44 @@ describe('PreviewModeManager — onComponentSelected (app-shell)', () => {
     const result = await m.onComponentSelected();
     expect(result).toBe('needs-patch');
   });
+
+  it('writes src/pages/test-preview.astro and returns ok for an Astro project (no react-router, no JS entry)', async () => {
+    // Mirrors the conloca website: astro dep + astro.config.mjs, no src/pages/, no
+    // react-router markers, no src/main.tsx. Before the astro tier this fell into
+    // vite-spa-jsx-router → detectRouterFile() null → _detectEntryFile() null → 'needs-patch'.
+    const files: Record<string, string> = {
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { astro: '^6', react: '^19' } }),
+      [`${root}/astro.config.mjs`]: 'export default {};',
+    };
+    const written: string[] = [];
+    const io: FileIO = {
+      async readFile(p: string) {
+        if (p in files) return files[p];
+        throw new Error(`ENOENT: ${p}`);
+      },
+      async writeFile(p: string, c: string) {
+        written.push(p);
+        files[p] = c;
+      },
+      async access(p: string) {
+        const exists = p in files || Object.keys(files).some((k) => k.startsWith(`${p}/`));
+        if (!exists) throw new Error('ENOENT');
+      },
+      async deleteFile() {},
+      async mkdir() {},
+    };
+    const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
+    const result = await m.onComponentSelected();
+
+    // Return value AND the actual file write — asserting only the return value would
+    // pass even if no route file was generated (getRouteFilePaths default → '' → 'ok').
+    expect(result).toBe('ok');
+    expect(written).toContain(`${root}/src/pages/test-preview.astro`);
+    const routeContent = files[`${root}/src/pages/test-preview.astro`];
+    expect(routeContent).toContain('@hyperide-managed');
+    expect(routeContent).toContain('client:only="react"');
+    expect(routeContent).toContain('CanvasPreview');
+  });
 });
 
 describe('PreviewModeManager — onComponentSelected (isolated mode)', () => {

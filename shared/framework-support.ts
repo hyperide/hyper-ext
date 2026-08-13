@@ -16,6 +16,7 @@ export const FRAMEWORK_SUPPORT: { name: string; level: SupportLevel }[] = [
   { name: 'Remix', level: 'supported' },
   { name: 'Vite SPA (file-based routing)', level: 'supported' },
   { name: 'Vite SPA (JSX router)', level: 'supported' },
+  { name: 'Astro', level: 'supported' },
   { name: 'CRA / Webpack', level: 'supported' },
   { name: 'Parcel', level: 'supported' },
   { name: 'Vue', level: 'planned' },

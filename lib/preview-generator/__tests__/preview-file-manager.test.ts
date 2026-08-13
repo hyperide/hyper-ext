@@ -1401,6 +1401,7 @@ describe('PreviewFileManager.ensureGitExclude', () => {
     expect(content).toContain('__canvas_preview_standalone__.tsx');
     expect(content).toContain('**/test-preview/');
     expect(content).toContain('**/test-preview.tsx');
+    expect(content).toContain('**/test-preview.astro');
   });
 
   it('appends missing entries to existing exclude file', async () => {
@@ -1419,7 +1420,7 @@ describe('PreviewFileManager.ensureGitExclude', () => {
     const io = new InMemoryFileIO();
     io.files.set(
       '/project/.git/info/exclude',
-      '# HyperIDE — generated preview files\n__canvas_preview__.tsx\n__canvas_preview_standalone__.tsx\n__canvas_samples__.tsx\n*.samples.tsx\n.hyperide/\n**/test-preview/\n**/test-preview.tsx\n',
+      '# HyperIDE — generated preview files\n__canvas_preview__.tsx\n__canvas_preview_standalone__.tsx\n__canvas_samples__.tsx\n*.samples.tsx\n.hyperide/\n**/test-preview/\n**/test-preview.tsx\n**/test-preview.astro\n',
     );
     const manager = new PreviewFileManager({ projectRoot: '/project', io });
     const before = io.files.get('/project/.git/info/exclude');

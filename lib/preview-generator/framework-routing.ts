@@ -16,6 +16,7 @@ export type FrameworkType =
   | 'remix'
   | 'vite-spa-file-based'
   | 'vite-spa-jsx-router'
+  | 'astro'
   | 'bun'
   | 'parcel'
   | 'webpack'
@@ -79,7 +80,11 @@ export async function detectFramework(projectRoot: string, io: FileIO): Promise<
     return { framework: 'remix', routesDir };
   }
 
-  // 3a. Astro — Vite-powered; no React Router, treat as plain Vite SPA entry
+  // 3a. Astro — Vite-powered, but no React Router and no JS SPA entry point. It uses
+  // its own file-based routing (src/pages/*.astro), so it gets a dedicated route file
+  // (test-preview.astro) that mounts CanvasPreview as a `client:only="react"` island.
+  // HYP-382 originally mapped Astro to vite-spa-jsx-router, which dead-ended: no router
+  // found AND no entry file found → 'needs-patch' → a misleading "JSX router detected" toast.
   const isAstro =
     Boolean(deps.astro) ||
     (await exists(io, join(projectRoot, 'astro.config.ts'))) ||
@@ -87,11 +92,22 @@ export async function detectFramework(projectRoot: string, io: FileIO): Promise<
     (await exists(io, join(projectRoot, 'astro.config.js'))) ||
     (await exists(io, join(projectRoot, 'astro.config.cjs')));
   if (isAstro) {
-    return { framework: 'vite-spa-jsx-router' };
+    return { framework: 'astro' };
   }
 
-  // 4. Vite — sub-classify via filesystem, preserve actual routes dir
-  if (deps.vite) {
+  // 4. Vite — sub-classify via filesystem, preserve actual routes dir.
+  // Detect Vite by config-file presence too, not just deps.vite: in monorepos
+  // vite is commonly hoisted to the workspace root, so a sub-package's own
+  // package.json lists no `vite` dependency even though `vite dev` runs there.
+  const isVite =
+    Boolean(deps.vite) ||
+    (await exists(io, join(projectRoot, 'vite.config.ts'))) ||
+    (await exists(io, join(projectRoot, 'vite.config.js'))) ||
+    (await exists(io, join(projectRoot, 'vite.config.mjs'))) ||
+    (await exists(io, join(projectRoot, 'vite.config.mts'))) ||
+    (await exists(io, join(projectRoot, 'vite.config.cts'))) ||
+    (await exists(io, join(projectRoot, 'vite.config.cjs')));
+  if (isVite) {
     if (await exists(io, join(projectRoot, 'app/routes'))) {
       return { framework: 'vite-spa-file-based', routesDir: 'app/routes' };
     }
@@ -140,6 +156,11 @@ export function getRouteFilePaths(result: DetectionResult, projectRoot: string):
     case 'remix':
     case 'vite-spa-file-based':
       return { routeFile: join(projectRoot, routesDir ?? 'app/routes', 'test-preview.tsx') };
+    case 'astro':
+      // Astro file-based routing: src/pages/test-preview.astro. A static-segment route
+      // outranks the CMS catch-all (/[...slug]) in Astro's route priority, and coexists
+      // safely with fallback:'passthrough'.
+      return { routeFile: join(projectRoot, 'src/pages', 'test-preview.astro') };
     default:
       // webpack, parcel, vite-spa-jsx-router, unknown — no file-based route
       return { routeFile: '' };
@@ -219,6 +240,20 @@ export default function TestPreviewRoute() {
     </div>
   );
 }
+`;
+  }
+
+  if (framework === 'astro') {
+    // Astro page: frontmatter import + template that mounts CanvasPreview as a React
+    // island. `client:only="react"` skips SSR — CanvasPreview reads window.location.search
+    // for the ?component= param, which is undefined during Astro's server render.
+    // No props are passed: the island resolves the active component client-side, same as
+    // the Vite-file-based route.
+    return `---
+${managed}
+import CanvasPreview from '${previewImportPath}';
+---
+<div id="root"><CanvasPreview client:only="react" /></div>
 `;
   }
 

@@ -160,6 +160,7 @@ export class PreviewModeManager {
       case 'nextjs-app-router':
       case 'nextjs-pages-router':
       case 'remix':
+      case 'astro':
       case 'vite-spa-file-based': {
         // ensurePreviewFiles() is idempotent — returns 'ok-files-written' only when
         // route files are freshly created or updated. Remix and Vite file-based
@@ -171,7 +172,9 @@ export class PreviewModeManager {
         // skips writing → 'ok' returned → no gate armed → awaitRecompile is a no-op.
         const fileResult = await this._fileManager.ensurePreviewFiles();
         if (fileResult === 'ok-files-written') {
-          if (framework === 'vite-spa-file-based' || framework === 'remix') {
+          if (framework === 'vite-spa-file-based' || framework === 'remix' || framework === 'astro') {
+            // Astro's dev server is Vite-powered — same short HMR barrier as Vite/Remix
+            // (no reliable webpack-style "compiled successfully" stdout marker).
             await this._waitForPreviewRouteUpdate();
           } else {
             this._onBeforeWebpackEntryPatch?.();

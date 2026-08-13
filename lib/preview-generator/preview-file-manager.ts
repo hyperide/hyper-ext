@@ -1073,6 +1073,7 @@ export class PreviewFileManager {
       '.hyperide/',
       '**/test-preview/',
       '**/test-preview.tsx',
+      '**/test-preview.astro',
     ];
 
     let existing = '';

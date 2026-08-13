@@ -1231,14 +1231,14 @@ export function activate(context: vscode.ExtensionContext) {
           // SYNC: shared/framework-support.ts → FRAMEWORK_SUPPORT
           void vscode.window.showWarningMessage(
             'HyperIDE: unsupported project type. ' +
-              'Supported: Next.js, Remix, Vite (file-based and JSX router), Webpack/CRA, Parcel.',
+              'Supported: Next.js, Remix, Vite (file-based and JSX router), Astro, Webpack/CRA, Parcel.',
           );
           return 'unsupported' as const;
         }
         if (result === 'needs-patch') {
           void vscode.window
             .showWarningMessage(
-              'HyperIDE: JSX router detected but no /test-preview route found. ' +
+              'HyperIDE: could not find a router or entry file to mount the /test-preview route. ' +
                 'Add the route manually or let AI do it.',
               'Auto fix',
               'Dismiss',
