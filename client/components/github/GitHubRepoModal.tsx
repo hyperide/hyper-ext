@@ -538,5 +538,3 @@ function CreateRepoForm({
     </form>
   );
 }
-
-export default GitHubRepoModal;

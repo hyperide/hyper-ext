@@ -39,12 +39,27 @@
         "scripts/**/*.{ts,cjs}",
         "test/**/*.ts",
       ],
+      // @playwright/mcp is loaded at runtime via a filesystem path
+      // (server/services/playwright-mcp.ts resolves node_modules/@playwright/mcp/cli.js),
+      // not a static import — knip can't see it.
+      "ignoreDependencies": ["@playwright/mcp"],
+      // The `playwright` binary (postinstall: `npx playwright install chromium`) is
+      // provided transitively by @playwright/mcp, which pins a prerelease
+      // (1.59.0-alpha-…). Declaring `playwright` directly would conflict with that pin,
+      // so we rely on the transitive copy and silence the unlisted-binary flag.
+      "ignoreBinaries": ["playwright"],
     },
     "packages/*": {
       // Each package's entry (src/index.ts or src/context.ts via `main`, bin/vecli.ts
       // via `bin`) is inferred from its own package.json. Only declare test files.
       "entry": ["**/*.test.ts"],
       "project": "src/**/*.ts",
+      // vector-cli declares vector-wasm (workspace:*) but doesn't import it from its own
+      // src/. It's a runtime requirement reached transitively: vector-cli -> vector-engine
+      // -> `import { MockPathOps } from 'vector-wasm'` (register-all.ts, a value import).
+      // vecli executes path-ops (boolean/offset) which need the backend at runtime, so the
+      // declaration is load-bearing — knip's per-package src/ scan can't see it.
+      "ignoreDependencies": ["vector-wasm"],
     },
     "vscode-extension/hypercanvas-preview": {
       "entry": [
@@ -59,6 +74,25 @@
         "**/*.test.{ts,tsx}",
       ],
       "project": "src/**/*.{ts,tsx}",
+      // These are NOT used directly by src/**, but the webview bundles import SaaS code
+      // via the `@/` (-> ../../client) and `@lib/` (-> ../../lib) esbuild aliases, which
+      // DO use them. knip's per-workspace project glob can't follow cross-workspace
+      // aliases, so it false-flags them. They are required by the bundle and must stay.
+      "ignoreDependencies": [
+        "@anthropic-ai/sdk",
+        "@babel/generator",
+        "@babel/parser",
+        "react-resizable-panels",
+        "recast",
+        "@radix-ui/react-dialog",
+        "@radix-ui/react-scroll-area",
+        "@radix-ui/react-slot",
+        "@radix-ui/react-tooltip",
+        "class-variance-authority",
+        "react-markdown",
+        "tailwind-merge",
+        "zustand",
+      ],
     },
     "vscode-extension/hypercanvas-code-server": {
       "entry": ["**/*.test.ts"],

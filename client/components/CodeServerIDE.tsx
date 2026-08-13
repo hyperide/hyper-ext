@@ -364,5 +364,3 @@ export function CodeServerIDE({
     </div>
   );
 }
-
-export default CodeServerIDE;
