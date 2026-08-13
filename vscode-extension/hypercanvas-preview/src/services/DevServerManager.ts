@@ -75,6 +75,7 @@ export class DevServerManager {
 
   // Preview proxy and runtime errors
   private _previewProxy: PreviewProxy | null = null;
+  private _pendingIsolatedMode = false; // setIsolatedMode() may arrive before proxy exists
   private _runtimeError: RuntimeError | null = null;
   private _onRuntimeErrorChangeListeners: Array<(error: RuntimeError | null) => void> = [];
 
@@ -224,6 +225,11 @@ export class DevServerManager {
 
       // Start preview proxy for script injection (error detection)
       this._previewProxy = new PreviewProxy(this._port, this._projectPath);
+      // Apply isolated mode that may have been set before proxy was created
+      // (PreviewModeManager.startWatching() fires before dev server starts)
+      if (this._pendingIsolatedMode) {
+        this._previewProxy.setIsolatedMode(true);
+      }
       await this._previewProxy.start();
       console.log(`[HyperIDE] PreviewProxy started on port ${this._previewProxy.port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
@@ -447,6 +453,7 @@ export class DevServerManager {
    * Switch between App Shell and Isolated mode. Delegated from PreviewModeManager.
    */
   setIsolatedMode(isolated: boolean): void {
+    this._pendingIsolatedMode = isolated;
     this._previewProxy?.setIsolatedMode(isolated);
   }
 
