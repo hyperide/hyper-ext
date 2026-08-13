@@ -45,14 +45,14 @@ export const CommentSticker = memo(function CommentSticker({
     >
       {/* Reply count badge */}
       {replyCount > 0 && (
-        <span className="absolute -right-1 -bottom-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-bold ring-1 ring-white">
+        <span className="absolute -right-1 -bottom-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-bold ring-1 ring-white dark:ring-gray-900">
           {replyCount}
         </span>
       )}
 
       {/* Unread indicator */}
       {hasUnread && !isSelected && (
-        <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" />
+        <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900" />
       )}
 
       {/* Resolved checkmark */}

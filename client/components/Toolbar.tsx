@@ -68,7 +68,7 @@ export default function Toolbar({
   onResetZoom,
   boardTool = 'select',
   onBoardToolChange,
-  drawingStyle = { color: '#000000', strokeWidth: 3, fontSize: 20 },
+  drawingStyle = { color: 'hsl(var(--foreground))', strokeWidth: 3, fontSize: 20 },
   onDrawingStyleChange,
   canvasMode = 'multi',
   onBeforeAddComment,
@@ -807,7 +807,7 @@ export default function Toolbar({
                               className="w-full bg-black rounded-full"
                               style={{
                                 height: `${width}px`,
-                                backgroundColor: drawingStyle.color || '#000000',
+                                backgroundColor: drawingStyle.color || 'hsl(var(--foreground))',
                               }}
                             />
                           </button>

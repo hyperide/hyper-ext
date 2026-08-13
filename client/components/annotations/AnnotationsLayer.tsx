@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTheme } from '@/components/ThemeProvider';
 import type { AnnotationElement } from '../../../shared/types/annotations';
 import { isArrowAnnotation, isTextAnnotation } from '../../../shared/types/annotations';
 import type { InstancePosition, ViewportState } from '../../../shared/types/canvas';
@@ -101,9 +100,6 @@ export function AnnotationsLayer({
   operations,
   onToolComplete,
 }: AnnotationsLayerProps) {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
-
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [editingArrowLabelId, setEditingArrowLabelId] = useState<string | null>(null);
   // Store measured text sizes for hit detection
@@ -817,7 +813,6 @@ export function AnnotationsLayer({
             key={arrow.id}
             arrow={arrow}
             isSelected={selectedIds.includes(arrow.id)}
-            isDark={isDark}
             isEditingLabel={editingArrowLabelId === arrow.id}
             onLabelChange={(label) => {
               if (operations) {
@@ -840,7 +835,6 @@ export function AnnotationsLayer({
             text={text}
             isSelected={selectedIds.includes(text.id)}
             isEditing={editingTextId === text.id}
-            isDark={isDark}
             onEndEdit={() => setEditingTextId(null)}
             onChange={(updated) => {
               if (operations) {
@@ -878,8 +872,8 @@ export function AnnotationsLayer({
             y={Math.min(marqueeState.startY, marqueeState.currentY)}
             width={Math.abs(marqueeState.currentX - marqueeState.startX)}
             height={Math.abs(marqueeState.currentY - marqueeState.startY)}
-            fill="rgba(59, 130, 246, 0.1)"
-            stroke="#3b82f6"
+            fill="hsl(var(--primary) / 0.1)"
+            stroke="hsl(var(--primary))"
             strokeWidth={1 / viewport.zoom}
             strokeDasharray={`${4 / viewport.zoom} ${2 / viewport.zoom}`}
             pointerEvents="none"

@@ -62,7 +62,7 @@ export default function EditorTabs({ tabs, activeTab, onTabClick, onTabClose, di
         <button
           type="button"
           onClick={onExitDiff}
-          className="ml-auto mr-2 px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
+          className="ml-auto mr-2 px-3 py-1 text-xs font-medium text-white bg-[#4597F7] rounded hover:bg-[#3585e5]"
         >
           Exit Diff
         </button>

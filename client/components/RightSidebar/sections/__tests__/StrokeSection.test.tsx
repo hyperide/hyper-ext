@@ -91,4 +91,20 @@ describe('StrokeSection', () => {
     fireEvent.change(screen.getByTestId(TID.inspector.strokeStyle), { target: { value: 'dashed' } });
     expect(syncStyleChange).toHaveBeenCalledWith('borderStyle', 'dashed');
   });
+
+  it('add stroke writes plain hex to user CSS, not hsl(var(...))', () => {
+    const syncStyleChange = mock(() => {});
+    const onStrokesChange = mock(() => {});
+    render(<StrokeSection strokes={[]} onStrokesChange={onStrokesChange} syncStyleChange={syncStyleChange} />);
+
+    fireEvent.click(screen.getByTestId('hyper-inspector-stroke-add'));
+
+    const borderColorCall = (syncStyleChange.mock.calls as unknown as [string, string][]).find(
+      ([key]) => key === 'borderColor',
+    );
+    expect(borderColorCall).toBeTruthy();
+    const borderColorValue = borderColorCall?.[1] ?? '';
+    expect(borderColorValue).not.toMatch(/hsl\(var/);
+    expect(borderColorValue).toMatch(/^#[0-9a-fA-F]{6}$/);
+  });
 });

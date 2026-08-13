@@ -5,7 +5,6 @@ export interface TextElementProps {
   text: TextAnnotation;
   isSelected: boolean;
   isEditing: boolean;
-  isDark?: boolean;
   onEndEdit: () => void;
   onChange: (text: TextAnnotation) => void;
   onSizeChange?: (id: string, width: number, height: number) => void;
@@ -19,7 +18,6 @@ export const TextElement = memo(function TextElement({
   text,
   isSelected,
   isEditing,
-  isDark = false,
   onEndEdit,
   onChange,
   onSizeChange,
@@ -123,10 +121,10 @@ export const TextElement = memo(function TextElement({
               color: text.color,
               fontFamily: 'system-ui, sans-serif',
               outline: 'none',
-              border: '1px solid #3b82f6',
+              border: '1px solid hsl(var(--primary))',
               borderRadius: 2,
               padding: '2px 4px',
-              backgroundColor: 'white',
+              backgroundColor: 'hsl(var(--background))',
               display: 'inline-block',
               minWidth: 50,
               whiteSpace: 'pre-wrap',
@@ -146,10 +144,9 @@ export const TextElement = memo(function TextElement({
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
               display: 'inline-block',
-              // White text stroke for dark mode
-              ...(isDark && {
-                textShadow: '-1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white',
-              }),
+              // Contrasting text shadow for readability against varying backgrounds
+              textShadow:
+                '-1px -1px 0 hsl(var(--background)), 1px -1px 0 hsl(var(--background)), -1px 1px 0 hsl(var(--background)), 1px 1px 0 hsl(var(--background))',
             }}
           >
             {text.text || 'Double-click to edit'}
@@ -165,7 +162,7 @@ export const TextElement = memo(function TextElement({
           width={textSize.width + 8}
           height={textSize.height + 8}
           fill="none"
-          stroke="#3b82f6"
+          stroke="hsl(var(--primary))"
           strokeWidth={1}
           strokeDasharray="4 2"
           pointerEvents="none"

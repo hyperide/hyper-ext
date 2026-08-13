@@ -4,7 +4,6 @@ import type { ArrowAnnotation } from '../../../shared/types/annotations';
 export interface ArrowElementProps {
   arrow: ArrowAnnotation;
   isSelected: boolean;
-  isDark?: boolean;
   isEditingLabel?: boolean;
   onLabelChange?: (label: string) => void;
   onLabelEditEnd?: () => void;
@@ -17,7 +16,6 @@ export interface ArrowElementProps {
 export const ArrowElement = memo(function ArrowElement({
   arrow,
   isSelected,
-  isDark = false,
   isEditingLabel = false,
   onLabelChange,
   onLabelEditEnd,
@@ -76,7 +74,7 @@ export const ArrowElement = memo(function ArrowElement({
     >
       {/* Arrowhead marker definitions */}
       <defs>
-        {/* Main arrowhead with optional white stroke for dark mode */}
+        {/* Main arrowhead with contrasting outline for readability */}
         <marker
           id={markerId}
           markerWidth="10"
@@ -86,12 +84,7 @@ export const ArrowElement = memo(function ArrowElement({
           orient="auto"
           markerUnits="strokeWidth"
         >
-          <polygon
-            points="0 0, 10 3.5, 0 7"
-            fill={arrow.strokeColor}
-            stroke={isDark ? 'white' : 'none'}
-            strokeWidth={isDark ? 1 : 0}
-          />
+          <polygon points="0 0, 10 3.5, 0 7" fill={arrow.strokeColor} stroke="hsl(var(--background))" strokeWidth={1} />
         </marker>
       </defs>
 
@@ -107,18 +100,16 @@ export const ArrowElement = memo(function ArrowElement({
         style={{ cursor: isSelected ? 'move' : 'pointer' }}
       />
 
-      {/* White outline for dark mode - line only, arrowhead has its own stroke */}
-      {isDark && (
-        <line
-          x1={arrow.startX}
-          y1={arrow.startY}
-          x2={arrow.endX}
-          y2={arrow.endY}
-          stroke="white"
-          strokeWidth={strokeWidth + 4}
-          pointerEvents="none"
-        />
-      )}
+      {/* Contrasting outline for readability against varying backgrounds */}
+      <line
+        x1={arrow.startX}
+        y1={arrow.startY}
+        x2={arrow.endX}
+        y2={arrow.endY}
+        stroke="hsl(var(--background))"
+        strokeWidth={strokeWidth + 4}
+        pointerEvents="none"
+      />
 
       {/* Visible line with arrowhead */}
       <line
@@ -139,12 +130,13 @@ export const ArrowElement = memo(function ArrowElement({
           {arrow.label && !isEditingLabel && (
             <>
               {/* White stroke outline for readability */}
+              {/* Background stroke outline for readability */}
               <text
                 x={0}
                 y={-labelPadding - 4}
                 textAnchor="middle"
                 fill="none"
-                stroke="#ffffff"
+                stroke="hsl(var(--background))"
                 strokeWidth={3}
                 fontSize={labelFontSize}
                 fontFamily="system-ui, sans-serif"
@@ -152,12 +144,12 @@ export const ArrowElement = memo(function ArrowElement({
               >
                 {arrow.label}
               </text>
-              {/* Black text on top */}
+              {/* Foreground text on top */}
               <text
                 x={0}
                 y={-labelPadding - 4}
                 textAnchor="middle"
-                fill="#000000"
+                fill="hsl(var(--foreground))"
                 fontSize={labelFontSize}
                 fontFamily="system-ui, sans-serif"
                 pointerEvents="none"
@@ -188,11 +180,11 @@ export const ArrowElement = memo(function ArrowElement({
                   fontSize: `${labelFontSize}px`,
                   fontFamily: 'system-ui, sans-serif',
                   textAlign: 'center',
-                  border: '2px solid #3b82f6',
+                  border: '2px solid hsl(var(--primary))',
                   borderRadius: '3px',
                   outline: 'none',
-                  backgroundColor: isDark ? '#1f2937' : '#ffffff',
-                  color: isDark ? '#e5e7eb' : '#000000',
+                  backgroundColor: 'hsl(var(--background))',
+                  color: 'hsl(var(--foreground))',
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -221,8 +213,8 @@ export const ArrowElement = memo(function ArrowElement({
             cx={arrow.startX}
             cy={arrow.startY}
             r={handleRadius}
-            fill="white"
-            stroke="#3b82f6"
+            fill="hsl(var(--background))"
+            stroke="hsl(var(--primary))"
             strokeWidth={2}
             style={{ cursor: 'grab' }}
           />
@@ -233,8 +225,8 @@ export const ArrowElement = memo(function ArrowElement({
             cx={arrow.endX}
             cy={arrow.endY}
             r={handleRadius}
-            fill="white"
-            stroke="#3b82f6"
+            fill="hsl(var(--background))"
+            stroke="hsl(var(--primary))"
             strokeWidth={2}
             style={{ cursor: 'grab' }}
           />
@@ -246,7 +238,7 @@ export const ArrowElement = memo(function ArrowElement({
             width={Math.abs(arrow.endX - arrow.startX) + 16}
             height={Math.abs(arrow.endY - arrow.startY) + 16}
             fill="none"
-            stroke="#3b82f6"
+            stroke="hsl(var(--primary))"
             strokeWidth={1}
             strokeDasharray="4 2"
             pointerEvents="none"

@@ -195,7 +195,7 @@ export const FillSection = memo(function FillSection({
 export const SampleDefault = () => {
   return (
     <FillSection
-      backgroundColor="#ffffff"
+      backgroundColor="hsl(var(--background))"
       fillOpacity="90"
       backgroundImage="/assets/wood-texture.png"
       textColor="#333333"
