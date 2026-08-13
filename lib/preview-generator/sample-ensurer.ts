@@ -1,11 +1,14 @@
 /**
  * Generalized sample component ensurer.
- * Checks if a given Sample* export exists in a component file,
- * and generates it via an injectable AI callback if missing.
+ * Checks if a given Sample* export exists in a co-located .samples.tsx file
+ * (or the component itself for backward compat), and generates it via an
+ * injectable AI callback if missing. Samples are written to a separate
+ * ComponentName.samples.tsx file — not appended to the component.
  *
  * Works in both Node.js (server) and VS Code extension via FileIO abstraction.
  */
 
+import { basename, dirname, join } from 'node:path';
 import type { FileIO } from '../ast/file-io';
 import { buildDeterministicContainerSampleScaffold } from './sample-scaffold';
 import { detectCompoundExports, escapeRegex, scanSampleExports } from './scanner';
@@ -74,8 +77,24 @@ export function tryDeterministicContainerSample(
 }
 
 /**
- * Ensure a component file has a specific Sample* export.
- * If missing, generates it via the AI callback and appends to the file.
+ * Returns the path to the co-located .samples.tsx file for a component.
+ *   /path/to/Button.tsx → /path/to/Button.samples.tsx
+ *   /path/to/index.tsx  → /path/to/index.samples.tsx
+ *
+ * The .samples.tsx suffix is excluded from the preview registry by the
+ * isPreviewIneligibleByName name-guard and is git-excluded via ensureGitExclude.
+ */
+export function getSampleFilePath(componentPath: string): string {
+  const dir = dirname(componentPath);
+  const stem = basename(componentPath).replace(/\.(tsx?|jsx?)$/, '');
+  return join(dir, `${stem}.samples.tsx`);
+}
+
+/**
+ * Ensure a component has a specific Sample* export in its co-located
+ * .samples.tsx file. Falls back to checking the component itself for
+ * backward compat (samples written by the old append-to-component system).
+ * New samples are always written to .samples.tsx, never to the component.
  */
 export async function ensureSample(config: EnsureSampleConfig): Promise<EnsureSampleResult> {
   const { io, absolutePath, componentName, sampleName, generate } = config;
@@ -93,9 +112,24 @@ export async function ensureSample(config: EnsureSampleConfig): Promise<EnsureSa
     return { generated: false, exists: false };
   }
 
-  // Check if sample already exists
-  const existingSamples = scanSampleExports(sourceCode);
-  if (existingSamples.includes(sampleName)) {
+  const sampleFilePath = getSampleFilePath(absolutePath);
+
+  // Check .samples.tsx first (new system)
+  const existingSampleCode = await readFileSafe(io, sampleFilePath);
+  if (existingSampleCode !== null) {
+    // babel can throw on mid-edit source despite `errorRecovery: true`; treat as absent
+    // rather than surfacing a parse error during auto-sample generation.
+    try {
+      if (scanSampleExports(existingSampleCode).includes(sampleName)) {
+        return { generated: false, exists: true };
+      }
+    } catch {
+      // .samples.tsx is temporarily unparseable — proceed to (re)generate below
+    }
+  }
+
+  // Backward compat: check the component itself (old append-to-component system)
+  if (scanSampleExports(sourceCode).includes(sampleName)) {
     return { generated: false, exists: true };
   }
 
@@ -105,14 +139,15 @@ export async function ensureSample(config: EnsureSampleConfig): Promise<EnsureSa
     exportName: sampleName,
   });
   if (deterministicCode) {
-    try {
-      await io.writeFile(absolutePath, `${sourceCode}\n\n${deterministicCode.trimStart()}\n`);
-      console.log(`[ensureSample] Generated deterministic ${sampleName} for ${componentName}`);
-      return { generated: true, exists: true };
-    } catch (error) {
-      console.error(`[ensureSample] Failed to write deterministic sample: ${error}`);
-      return { generated: false, exists: false };
-    }
+    return writeSampleCode(
+      io,
+      sampleFilePath,
+      existingSampleCode,
+      deterministicCode.trimStart(),
+      componentName,
+      sampleName,
+      'deterministic',
+    );
   }
 
   // Generate via AI callback
@@ -136,11 +171,31 @@ export async function ensureSample(config: EnsureSampleConfig): Promise<EnsureSa
     return { generated: false, exists: false };
   }
 
-  // Append to file
-  const updatedCode = `${sourceCode}\n\n${generatedCode}\n`;
+  return writeSampleCode(io, sampleFilePath, existingSampleCode, generatedCode, componentName, sampleName, 'AI');
+}
+
+async function readFileSafe(io: FileIO, path: string): Promise<string | null> {
   try {
-    await io.writeFile(absolutePath, updatedCode);
-    console.log(`[ensureSample] Generated ${sampleName} for ${componentName}`);
+    return await io.readFile(path);
+  } catch {
+    return null;
+  }
+}
+
+async function writeSampleCode(
+  io: FileIO,
+  sampleFilePath: string,
+  existingContent: string | null,
+  newCode: string,
+  componentName: string,
+  sampleName: string,
+  source: 'deterministic' | 'AI',
+): Promise<EnsureSampleResult> {
+  const updatedContent = existingContent !== null ? `${existingContent.trimEnd()}\n\n${newCode}\n` : `${newCode}\n`;
+  try {
+    await io.writeFile(sampleFilePath, updatedContent);
+    const label = source === 'deterministic' ? 'deterministic ' : '';
+    console.log(`[ensureSample] Generated ${label}${sampleName} for ${componentName} → ${basename(sampleFilePath)}`);
     return { generated: true, exists: true };
   } catch (error) {
     console.error(`[ensureSample] Failed to write: ${error}`);
@@ -149,7 +204,7 @@ export async function ensureSample(config: EnsureSampleConfig): Promise<EnsureSa
 }
 
 /**
- * Validate AI-generated sample code before appending.
+ * Validate AI-generated sample code before writing.
  * Returns error message string if invalid, null if valid.
  */
 function validateGeneratedSample(code: string, sampleName: string, existingSource: string): string | null {

@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { FileIO } from '../../ast/file-io';
-import { buildContainerSample, ensureSample, tryDeterministicContainerSample } from '../sample-ensurer';
+import {
+  buildContainerSample,
+  ensureSample,
+  getSampleFilePath,
+  tryDeterministicContainerSample,
+} from '../sample-ensurer';
 
 class InMemoryFileIO implements FileIO {
   files = new Map<string, string>();
@@ -87,6 +92,32 @@ const AlertDescription = React.forwardRef<
 export { Alert, AlertTitle, AlertDescription };
 `;
 
+describe('getSampleFilePath', () => {
+  it('replaces .tsx extension with .samples.tsx', () => {
+    expect(getSampleFilePath('/project/Button.tsx')).toBe('/project/Button.samples.tsx');
+  });
+
+  it('works for index files', () => {
+    expect(getSampleFilePath('/project/Component/index.tsx')).toBe('/project/Component/index.samples.tsx');
+  });
+
+  it('works for .ts files', () => {
+    expect(getSampleFilePath('/project/utils.ts')).toBe('/project/utils.samples.tsx');
+  });
+
+  it('works for .jsx files', () => {
+    expect(getSampleFilePath('/project/Button.jsx')).toBe('/project/Button.samples.tsx');
+  });
+
+  it('works for .js files', () => {
+    expect(getSampleFilePath('/project/Widget.js')).toBe('/project/Widget.samples.tsx');
+  });
+
+  it('keeps the same directory', () => {
+    expect(getSampleFilePath('/deep/nested/path/Card.tsx')).toBe('/deep/nested/path/Card.samples.tsx');
+  });
+});
+
 describe('ensureSample', () => {
   let originalLog: typeof console.log;
   let originalWarn: typeof console.warn;
@@ -124,12 +155,33 @@ describe('ensureSample', () => {
     expect(result.exists).toBe(true);
     expect(generate).toHaveBeenCalledTimes(1);
 
-    const written = io.files.get('/project/Button.tsx');
-    expect(written).toContain('SampleDefault');
+    // Sample written to .samples.tsx, component untouched
+    expect(io.files.get('/project/Button.tsx')).toBe(BUTTON_SOURCE);
+    expect(io.files.get('/project/Button.samples.tsx')).toContain('SampleDefault');
   });
 
-  it('should skip generation when sample already exists', async () => {
+  it('should skip generation when sample already exists in .samples.tsx', async () => {
     const io = new InMemoryFileIO();
+    io.files.set('/project/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/Button.samples.tsx', `${GENERATED_SAMPLE}\n`);
+    const generate = mock(() => Promise.resolve(GENERATED_SAMPLE));
+
+    const result = await ensureSample({
+      io,
+      absolutePath: '/project/Button.tsx',
+      componentName: 'Button',
+      sampleName: 'SampleDefault',
+      generate,
+    });
+
+    expect(result.generated).toBe(false);
+    expect(result.exists).toBe(true);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('should skip generation when sample already exists in the component (backward compat)', async () => {
+    const io = new InMemoryFileIO();
+    // Old system: sample appended to the component file
     io.files.set('/project/Button.tsx', BUTTON_WITH_SAMPLE);
     const generate = mock(() => Promise.resolve(GENERATED_SAMPLE));
 
@@ -144,6 +196,31 @@ describe('ensureSample', () => {
     expect(result.generated).toBe(false);
     expect(result.exists).toBe(true);
     expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('should append a new sample to an existing .samples.tsx file', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/Button.tsx', BUTTON_WITH_SAMPLE);
+    // .samples.tsx already has SampleDefault
+    io.files.set('/project/Button.samples.tsx', `${GENERATED_SAMPLE}\n`);
+    const generate = mock(() => Promise.resolve(GENERATED_PRIMARY));
+
+    const result = await ensureSample({
+      io,
+      absolutePath: '/project/Button.tsx',
+      componentName: 'Button',
+      sampleName: 'SamplePrimary',
+      generate,
+    });
+
+    expect(result.generated).toBe(true);
+    expect(result.exists).toBe(true);
+
+    // Component is untouched; new sample appended to .samples.tsx
+    expect(io.files.get('/project/Button.tsx')).toBe(BUTTON_WITH_SAMPLE);
+    const sampleFile = io.files.get('/project/Button.samples.tsx');
+    expect(sampleFile).toContain('SampleDefault');
+    expect(sampleFile).toContain('SamplePrimary');
   });
 
   it('should handle any sample name, not just SampleDefault', async () => {
@@ -162,9 +239,9 @@ describe('ensureSample', () => {
     expect(result.generated).toBe(true);
     expect(result.exists).toBe(true);
 
-    const written = io.files.get('/project/Button.tsx');
-    expect(written).toContain('SamplePrimary');
-    expect(written).toContain('SampleDefault'); // original preserved
+    // New sample goes to .samples.tsx; component is not touched
+    expect(io.files.get('/project/Button.tsx')).toBe(BUTTON_WITH_SAMPLE);
+    expect(io.files.get('/project/Button.samples.tsx')).toContain('SamplePrimary');
   });
 
   it('should return exists=false when file is unreadable', async () => {
@@ -235,10 +312,12 @@ describe('ensureSample', () => {
     expect(result.exists).toBe(true);
     expect(generate).not.toHaveBeenCalled();
 
-    const written = io.files.get('/project/Alert.tsx');
-    expect(written).toContain('export const SampleDefault');
-    expect(written).toContain('<AlertTitle>Preview title</AlertTitle>');
-    expect(written).toContain(
+    // Sample is written to .samples.tsx, component untouched
+    expect(io.files.get('/project/Alert.tsx')).toBe(ALERT_SOURCE);
+    const sampleFile = io.files.get('/project/Alert.samples.tsx');
+    expect(sampleFile).toContain('export const SampleDefault');
+    expect(sampleFile).toContain('<AlertTitle>Preview title</AlertTitle>');
+    expect(sampleFile).toContain(
       '<AlertDescription>This sample shows the component with visible content.</AlertDescription>',
     );
   });
@@ -344,10 +423,12 @@ describe('ensureSample', () => {
     expect(result.exists).toBe(true);
     expect(generate).not.toHaveBeenCalled();
 
-    const written = io.files.get('/project/alert.tsx');
-    expect(written).toContain('SampleDefault');
-    expect(written).toContain('AlertTitle');
-    expect(written).toContain('AlertDescription');
+    // Sample written to .samples.tsx, not the component
+    expect(io.files.get('/project/alert.tsx')).toBe(ALERT_COMPOUND_SOURCE);
+    const sampleFile = io.files.get('/project/alert.samples.tsx');
+    expect(sampleFile).toContain('SampleDefault');
+    expect(sampleFile).toContain('AlertTitle');
+    expect(sampleFile).toContain('AlertDescription');
   });
 });
 

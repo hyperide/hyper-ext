@@ -20,6 +20,18 @@ export interface PreviewComponentEntry {
    * opts the explicitly-requested entry root back in so `App.tsx` is previewable as an app.
    */
   isAppEntry?: boolean;
+  /**
+   * Import path for the co-located .samples.tsx file (HYP-378). Present only when
+   * .samples.tsx exists and exports at least one Sample* symbol. The generator emits
+   * a second import line for this path so samples are decoupled from the component file.
+   */
+  samplesImportPath?: string;
+  /**
+   * Sample export names found in .samples.tsx (a subset of sampleExports). Used by the
+   * generator to split sample imports between the component file and .samples.tsx, avoiding
+   * duplicate bindings when the same name exists in both.
+   */
+  samplesFileExports?: string[];
 }
 
 export interface SSRMockConfig {

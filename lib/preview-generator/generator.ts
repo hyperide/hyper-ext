@@ -87,7 +87,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   // Component imports
   for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
-    lines.push(buildImportLine(entry, alias));
+    lines.push(...buildImportLine(entry, alias));
     if (entry.syntheticSampleDefault) {
       lines.push(`import * as ${alias}Module from ${jsStr(entry.importPath)};`);
     }
@@ -234,18 +234,51 @@ if (root) {
   return baseContent + bootstrap;
 }
 
-function buildImportLine(entry: PreviewComponentEntry, alias: string): string {
-  const sampleImports = entry.sampleExports.map((exp) => `${exp} as ${alias}${exp}`);
+/**
+ * Build import line(s) for a registry entry.
+ *
+ * When a .samples.tsx file provides some of the sample exports (samplesFileExports is set),
+ * two import lines are generated: one for the component (with only component-file samples),
+ * and one for the samples file. This avoids duplicate bindings when the same Sample* name
+ * exists in both sources — the .samples.tsx version always wins.
+ *
+ * Returns string[] so callers spread it with lines.push(...buildImportLine(...)).
+ */
+function buildImportLine(entry: PreviewComponentEntry, alias: string): string[] {
+  const samplesFileSet = new Set(entry.samplesFileExports ?? []);
+
+  // Only subtract .samples.tsx exports from the component import when we actually have a
+  // samplesImportPath to import them from. If samplesImportPath is missing but samplesFileExports
+  // is set (a malformed entry), we fall back to importing everything from the component file so
+  // the bindings are not silently lost.
+  const componentSamples =
+    entry.samplesImportPath && samplesFileSet.size > 0
+      ? entry.sampleExports.filter((exp) => !samplesFileSet.has(exp))
+      : entry.sampleExports;
+  const componentSampleImports = componentSamples.map((exp) => `${exp} as ${alias}${exp}`);
+
   const safePath = jsStr(entry.importPath);
+  const result: string[] = [];
+
   if (entry.exportStyle === 'default-named' || entry.exportStyle === 'default-anonymous') {
-    if (sampleImports.length > 0) {
-      return `import ${alias}, { ${sampleImports.join(', ')} } from ${safePath};`;
+    if (componentSampleImports.length > 0) {
+      result.push(`import ${alias}, { ${componentSampleImports.join(', ')} } from ${safePath};`);
+    } else {
+      result.push(`import ${alias} from ${safePath};`);
     }
-    return `import ${alias} from ${safePath};`;
+  } else {
+    const componentImport = alias !== entry.componentName ? `${entry.componentName} as ${alias}` : alias;
+    const allImports = [componentImport, ...componentSampleImports];
+    result.push(`import { ${allImports.join(', ')} } from ${safePath};`);
   }
-  const componentImport = alias !== entry.componentName ? `${entry.componentName} as ${alias}` : alias;
-  const allImports = [componentImport, ...sampleImports];
-  return `import { ${allImports.join(', ')} } from ${safePath};`;
+
+  // Second import line for .samples.tsx (HYP-378)
+  if (entry.samplesFileExports && entry.samplesFileExports.length > 0 && entry.samplesImportPath) {
+    const fileSampleImports = entry.samplesFileExports.map((exp) => `${exp} as ${alias}${exp}`);
+    result.push(`import { ${fileSampleImports.join(', ')} } from ${jsStr(entry.samplesImportPath)};`);
+  }
+
+  return result;
 }
 
 function renderSyntheticSampleArrow(

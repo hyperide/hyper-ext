@@ -15,6 +15,7 @@ import {
 } from './scanner';
 import { buildContainerSampleJsxBody } from './sample-scaffold';
 import { isFrameworkReserved, isPreviewIneligibleByName } from './preview-constants';
+import { getSampleFilePath } from './sample-ensurer';
 import type { PreviewComponentEntry } from './generator';
 
 interface BuildEntryOptions {
@@ -38,6 +39,40 @@ interface BuildEntryOptions {
    * single-package projects, where `..` paths are always escapes and rejected.
    */
   workspaceRoot?: string;
+}
+
+/**
+ * Read sample exports from the co-located .samples.tsx file (HYP-378).
+ * Returns null when the file does not exist, is unreadable, or has no Sample* exports.
+ * The samplesImportPath is relative to previewDir (without extension), ready for import.
+ */
+async function readSamplesFile(
+  io: FileIO,
+  absoluteComponentPath: string,
+  previewDir: string,
+): Promise<{ samplesFileExports: string[]; samplesImportPath: string } | null> {
+  const samplesAbsPath = getSampleFilePath(absoluteComponentPath);
+  let samplesContent: string;
+  try {
+    samplesContent = await io.readFile(samplesAbsPath);
+  } catch {
+    return null;
+  }
+
+  let samplesFileExports: string[];
+  try {
+    samplesFileExports = scanSampleExports(samplesContent);
+  } catch {
+    // .samples.tsx has a syntax error — treat as absent rather than blocking the entry.
+    // Warn so the user can find and fix the file; the preview still builds from the component.
+    console.warn(`[PreviewFileManager] Could not parse ${basename(samplesAbsPath)} — ignoring`);
+    return null;
+  }
+  if (samplesFileExports.length === 0) return null;
+
+  const relativePath = relative(previewDir, samplesAbsPath).replace(/\.\w+$/, '');
+  const samplesImportPath = relativePath.startsWith('.') ? relativePath : `./${relativePath}`;
+  return { samplesFileExports, samplesImportPath };
 }
 
 export async function buildEntry(
@@ -195,6 +230,18 @@ export async function buildEntry(
   // Compute import path relative to preview file
   const importPath = await computeImportPath(projectRoot, io, componentPath, previewDir);
 
+  // HYP-378 — also read .samples.tsx for sample exports. Merge with component file samples
+  // (.samples.tsx exports take precedence so they are not re-imported from the component).
+  let samplesFileExports: string[] | undefined;
+  let samplesImportPath: string | undefined;
+  const samplesFileData = await readSamplesFile(io, absolutePath, previewDir);
+  if (samplesFileData) {
+    samplesFileExports = samplesFileData.samplesFileExports;
+    samplesImportPath = samplesFileData.samplesImportPath;
+    // Union merge: .samples.tsx entries first so Set dedup keeps them over component dupes
+    sampleExports = [...new Set([...samplesFileData.samplesFileExports, ...sampleExports])];
+  }
+
   // For compound shadcn-style modules without an authored SampleDefault,
   // try to synthesize one from the named exports so the preview can render
   // <Carousel><CarouselContent>…</CarouselContent></Carousel> instead of
@@ -243,6 +290,8 @@ export async function buildEntry(
     ...(detectedExports && detectedExports.length > 0 && { detectedExports }),
     ...(declaredPropNames !== undefined && { declaredPropNames }),
     ...(isAppEntry && { isAppEntry: true }),
+    ...(samplesImportPath && { samplesImportPath }),
+    ...(samplesFileExports && samplesFileExports.length > 0 && { samplesFileExports }),
   };
 }
 

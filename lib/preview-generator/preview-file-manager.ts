@@ -32,6 +32,7 @@ import {
 } from './generator';
 import { ensureGitExclude, ensureStandaloneEntry } from './preview-file-ops';
 import { buildEntry, computeImportPath } from './preview-build-entry';
+import { getSampleFilePath } from './sample-ensurer';
 import {
   detectProviderShell,
   detectPushStateRouterShell,
@@ -630,6 +631,21 @@ export class PreviewFileManager {
         // case is unaffected (reverted source still parses), so it stays covered.
         continue;
       }
+
+      // HYP-378 — also scan .samples.tsx so components whose samples were moved there
+      // don't trigger an infinite regen loop (component file returns [] but entry.sampleExports
+      // still lists the merged set including .samples.tsx exports).
+      const samplesAbsPath = getSampleFilePath(join(this.projectRoot, canonicalPath));
+      try {
+        const samplesContent = await this.io.readFile(samplesAbsPath);
+        const fileSamples = scanSampleExports(samplesContent);
+        if (fileSamples.length > 0) {
+          currentSamples = [...new Set([...fileSamples, ...currentSamples])];
+        }
+      } catch {
+        // No .samples.tsx or unreadable — component-only scan is sufficient
+      }
+
       if (currentSamples.length !== entry.sampleExports.length) return true;
       if (currentSamples.some((sample) => !entry.sampleExports.includes(sample))) return true;
     }
