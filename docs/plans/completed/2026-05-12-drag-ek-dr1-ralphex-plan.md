@@ -88,7 +88,7 @@ Update `docs/plans/2026-05-06-move-any-intermittent.md` Task 7 with findings.
 
 ## Task 5 — TG report
 
-Send via `cd /Users/ultra/xp/codex-tg-bot && bash scripts/send-tg-report.sh`:
+Send via `tg "..."`:
 
 - Which task fixed it (img drag gesture or moveElement or resolver)
 - Files changed, commits

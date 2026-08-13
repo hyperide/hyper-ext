@@ -96,7 +96,7 @@ If the "leaf" picked by the heuristic is near the top of the document (despite t
 
 - [ ] `HYPER_E2E_SHARDS=1 bun run test:docker` with `--grep "ET-17"`
 - [ ] ET-17-before-click.png and ET-17-after-click.png show clear scroll position change
-- [ ] Send both screenshots to TG via `send-tg-file.sh ... --photo`
+- [ ] Send both screenshots to TG via `tg --photo <path> "caption"`
 
 ## Acceptance criteria
 

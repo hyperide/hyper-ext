@@ -107,10 +107,10 @@ Out of scope:
       SKIPPED — no GREEN screenshots to verify (see above). Only-on-failure
       capture would show empty Hyper Preview pane (dev server never came up),
       which represents harness regression, not feature state.
-- [x] Send a single TG report via `send-tg-report.sh` summarising both fixes,
-      then `send-tg-file.sh ... --photo` for each screenshot. CLAUDE.md rule:
+- [x] Send a single TG report via `tg "..."` summarising both fixes,
+      then `tg --photo <path> "caption"` for each screenshot. CLAUDE.md rule:
       no screenshot in TG = bug not fixed.
-      Report sent via `send-tg-report.sh /tmp/tg-report-tw-order-followup.txt`
+      Report sent via `tg "$(cat /tmp/tg-report-tw-order-followup.txt)"`
       with code-level GREEN verdict (33 unit tests pass) + codex re-review
       "No discrete correctness issues were found" + explicit BLOCKED-upstream
       flag for e2e and merge-pending caveat. No `--photo` calls (no GREEN

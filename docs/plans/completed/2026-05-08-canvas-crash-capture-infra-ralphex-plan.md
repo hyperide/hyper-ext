@@ -75,12 +75,12 @@ be filed, file it. No "follow-up needed" placeholders.
 
 ### Task 5: Telegram handoff (FILES, not paths)
 
-- [x] TG report via `send-tg-report.sh` summarising what landed.
-- [x] Send the new plan FILE itself via `send-tg-file.sh` (NOT a path string —
+- [x] TG report via `tg "..."` summarising what landed.
+- [x] Send the new plan FILE itself via `tg --file <path>` (NOT a path string —
       CLAUDE.md rule). Same for the merged commit summary log if useful.
 - [x] If e2e capture proves a clean baseline (no spurious rejections), send
-      that artifact via `send-tg-file.sh ... --photo` if it's a screenshot, or
-      `send-tg-file.sh` for the log file. [skipped — bulka Docker dev-server
+      that artifact via `tg --photo <path> "caption"` if it's a screenshot, or
+      `tg --file <path>` for the log file. [skipped — bulka Docker dev-server
       bring-up regression blocks running the discard spec in CI; see NEEDS LINEAR
       ticket in MEMORY.md]
 
@@ -94,7 +94,7 @@ be filed, file it. No "follow-up needed" placeholders.
 - Investigate before deleting. CLAUDE.md "Dead code".
 - Run e2e ONLY through `HYPER_E2E_SHARDS=1 bun run test:docker`.
 - TG: NEVER write file paths in messages — always attach the file via
-  `send-tg-file.sh`. CLAUDE.md "Скриншоты и файлы — прикладывать, не писать
+  `tg --file <path>` (or `tg --photo` for screenshots). CLAUDE.md "Скриншоты и файлы — прикладывать, не писать
   пути".
 - Telegram heartbeat every 15 min.
 

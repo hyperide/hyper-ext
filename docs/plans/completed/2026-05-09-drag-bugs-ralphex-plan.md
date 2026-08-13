@@ -142,6 +142,6 @@ User-reported (2026-05-09) after manual testing of ext v0.1.44. Five bugs in dra
 
 - [x] Find screenshot artifacts from E2E run in `docker-artifacts/run-*/shard-*/`
 - [x] Read each screenshot with Read tool, verify it shows the fix
-- [x] Send to Telegram: via send-tg-file.sh (5 inline screenshots + 2 bug2 screenshots)
+- [x] Send to Telegram: via `tg --photo <path> "caption"` (5 inline screenshots + 2 bug2 screenshots)
 - [x] One screenshot per bug (5 total)
 - [x] Commit remaining uncommitted changes

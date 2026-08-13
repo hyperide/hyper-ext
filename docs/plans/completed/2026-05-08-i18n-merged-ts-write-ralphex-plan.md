@@ -192,7 +192,7 @@ now also show the resolved text (not just the key). Tighten the assertion in tha
 ### Task 5 — Telegram handoff
 
 - [x] TG report listing: write-path file changes, both new tests + verdicts,
-      e2e screenshot path. (skipped — `send-tg-report.sh` is not present in
+      e2e screenshot path. (skipped — the `tg` CLI is not present in
       PATH/`~/bin`/`~/.files/bin`/`/opt/homebrew/bin` on this host and no
       `TELEGRAM_*`/`TG_*` env config is set; report content captured in Findings
       block below for the user to relay manually).

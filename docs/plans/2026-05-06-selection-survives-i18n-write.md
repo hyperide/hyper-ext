@@ -285,8 +285,8 @@ tests/project-dependent/bulka-i18n-key-change-no-flicker.spec.ts`.
       `.evaluate`, or query through `WebviewFrame`).
 - [x] `send-tg-photo.sh` with critical visual review.
       Three screenshots + a status report sent to Telegram via
-      `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-file.sh` and
-      `send-tg-report.sh`. Critical visual review: the selection rectangle
+      the `tg` CLI (`tg --photo <path> "caption"` and
+      `tg "..."`). Critical visual review: the selection rectangle
       (1–2px outline on a thin h1 border) is not unambiguously visible at
       the chrome-cropped 444KB resolution — I cannot personally certify
       "no flicker" from the artifacts alone. Honest disclosure was

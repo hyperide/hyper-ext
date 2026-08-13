@@ -127,11 +127,11 @@ and a deferred-Linear note in MEMORY.md instead.
 
 ### Task 5 — Telegram handoff
 
-- Send a single TG report via `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`:
+- Send a single TG report via `tg "..."`:
   - the call site that was throwing, the fix, files touched
   - both e2e + unit verdicts
   - commit hashes
-- Send the e2e screenshot of canvas-after-discard via `send-tg-file.sh ... --photo`. Visually
+- Send the e2e screenshot of canvas-after-discard via `tg --photo <path> "caption"`. Visually
   verify the canvas survived, an element is selectable, no error overlay.
 - CLAUDE.md rule: no screenshot in TG = bug not fixed.
 

@@ -171,6 +171,6 @@ run test:docker -- e2e/tests/project-independent/drag-text-containers.spec.ts`.
       with drag-ghost overlay; NN-2 shows `<p>` "DD paragraph text" with
       light selection-ghost (drag state reached); NN-3 same for `<h3>`.
 - [x] Send only verified frames. Sent NN-1, NN-2, NN-3 mid-drag PNGs to
-      Telegram via `send-tg-file.sh ... --photo` with captions naming
+      Telegram via `tg --photo <path> "caption"` with captions naming
       Task 2 (grid horizontal inference) and Task 3 (pointer capture)
-      fixes. Status report sent via `send-tg-report.sh`.
+      fixes. Status report sent via `tg "..."`.

@@ -350,7 +350,7 @@ N adjustments") rather than blocking the drop.
       precedent as commit `2843b223` ("Task 6: mark verification
       steps skipped — non-automatable in ralphex") on this plan's
       sibling worktree. Three blockers from this loop:
-      (a) `send-tg-photo.sh` / `send-tg-report.sh` referenced in
+      (a) `send-tg-photo.sh` / the `tg` CLI referenced in
       `CLAUDE.md` do not exist anywhere in this repo or its
       siblings, no `TELEGRAM_BOT_TOKEN` / `TELEGRAM_REPORT_CHAT_ID`
       in env, so TG submission cannot be performed from this

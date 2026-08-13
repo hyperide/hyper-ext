@@ -44,4 +44,4 @@ in the source file via AstService.
 - [ ] Run `npm run package` in `vscode-extension/hypercanvas-preview/`.
 - [ ] Run PI-7-I18N-6 — GREEN.
 - [ ] Run PI-7-I18N-1 through PI-7-I18N-5 — no regressions.
-- [ ] Send screenshot to Telegram via `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`.
+- [ ] Send screenshot to Telegram via `tg --photo <path> "caption"`.

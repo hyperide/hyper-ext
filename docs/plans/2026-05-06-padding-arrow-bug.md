@@ -245,7 +245,7 @@ Reproduction (from `~/.claude/projects/-Users-ultra-work-hyper-canvas-draft/memo
 
 - [x] `send-tg-photo.sh` with critical visual review.
 
-      [x] sent text status report via send-tg-report.sh — explicitly NOT
+      [x] sent text status report via the `tg` CLI — explicitly NOT
       claiming "fixed" / "✅". Listed: build OK, install OK, unit tests
       GREEN, E2E verifier written but not runnable in this loop, manual
       reproduction steps for the user. No fake screenshot of a passing

@@ -199,7 +199,7 @@ Highest-risk examples:
       run or record exactly why it was deferred. [deferred: requires E2E infra (VS Code + Playwright + extension installed) — not available in current environment]
 - [x] Summarize changed files, tests run, behavior now covered, remaining fake
       categories, and whether a full suite completed. [see below]
-- [x] Send a concise Telegram-ready summary. [manual (skipped - send-tg-report.sh not installed in current environment)]
+- [x] Send a concise Telegram-ready summary. [manual (skipped - the `tg` CLI not installed in current environment)]
 
 <!-- Summary:
 Changed files across Tasks 2-6 (ext-test-projects):

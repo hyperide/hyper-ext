@@ -146,7 +146,7 @@ Run #29 with `--memory-swap -1` is the first run that should cover all of these.
 
 1. Poll every 30–60s while a long run is active.
 2. Send Telegram heartbeat at least every 15 min and on phase changes.
-3. Use **claude bridge bot** (`codex-tg-bot`), not calendar bot.
+3. Use the `tg` CLI, not calendar bot.
 4. Monitor CPU, memory, container status, test step counts.
 
 ### Work discipline
@@ -155,7 +155,7 @@ Run #29 with `--memory-swap -1` is the first run that should cover all of these.
 2. Update workfile after every commit: what changed, why, validation, next.
 3. Do not claim a test/run passed unless it actually happened.
 4. Do not self-nest codex CLI. Other agent CLIs (claude) are fine for review.
-5. **Any user question → background research → answer in Telegram** (`/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`).
+5. **Any user question → background research → answer in Telegram** (`tg "..."`).
    User reads chat from phone. TG answer is mandatory — not optional, not "instead of inline". Russian, detailed (3-6 sentences, key numbers, root cause, next steps). Never dump raw logs.
 
 ### Failure classification

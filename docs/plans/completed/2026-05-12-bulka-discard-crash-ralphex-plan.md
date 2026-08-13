@@ -87,7 +87,7 @@ const { canvas } = await setupPreviewWithDevServer(window);
 Change to:
 
 ```ts
-const { canvas } = await setupPreviewWithDevServer(window, "client/pages/Index.tsx");
+const { canvas } = await setupPreviewWithDevServer(window, 'client/pages/Index.tsx');
 ```
 
 Rationale: `resolveDefaultComponentFile` already returns `client/pages/Index.tsx` for
@@ -149,8 +149,8 @@ In `extension.ts`, `setupEntryFileWatcher` resolves both router and entry files 
 `detectRouterFile()` and `getEntryFilePath()`. Add temporary debug logging:
 
 ```ts
-console.log("[HyperIDE] setupEntryFileWatcher routerFile:", routerFile);
-console.log("[HyperIDE] setupEntryFileWatcher entryFile:", entryFile);
+console.log('[HyperIDE] setupEntryFileWatcher routerFile:', routerFile);
+console.log('[HyperIDE] setupEntryFileWatcher entryFile:', entryFile);
 ```
 
 These appear in the extension host output and are captured by Playwright's console sink
@@ -165,7 +165,7 @@ with `bulka-the-dog/client/main.tsx`.
 Add logging at the start of `scheduleRepatch` callback in `setupEntryFileWatcher`:
 
 ```ts
-console.log("[HyperIDE] entry-file-watcher: scheduleRepatch triggered");
+console.log('[HyperIDE] entry-file-watcher: scheduleRepatch triggered');
 ```
 
 If this log does NOT appear in the test output after the `execSync('git checkout -- ...')`
@@ -210,7 +210,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- \
 
 ### Task 4: TG report
 
-Send to Telegram via `send-tg-report.sh`:
+Send to Telegram via `tg "..."`:
 
 - What failed (test infrastructure / watcher / rejection).
 - What was fixed (explicit path and/or watcher fix).

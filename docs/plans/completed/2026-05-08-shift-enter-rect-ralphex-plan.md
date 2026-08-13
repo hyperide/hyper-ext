@@ -198,7 +198,7 @@ You'll likely find that the rect path uses one of the old/non-uniform key deriva
 ### Task 4: Telegram handoff
 
 - [x] TG report listing: divergence found, file changes, e2e/unit verdicts, commit hashes.
-      [Sent via `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`. Body summarises:
+      [Sent via the `tg` CLI (`tg "..."`). Body summarises:
       Task 1 RED e2e (5343ab65), Task 2 diagnosis + `[shiftparent]` traces (c57cf410),
       Task 3 index-aware walk-up fix + 6 GREEN unit tests (d1b623da). E2E verdict:
       blocked by pre-existing bulka Docker dev-server bring-up regression

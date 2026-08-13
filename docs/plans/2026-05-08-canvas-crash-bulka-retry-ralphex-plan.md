@@ -62,8 +62,8 @@ Out of scope:
       still visible, an element selectable, no error overlay).
 - [ ] Open the screenshot with Read. Verify visually that the canvas survived
       the discard and a click selects an element.
-- [ ] TG report via `send-tg-report.sh` + screenshot via `send-tg-file.sh ...
---photo`. CLAUDE.md: no screenshot = bug not fixed.
+- [ ] TG report via `tg "..."` + screenshot via `tg --photo <path>
+"caption"`. CLAUDE.md: no screenshot = bug not fixed.
 
 ## Hard Rules
 

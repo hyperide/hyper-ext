@@ -169,10 +169,10 @@ git commit -m "fix(tailwind): extend parseTailwindClasses — padding, named col
 
 ### Task 6: TG Report
 
-- [x] Send TG report via `bash /Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`
+- [x] Send TG report via `tg "..."`
 - [x] Include: commit hash, which classes were added to parser, both test results (PI-9-451 GREEN + PI-9-461 GREEN), screenshot
 
-Send via `bash /Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`:
+Send via `tg "..."`:
 
 - Commit hash
 - Which classes were added to parser

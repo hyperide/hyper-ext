@@ -45,4 +45,4 @@ Findings: `iframe:scrollToElement` never existed. Scroll is done via `hypercanva
 
 - [ ] Run `npm run package` in `vscode-extension/hypercanvas-preview/`.
 - [ ] Run the e2e test — GREEN.
-- [ ] Send screenshot to Telegram via `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`.
+- [ ] Send screenshot to Telegram via `tg --photo <path> "caption"`.

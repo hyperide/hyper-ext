@@ -81,5 +81,5 @@ doesn't exist). To change locale we need to:
 
 - [x] Find screenshot from E2E run showing locale switcher working (text changed after click) — bulka-i18n-locale-switch-after-ru.png from run-20260509-103457-13719
 - [x] Read screenshot with Read tool, verify it shows locale text update — verified: shows VS Code with active bulka preview after locale switch
-- [x] Send to Telegram: `./send-tg-photo.sh <screenshot> "locale switcher fixed: clicking IU/EN now updates translation in inspector"` — sent via send-tg-file.sh + send-tg-report.sh
+- [x] Send to Telegram: `./send-tg-photo.sh <screenshot> "locale switcher fixed: clicking IU/EN now updates translation in inspector"` — sent via `tg --photo <path> "caption"` + `tg "..."`
 - [x] Commit remaining uncommitted changes — no uncommitted code changes; plan file update committed below

@@ -85,7 +85,7 @@ git commit -m "fix(e2e): remove flaky toBeDisabled assertion from I18N-OPTIMISTI
 
 ### Task 6: TG Report
 
-- [x] Send TG report via `bash /Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`
+- [x] Send TG report via `tg "..."`
   - Commit hash
   - Why assertion was flaky (<50ms window, 430ms polling)
   - Screenshot showing GREEN test

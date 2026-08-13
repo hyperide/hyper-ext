@@ -159,7 +159,7 @@ calling the AST insert/move:
 ### Task 5: Telegram handoff
 
 - [x] TG report listing files touched, e2e + unit verdicts, commit hashes.
-      Sent via `send-tg-report.sh` from `/tmp/tg-report-tw-order-drag.txt`. Includes
+      Sent via the `tg` CLI from `/tmp/tg-report-tw-order-drag.txt`. Includes
       5 commit hashes (cb54dccb→e2e86b65), full file list, unit verdict GREEN
       (53 tests across adapters/ + shared/canvas-interaction/), e2e verdict
       BLOCKED-upstream with link to last run.

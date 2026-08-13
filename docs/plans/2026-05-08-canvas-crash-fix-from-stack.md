@@ -32,7 +32,7 @@ Track B produces a Docker-reproducible repro or a root-cause explanation.
 - Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any E2E work.
 - Never `RemoteTrigger`. Ralphex is local CLI only.
 - No "follow-up needed" placeholders — each task has an explicit deliverable.
-- TG: never write file paths, always attach files via `send-tg-file.sh`.
+- TG: never write file paths, always attach files via `tg --file <path> "caption"` (or `tg --photo` for screenshots).
 
 ---
 
@@ -52,12 +52,11 @@ Track B produces a Docker-reproducible repro or a root-cause explanation.
       to the sink file within milliseconds of the rejection.
 - [ ] Open Command Palette → "HyperIDE: Stop Diagnostic Capture".
       VS Code shows stats: "Rejections: N, exceptions: M" and opens the log in an editor.
-- [ ] Attach the `.log` file to a Telegram message via `send-tg-file.sh` so the
+- [ ] Attach the `.log` file to a Telegram message via the `tg` CLI so the
       follow-up ralphex session can read it. Paste the path into a new plan comment:
 
       ```
-      bash /Users/ultra/work/hyper-canvas-draft/scripts/send-tg-file.sh \
-        ~/.hyperide-diagnostics-<ts>.log
+      tg --file ~/.hyperide-diagnostics-<ts>.log "diagnostics log"
       ```
 
 - [ ] If the log shows 0 rejections, the extension reload cleared the handler state —
@@ -106,7 +105,7 @@ This task runs after the log file is attached. Ralphex reads the log and:
         tests/project-dependent/bulka-canvas-discard-no-crash.spec.ts
       ```
 
-- [ ] Send a TG report with before/after screenshots via `send-tg-file.sh ... --photo`.
+- [ ] Send a TG report with before/after screenshots via `tg --photo <path> "caption"`.
 - [ ] Commit with message `fix(ext): guard push() call site — no crash on SCM discard`.
 - [ ] Open a Linear ticket and link the commit. Close the ticket.
 

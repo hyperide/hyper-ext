@@ -140,4 +140,4 @@ tests/project-dependent/bulka-i18n-key-change-no-flicker.spec.ts
       Done: visual check confirms 500ms shows "Appearance" heading with
       right-sidebar style data (element selected); 1000ms same settled state;
       16ms frame shows clear pink selection rect. Both frames clean — no blank
-      overlay. Sent via send-tg-file.sh --photo with text report.
+      overlay. Sent via `tg --photo <path> "caption"` with text report.

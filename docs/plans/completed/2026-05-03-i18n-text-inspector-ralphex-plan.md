@@ -8,7 +8,7 @@ Hyper Canvas text editing currently treats JSX expression children as raw
 expressions. For a selected node such as:
 
 ```tsx
-<p className="text-foreground/80">{t("habits.walks")}</p>
+<p className="text-foreground/80">{t('habits.walks')}</p>
 ```
 
 the inspector should recognize the i18n call, show key `habits.walks`, show the
@@ -61,8 +61,8 @@ JSX children:
 
 ```ts
 interface I18nTextBinding {
-  kind: "i18n";
-  library: "react-i18next" | "i18next" | "next-intl" | "react-intl" | "lingui" | "custom";
+  kind: 'i18n';
+  library: 'react-i18next' | 'i18next' | 'next-intl' | 'react-intl' | 'lingui' | 'custom';
   key: string;
   activeLocale: string;
   availableLocales: string[];
@@ -177,7 +177,7 @@ bun test shared/i18n-text/__tests__/detect-i18n-package.test.ts
   ```tsx
   export default function Index() {
     const { t } = useLanguage();
-    return <p className="text-foreground/80">{t("habits.walks")}</p>;
+    return <p className="text-foreground/80">{t('habits.walks')}</p>;
   }
   ```
 
@@ -452,16 +452,16 @@ git diff | grep "^-.*\\(/\\*\\*\\|//\\)" || true
 ### Task 16: Telegram Screenshot Delivery
 
 - [x] Detect existing local ralphex/project notification configuration first:
-      — Found `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh` (executable).
+      — Found the `tg` CLI (executable).
 - [x] Prefer a configured ralphex notification transport if present.
-      — Used `send-tg-report.sh` (preferred transport, exits 0).
-- [x] Otherwise use `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`
+      — Used the `tg` CLI (preferred transport, exits 0).
+- [x] Otherwise use the `tg` CLI (`tg "..."`)
       for a human-written summary and a local screenshot directory path.
       — Sent summary: Tasks 13-15 results, screenshot paths, blockers noted.
 - [x] If sending image files requires a separate Telegram photo helper, make it
       read token/chat values from environment or local ignored config. Do not print
       secrets and do not commit credentials.
-      — send-tg-report.sh reads credentials from its own `.env` file; no secrets exposed.
+      — the `tg` CLI reads credentials from its own `.env` file; no secrets exposed.
 - [x] Send only concise human summaries and verified screenshots, never raw
       command logs, diffs, prompts, or secrets.
       — Sent human summary only. E2E screenshots at `/tmp/hyper-i18n-inspector-*.png`.
@@ -472,7 +472,7 @@ git diff | grep "^-.*\\(/\\*\\*\\|//\\)" || true
 Verification:
 
 ```bash
-test -x /Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh
+command -v tg
 ls -la /tmp | rg "i18n-text|hyper-canvas|bulka"
 ```
 
@@ -501,7 +501,7 @@ ls -la /tmp | rg "i18n-text|hyper-canvas|bulka"
       — `/tmp/hyper-i18n-inspector-before.png`, `-selected.png`, `-final.png` from E2E run.
       SaaS live verification blocked by no PostgreSQL + missing server-side read path.
 - [x] Telegram delivery was completed or a precise blocker was recorded.
-      — `send-tg-report.sh` called, exit 0. Summary includes all blockers and screenshot paths.
+      — the `tg` CLI called, exit 0. Summary includes all blockers and screenshot paths.
 - [x] Final self-rating out of 10 and concrete follow-up ideas are recorded in
       ralphex progress.
       — **Rating: 7/10**. Core read/write paths complete, unit tests pass, component wired.

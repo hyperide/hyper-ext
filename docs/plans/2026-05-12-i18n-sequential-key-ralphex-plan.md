@@ -147,9 +147,9 @@ At the top of `handleI18nKeyChange` callback (line 774), log the full state befo
 the guard:
 
 ```ts
-console.warn("[HC i18n-key debug] handleI18nKeyChange called", {
+console.warn('[HC i18n-key debug] handleI18nKeyChange called', {
   newKey,
-  i18nTextKey: i18nText?.kind === "i18n" ? i18nText.key : null,
+  i18nTextKey: i18nText?.kind === 'i18n' ? i18nText.key : null,
   lastWrittenI18nKey: lastWrittenI18nKeyRef.current,
   writeInProgress: useSharedEditorState.getState().writeInProgress,
 });
@@ -287,7 +287,7 @@ useEffect(() => {
     setPendingKeyWrite(null);
     return;
   }
-  if (i18nText?.kind === "i18n" && i18nText.key === pendingKeyWrite.key) {
+  if (i18nText?.kind === 'i18n' && i18nText.key === pendingKeyWrite.key) {
     setPendingKeyWrite(null);
   }
 }, [i18nText, selectedId, pendingKeyWrite]);
@@ -367,7 +367,7 @@ Save screenshots:
 
 ## Task 5: TG report
 
-Send via `send-tg-report.sh`:
+Send via the `tg` CLI (`tg "..."`):
 
 - Root cause: `keyBusy` dropped false between `writeInProgress` clearing and `loading`
   rising — stale `realKey` in inspector caused `commitKey` to abort second write.

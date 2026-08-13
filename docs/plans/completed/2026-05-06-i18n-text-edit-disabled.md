@@ -208,7 +208,7 @@ deterministic on cold-server runs as well. Committed in
 `ext-test-projects` as a single change to
 `e2e/tests/project-independent/i18n-inspector.spec.ts`.
 
-Screenshots sent to Telegram via `send-tg-file.sh` from
+Screenshots sent to Telegram via `tg --photo <path> "caption"` from
 `run-20260506-112416-42040/shard-1/screenshots/`:
 
 - `test-i18n-pi7-existing-key-edit.png` — inspector with `test.greeting`

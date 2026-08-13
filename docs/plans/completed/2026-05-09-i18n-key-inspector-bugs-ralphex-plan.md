@@ -116,6 +116,6 @@ Root cause of Test 4 RED: after Task 3, `showCombobox = canCreateKeys || ...` al
 
 - [x] Find screenshot artifacts from the E2E run
 - [x] Read each screenshot with Read tool, visually verify it shows the bug is fixed
-- [x] Send passing screenshots to Telegram (4 screenshots sent via send-tg-file.sh)
+- [x] Send passing screenshots to Telegram (4 screenshots sent via `tg --photo <path> "caption"`)
 - [x] One screenshot per bug fixed (4 total)
 - [x] Commit any remaining uncommitted changes with descriptive message

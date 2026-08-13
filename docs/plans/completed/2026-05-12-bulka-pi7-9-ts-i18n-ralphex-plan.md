@@ -87,7 +87,7 @@ Screenshot the GREEN result.
 
 ### Task 5: TG report
 
-Send via `cd /Users/ultra/xp/codex-tg-bot && bash scripts/send-tg-report.sh`:
+Send via `tg "..."`:
 
 - Which task fixed it (project load or editability or write path)
 - Files changed, commits

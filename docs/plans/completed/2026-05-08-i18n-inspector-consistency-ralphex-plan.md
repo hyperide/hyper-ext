@@ -108,7 +108,7 @@ removed in `3bff90dd`, restore it from `git show d8874e13 -- '*StyleReadService.
 
 ```ts
 if (!resolved || resolved.resolvedText === null) {
-  return { kind: "unsupported", reason: "missing-source-location" };
+  return { kind: 'unsupported', reason: 'missing-source-location' };
 }
 ```
 
@@ -116,7 +116,7 @@ Replace with:
 
 ```ts
 if (!resolved) {
-  return { kind: "unsupported", reason: "missing-source-location" };
+  return { kind: 'unsupported', reason: 'missing-source-location' };
 }
 // resolved.resolvedText may be null (locale missing the key, or fresh key not yet
 // committed to the dictionary). The inspector handles null by showing an empty input;
@@ -210,21 +210,21 @@ to tolerate empty text — reviewer will tighten later.
 
 ### Task 5 — Telegram handoff
 
-- [x] Send TG report via `send-tg-report.sh` — отправлен с резюме Tasks 1+2
+- [x] Send TG report via `tg "..."` — отправлен с резюме Tasks 1+2
       (commits f676cee6, fa9d08f3) и Tasks 3+4 (specs 7f12085c, b568c6f6),
       явно отмечено что GREEN заблокирован Docker pnpm gap.
-- [x] Send Task 3 + Task 4 e2e screenshots via `send-tg-file.sh ... --photo`
+- [x] Send Task 3 + Task 4 e2e screenshots via `tg --photo <path> "caption"`
       — skipped (not automatable in this iteration). GREEN-прогона нет,
       отправлять нечего: bulka-the-dog использует pnpm-lock, e2e Docker
       образ не содержит pnpm. Тот же блок репродуцирует существующий
       `bulka-i18n-combobox.spec.ts`. Скриншоты приложить задним числом
       когда Docker-образ получит pnpm (или bulka мигрирует на bun.lock).
 
-- Send a single TG report via `send-tg-report.sh` summarising:
+- Send a single TG report via `tg "..."` summarising:
   - what changed (Tasks 1 + 2 file references, helper signature)
   - both e2e specs and their final verdicts
   - any commit hashes
-- Send the e2e screenshot from Task 3 AND Task 4 via `send-tg-file.sh ... --photo`. Verify
+- Send the e2e screenshot from Task 3 AND Task 4 via `tg --photo <path> "caption"`. Verify
   visually that they show the locale change actually happening / the new key actually
   showing. CLAUDE.md rule: no screenshot in TG = bug not fixed.
 

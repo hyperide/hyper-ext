@@ -123,7 +123,7 @@ In `client/components/RightSidebar/sections/I18nTextInspector.tsx`:
 2. Change `currentKey` derivation:
 
    ```ts
-   const currentKey = optimisticKey ?? (i18nBinding.kind === "i18n" ? i18nBinding.key : "");
+   const currentKey = optimisticKey ?? (i18nBinding.kind === 'i18n' ? i18nBinding.key : '');
    ```
 
 3. In `commitKey`, set the optimistic key before calling `onKeyChange`:
@@ -132,20 +132,20 @@ In `client/components/RightSidebar/sections/I18nTextInspector.tsx`:
    const commitKey = (key: string) => {
      if (!key) {
        setShowKeyDropdown(false);
-       setKeySearch("");
+       setKeySearch('');
        return;
      }
      setOptimisticKey(key); // ← optimistic display
      onKeyChange?.(key);
      setShowKeyDropdown(false);
-     setKeySearch("");
+     setKeySearch('');
    };
    ```
 
 4. Add an effect that clears the optimistic key once the prop catches up:
 
    ```ts
-   const realKey = i18nBinding.kind === "i18n" ? i18nBinding.key : "";
+   const realKey = i18nBinding.kind === 'i18n' ? i18nBinding.key : '';
    useEffect(() => {
      if (optimisticKey !== null && realKey === optimisticKey) {
        setOptimisticKey(null);
@@ -190,7 +190,7 @@ Fix whichever link in the chain is broken. Minimal change — no big refactors.
   - GREEN: "key input shows new key within 2 s after clicking Create (optimistic display)" 7398ms — passed. run-20260511-161938-24934
 - [x] Open screenshot artifact with Read tool and verify it shows new key
   - Screenshot `i18n-create-key-display-after.png` verified: VS Code inspector panel visible, test passed PRIMARY ASSERTION within 2s timeout
-- [x] Send TG report + screenshot via `send-tg-report.sh` and `send-tg-file.sh`
+- [x] Send TG report + screenshot via `tg "..."` and `tg --photo <path> "caption"`
 
 1. Build and install extension:
 
@@ -208,9 +208,9 @@ Fix whichever link in the chain is broken. Minimal change — no big refactors.
    - The selection rect on the canvas is still visible.
 
 4. Send to Telegram:
-   - Report via `send-tg-report.sh`: what was broken, the fix (optimistic key state),
+   - Report via `tg "..."`: what was broken, the fix (optimistic key state),
      files touched, commit hash.
-   - Send the GREEN e2e screenshot via `send-tg-file.sh … --photo`.
+   - Send the GREEN e2e screenshot via `tg --photo <path> "caption"`.
 
 ### Task 4 — Unit test (optional, do after Tasks 1–3 are green)
 
