@@ -6,8 +6,8 @@
  * for AI-based or heuristic-based structure discovery.
  */
 
-import fs from "node:fs";
-import path from "node:path";
+import fs from 'node:fs';
+import path from 'node:path';
 import type {
   ComponentGroup,
   ComponentListItem,
@@ -16,74 +16,74 @@ import type {
   ProjectStructurePaths,
   ProjectStructureStore,
   SubProject,
-} from "./types.js";
+} from './types.js';
 
 /** Next.js App Router special files that cannot be rendered in canvas preview */
 const NEXTJS_APP_ROUTER_FILES = new Set([
-  "layout",
-  "loading",
-  "error",
-  "not-found",
-  "template",
-  "global-error",
-  "default",
-  "route",
+  'layout',
+  'loading',
+  'error',
+  'not-found',
+  'template',
+  'global-error',
+  'default',
+  'route',
 ]);
 
 /** Directories to always skip during heuristic scanning */
 const SKIP_DIRS = new Set([
-  "node_modules",
-  ".git",
-  ".next",
-  ".remix",
-  "dist",
-  "build",
-  ".hyperide",
-  "project-preview",
-  "public",
-  "assets",
-  "__tests__",
-  "test",
-  "tests",
-  "coverage",
-  ".turbo",
-  ".cache",
+  'node_modules',
+  '.git',
+  '.next',
+  '.remix',
+  'dist',
+  'build',
+  '.hyperide',
+  'project-preview',
+  'public',
+  'assets',
+  '__tests__',
+  'test',
+  'tests',
+  'coverage',
+  '.turbo',
+  '.cache',
 ]);
 
 /** Non-component directories that live alongside components */
 const NON_COMPONENT_DIRS = new Set([
-  "data",
-  "types",
-  "hooks",
-  "lib",
-  "utils",
-  "helpers",
-  "context",
-  "store",
-  "stores",
-  "styles",
-  "theme",
-  "config",
-  "constants",
-  "navigation",
-  "assets",
-  "fonts",
-  "icons",
-  "images",
-  "server",
-  "database",
-  "tamagui",
-  "emotion",
-  "zero",
-  "shims",
-  "platform",
+  'data',
+  'types',
+  'hooks',
+  'lib',
+  'utils',
+  'helpers',
+  'context',
+  'store',
+  'stores',
+  'styles',
+  'theme',
+  'config',
+  'constants',
+  'navigation',
+  'assets',
+  'fonts',
+  'icons',
+  'images',
+  'server',
+  'database',
+  'tamagui',
+  'emotion',
+  'zero',
+  'shims',
+  'platform',
 ]);
 
 /** Atom directory names — typically contain small reusable primitives */
-const ATOM_DIR_NAMES = new Set(["ui", "atoms", "elements", "primitives"]);
+const ATOM_DIR_NAMES = new Set(['ui', 'atoms', 'elements', 'primitives']);
 
 /** Page/route directory names */
-const PAGE_DIR_NAMES = new Set(["pages", "routes", "screens", "views"]);
+const PAGE_DIR_NAMES = new Set(['pages', 'routes', 'screens', 'views']);
 
 export class ComponentScanner {
   constructor(
@@ -142,7 +142,7 @@ export class ComponentScanner {
     if (!path.isAbsolute(rawPath)) return rawPath;
 
     const relativeToRoot = path.relative(projectRoot, rawPath);
-    if (relativeToRoot && !relativeToRoot.startsWith("..") && !path.isAbsolute(relativeToRoot)) {
+    if (relativeToRoot && !relativeToRoot.startsWith('..') && !path.isAbsolute(relativeToRoot)) {
       return relativeToRoot;
     }
 
@@ -160,7 +160,7 @@ export class ComponentScanner {
       if (this.projectPathExists(projectRoot, relative)) return relative;
     }
 
-    const sourceRootIndex = parts.findIndex((part) => part === "src" || part === "app");
+    const sourceRootIndex = parts.findIndex((part) => part === 'src' || part === 'app');
     if (sourceRootIndex !== -1) {
       const relative = parts.slice(sourceRootIndex).join(path.sep);
       if (this.projectPathExists(projectRoot, relative)) return relative;
@@ -194,7 +194,7 @@ export class ComponentScanner {
     if (!configuredPaths.every((rawPath) => path.isAbsolute(rawPath))) return false;
     const hasForeignAbsolutePath = configuredPaths.some((rawPath) => {
       const relativeToRoot = path.relative(projectRoot, rawPath);
-      return relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot);
+      return relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot);
     });
     if (!hasForeignAbsolutePath) return false;
     return !this.hasExistingConfiguredPath(normalizedPaths, projectRoot);
@@ -222,7 +222,7 @@ export class ComponentScanner {
 
     // Determine source roots to scan
     const sourceRoots: string[] = [];
-    for (const dir of ["src", "app", "client"]) {
+    for (const dir of ['src', 'app', 'client']) {
       const fullPath = path.join(projectRoot, dir);
       if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
         sourceRoots.push(fullPath);
@@ -233,7 +233,7 @@ export class ComponentScanner {
     // Triggered by nx.json, turbo.json, pnpm-workspace.yaml, or workspaces field.
     const isMonorepo = this.isMonorepoRoot(projectRoot);
     if (isMonorepo) {
-      for (const subDir of ["targets", "apps", "packages", "libs", "services"]) {
+      for (const subDir of ['targets', 'apps', 'packages', 'libs', 'services']) {
         const subDirPath = path.join(projectRoot, subDir);
         if (!fs.existsSync(subDirPath)) continue;
         let pkgEntries: fs.Dirent[];
@@ -246,7 +246,7 @@ export class ComponentScanner {
           if (!pkg.isDirectory() || SKIP_DIRS.has(pkg.name)) continue;
           const pkgRoot = path.join(subDirPath, pkg.name);
           let foundNested = false;
-          for (const srcDir of ["src", "app"]) {
+          for (const srcDir of ['src', 'app']) {
             const srcPath = path.join(pkgRoot, srcDir);
             if (fs.existsSync(srcPath) && fs.statSync(srcPath).isDirectory()) {
               sourceRoots.push(srcPath);
@@ -256,7 +256,7 @@ export class ComponentScanner {
           // If no src/ or app/ found, check for conventional dirs at package root
           // (e.g. apps/web/pages/, packages/ui/components/).
           if (!foundNested) {
-            const hasConventionalDir = ["pages", "components", "screens", "routes"].some((d) => {
+            const hasConventionalDir = ['pages', 'components', 'screens', 'routes'].some((d) => {
               const dp = path.join(pkgRoot, d);
               return fs.existsSync(dp) && fs.statSync(dp).isDirectory();
             });
@@ -296,19 +296,19 @@ export class ComponentScanner {
         }
 
         // Components directory — check for atom subdirs
-        if (entryName === "components") {
+        if (entryName === 'components') {
           this.categorizeComponentsDir(entryPath, atoms, composites);
           continue;
         }
 
         // features/ → composites
-        if (entryName === "features" || entryName === "modules") {
+        if (entryName === 'features' || entryName === 'modules') {
           composites.push(entryPath);
           continue;
         }
 
         // interface/ → could contain atoms (tamagui-free-sample style)
-        if (entryName === "interface") {
+        if (entryName === 'interface') {
           // Scan for atom-like subdirs
           this.categorizeInterfaceDir(entryPath, atoms, composites);
           continue;
@@ -316,16 +316,16 @@ export class ComponentScanner {
 
         // src/app/ in non-Next.js projects (common Vite+React pattern: all features under src/app/)
         // Treat like components/ — ui/ subdir → atoms, everything else → composites
-        if (entryName === "app" && dirName === "src" && framework !== "nextjs") {
+        if (entryName === 'app' && dirName === 'src' && framework !== 'nextjs') {
           this.categorizeComponentsDir(entryPath, atoms, composites);
           continue;
         }
       }
 
       // Next.js App Router: app/ itself is pages (if it has page.tsx files)
-      if (dirName === "app" && framework === "nextjs") {
+      if (dirName === 'app' && framework === 'nextjs') {
         // app/ with page.tsx → pages source
-        if (this.hasFileRecursive(sourceRoot, "page.tsx") || this.hasFileRecursive(sourceRoot, "page.jsx")) {
+        if (this.hasFileRecursive(sourceRoot, 'page.tsx') || this.hasFileRecursive(sourceRoot, 'page.jsx')) {
           pages.push(sourceRoot);
         }
       }
@@ -337,20 +337,20 @@ export class ComponentScanner {
       // Also applies to monorepo sub-package src/ directories even when root src/ already found pages —
       // each sub-package's direct .tsx files should be discoverable independently.
       const isSubPackageSrc =
-        dirName === "src" &&
-        !sourceRoot.endsWith(path.join(projectRoot, "src")) &&
-        !sourceRoot.endsWith(path.join(projectRoot, "app")) &&
-        !sourceRoot.endsWith(path.join(projectRoot, "client"));
-      if (dirName === "src" && framework === "react" && (pages.length === 0 || isSubPackageSrc)) {
+        dirName === 'src' &&
+        !sourceRoot.endsWith(path.join(projectRoot, 'src')) &&
+        !sourceRoot.endsWith(path.join(projectRoot, 'app')) &&
+        !sourceRoot.endsWith(path.join(projectRoot, 'client'));
+      if (dirName === 'src' && framework === 'react' && (pages.length === 0 || isSubPackageSrc)) {
         // Add individual files — fallback is non-recursive (only direct src/ children)
         for (const e of entries) {
           if (
             e.isFile() &&
-            (e.name.endsWith(".tsx") || e.name.endsWith(".jsx")) &&
-            !e.name.endsWith(".test.tsx") &&
-            !e.name.endsWith(".spec.tsx") &&
-            !e.name.endsWith(".test.jsx") &&
-            !e.name.endsWith(".spec.jsx") &&
+            (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) &&
+            !e.name.endsWith('.test.tsx') &&
+            !e.name.endsWith('.spec.tsx') &&
+            !e.name.endsWith('.test.jsx') &&
+            !e.name.endsWith('.spec.jsx') &&
             /^[A-Z]/.test(e.name)
           ) {
             pages.push(path.join(sourceRoot, e.name));
@@ -389,14 +389,14 @@ export class ComponentScanner {
 
   /** Return true if projectRoot is a monorepo workspace (Nx, Turbo, pnpm, Lerna, generic). */
   private isMonorepoRoot(projectRoot: string): boolean {
-    if (fs.existsSync(path.join(projectRoot, "nx.json"))) return true;
-    if (fs.existsSync(path.join(projectRoot, "turbo.json"))) return true;
-    if (fs.existsSync(path.join(projectRoot, "pnpm-workspace.yaml"))) return true;
-    if (fs.existsSync(path.join(projectRoot, "lerna.json"))) return true;
+    if (fs.existsSync(path.join(projectRoot, 'nx.json'))) return true;
+    if (fs.existsSync(path.join(projectRoot, 'turbo.json'))) return true;
+    if (fs.existsSync(path.join(projectRoot, 'pnpm-workspace.yaml'))) return true;
+    if (fs.existsSync(path.join(projectRoot, 'lerna.json'))) return true;
     try {
-      const pkgPath = path.join(projectRoot, "package.json");
+      const pkgPath = path.join(projectRoot, 'package.json');
       if (fs.existsSync(pkgPath)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
         const deps = { ...pkg.dependencies, ...pkg.devDependencies };
         if (deps.nx || deps.turbo) return true;
         if (Array.isArray(pkg.workspaces)) return true;
@@ -408,18 +408,18 @@ export class ComponentScanner {
   }
 
   /** Detect framework from package.json dependencies */
-  private detectFramework(projectRoot: string): "nextjs" | "remix" | "expo" | "react" {
+  private detectFramework(projectRoot: string): 'nextjs' | 'remix' | 'expo' | 'react' {
     try {
-      const pkgPath = path.join(projectRoot, "package.json");
-      if (!fs.existsSync(pkgPath)) return "react";
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      const pkgPath = path.join(projectRoot, 'package.json');
+      if (!fs.existsSync(pkgPath)) return 'react';
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
       const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-      if (deps.next) return "nextjs";
-      if (deps["@remix-run/react"] || deps["@remix-run/node"]) return "remix";
-      if (deps.expo || deps["react-native"]) return "expo";
-      return "react";
+      if (deps.next) return 'nextjs';
+      if (deps['@remix-run/react'] || deps['@remix-run/node']) return 'remix';
+      if (deps.expo || deps['react-native']) return 'expo';
+      return 'react';
     } catch {
-      return "react";
+      return 'react';
     }
   }
 
@@ -440,7 +440,7 @@ export class ComponentScanner {
       if (ATOM_DIR_NAMES.has(entryName)) {
         atoms.push(path.join(componentsPath, entry.name));
         hasAtomSubdir = true;
-      } else if (entryName === "layout") {
+      } else if (entryName === 'layout') {
         // layout/ subdirectory → composites
         composites.push(path.join(componentsPath, entry.name));
       }
@@ -454,7 +454,7 @@ export class ComponentScanner {
     if (!hasAtomSubdir) {
       // No atom subdirs found — check if the dir has many small generic-named files
       // that might indicate it's an atoms dir itself (rare but possible)
-      const tsxFiles = entries.filter((e) => e.isFile() && (e.name.endsWith(".tsx") || e.name.endsWith(".jsx")));
+      const tsxFiles = entries.filter((e) => e.isFile() && (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')));
       // If it's a flat directory with many files, it's still composites by default
       // (atoms need an explicit ui/ or atoms/ subdir)
       void tsxFiles;
@@ -474,9 +474,9 @@ export class ComponentScanner {
       if (!entry.isDirectory()) continue;
       const entryName = entry.name.toLowerCase();
       // Known atom-like subdirs
-      if (["buttons", "forms", "text", "image", "avatars", "icons"].includes(entryName)) {
+      if (['buttons', 'forms', 'text', 'image', 'avatars', 'icons'].includes(entryName)) {
         atoms.push(path.join(interfacePath, entry.name));
-      } else if (["layout", "headers", "dialogs", "pages", "app"].includes(entryName)) {
+      } else if (['layout', 'headers', 'dialogs', 'pages', 'app'].includes(entryName)) {
         composites.push(path.join(interfacePath, entry.name));
       }
     }
@@ -539,9 +539,9 @@ export class ComponentScanner {
         components.push(...this.scanComponentDirectory(fullPath, categoryRoot, projectRoot));
       } else if (
         entry.isFile() &&
-        entry.name.endsWith(".tsx") &&
-        !entry.name.endsWith(".test.tsx") &&
-        !entry.name.endsWith(".spec.tsx")
+        entry.name.endsWith('.tsx') &&
+        !entry.name.endsWith('.test.tsx') &&
+        !entry.name.endsWith('.spec.tsx')
       ) {
         components.push({
           name: path.relative(categoryRoot, fullPath),
@@ -568,18 +568,18 @@ export class ComponentScanner {
       if (entry.isDirectory()) {
         components.push(...this.scanPagesDirectory(fullPath, categoryRoot, projectRoot));
       } else if (entry.isFile()) {
-        const baseName = entry.name.replace(/\.(tsx?|jsx?)$/, "");
+        const baseName = entry.name.replace(/\.(tsx?|jsx?)$/, '');
         if (
-          (entry.name.endsWith(".tsx") || entry.name.endsWith(".jsx")) &&
-          !entry.name.endsWith(".test.tsx") &&
-          !entry.name.endsWith(".test.jsx") &&
-          !entry.name.endsWith(".spec.tsx") &&
-          !entry.name.endsWith(".spec.jsx") &&
-          entry.name !== "test-preview.tsx" &&
-          !entry.name.startsWith("_") &&
+          (entry.name.endsWith('.tsx') || entry.name.endsWith('.jsx')) &&
+          !entry.name.endsWith('.test.tsx') &&
+          !entry.name.endsWith('.test.jsx') &&
+          !entry.name.endsWith('.spec.tsx') &&
+          !entry.name.endsWith('.spec.jsx') &&
+          entry.name !== 'test-preview.tsx' &&
+          !entry.name.startsWith('_') &&
           !NEXTJS_APP_ROUTER_FILES.has(baseName) &&
-          entry.name !== "middleware.ts" &&
-          entry.name !== "middleware.js"
+          entry.name !== 'middleware.ts' &&
+          entry.name !== 'middleware.js'
         ) {
           components.push({
             name: path.relative(categoryRoot, fullPath),
@@ -602,9 +602,9 @@ export class ComponentScanner {
       }),
     );
 
-    const atomGroups = this.buildGroups(paths.atomComponentsPaths, projectRoot, "component");
-    const compositeGroups = this.buildGroups(paths.compositeComponentsPaths, projectRoot, "component", atomDirPaths);
-    const pageGroups = this.buildGroups(paths.pagesPaths, projectRoot, "page");
+    const atomGroups = this.buildGroups(paths.atomComponentsPaths, projectRoot, 'component');
+    const compositeGroups = this.buildGroups(paths.compositeComponentsPaths, projectRoot, 'component', atomDirPaths);
+    const pageGroups = this.buildGroups(paths.pagesPaths, projectRoot, 'page');
 
     const isMonorepo = this.isMonorepoRoot(projectRoot);
     if (!isMonorepo) {
@@ -633,7 +633,7 @@ export class ComponentScanner {
   /** Enumerate sub-packages in a monorepo and build per-sub-project component groups. */
   private detectSubProjects(projectRoot: string): SubProject[] {
     const subProjects: SubProject[] = [];
-    const WORKSPACE_DIRS = ["targets", "apps", "packages", "libs", "services"];
+    const WORKSPACE_DIRS = ['targets', 'apps', 'packages', 'libs', 'services'];
 
     for (const workspaceDir of WORKSPACE_DIRS) {
       const workspacePath = path.join(projectRoot, workspaceDir);
@@ -677,51 +677,51 @@ export class ComponentScanner {
     const atomDirPaths = new Set(
       structure.atomComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
     );
-    const atomGroups = this.buildGroups(structure.atomComponentsPaths, projectRoot, "component");
+    const atomGroups = this.buildGroups(structure.atomComponentsPaths, projectRoot, 'component');
     const compositeGroups = this.buildGroups(
       structure.compositeComponentsPaths,
       projectRoot,
-      "component",
+      'component',
       atomDirPaths,
     );
-    const pageGroups = this.buildGroups(structure.pagesPaths, projectRoot, "page");
+    const pageGroups = this.buildGroups(structure.pagesPaths, projectRoot, 'page');
 
     return { name, path: relativePath, supported: true, atomGroups, compositeGroups, pageGroups };
   }
 
   /** Check whether a sub-project directory is React-based and HyperIDE-compatible. */
   private checkSubProjectSupport(subPkgPath: string): { supported: boolean; unsupportedReason?: string } {
-    const pkgJsonPath = path.join(subPkgPath, "package.json");
+    const pkgJsonPath = path.join(subPkgPath, 'package.json');
     let deps: Record<string, string> = {};
     if (fs.existsSync(pkgJsonPath)) {
       try {
-        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
         deps = { ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies };
       } catch {
         // ignore parse errors
       }
     }
 
-    if (deps["vue"] || deps["@vue/core"]) {
-      return { supported: false, unsupportedReason: "Vue.js projects not supported" };
+    if (deps['vue'] || deps['@vue/core']) {
+      return { supported: false, unsupportedReason: 'Vue.js projects not supported' };
     }
-    if (deps["svelte"]) {
-      return { supported: false, unsupportedReason: "Svelte projects not supported" };
+    if (deps['svelte']) {
+      return { supported: false, unsupportedReason: 'Svelte projects not supported' };
     }
-    if (deps["@angular/core"]) {
-      return { supported: false, unsupportedReason: "Angular projects not supported" };
+    if (deps['@angular/core']) {
+      return { supported: false, unsupportedReason: 'Angular projects not supported' };
     }
 
     // Check for React
-    if (deps["react"] || deps["react-native"]) {
+    if (deps['react'] || deps['react-native']) {
       return { supported: true };
     }
 
     // No explicit framework — check if any .tsx/.jsx files exist under src/
-    const hasTsx = this.hasFileRecursiveExt(subPkgPath, [".tsx", ".jsx"]);
+    const hasTsx = this.hasFileRecursiveExt(subPkgPath, ['.tsx', '.jsx']);
     if (hasTsx) return { supported: true };
 
-    return { supported: false, unsupportedReason: "No React components found" };
+    return { supported: false, unsupportedReason: 'No React components found' };
   }
 
   /**
@@ -731,12 +731,12 @@ export class ComponentScanner {
    * Library packages export components for other packages to use — they don't run as standalone apps.
    */
   private isLibrarySubPackage(subPkgRoot: string): boolean {
-    const pkgJsonPath = path.join(subPkgRoot, "package.json");
+    const pkgJsonPath = path.join(subPkgRoot, 'package.json');
     if (!fs.existsSync(pkgJsonPath)) return false;
     try {
-      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
       const peerDeps = pkg.peerDependencies ?? {};
-      return !!peerDeps["react"] && !pkg.dependencies?.["react"];
+      return !!peerDeps['react'] && !pkg.dependencies?.['react'];
     } catch {
       return false;
     }
@@ -749,7 +749,7 @@ export class ComponentScanner {
     const pages: string[] = [];
     const framework = this.detectFramework(subPkgRoot);
 
-    for (const srcDirName of ["src", "app"]) {
+    for (const srcDirName of ['src', 'app']) {
       const srcPath = path.join(subPkgRoot, srcDirName);
       if (!fs.existsSync(srcPath) || !fs.statSync(srcPath).isDirectory()) continue;
 
@@ -770,12 +770,22 @@ export class ComponentScanner {
           pages.push(entryPath);
           continue;
         }
-        if (entryName === "components") {
+        if (entryName === 'components') {
           this.categorizeComponentsDir(entryPath, atoms, composites);
           continue;
         }
-        if (entryName === "features" || entryName === "modules") {
+        if (entryName === 'features' || entryName === 'modules') {
           composites.push(entryPath);
+          continue;
+        }
+
+        // src/app/ in non-Next.js sub-packages (conloca pattern: every feature under
+        // src/app/**). Mirror the non-scope detectProjectStructure() branch — treat
+        // src/app/ like components/: ui/ subdir → atoms, everything else → composites.
+        // Without this the in-scope scan finds no known dir and the Explorer shows
+        // ZERO components for the target (HYP-419).
+        if (entryName === 'app' && srcDirName === 'src' && framework !== 'nextjs') {
+          this.categorizeComponentsDir(entryPath, atoms, composites);
           continue;
         }
       }
@@ -783,22 +793,22 @@ export class ComponentScanner {
       // Fallback: PascalCase .tsx at src/ root.
       // Library sub-packages (react in peerDeps only) → composites (entire src/).
       // App sub-packages → individual PascalCase files to pages.
-      const isSubPkgSrc = !srcPath.endsWith(path.join(workspaceRoot, "src"));
-      if (srcDirName === "src" && framework === "react" && (pages.length === 0 || isSubPkgSrc)) {
+      const isSubPkgSrc = !srcPath.endsWith(path.join(workspaceRoot, 'src'));
+      if (srcDirName === 'src' && framework === 'react' && (pages.length === 0 || isSubPkgSrc)) {
         if (this.isLibrarySubPackage(subPkgRoot)) {
           const hasTsxAtRoot = entries.some(
-            (e) => e.isFile() && (e.name.endsWith(".tsx") || e.name.endsWith(".jsx")) && /^[A-Z]/.test(e.name),
+            (e) => e.isFile() && (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) && /^[A-Z]/.test(e.name),
           );
           if (hasTsxAtRoot) composites.push(srcPath);
         } else {
           for (const e of entries) {
             if (
               e.isFile() &&
-              (e.name.endsWith(".tsx") || e.name.endsWith(".jsx")) &&
-              !e.name.endsWith(".test.tsx") &&
-              !e.name.endsWith(".spec.tsx") &&
-              !e.name.endsWith(".test.jsx") &&
-              !e.name.endsWith(".spec.jsx") &&
+              (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) &&
+              !e.name.endsWith('.test.tsx') &&
+              !e.name.endsWith('.spec.tsx') &&
+              !e.name.endsWith('.test.jsx') &&
+              !e.name.endsWith('.spec.jsx') &&
               /^[A-Z]/.test(e.name)
             ) {
               pages.push(path.join(srcPath, e.name));
@@ -825,18 +835,18 @@ export class ComponentScanner {
         if (!entry.isDirectory()) continue;
         if (SKIP_DIRS.has(entry.name) || NON_COMPONENT_DIRS.has(entry.name)) continue;
         const entryName = entry.name.toLowerCase();
-        if (entryName === "src" || entryName === "app") continue;
+        if (entryName === 'src' || entryName === 'app') continue;
         const entryPath = path.join(subPkgRoot, entry.name);
 
         if (PAGE_DIR_NAMES.has(entryName)) {
           pages.push(entryPath);
           continue;
         }
-        if (entryName === "components") {
+        if (entryName === 'components') {
           this.categorizeComponentsDir(entryPath, atoms, composites);
           continue;
         }
-        if (entryName === "features" || entryName === "modules") {
+        if (entryName === 'features' || entryName === 'modules') {
           composites.push(entryPath);
           continue;
         }
@@ -863,7 +873,7 @@ export class ComponentScanner {
   private buildGroups(
     categoryPaths: string[] | null | undefined,
     projectRoot: string,
-    kind: "component" | "page",
+    kind: 'component' | 'page',
     excludeDirs?: Set<string>,
   ): ComponentGroup[] {
     const groups: ComponentGroup[] = [];
@@ -887,7 +897,7 @@ export class ComponentScanner {
 
       // File path case
       if (stat.isFile()) {
-        if (kind === "page") {
+        if (kind === 'page') {
           // Individual page file — group by parent directory, add single component entry
           const dirPath = path.relative(projectRoot, path.dirname(categoryPath));
           const item: ComponentListItem = {
@@ -930,7 +940,7 @@ export class ComponentScanner {
       }
 
       const components =
-        kind === "page"
+        kind === 'page'
           ? this.scanPagesDirectory(categoryPath, categoryPath, projectRoot)
           : this.scanComponentDirectory(
               categoryPath,

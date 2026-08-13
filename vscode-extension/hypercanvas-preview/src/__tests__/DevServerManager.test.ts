@@ -181,6 +181,18 @@ describe('DevServerManager', () => {
       expect(manager.getLogs()).toEqual([]);
       expect((manager as unknown as { _projectPath: string })._projectPath).toBe('/next-project');
     });
+
+    // HYP-420: an explicitly pinned sub-project path must survive start()'s
+    // _syncProjectPathWithWorkspace, which would otherwise reset it to the VS Code
+    // workspace folder (the monorepo root, which has no runnable dev script).
+    it('pins the path so _syncProjectPathWithWorkspace does not reset it', async () => {
+      await manager.setProjectPath('/repo/targets/conloca-app');
+      expect((manager as unknown as { _projectPathPinned: boolean })._projectPathPinned).toBe(true);
+
+      await (manager as unknown as { _syncProjectPathWithWorkspace(): Promise<void> })._syncProjectPathWithWorkspace();
+
+      expect((manager as unknown as { _projectPath: string })._projectPath).toBe('/repo/targets/conloca-app');
+    });
   });
 
   describe('clearLogs', () => {

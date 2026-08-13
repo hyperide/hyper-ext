@@ -62,6 +62,15 @@ export class PreviewPanel {
   private _panel?: vscode.WebviewPanel;
   private _currentComponent?: string;
   private _navigableComponent?: string;
+  /**
+   * The component path as the preview dev server sees it — relative to the active
+   * project root. For a monorepo this is the sub-project-relative path (the key in
+   * the sub-project's __canvas_preview__ registry), which differs from
+   * _currentComponent (always repo-relative, the root for astBridge edits). Used only
+   * to build the iframe ?component= URL. Defaults to _currentComponent for
+   * single-package projects where the two roots coincide (HYP-420).
+   */
+  private _previewComponent?: string;
   private _requiresPreviewRegeneration = false;
   private _defaultComponent?: string;
   private _disposables: vscode.Disposable[] = [];
@@ -129,6 +138,7 @@ export class PreviewPanel {
     this._workspaceRoot = workspaceRoot;
     this._currentComponent = undefined;
     this._navigableComponent = undefined;
+    this._previewComponent = undefined;
     this._requiresPreviewRegeneration = false;
     this._defaultComponent = undefined;
     this._devServerRunning = false;
@@ -1270,6 +1280,9 @@ export class PreviewPanel {
   private _setCurrentComponent(component: string): void {
     if (this._currentComponent !== component) {
       this._navigableComponent = undefined;
+      // Drop any stale sub-project preview path; the extension re-supplies it via
+      // setComponentParam when this component is (re)selected through the pipeline.
+      this._previewComponent = undefined;
     }
     this._currentComponent = component;
     const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
@@ -1307,8 +1320,14 @@ export class PreviewPanel {
       return;
     }
 
+    // The iframe URL must use the preview (project-root-relative) path so the dev
+    // server's __canvas_preview__ registry key matches. _previewComponent is set
+    // alongside _currentComponent by setComponentParam; fall back to the repo-relative
+    // component for paths that coincide (single-package projects, _defaultComponent).
+    const previewComponent = this._currentComponent && this._previewComponent ? this._previewComponent : component;
+
     const baseUrl = `${this._previewBaseUrl}/test-preview`;
-    const url = `${baseUrl}?component=${encodeURIComponent(component)}`;
+    const url = `${baseUrl}?component=${encodeURIComponent(previewComponent)}`;
 
     console.log('[HyperIDE] Updating URL:', url);
 
@@ -1397,11 +1416,18 @@ export class PreviewPanel {
 
   /**
    * Update iframe component URL param without a hard reload.
-   * Triggers navigation to /test-preview?component=<componentPath>.
+   * Triggers navigation to /test-preview?component=<previewComponentPath>.
+   *
+   * @param componentPath repo-relative path — the identity used for AST edits and
+   *   the `setComponent` webview message (must match the repo-rooted astBridge).
+   * @param previewComponentPath project-root-relative path used to build the iframe
+   *   ?component= URL. For a monorepo this is the sub-project-relative path; defaults
+   *   to componentPath when the project and repo roots coincide.
    */
-  public setComponentParam(componentPath: string): void {
+  public setComponentParam(componentPath: string, previewComponentPath: string = componentPath): void {
     this._currentComponent = componentPath;
     this._navigableComponent = componentPath;
+    this._previewComponent = previewComponentPath;
     this._requiresPreviewRegeneration = false;
     if (!this._panel) return;
 
@@ -1410,9 +1436,12 @@ export class PreviewPanel {
       return;
     }
 
+    // Post the preview (project-root-relative) path: the iframe navigates to it and
+    // the sub-project's __canvas_preview__ registry is keyed by that path, not the
+    // repo-relative one (HYP-420).
     this._panel.webview.postMessage({
       type: 'setComponent',
-      component: componentPath,
+      component: previewComponentPath,
     });
   }
 

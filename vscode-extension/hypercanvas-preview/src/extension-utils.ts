@@ -6,6 +6,10 @@
  * Past bugs: HYP-363 — global unhandledRejection handler mislabeled foreign
  *            extension errors (open.bun-vscode, github.copilot-chat) as
  *            [HyperIDE] failures. Fixed by filtering via stack-trace origin.
+ *            HYP-420 follow-up (P2 #277) — a stale resolveActiveProjectRoot
+ *            callback could re-root the preview pipeline to the OLD monorepo
+ *            sub-project after a newer selection landed. Fixed by gating the
+ *            reroot on a monotonic selection sequence (createSequencedReroot).
  */
 
 /**
@@ -55,4 +59,41 @@ export function serializeRejectionReason(reason: unknown): SerializedReason {
   } catch {
     return String(reason);
   }
+}
+
+export type SequencedRerootResult = { root: string; stale: boolean };
+
+/**
+ * Builds a sequence-aware re-root function for monorepo component selection.
+ *
+ * Resolving the active project root for a selected component is async (it walks
+ * the filesystem for the nearest package.json). When the user quickly selects
+ * components from different sub-projects, an earlier resolve can finish AFTER a
+ * newer selection. Without guarding, the stale callback re-roots the preview
+ * pipeline (previewManager / modeManager / devServerManager) back to the OLD
+ * sub-project — so subsequent preview generation and dev-server start run in the
+ * wrong package, even though the downstream selection handler is later skipped.
+ *
+ * Each invocation captures a monotonically increasing sequence id. After the
+ * async resolve completes, the reroot runs ONLY if no newer selection has
+ * arrived (`mySeq === seq`). A stale call returns `{ stale: true }` and performs
+ * no reroot at all, so the caller can also skip downstream handling.
+ *
+ * The happy path (a single in-flight selection) is identical to calling
+ * `reroot(resolveRoot(component))` directly — the seq always matches.
+ */
+export function createSequencedReroot(deps: {
+  resolveRoot: (component: string) => Promise<string>;
+  reroot: (targetRoot: string) => void;
+}): (component: string) => Promise<SequencedRerootResult> {
+  let seq = 0;
+  return async (component: string): Promise<SequencedRerootResult> => {
+    const mySeq = ++seq;
+    const root = await deps.resolveRoot(component);
+    // A newer selection arrived while we awaited the resolve — do NOT reroot the
+    // pipeline to this superseded sub-project.
+    if (mySeq !== seq) return { root, stale: true };
+    deps.reroot(root);
+    return { root, stale: false };
+  };
 }

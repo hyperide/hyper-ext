@@ -64,6 +64,11 @@ export class DevServerManager {
   private _status: DevServerStatus = 'stopped';
   private _error: string | undefined;
   private _projectPath: string;
+  // True once setProjectPath has explicitly pinned the project path (e.g. to a monorepo
+  // sub-project for a selected component, HYP-420). When set, start() must NOT reset the
+  // path back to the VS Code workspace folder via _syncProjectPathWithWorkspace — the
+  // repo root often has no dev/start script and would fail to launch.
+  private _projectPathPinned = false;
   private _outputChannel: vscode.OutputChannel;
   private _onStatusChangeListeners: Array<(state: DevServerState) => void> = [];
 
@@ -423,6 +428,14 @@ export class DevServerManager {
    * for the new workspace.
    */
   async setProjectPath(projectPath: string): Promise<void> {
+    // Explicit external set (e.g. monorepo sub-project reroot) pins the path so a later
+    // start() won't sync it back to the workspace folder via _syncProjectPathWithWorkspace.
+    this._projectPathPinned = true;
+    await this._applyProjectPath(projectPath);
+  }
+
+  /** Switch the project path and reset project-scoped state. Does not change the pin. */
+  private async _applyProjectPath(projectPath: string): Promise<void> {
     if (projectPath === this._projectPath) return;
     await this.stop();
     this._projectPath = projectPath;
@@ -532,9 +545,13 @@ export class DevServerManager {
   }
 
   private async _syncProjectPathWithWorkspace(): Promise<void> {
+    // Respect an explicitly pinned path (monorepo sub-project, HYP-420) — never reset
+    // it to the workspace folder, which may lack a runnable dev/start script. Use
+    // _applyProjectPath (not setProjectPath) so this automatic sync never sets the pin.
+    if (this._projectPathPinned) return;
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!workspaceRoot || workspaceRoot === this._projectPath) return;
-    await this.setProjectPath(workspaceRoot);
+    await this._applyProjectPath(workspaceRoot);
   }
 
   /**

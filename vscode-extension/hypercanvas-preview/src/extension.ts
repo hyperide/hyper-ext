@@ -26,14 +26,16 @@ import {
   type SSRMockConfig,
 } from '@lib/preview-generator';
 import { detectFramework } from '@lib/preview-generator/framework-routing';
+import { resolveActiveProjectRoot } from '@lib/preview-generator/monorepo-root';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
+import type { SharedEditorState } from '@lib/types';
 import * as vscode from 'vscode';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provider-defaults';
 import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../../shared/ai-provider-info';
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import { goToCode } from './EditorBridge';
-import { isForeignExtensionError, serializeRejectionReason } from './extension-utils';
+import { createSequencedReroot, isForeignExtensionError, serializeRejectionReason } from './extension-utils';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
@@ -799,24 +801,80 @@ export function activate(context: vscode.ExtensionContext) {
   };
   void setupEntryFileWatcher(activeWorkspaceRoot, modeManager);
 
-  const syncWorkspaceRuntime = (): string => {
-    const currentRoot = getWorkspaceRoot() ?? activeWorkspaceRoot;
-    if (currentRoot === activeWorkspaceRoot) return activeWorkspaceRoot;
+  // Re-root only the preview/dev axis (file manager, mode manager, dev server) to
+  // `targetRoot`. Used for BOTH a workspace-folder change and a monorepo sub-project
+  // selection. Deliberately does NOT touch previewPanel.setWorkspaceRoot, astBridge,
+  // componentService, or runProjectDetection — those stay repo-rooted so the Explorer
+  // accordion spans all sub-projects and AST edits resolve against the repo root
+  // (HYP-420; astBridge cannot move without breaking cross-target Explorer).
+  const rerootPreviewPipeline = (targetRoot: string): void => {
+    if (targetRoot === activeWorkspaceRoot) return;
 
     modeManager.stopWatching();
-    activeWorkspaceRoot = currentRoot;
+    activeWorkspaceRoot = targetRoot;
     previewManager = createPreviewFileManager(activeWorkspaceRoot);
     modeManager = createPreviewModeManager(activeWorkspaceRoot);
     modeManager.startWatching();
     void setupEntryFileWatcher(activeWorkspaceRoot, modeManager);
 
-    previewPanel?.setWorkspaceRoot(activeWorkspaceRoot);
-    rightPanelProvider?.notifyCapabilities(null);
     void devServerManager?.setProjectPath(activeWorkspaceRoot);
+  };
+
+  // Heavy re-root for a genuine VS Code workspace-folder change: in addition to the
+  // preview/dev axis, reset the repo-rooted panel/detection/capabilities since the
+  // whole project changed.
+  const rerootProjectPipeline = (folderRoot: string): void => {
+    rerootPreviewPipeline(folderRoot);
+    previewPanel?.setWorkspaceRoot(folderRoot);
+    rightPanelProvider?.notifyCapabilities(null);
     stateHub?.applyUpdate({ projectUIKit: undefined });
-    runProjectDetection(activeWorkspaceRoot);
+    runProjectDetection(folderRoot);
+  };
+
+  // The VS Code workspace folder root last applied. Distinct from activeWorkspaceRoot,
+  // which may point at a monorepo sub-project after a component selection (HYP-420).
+  // syncWorkspaceRuntime resets the pipeline only on a GENUINE folder change — never
+  // on a sub-project reroot — so callers like onSampleCreated / scopeChange don't
+  // yank the active sub-project back to the repo root mid-session.
+  let lastFolderRoot = workspaceRoot;
+
+  const syncWorkspaceRuntime = (): string => {
+    const currentFolderRoot = getWorkspaceRoot() ?? lastFolderRoot;
+    if (currentFolderRoot === lastFolderRoot) return activeWorkspaceRoot;
+    lastFolderRoot = currentFolderRoot;
+    rerootProjectPipeline(currentFolderRoot);
     return activeWorkspaceRoot;
   };
+
+  // The VS Code workspace folder. For a monorepo this is the repo root; the active
+  // project root (activeWorkspaceRoot) may be a sub-project under it after a component
+  // in that sub-project is selected. Tracked separately so we always resolve a
+  // selected component against the repo root, not the previously-focused sub-project.
+  const workspaceFolderRoot = (): string => getWorkspaceRoot() ?? workspaceRoot;
+
+  /**
+   * For a monorepo, re-root the preview pipeline to the sub-project that owns the
+   * selected component (the nearest ancestor with its own package.json). The repo
+   * root usually has no dev/start script and no index.html / src entry, so the dev
+   * server and entry/router patch must run inside the target (HYP-420). Returns the
+   * active project root the component should be resolved against.
+   */
+  // Sequence-aware reroot: resolveActiveProjectRoot is an async filesystem walk,
+  // so when the user rapidly selects components from different monorepo targets an
+  // earlier resolve can finish AFTER a newer selection. The reroot of
+  // previewManager / modeManager / devServerManager must therefore be gated on the
+  // selection sequence — a stale callback must NOT reroot the pipeline to the old
+  // sub-project, or subsequent preview generation / dev-server start run in the
+  // wrong package (P2 #277). The freshness check lives INSIDE the helper, before
+  // the reroot, so the ordering bug (reroot-then-check) cannot recur.
+  const resolveAndRerootToComponent = createSequencedReroot({
+    resolveRoot: (componentPath) => {
+      const repoRoot = workspaceFolderRoot();
+      const absComponent = isAbsolute(componentPath) ? componentPath : join(activeWorkspaceRoot, componentPath);
+      return resolveActiveProjectRoot(repoRoot, absComponent, vsCodeIO);
+    },
+    reroot: (projectRoot) => rerootPreviewPipeline(projectRoot),
+  });
 
   context.subscriptions.push({
     dispose: () => {
@@ -827,14 +885,18 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => syncWorkspaceRuntime()));
 
   previewPanel.onSampleCreated(async (componentPath) => {
-    const currentWorkspaceRoot = syncWorkspaceRuntime();
-    const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
-    const relativePath = relative(currentWorkspaceRoot, absComponentPath);
+    syncWorkspaceRuntime();
+    // componentPath comes from the repo-rooted previewPanel → repo-relative. previewManager
+    // is rooted at the active sub-project, so re-derive the sub-project-relative path.
+    const repoRoot = workspaceFolderRoot();
+    const absComponentPath = isAbsolute(componentPath) ? componentPath : join(repoRoot, componentPath);
+    const repoRelativePath = relative(repoRoot, absComponentPath);
+    const relativePath = relative(activeWorkspaceRoot, absComponentPath);
     // No isUiPrimitive guard here: onSampleCreated fires only after SampleDefault is written,
     // meaning the primitive is now previewable and must be registered in __canvas_preview__.tsx.
     await previewManager.ensureComponent([relativePath]);
     await devServerManager?.awaitRecompile();
-    previewPanel?.setComponentParam(relativePath);
+    previewPanel?.setComponentParam(repoRelativePath, relativePath);
     previewPanel?.refresh();
   });
 
@@ -877,174 +939,210 @@ export function activate(context: vscode.ExtensionContext) {
 
   const unsubStateChange = stateHub.onChange((_state, patch) => {
     if (patch.currentComponent?.path) {
-      const currentWorkspaceRoot = syncWorkspaceRuntime();
+      // Re-root the pipeline to the monorepo sub-project that owns this component
+      // before computing any paths (HYP-420). The component path from the Explorer
+      // is relative to the VS Code workspace folder (repo root); resolve the abs
+      // path against the repo root, then re-root so the dev server / entry patch /
+      // __canvas_preview__ run inside the sub-project. For single-package projects
+      // this resolves back to the workspace root — a no-op.
       const componentPath = patch.currentComponent.path;
-      const componentName = patch.currentComponent.name;
-      const sampleComponentName = normalizeSampleComponentName(componentName);
-
-      // Auto-open Preview Panel if not already visible.
-      // ViewColumn.Two (not Beside): in single-column E2E setups, ViewColumn.Beside
-      // resolves to column 2 which doesn't exist yet — VS Code places the webview
-      // off-screen. ViewColumn.Two forces a visible split in any layout.
-      previewPanel?.createOrShow(vscode.ViewColumn.Two);
-
-      // Open the component file in the left editor group (ViewColumn.One)
-      // so the user can see the code alongside the preview.
-      // Uses preview mode (italic tab) — consistent with single-click Explorer UX.
-      const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
-      // .then(onFulfilled, onRejected) only catches openTextDocument's rejection.
-      // showTextDocument can also reject (disposed editor / workspace switch /
-      // race with another panel closing all editors), and that rejection
-      // becomes an unhandled promise rejection which VS Code surfaces as a
-      // ".error" notification toast containing "Unhandled rejection ..." —
-      // tripping every preview-render "renders without errors" assertion that
-      // greps for /fatal|crash|unhandled/i. Use a trailing .then().catch()
-      // chain so both stages funnel into the same handler.
-      vscode.workspace
-        .openTextDocument(vscode.Uri.file(absPath))
-        .then((doc) =>
-          vscode.window.showTextDocument(doc, {
-            viewColumn: vscode.ViewColumn.One,
-            preserveFocus: true,
-            preview: true,
-          }),
-        )
-        .then(undefined, (err) => {
-          console.error('[HyperIDE] Failed to open component file:', err);
-        });
-
-      // Parse component structure
-      const capturedComponentPath = componentPath;
-      panelRouter?.componentService
-        .parseStructure(capturedComponentPath)
-        .then((structure) => {
-          if (stateHub?.state.currentComponent?.path === capturedComponentPath) {
-            stateHub.applyUpdate({ astStructure: structure });
-          }
-        })
-        .catch((err) => {
-          console.error('[HyperIDE] Failed to inject UUIDs / parse structure:', err);
-        });
-
-      // Cancel previous ensureSample/ensureComponent chain
-      previewAbortController?.abort();
-      const ac = new AbortController();
-      previewAbortController = ac;
-      componentMissingRetries.clear();
-
-      // Normalize: currentComponent.path may be relative or absolute
-      const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
-      const relativePath = relative(currentWorkspaceRoot, absComponentPath);
-
-      // UI primitives (shadcn-style ui/<name>.tsx) must NOT have SampleDefault written
-      // into their source — keeping the file pristine matters for users who track shadcn
-      // updates, and writing a deterministic scaffold into Carousel/Tabs/etc. would lose
-      // exports that don't match the suffix allow-list. Instead, preview-file-manager
-      // synthesizes a SampleDefault inline inside __canvas_preview__.tsx via
-      // syntheticSampleDefault (Task 2). We still need to register the primitive in the
-      // registry so the iframe can find it — call ensureComponent below, but skip the
-      // ensureSample mutation and the in-memory prop injection (the synthetic compound
-      // scaffold already renders shadcn primitives).
-      //
-      // No unit test covers the !isPrimitive split here — extension.ts is hard to harness
-      // in isolation. The behavior is covered by the project-dependent E2E spec
-      // `component-load.spec.ts` (sibling repo `ext-test-projects/e2e/`).
-      const isPrimitive = isUiPrimitive(relativePath);
-
-      // Skip AI source-file mutation entirely when the harness disables it.
-      // E2E tests set hypercanvas.preview.autoSampleGeneration=false so ensureSample
-      // doesn't write SampleDefault into the test project's component files —
-      // otherwise `git checkout -- .` between specs drops the export, Vite reports
-      // "export removed", forces a full reload, and __canvas_preview__.tsx fails to
-      // reload mid-transition. NOTE: this gate is for SOURCE-WRITING only. The
-      // feature #210 in-memory prop injection below is NOT gated on it — it never
-      // touches the source file, so there is nothing for `git checkout` to revert.
-      const autoSampleEnabled = vscode.workspace
-        .getConfiguration('hypercanvas.preview')
-        .get<boolean>('autoSampleGeneration', true);
-
-      const ensureSamplePromise =
-        autoSampleEnabled && !isPrimitive
-          ? ensureSample({
-              io: vsCodeIO,
-              absolutePath: absComponentPath,
-              componentName: sampleComponentName,
-              sampleName: 'SampleDefault',
-              generate: sampleGenerator,
-            })
-          : Promise.resolve({ generated: false, exists: false });
-
-      ensureSamplePromise
-        .then(async (sampleResult) => {
-          if (ac.signal.aborted) return;
-          // Feature #210 — "try first, then ask" via IN-MEMORY generated props.
-          // Skip UI primitives (synthetic compound scaffold already renders them and
-          // spreading event-like fallback props into them triggers React warnings).
-          // Unlike the old source-mutation path, this is NOT gated on
-          // autoSampleGeneration — generated values are injected at render through the
-          // preview bridge and never written to disk, so they survive `git checkout`
-          // between E2E specs. Posting happens BEFORE ensureComponent (which writes the
-          // preview file and triggers the iframe render) so the webview global is set
-          // when the component first renders.
-          if (!isPrimitive) {
-            const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
-            if (previewPanel && shouldInjectGeneratedProps(sampleResult, props)) {
-              // Key by relativePath — the value that lands in the `?component=` URL
-              // and the preview registry. componentPath may be absolute (normalized
-              // above); keying by it would make the iframe lookup miss.
-              await previewPanel.injectGeneratedSampleProps(componentPath, relativePath);
-            }
-          }
-          // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic).
-          // For UI primitives this is what bakes the syntheticSampleDefault into the registry.
-          return previewManager.ensureComponent([relativePath]);
-        })
-        .then(async () => {
-          if (ac.signal.aborted) return 'aborted' as const;
-          // 3. Ensure route files + handle mode transitions (App Shell / Isolated)
-          const result = await modeManager.onComponentSelected();
-          if (result === 'unsupported') {
-            // SYNC: shared/framework-support.ts → FRAMEWORK_SUPPORT
-            void vscode.window.showWarningMessage(
-              'HyperIDE: unsupported project type. ' +
-                'Supported: Next.js, Remix, Vite (file-based and JSX router), Webpack/CRA, Parcel.',
-            );
-            return 'unsupported' as const;
-          }
-          if (result === 'needs-patch') {
-            void vscode.window
-              .showWarningMessage(
-                'HyperIDE: JSX router detected but no /test-preview route found. ' +
-                  'Add the route manually or let AI do it.',
-                'Auto fix',
-                'Dismiss',
-              )
-              .then(async (choice) => {
-                if (choice === 'Auto fix') {
-                  const prompt = await buildNeedsPatchPrompt(currentWorkspaceRoot, vsCodeIO);
-                  aiChatProvider?.sendAIPrompt(prompt);
-                }
-              });
-            return 'needs-patch' as const;
-          }
-          return result;
-        })
-        .then(async (result) => {
-          if (ac.signal.aborted || result === 'aborted' || result === 'unsupported' || result === 'needs-patch') return;
-          // 4. If webpack armed the recompile gate (via onBeforeWebpackEntryPatch),
-          // wait for the post-patch `compiled successfully` so the iframe doesn't
-          // race a half-built bundle. No-op for vite/remix/next.
-          await devServerManager?.awaitRecompile();
-          if (ac.signal.aborted) return;
-          // 5. Update iframe component URL param — no hard reload needed
-          previewPanel?.setComponentParam(relativePath);
-        })
-        .catch((err) => {
-          if (ac.signal.aborted) return;
-          console.error('[HyperIDE] Failed to ensure sample/preview:', err);
-        });
+      const repoRoot = workspaceFolderRoot();
+      const absSelectedComponent = isAbsolute(componentPath) ? componentPath : join(repoRoot, componentPath);
+      void resolveAndRerootToComponent(absSelectedComponent).then(({ root: currentWorkspaceRoot, stale }) => {
+        // The reroot awaits async filesystem checks, so a newer selection may have
+        // landed meanwhile. When stale (a newer selection superseded this one),
+        // the helper already skipped the pipeline reroot — drop the callback too.
+        if (stale) return;
+        // Also drop if the current component changed via a non-selection path that
+        // never re-invoked the reroot helper (e.g. a workspace switch clearing
+        // currentComponent → null), so we don't reopen / navigate to the old file.
+        if (stateHub?.state.currentComponent?.path !== componentPath) return;
+        handleComponentSelected(patch, absSelectedComponent, currentWorkspaceRoot);
+      });
     }
   });
+
+  function handleComponentSelected(
+    patch: Partial<SharedEditorState>,
+    absSelectedComponent: string,
+    currentWorkspaceRoot: string,
+  ): void {
+    const componentPath = patch.currentComponent?.path ?? absSelectedComponent;
+    const componentName = patch.currentComponent?.name ?? '';
+    const sampleComponentName = normalizeSampleComponentName(componentName);
+
+    // Auto-open Preview Panel if not already visible.
+    // ViewColumn.Two (not Beside): in single-column E2E setups, ViewColumn.Beside
+    // resolves to column 2 which doesn't exist yet — VS Code places the webview
+    // off-screen. ViewColumn.Two forces a visible split in any layout.
+    previewPanel?.createOrShow(vscode.ViewColumn.Two);
+
+    // Open the component file in the left editor group (ViewColumn.One)
+    // so the user can see the code alongside the preview.
+    // Uses preview mode (italic tab) — consistent with single-click Explorer UX.
+    const absPath = absSelectedComponent;
+    // .then(onFulfilled, onRejected) only catches openTextDocument's rejection.
+    // showTextDocument can also reject (disposed editor / workspace switch /
+    // race with another panel closing all editors), and that rejection
+    // becomes an unhandled promise rejection which VS Code surfaces as a
+    // ".error" notification toast containing "Unhandled rejection ..." —
+    // tripping every preview-render "renders without errors" assertion that
+    // greps for /fatal|crash|unhandled/i. Use a trailing .then().catch()
+    // chain so both stages funnel into the same handler.
+    vscode.workspace
+      .openTextDocument(vscode.Uri.file(absPath))
+      .then((doc) =>
+        vscode.window.showTextDocument(doc, {
+          viewColumn: vscode.ViewColumn.One,
+          preserveFocus: true,
+          preview: true,
+        }),
+      )
+      .then(undefined, (err) => {
+        console.error('[HyperIDE] Failed to open component file:', err);
+      });
+
+    // Parse component structure
+    const capturedComponentPath = componentPath;
+    panelRouter?.componentService
+      .parseStructure(capturedComponentPath)
+      .then((structure) => {
+        if (stateHub?.state.currentComponent?.path === capturedComponentPath) {
+          stateHub.applyUpdate({ astStructure: structure });
+        }
+      })
+      .catch((err) => {
+        console.error('[HyperIDE] Failed to inject UUIDs / parse structure:', err);
+      });
+
+    // Cancel previous ensureSample/ensureComponent chain
+    previewAbortController?.abort();
+    const ac = new AbortController();
+    previewAbortController = ac;
+    componentMissingRetries.clear();
+
+    // Two roots coexist (HYP-420):
+    //  - relativePath: relative to the active sub-project root → drives previewManager
+    //    (the __canvas_preview__ registry key) and the iframe ?component= URL.
+    //  - repoRelativePath: relative to the repo root → the component identity for the
+    //    repo-rooted astBridge / componentService and the panel's _currentComponent.
+    // For single-package projects the two roots coincide and the paths are equal.
+    const absComponentPath = absSelectedComponent;
+    const relativePath = relative(currentWorkspaceRoot, absComponentPath);
+    const repoRelativePath = relative(workspaceFolderRoot(), absComponentPath);
+
+    // UI primitives (shadcn-style ui/<name>.tsx) must NOT have SampleDefault written
+    // into their source — keeping the file pristine matters for users who track shadcn
+    // updates, and writing a deterministic scaffold into Carousel/Tabs/etc. would lose
+    // exports that don't match the suffix allow-list. Instead, preview-file-manager
+    // synthesizes a SampleDefault inline inside __canvas_preview__.tsx via
+    // syntheticSampleDefault (Task 2). We still need to register the primitive in the
+    // registry so the iframe can find it — call ensureComponent below, but skip the
+    // ensureSample mutation and the in-memory prop injection (the synthetic compound
+    // scaffold already renders shadcn primitives).
+    //
+    // No unit test covers the !isPrimitive split here — extension.ts is hard to harness
+    // in isolation. The behavior is covered by the project-dependent E2E spec
+    // `component-load.spec.ts` (sibling repo `ext-test-projects/e2e/`).
+    const isPrimitive = isUiPrimitive(relativePath);
+
+    // Skip AI source-file mutation entirely when the harness disables it.
+    // E2E tests set hypercanvas.preview.autoSampleGeneration=false so ensureSample
+    // doesn't write SampleDefault into the test project's component files —
+    // otherwise `git checkout -- .` between specs drops the export, Vite reports
+    // "export removed", forces a full reload, and __canvas_preview__.tsx fails to
+    // reload mid-transition. NOTE: this gate is for SOURCE-WRITING only. The
+    // feature #210 in-memory prop injection below is NOT gated on it — it never
+    // touches the source file, so there is nothing for `git checkout` to revert.
+    const autoSampleEnabled = vscode.workspace
+      .getConfiguration('hypercanvas.preview')
+      .get<boolean>('autoSampleGeneration', true);
+
+    const ensureSamplePromise =
+      autoSampleEnabled && !isPrimitive
+        ? ensureSample({
+            io: vsCodeIO,
+            absolutePath: absComponentPath,
+            componentName: sampleComponentName,
+            sampleName: 'SampleDefault',
+            generate: sampleGenerator,
+          })
+        : Promise.resolve({ generated: false, exists: false });
+
+    ensureSamplePromise
+      .then(async (sampleResult) => {
+        if (ac.signal.aborted) return;
+        // Feature #210 — "try first, then ask" via IN-MEMORY generated props.
+        // Skip UI primitives (synthetic compound scaffold already renders them and
+        // spreading event-like fallback props into them triggers React warnings).
+        // Unlike the old source-mutation path, this is NOT gated on
+        // autoSampleGeneration — generated values are injected at render through the
+        // preview bridge and never written to disk, so they survive `git checkout`
+        // between E2E specs. Posting happens BEFORE ensureComponent (which writes the
+        // preview file and triggers the iframe render) so the webview global is set
+        // when the component first renders.
+        if (!isPrimitive) {
+          // componentService is repo-rooted → parse the prop schema with the
+          // repo-relative componentPath. The iframe keys generated props by the
+          // sub-project-relative path (HYP-420) — the same value that lands in the
+          // `?component=` URL and the preview registry — so pass relativePath as the
+          // previewKey; keying by componentPath would make the iframe lookup miss.
+          const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
+          if (previewPanel && shouldInjectGeneratedProps(sampleResult, props)) {
+            await previewPanel.injectGeneratedSampleProps(componentPath, relativePath);
+          }
+        }
+        // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic).
+        // For UI primitives this is what bakes the syntheticSampleDefault into the registry.
+        return previewManager.ensureComponent([relativePath]);
+      })
+      .then(async () => {
+        if (ac.signal.aborted) return 'aborted' as const;
+        // 3. Ensure route files + handle mode transitions (App Shell / Isolated)
+        const result = await modeManager.onComponentSelected();
+        if (result === 'unsupported') {
+          // SYNC: shared/framework-support.ts → FRAMEWORK_SUPPORT
+          void vscode.window.showWarningMessage(
+            'HyperIDE: unsupported project type. ' +
+              'Supported: Next.js, Remix, Vite (file-based and JSX router), Webpack/CRA, Parcel.',
+          );
+          return 'unsupported' as const;
+        }
+        if (result === 'needs-patch') {
+          void vscode.window
+            .showWarningMessage(
+              'HyperIDE: JSX router detected but no /test-preview route found. ' +
+                'Add the route manually or let AI do it.',
+              'Auto fix',
+              'Dismiss',
+            )
+            .then(async (choice) => {
+              if (choice === 'Auto fix') {
+                const prompt = await buildNeedsPatchPrompt(currentWorkspaceRoot, vsCodeIO);
+                aiChatProvider?.sendAIPrompt(prompt);
+              }
+            });
+          return 'needs-patch' as const;
+        }
+        return result;
+      })
+      .then(async (result) => {
+        if (ac.signal.aborted || result === 'aborted' || result === 'unsupported' || result === 'needs-patch') return;
+        // 4. If webpack armed the recompile gate (via onBeforeWebpackEntryPatch),
+        // wait for the post-patch `compiled successfully` so the iframe doesn't
+        // race a half-built bundle. No-op for vite/remix/next.
+        await devServerManager?.awaitRecompile();
+        if (ac.signal.aborted) return;
+        // 5. Update iframe component URL param — no hard reload needed.
+        // _currentComponent stays repo-relative (astBridge identity); the iframe URL
+        // uses the sub-project-relative path (the dev server's preview registry key).
+        previewPanel?.setComponentParam(repoRelativePath, relativePath);
+      })
+      .catch((err) => {
+        if (ac.signal.aborted) return;
+        console.error('[HyperIDE] Failed to ensure sample/preview:', err);
+      });
+  }
   context.subscriptions.push({ dispose: unsubStateChange });
 
   // Auto-reveal Inspector when component insertion UI opens
