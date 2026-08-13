@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { loadPersistedState } from '@/lib/storage';
+import { useProjectActivationStore } from '@/stores/projectActivationStore';
 import { type ComponentsAPIResponse, fetchComponentsJSON } from '@/utils/fetchComponents';
 
 export interface ComponentInfo {
@@ -111,10 +112,20 @@ export function useComponentAutoLoad({
     pages: [],
     isLoaded: false,
   });
+  // HYP-227: scope the shared components cache by the activated project so a switch
+  // doesn't hand this project the previous project's cached components within the TTL.
+  const activatedProjectId = useProjectActivationStore((s) => s.activatedProjectId);
 
   const fetchAndAutoSelect = useCallback(async () => {
+    // HYP-227: capture the project this fetch belongs to. fetchComponentsJSON starts a
+    // new request when the key changes but does NOT abort the old one, so a slow fetch
+    // for the previously active project can resolve after a switch. Re-check the active
+    // project after the await and bail before mutating state / auto-loading if it changed
+    // — otherwise project A's components get loaded into project B.
+    const dispatchedProjectId = activatedProjectId;
     try {
-      const data = await fetchComponentsJSON();
+      const data = await fetchComponentsJSON(activatedProjectId);
+      if (useProjectActivationStore.getState().activatedProjectId !== dispatchedProjectId) return;
       const flattened = flattenComponentGroups(data);
       if (!flattened) {
         // HTTP error (!res.ok) returns { success: false } — mark as loaded,
@@ -154,7 +165,7 @@ export function useComponentAutoLoad({
       console.error('Failed to load components:', err);
       setAvailableComponents({ atoms: [], composites: [], pages: [], isLoaded: true });
     }
-  }, [currentComponentName, mode, loadComponent]);
+  }, [currentComponentName, mode, loadComponent, activatedProjectId]);
 
   useEffect(() => {
     if (!activeProjectId || activeProjectStatus !== 'running') return;

@@ -19,21 +19,32 @@ export interface ComponentsAPIResponse {
 }
 
 let inflightPromise: Promise<ComponentsAPIResponse> | null = null;
+let inflightProjectId: string | null = null;
 let abortController: AbortController | null = null;
 
 let cachedResult: ComponentsAPIResponse | null = null;
+let cachedProjectId: string | null = null;
 let cachedAt = 0;
 const CACHE_TTL_MS = 2000;
 
-/** Fetch and parse /api/get-components. Deduplicates concurrent calls with a 2s TTL cache. */
-export function fetchComponentsJSON(): Promise<ComponentsAPIResponse> {
-  if (cachedResult && Date.now() - cachedAt < CACHE_TTL_MS) {
+/**
+ * Fetch and parse /api/get-components. Deduplicates concurrent calls with a 2s TTL cache.
+ *
+ * The cache and in-flight dedup are keyed by `projectId` (HYP-227): on a project switch
+ * the active project changes but `cancelComponentsFetch` is not always called (the editor
+ * auto-load path only changes `activeProjectId`), so a project-agnostic cache would hand
+ * the previous project's components to the new one within the TTL. Pass the active project
+ * id (useProjectActivationStore.activatedProjectId) so a key change forces a re-fetch.
+ */
+export function fetchComponentsJSON(projectId: string | null): Promise<ComponentsAPIResponse> {
+  if (cachedResult && cachedProjectId === projectId && Date.now() - cachedAt < CACHE_TTL_MS) {
     return Promise.resolve(cachedResult);
   }
 
-  if (inflightPromise) return inflightPromise;
+  if (inflightPromise && inflightProjectId === projectId) return inflightPromise;
 
   abortController = new AbortController();
+  inflightProjectId = projectId;
   const thisPromise = authFetch('/api/get-components', { signal: abortController.signal })
     .then((res) => {
       if (!res.ok) {
@@ -45,6 +56,7 @@ export function fetchComponentsJSON(): Promise<ComponentsAPIResponse> {
         .then((json: ComponentsAPIResponse) => {
           if (json.success) {
             cachedResult = json;
+            cachedProjectId = projectId;
             cachedAt = Date.now();
           }
           return json;
@@ -58,6 +70,7 @@ export function fetchComponentsJSON(): Promise<ComponentsAPIResponse> {
       // a cancel→refetch sequence may have already replaced the handles.
       if (inflightPromise === thisPromise) {
         inflightPromise = null;
+        inflightProjectId = null;
         abortController = null;
       }
     });
@@ -72,7 +85,9 @@ export function cancelComponentsFetch(): void {
     abortController.abort();
     abortController = null;
     inflightPromise = null;
+    inflightProjectId = null;
   }
   cachedResult = null;
+  cachedProjectId = null;
   cachedAt = 0;
 }

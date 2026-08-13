@@ -2,8 +2,29 @@
  * Tests the exported pure functions that useComponentAutoLoad uses internally.
  * Covers the race-condition fix (HYP-224): server returning success: false
  * must NOT mark components as loaded, allowing retry on next event.
+ *
+ * Also covers the stale-in-flight guard (HYP-227): a slow fetch for the previously
+ * active project must NOT auto-load its components after the active project switched.
  */
-import { describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { act, renderHook } from '@testing-library/react';
+import type { ComponentsAPIResponse } from '@/utils/fetchComponents';
+
+// ── Mocks (must precede the hook import so the mocked module is bound) ──────────
+// Control fetch resolution timing so we can interleave a slow project-A fetch with
+// a fast project-B fetch and resolve A last.
+const fetchComponentsJSON = mock(
+  (_projectId: string | null): Promise<ComponentsAPIResponse> => Promise.resolve({ success: true }),
+);
+mock.module('@/utils/fetchComponents', () => ({
+  fetchComponentsJSON,
+  cancelComponentsFetch: mock(),
+}));
+mock.module('@/lib/storage', () => ({
+  loadPersistedState: () => ({ openedComponent: null }),
+}));
+
+import { useProjectActivationStore } from '@/stores/projectActivationStore';
 import {
   type AvailableComponents,
   type ComponentInfo,
@@ -11,7 +32,19 @@ import {
   hasNoRenderableComponents,
   isEntryPoint,
   selectComponentToLoad,
+  useComponentAutoLoad,
 } from '../useComponentAutoLoad';
+
+/** A success payload tagging its single atom with the owning project, so we can
+ *  tell which project's components were loaded. */
+function payloadFor(project: string): ComponentsAPIResponse {
+  return {
+    success: true,
+    atomGroups: [{ dirPath: project, components: [{ name: project, path: `${project}.tsx` }] }],
+    compositeGroups: [],
+    pageGroups: [],
+  };
+}
 
 describe('flattenComponentGroups', () => {
   it('returns null when server reports failure', () => {
@@ -270,5 +303,106 @@ describe('selectComponentToLoad', () => {
       persistedOpenedComponent: undefined,
     });
     expect(result).toBeNull();
+  });
+});
+
+// HYP-227: a slow fetch for the project that was active at dispatch time must not
+// auto-load its components after the active project has switched. Repro: project A
+// fetch is slow, user switches to B, B resolves first, then A resolves late.
+describe('useComponentAutoLoad — stale in-flight guard', () => {
+  /** A promise plus its resolver, so the test controls when each fetch settles. */
+  function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  }
+
+  // Tell React this is an act() environment so updates driven through act()/waitFor()
+  // are recognised and don't emit spurious "not wrapped in act(...)" warnings. The
+  // shared test setup doesn't set it globally, so scope it to this async-render block.
+  const actEnv = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  let priorActEnv: boolean | undefined;
+
+  beforeEach(() => {
+    priorActEnv = actEnv.IS_REACT_ACT_ENVIRONMENT;
+    actEnv.IS_REACT_ACT_ENVIRONMENT = true;
+    fetchComponentsJSON.mockReset();
+    useProjectActivationStore.setState({ activatedProjectId: null });
+  });
+
+  afterEach(() => {
+    actEnv.IS_REACT_ACT_ENVIRONMENT = priorActEnv;
+    useProjectActivationStore.setState({ activatedProjectId: null });
+  });
+
+  it('does not load project A components after switching to project B (A resolves late)', async () => {
+    const a = deferred<ComponentsAPIResponse>();
+    const b = deferred<ComponentsAPIResponse>();
+    // Project A's fetch is slow (deferred), project B's is fast (deferred, resolved
+    // first by the test). Key by the project id so any spurious effect re-run for the
+    // same project reuses the same pending promise instead of an undefined payload.
+    fetchComponentsJSON.mockImplementation((projectId: string | null) => {
+      if (projectId === 'A') return a.promise;
+      if (projectId === 'B') return b.promise;
+      return Promise.resolve({ success: true });
+    });
+
+    const loadComponent = mock((_path: string) => {});
+
+    // Project A active.
+    act(() => {
+      useProjectActivationStore.setState({ activatedProjectId: 'A' });
+    });
+    const { rerender } = renderHook((props) => useComponentAutoLoad(props), {
+      initialProps: {
+        activeProjectId: 'A',
+        activeProjectStatus: 'running',
+        currentComponentName: undefined,
+        mode: 'design' as const,
+        loadComponent,
+      },
+    });
+
+    // Let project A's mount effect settle (no resolution yet — fetch A is still pending).
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Switch to project B before A's fetch resolves.
+    await act(async () => {
+      useProjectActivationStore.setState({ activatedProjectId: 'B' });
+      rerender({
+        activeProjectId: 'B',
+        activeProjectStatus: 'running',
+        currentComponentName: undefined,
+        mode: 'design' as const,
+        loadComponent,
+      });
+      await Promise.resolve();
+    });
+
+    // Drain enough microtask ticks for the hook's `await fetchComponentsJSON` + its
+    // synchronous continuation (flatten + setState + loadComponent) to settle inside act.
+    const settle = async () => {
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+    };
+
+    // B resolves first — its auto-load runs inside act.
+    await act(async () => {
+      b.resolve(payloadFor('B'));
+      await settle();
+    });
+
+    expect(loadComponent).toHaveBeenCalledWith('B.tsx');
+
+    // A resolves late — its components must NOT be auto-loaded into B.
+    await act(async () => {
+      a.resolve(payloadFor('A'));
+      await settle();
+    });
+
+    expect(loadComponent).not.toHaveBeenCalledWith('A.tsx');
   });
 });

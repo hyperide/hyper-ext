@@ -46,7 +46,7 @@ export function useComponentsData(): UseComponentsDataResult {
     if (engine) {
       // SaaS path: shared deduplicating fetch (see fetchComponents.ts)
       cancelComponentsFetch();
-      fetchComponentsJSON()
+      fetchComponentsJSON(activatedProjectId)
         .then((result) => {
           if (result.success) {
             setData({
@@ -96,7 +96,7 @@ export function useComponentsData(): UseComponentsDataResult {
           setLoading(false);
         });
     }
-  }, [engine, canvas]);
+  }, [engine, canvas, activatedProjectId]);
 
   useEffect(() => {
     // SaaS: skip fetch until project is activated on the server (avoids 404).
