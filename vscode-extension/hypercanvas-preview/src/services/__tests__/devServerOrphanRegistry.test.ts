@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import {
   clearOwnedDevServer,
+  findLiveOwnedDevServer,
   groupMembersLookLikeRecordedTool,
   isProcessAlive,
   isProcessGroupAlive,
@@ -518,5 +519,60 @@ describe('reapStaleOwnedDevServer', () => {
         { baseDir },
       ),
     ).not.toThrow();
+  });
+});
+
+describe('findLiveOwnedDevServer (attach-first identity proof, HYP-1160)', () => {
+  it('returns a live recorded server whose live command line matches the record', () => {
+    // A real `node` process matches a recorded "node …" command through the
+    // real `ps` identity check — the same ladder the reaper trusts before killing.
+    const pid = spawnNode();
+    recordOwnedDevServer({ ...makeRecord(pid), command: 'node scripts/dev.js' }, baseDir);
+
+    const found = findLiveOwnedDevServer('/proj/a', baseDir);
+    expect(found?.pid).toBe(pid);
+  });
+
+  it('returns the newest live record when several generations are recorded', () => {
+    const pidA = spawnNode();
+    const pidB = spawnNode();
+    recordOwnedDevServer({ ...makeRecord(pidA), command: 'node scripts/dev.js' }, baseDir);
+    recordOwnedDevServer({ ...makeRecord(pidB), command: 'node scripts/dev.js' }, baseDir);
+
+    const found = findLiveOwnedDevServer('/proj/a', baseDir);
+    expect(found?.pid).toBe(pidB);
+  });
+
+  it('returns null when no record exists for the project', () => {
+    expect(findLiveOwnedDevServer('/proj/a', baseDir)).toBeNull();
+  });
+
+  it('returns null when the recorded pid is dead (a stranger holding the port proves nothing)', async () => {
+    const pid = spawnNode();
+    recordOwnedDevServer({ ...makeRecord(pid), command: 'node scripts/dev.js' }, baseDir);
+    killGroup(pid);
+    expect(await waitForDeath(pid)).toBe(true);
+    // Group too must be gone — a dead leader with a live group is still "live".
+    expect(await waitForGroupDeath(pid)).toBe(true);
+
+    expect(findLiveOwnedDevServer('/proj/a', baseDir)).toBeNull();
+  });
+
+  it('returns null on a POSITIVE identity mismatch (pid likely reused by an unrelated process)', () => {
+    // A plain `sleep` cannot match the recorded dev-tool command — the same
+    // positive-mismatch signal that suppresses the reaper's kill must also
+    // suppress an attach.
+    const pid = spawnSleeper();
+    recordOwnedDevServer({ ...makeRecord(pid), command: 'bun run dev' }, baseDir);
+
+    expect(findLiveOwnedDevServer('/proj/a', baseDir)).toBeNull();
+    expect(isProcessAlive(pid)).toBe(true); // record left for the reaper, not pruned
+  });
+
+  it('never throws on a corrupt record file (best-effort, same contract as the reaper)', () => {
+    // codeql[js/insecure-temporary-file] -- test fixture: orphanRecordPath is given the mkdtemp-isolated baseDir here, so the file lands in an unpredictable per-test dir, not the shared tmp root
+    writeFileSync(orphanRecordPath('/proj/a', baseDir), 'not json{', 'utf8');
+    expect(() => findLiveOwnedDevServer('/proj/a', baseDir)).not.toThrow();
+    expect(findLiveOwnedDevServer('/proj/a', baseDir)).toBeNull();
   });
 });

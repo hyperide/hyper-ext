@@ -54,6 +54,7 @@ describe('HYP-52 regression: plain start() does not self-supersede via workspace
       const manager = new DevServerManager(initialDir);
       const priv = manager as unknown as {
         _findFreePort: (start: number) => Promise<number>;
+        _probeHttpServer: (port: number) => Promise<boolean>;
         _spawnDevServer?: (...a: unknown[]) => unknown;
         _waitForReady: (timeout: number, gen?: number) => Promise<void>;
         _status: string;
@@ -61,6 +62,10 @@ describe('HYP-52 regression: plain start() does not self-supersede via workspace
         _process: unknown;
         _runStart: (dep?: boolean) => Promise<unknown>;
       };
+
+      // Keep the start on the spawn path: the HYP-1160 attach-first probe would
+      // otherwise adopt any real HTTP server this dev machine has on :3000.
+      priv._probeHttpServer = mock(async () => false);
 
       // At port-find time, snapshot whether the captured gen still matches the live epoch.
       // Pre-fix this DID NOT match (sync had bumped past it) and the next supersede check

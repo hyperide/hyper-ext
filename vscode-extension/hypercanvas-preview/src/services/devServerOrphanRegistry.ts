@@ -160,6 +160,47 @@ export function readOwnedDevServer(projectPath: string, baseDir: string = tmpdir
   return records.at(-1) ?? null;
 }
 
+/**
+ * Find a live, identity-matching owned dev-server record for this project —
+ * the ATTACH-side identity proof (HYP-1160). Before DevServerManager adopts a
+ * server already answering HTTP on the expected port, it must know the listener
+ * is one WE spawned for THIS project, not a different project's dev server or an
+ * unrelated service that happens to hold the port. A record in this project's
+ * registry file whose process/group is still alive is exactly that proof: only
+ * our own spawn writes it (keyed by sha1(projectPath)), so a random service
+ * cannot spoof it.
+ *
+ * Uses the SAME aliveness + positive-identity ladder as the reaper
+ * (reapOneRecord): a POSITIVE identity mismatch (the live command line no
+ * longer matches the recorded command — pid reuse) rejects the record;
+ * "can't tell" (null — win32, `ps` unavailable, no usable tokens) is accepted,
+ * the same floor the reaper applies before killing. Newest record wins.
+ *
+ * Read-only: dead/mismatched records are left in place for the reaper's prune.
+ */
+export function findLiveOwnedDevServer(projectPath: string, baseDir: string = tmpdir()): OwnedDevServerRecord | null {
+  try {
+    // Newest record wins — reverse-INDEX the array instead of spread+reverse
+    // copying it on every call (PR #692 review).
+    const records = readOwnedDevServers(projectPath, baseDir);
+    for (let i = records.length - 1; i >= 0; i--) {
+      const record = records[i];
+      const leaderAlive = isProcessAlive(record.pid);
+      const groupAlive = leaderAlive || isProcessGroupAlive(record.pid);
+      if (!groupAlive) continue;
+      const identityMismatch = leaderAlive
+        ? liveProcessLooksLikeRecord(record.pid, record.command) === false
+        : groupMembersLookLikeRecordedTool(record.pid, record.command) === false;
+      if (identityMismatch) continue;
+      return record;
+    }
+    return null;
+  } catch {
+    // Best-effort, same contract as the rest of the registry.
+    return null;
+  }
+}
+
 /** Delete one owned dev-server record (clean stop / child exit). Best-effort. */
 export function clearOwnedDevServer(projectPath: string, pid: number, baseDir: string = tmpdir()): void {
   try {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
+import * as http from 'node:http';
 import * as net from 'node:net';
-import { findFreePort, probeOpen } from '../netProbe';
+import { findFreePort, probeHttp, probeOpen } from '../netProbe';
 
 /**
  * Open a listening server bound to a specific host and resolve once it is
@@ -47,6 +48,50 @@ describe('netProbe', () => {
       // Grab a free port via the util, then probe it while closed.
       const port = await findFreePort(49500);
       expect(await probeOpen(port)).toBe(false);
+    });
+  });
+
+  describe('probeHttp', () => {
+    it('resolves true on the FIRST HTTP response even when the other family hangs (PR #692 review)', async () => {
+      // A blackhole on ::1 — accepts TCP but never speaks HTTP — stands in for a
+      // hung family that neither answers nor errors until the probe timeout.
+      // The IPv4 HTTP server answers immediately; the probe must return true
+      // from that first response, not wait out the ::1 timeout (Promise.all did).
+      const httpServer = http.createServer((_req, res) => {
+        res.writeHead(200);
+        res.end('ok');
+      });
+      const { promise: httpListening, resolve: httpReady, reject: httpFailed } = Promise.withResolvers<void>();
+      httpServer.once('error', httpFailed);
+      httpServer.listen(0, '127.0.0.1', httpReady);
+      await httpListening;
+      closers.push(() => httpServer.close());
+      const httpAddr = httpServer.address();
+      if (!httpAddr || typeof httpAddr !== 'object') throw new Error('no address');
+      const port = httpAddr.port;
+
+      const hungSockets: net.Socket[] = [];
+      const blackhole = net.createServer((socket) => {
+        hungSockets.push(socket); // hold the connection open, never respond
+      });
+      const { promise: bhListening, resolve: bhReady, reject: bhFailed } = Promise.withResolvers<void>();
+      blackhole.once('error', bhFailed);
+      blackhole.listen(port, '::1', bhReady);
+      await bhListening;
+      closers.push(() => {
+        for (const socket of hungSockets) socket.destroy();
+        blackhole.close();
+      });
+
+      const start = Date.now();
+      expect(await probeHttp(port)).toBe(true);
+      // Well under the 1s probe timeout the ::1 blackhole would otherwise cost.
+      expect(Date.now() - start).toBeLessThan(800);
+    });
+
+    it('resolves false only after BOTH families fail', async () => {
+      const port = await findFreePort(49700);
+      expect(await probeHttp(port)).toBe(false);
     });
   });
 

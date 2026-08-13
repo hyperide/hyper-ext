@@ -1435,8 +1435,13 @@ describe('DevServerManager', () => {
       const supersedeManager = new DevServerManager(tmp);
       const priv = supersedeManager as unknown as Privates & {
         _findFreePort: (start: number) => Promise<number>;
+        _probeHttpServer: (port: number) => Promise<boolean>;
         _syncProjectPathWithWorkspace: () => Promise<void>;
       };
+
+      // Keep the start on the spawn path: the HYP-1160 attach-first probe would
+      // otherwise adopt any real HTTP server this dev machine has on :3000.
+      priv._probeHttpServer = mock(async () => false);
 
       // Keep the path stable (no workspace sync side effects).
       priv._syncProjectPathWithWorkspace = mock(async () => {});

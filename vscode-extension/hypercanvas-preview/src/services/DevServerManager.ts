@@ -6,7 +6,7 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { detectFramework } from '@lib/preview-generator/framework-routing';
 import { VITE_CONFIG_CANDIDATES } from '@lib/preview-generator/vite-config-ast';
 import { patchViteConfigForReactDedupe } from '@lib/preview-generator/vite-config-react-dedupe';
@@ -15,10 +15,25 @@ import { ERROR_PATTERNS, SUCCESS_PATTERNS } from '../../../../shared/log-pattern
 import type { RuntimeError } from '../../../../shared/runtime-error';
 import type { DevServerState, DevServerStatus, ProjectType } from '../types';
 import { VSCodeFileIO } from '../vscode-file-io';
-import { clearOwnedDevServer, reapStaleOwnedDevServer, recordOwnedDevServer } from './devServerOrphanRegistry';
-import { findFreePort, probeOpen } from './netProbe';
+import {
+  clearOwnedDevServer,
+  findLiveOwnedDevServer,
+  isProcessAlive,
+  isProcessGroupAlive,
+  type OwnedDevServerRecord,
+  reapStaleOwnedDevServer,
+  recordOwnedDevServer,
+} from './devServerOrphanRegistry';
+import { readSpawnPlan, writeSpawnPlan } from './devServerSpawnPlan';
+import { findFreePort, probeHttp, probeOpen } from './netProbe';
 import { PreviewProxy } from './PreviewProxy';
-import { detectPackageManager, getPackageScripts, getProjectInfo } from './ProjectDetector';
+import {
+  detectPackageManager,
+  detectPackageManagerLockfile,
+  findWorkspaceRoot,
+  getPackageScripts,
+  getProjectInfo,
+} from './ProjectDetector';
 
 /**
  * Pure predicate behind {@link DevServerManager._hasDirtyViteConfig}: do any of the dirty open
@@ -175,6 +190,75 @@ export function portInjectionArgs(type: ProjectType, script: string, port: numbe
   return [];
 }
 
+/** The final dev-server spawn decision: what to run, and from where. */
+export interface SpawnCommand {
+  cmd: string;
+  args: string[];
+  cwd: string;
+  /**
+   * Which resolution branch produced this command (PR #692 review):
+   * 'wrapper-script' — the wrapper script text executed directly with cwd at
+   * the workspace root; 'pm-run' — `<pm> run <script>` with cwd at the package
+   * dir. Persisted in the spawn plan; a persisted cwd is reused only when the
+   * live resolution lands on the SAME branch (an edited script that flips
+   * shell-safety must not inherit the other branch's cwd).
+   */
+  branch: 'wrapper-script' | 'pm-run';
+}
+
+/** The `<pm> run <script>` invocation for a package manager (npm/pnpm/bun run, yarn bare). */
+function pmRunCommand(packageManager: PackageManager, script: string): { cmd: string; args: string[] } {
+  if (packageManager === 'yarn') return { cmd: 'yarn', args: [script] };
+  return { cmd: packageManager, args: ['run', script] };
+}
+
+/**
+ * Resolve the dev-server spawn command for a dev script (HYP-1160).
+ *
+ * Plain scripts (`vite dev`, `next dev`) keep the historical shape: `<pm> run
+ * <script>` with cwd = the project dir.
+ *
+ * Task-runner wrapper scripts (`nx run conloca-app:dev …`, `turbo run dev`) must
+ * execute from the WORKSPACE ROOT, not the subpackage dir — the Nx project
+ * graph fails to resolve when `nx run …` runs with cwd inside a subpackage
+ * (confirmed on conloca: same command works from the repo root, breaks from
+ * targets/conloca-app). We therefore execute the script TEXT directly (the
+ * same command `npm run` would run) with cwd = the workspace root, which also
+ * preserves the exact target the user picked via the HYP-1104 monorepo
+ * auto-target — running `<pm> run <script>` at the root would instead boot
+ * whatever app the ROOT package.json's script of the same name points at.
+ *
+ * Script text is only executed directly when every token passes
+ * {@link SHELL_SAFE_TOKEN} (the spawn folds tokens into a `shell: true`
+ * string); otherwise we fall back to `<pm> run <script>` with cwd = the
+ * SELECTED package dir (projectPath), NOT the workspace root (P1, PR #692):
+ * running `<pm> run <script>` at the root would resolve the ROOT package's
+ * same-named script — booting the wrong app, or failing when the root lacks
+ * the script. Running from the package dir preserves the HYP-1104 auto-target
+ * (the package the user actually picked) while the package manager still
+ * resolves wrapper binaries the usual way (every ancestor `node_modules/.bin`
+ * up to the workspace root lands on the script's PATH). The fallback remains
+ * degraded for the Nx-graph edge (the script text still executes with cwd
+ * inside the subpackage) — degraded, but never the wrong package's script.
+ */
+export async function resolveSpawnCommand(
+  projectPath: string,
+  packageManager: PackageManager,
+  script: string,
+  scriptText: string,
+): Promise<SpawnCommand> {
+  if (devScriptUsesWrapper(scriptText)) {
+    const cwd = await findWorkspaceRoot(projectPath);
+    const tokens = scriptText.trim().split(/\s+/);
+    if (tokens.every((token) => SHELL_SAFE_TOKEN.test(token))) {
+      const [cmd, ...args] = tokens;
+      return { cmd, args, cwd, branch: 'wrapper-script' };
+    }
+    return { ...pmRunCommand(packageManager, script), cwd: projectPath, branch: 'pm-run' };
+  }
+  return { ...pmRunCommand(packageManager, script), cwd: projectPath, branch: 'pm-run' };
+}
+
 export function shouldRepairDependencies(errorMessage: string, logs: LogEntry[]): boolean {
   const text = `${errorMessage}\n${logs.map((entry) => entry.line).join('\n')}`.toLowerCase();
   return (
@@ -248,6 +332,21 @@ export class DevServerManager {
   // path back to the VS Code workspace folder via _syncProjectPathWithWorkspace — the
   // repo root often has no dev/start script and would fail to launch.
   private _projectPathPinned = false;
+  // Base dir for the persisted spawn plan (HYP-1160) — undefined means the
+  // store's default (OS temp dir). Overridden by tests to isolate the store.
+  private _spawnPlanBaseDir?: string;
+  // Base dir for the owned-dev-server orphan registry — undefined means the
+  // registry's default (OS temp dir). Overridden by tests to isolate it.
+  private _orphanBaseDir?: string;
+  // The registry record of the dev server we ATTACHED to (HYP-1160 attach-first),
+  // or null when the running server is one we spawned this session (_process) or
+  // none is running. Attach requires the identity-verified record — we only adopt
+  // servers a previous session of this manager spawned — so stop() owns the
+  // teardown: _runStop kills the adopted process group by the recorded pid and
+  // clears the record, so a restart spawns a FRESH server instead of silently
+  // re-attaching to the stale one, and a dead adopted server is reaped rather
+  // than leaked (PR #692 review).
+  private _adoptedRecord: OwnedDevServerRecord | null = null;
   private _outputChannel: vscode.OutputChannel;
   private _onStatusChangeListeners: Array<(state: DevServerState) => void> = [];
 
@@ -471,6 +570,99 @@ export class DevServerManager {
   }
 
   /**
+   * Start the preview proxy for script injection (error detection) against the
+   * currently selected `_port`. Shared by the spawn path and the HYP-1160
+   * attach-first path (adopting an already-listening server still needs the
+   * proxy so runtime-error capture and preview wiring work).
+   */
+  private async _startPreviewProxy(): Promise<void> {
+    const port = this._port;
+    if (port === null) throw new Error('Cannot start preview proxy before a port is selected');
+    const proxy = new PreviewProxy(port, this._projectPath);
+    // Single source of truth for "are we serving" (HYP-370 Phase 4): the proxy
+    // serves only while this manager still owns it. _stopProxy() nulls
+    // _previewProxy at the exact instant the old proxy._isStopping used to flip,
+    // so behavior is preserved (stop()/exit short-circuits; the process-error
+    // path, which does not call _stopProxy, keeps serving as before).
+    proxy.setIsServing(() => this._previewProxy === proxy);
+    this._previewProxy = proxy;
+    // Apply isolated mode that may have been set before proxy was created
+    // (PreviewModeManager.startWatching() fires before dev server starts)
+    if (this._pendingIsolatedMode) {
+      proxy.setIsolatedMode(true);
+    }
+    await proxy.start();
+    this._outputChannel.appendLine(`[DevServer] PreviewProxy started on port ${this._previewProxy.port}`);
+  }
+
+  /**
+   * Resolve the spawn plan for `devScript` (HYP-1160): the package manager
+   * (lockfile walk-up via detectPackageManager), the spawn cwd (workspace root
+   * for task-runner wrapper scripts), and the command tokens.
+   *
+   * The FIRST resolution is persisted (devServerSpawnPlan); later starts —
+   * including the respawn after a VS Code window reload, whose re-detection
+   * was observed flipping bun → npm on a bun+Nx monorepo (conloca) — reuse the
+   * persisted plan instead of re-detecting, so the respawn spawns the SAME pm
+   * + cwd the previous window resolved. A persisted plan is reused only while
+   * its script key still exists in package.json with the same wrapper-ness
+   * (devScriptUsesWrapper) AND the live resolution lands on the same branch
+   * (wrapper-script-at-root vs pm-run-at-package-dir); an edited dev script
+   * re-resolves and overwrites.
+   */
+  private async _resolveSpawnPlan(
+    devScript: string,
+    scripts: Record<string, string>,
+  ): Promise<SpawnCommand & { packageManager: PackageManager }> {
+    const scriptText = scripts[devScript] ?? '';
+    const wrapper = devScriptUsesWrapper(scriptText);
+    const persisted = readSpawnPlan(this._projectPath, this._spawnPlanBaseDir);
+    // A persisted plan survives ABSENT evidence (the transient reload-time
+    // detection flip it exists for) but not CONFIDENTLY contradicting
+    // evidence: a lock file naming a different package manager means a
+    // pm migration, and the plan must re-resolve (PR #692 review).
+    const evidence = persisted ? await detectPackageManagerLockfile(this._projectPath) : null;
+    const evidenceContradicts = evidence !== null && evidence.manager !== persisted?.packageManager;
+    if (
+      persisted &&
+      !evidenceContradicts &&
+      persisted.script === devScript &&
+      scripts[devScript] &&
+      persisted.wrapper === wrapper
+    ) {
+      // Rebuild the command tokens from the LIVE script text (deterministic),
+      // but keep the persisted pm + cwd — those are the fields whose
+      // re-detection proved unstable across a window reload.
+      const command = await resolveSpawnCommand(this._projectPath, persisted.packageManager, devScript, scriptText);
+      // Reuse the persisted cwd ONLY when the live resolution lands on the same
+      // branch (PR #692 review): an edited script that flips shell-safety
+      // (`nx run app:dev` → `nx run app:dev && …`) keeps wrapper-ness but moves
+      // the correct cwd from the workspace root back to the package dir —
+      // inheriting the persisted root cwd would run `<pm> run <script>` at the
+      // ROOT and boot the root package's same-named script (wrong app).
+      if (command.branch === persisted.branch) {
+        return { ...command, cwd: persisted.cwd, packageManager: persisted.packageManager };
+      }
+    }
+    const packageManager = await detectPackageManager(this._projectPath);
+    const command = await resolveSpawnCommand(this._projectPath, packageManager, devScript, scriptText);
+    writeSpawnPlan(
+      {
+        version: 2,
+        projectPath: this._projectPath,
+        script: devScript,
+        packageManager,
+        cwd: command.cwd,
+        wrapper,
+        branch: command.branch,
+        createdAt: Date.now(),
+      },
+      this._spawnPlanBaseDir,
+    );
+    return { ...command, packageManager };
+  }
+
+  /**
    * Start the dev server. PUBLIC entry — serializes onto the lifecycle queue so a
    * concurrent stop()/restart() can never interleave with the spawn (HYP-52). The
    * actual work lives in _runStart; internal callers (dependency-repair retry) must
@@ -519,21 +711,10 @@ export class DevServerManager {
     this._hasErrors = false;
     this._portDetected = false;
 
-    // Reap our own orphaned dev servers from previous sessions BEFORE picking a
-    // port. On a VS Code window reload, deactivate()'s fire-and-forget stop() does
-    // not complete before the extension host is torn down, so detached children can
-    // survive and keep their ports. A port-ignoring server (Bun hardcodes :3000)
-    // then loses the next start to an orphan with EADDRINUSE and the preview never
-    // appears. We attribute each kill ONLY via a pid WE recorded for THIS project —
-    // never "whoever holds the port" (occupancy is not ownership).
-    // See devServerOrphanRegistry (orphan-reap-on-reload).
-    this._reapOrphanedDevServer();
-
     try {
       // Get project info
       const projectInfo = await getProjectInfo(this._projectPath);
       const scripts = await getPackageScripts(this._projectPath);
-      const packageManager = await detectPackageManager(this._projectPath);
 
       // Patch the user's vite.config (resolve.dedupe + optimizeDeps.include) BEFORE we spawn
       // their dev server. Remix (Vite 6, SSR) previews flakily crash on COLD start with a
@@ -565,6 +746,81 @@ export class DevServerManager {
       // Find free port — prefer VS Code setting, fall back to project default
       const configuredPort = vscode.workspace.getConfiguration('hypercanvas.preview').get<number>('defaultPort');
       const startPort = configuredPort ?? projectInfo.defaultPort;
+
+      // HYP-1160 attach-first: when a dev server ALREADY answers HTTP on the
+      // expected port, adopt it instead of spawning a competitor that either
+      // loses the port race or boots a second instance — but ONLY once its
+      // identity is confirmed (P1, PR #692): bare HTTP reachability proves
+      // nothing about WHO is listening, and attaching to a different project's
+      // dev server (or an unrelated service) would display and edit against the
+      // wrong app. The identity proof is the orphan registry: a record WE wrote
+      // for THIS projectPath whose pid/process-group is still alive and whose
+      // live command line does not positively mismatch the recorded command
+      // (findLiveOwnedDevServer mirrors the reaper's ladder). A random service
+      // cannot spoof that — only our own spawn writes a record. A content probe
+      // (title/HTML markers) was rejected as the signal: any static server can
+      // serve a matching page, and framework-specific markers are not universal.
+      // When identity can't be confirmed (a stranger's server, or one the user
+      // started outside this manager), we fall through to the spawn path, which
+      // picks a FREE port — the safe pre-attach-first behavior.
+      if (await this._probeHttpServer(startPort)) {
+        const owned = findLiveOwnedDevServer(this._projectPath, this._orphanBaseDir);
+        if (owned) {
+          // Same supersede discipline as the spawn path: a concurrent stop that
+          // bumped the generation during the probe abandons this start.
+          if (gen !== this._generation) {
+            this.transition('stopped');
+            return this.getState();
+          }
+          this._port = startPort;
+          this._outputChannel.appendLine(
+            `[DevServer] Attaching to dev server already listening on port ${startPort} ` +
+              `(pid ${owned.pid}, spawned by a previous session for this project)`,
+          );
+          // We adopt the recorded orphan instead of reaping it — skip the reap
+          // below. We record no NEW owned pid (we spawned nothing this session);
+          // the EXISTING record doubles as the adopted server's teardown handle:
+          // attach requires this identity proof (we only adopt servers a previous
+          // session of this manager spawned), so stop() OWNS the teardown — it
+          // kills the adopted process group by this record and clears it, so a
+          // restart spawns a FRESH server instead of silently re-attaching to a
+          // stale one (PR #692 review).
+          await this._startPreviewProxy();
+          // Post-proxy supersede check (HYP-52), mirroring the spawn path's
+          // re-check: a stop()/reroot that bumped the generation while
+          // proxy.start() awaited abandons this attach. Tear down the proxy that
+          // was just started and never transition to running; 'stopped' is the
+          // coherent resting state (legal edge from 'starting', and no exit
+          // handler exists to reset a stranded 'starting'). The adopted server
+          // itself is left running — we never took ownership of it here
+          // (_adoptedRecord is set only below), and its registry record survives
+          // for the next start to re-attach to or reap.
+          if (gen !== this._generation) {
+            this._stopProxy();
+            this.transition('stopped');
+            return this.getState();
+          }
+          this._adoptedRecord = owned;
+          this.transition('running');
+          return this.getState();
+        }
+        this._outputChannel.appendLine(
+          `[DevServer] Port ${startPort} answers HTTP but is not a dev server we started for this project — spawning on a free port instead`,
+        );
+      }
+
+      // Reap our own orphaned dev servers from previous sessions BEFORE picking
+      // a port (skipped only by the verified-attach return above — reaping the
+      // orphan we just adopted would kill the server we mean to use). On a VS
+      // Code window reload, deactivate()'s fire-and-forget stop() does not
+      // complete before the extension host is torn down, so detached children
+      // can survive and keep their ports. A port-ignoring server (Bun hardcodes
+      // :3000) then loses the next start to an orphan with EADDRINUSE and the
+      // preview never appears. We attribute each kill ONLY via a pid WE recorded
+      // for THIS project — never "whoever holds the port" (occupancy is not
+      // ownership). See devServerOrphanRegistry (orphan-reap-on-reload).
+      this._reapOrphanedDevServer();
+
       this._port = await this._findFreePort(startPort);
 
       // Pre-spawn supersede check (HYP-52): a stop()/restart() that bumped _generation
@@ -584,21 +840,7 @@ export class DevServerManager {
       }
 
       // Start preview proxy for script injection (error detection)
-      const proxy = new PreviewProxy(this._port, this._projectPath);
-      // Single source of truth for "are we serving" (HYP-370 Phase 4): the proxy
-      // serves only while this manager still owns it. _stopProxy() nulls
-      // _previewProxy at the exact instant the old proxy._isStopping used to flip,
-      // so behavior is preserved (stop()/exit short-circuit; the process-error
-      // path, which does not call _stopProxy, keeps serving as before).
-      proxy.setIsServing(() => this._previewProxy === proxy);
-      this._previewProxy = proxy;
-      // Apply isolated mode that may have been set before proxy was created
-      // (PreviewModeManager.startWatching() fires before dev server starts)
-      if (this._pendingIsolatedMode) {
-        proxy.setIsolatedMode(true);
-      }
-      await proxy.start();
-      console.log(`[HyperIDE] PreviewProxy started on port ${this._previewProxy.port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+      await this._startPreviewProxy();
 
       // Pre-spawn supersede check (HYP-52): if a concurrent stop()/restart() bumped the
       // generation while proxy.start() awaited, abandon this start before spawning. A
@@ -616,11 +858,6 @@ export class DevServerManager {
         return this.getState();
       }
 
-      console.log(
-        `[HyperIDE] DevServer: ${packageManager} run ${devScript} (port ${this._port}) in ${this._projectPath}`,
-      ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-      this._outputChannel.appendLine(`[DevServer] Starting ${packageManager} run ${devScript}`);
-      this._outputChannel.appendLine(`[DevServer] Project: ${this._projectPath}`);
       // Decide --port injection. We skip it (relying on stdout port
       // auto-detection, _maybeUpdatePortFromOutput) when:
       //  - the script already pins its own port (`vite dev --port 3000`) — a
@@ -640,21 +877,34 @@ export class DevServerManager {
         this._outputChannel.appendLine('[DevServer] Port: declared by dev script (auto-detected from output)');
       }
 
-      // Build command based on package manager
-      const command = this._buildCommand(packageManager, devScript);
+      // Resolve the spawn plan (pm + cwd + command), reusing the persisted plan
+      // on respawn (HYP-1160) instead of re-detecting.
+      const plan = await this._resolveSpawnPlan(devScript, scripts);
+      // No copy of plan.args: the plan is a fresh local resolution (nothing
+      // else holds the array), and appendScriptCliArgs below mutates it in place.
+      const command = { cmd: plan.cmd, args: plan.args };
+
+      this._outputChannel.appendLine(
+        `[DevServer] Starting ${command.cmd} ${command.args.join(' ')} (port ${this._port}) in ${plan.cwd}`,
+      );
+      this._outputChannel.appendLine(`[DevServer] Project: ${this._projectPath}`);
 
       // Pass --port via CLI for frameworks that support it.
       // Env vars PORT/VITE_PORT alone are not reliable (Vite ignores them).
       if (portArgs.length > 0) {
-        appendScriptCliArgs(command, packageManager, portArgs);
+        appendScriptCliArgs(command, plan.packageManager, portArgs);
       }
 
       // Spawn process. Fold args into the command string (no `args` array) so
       // `shell: true` does not trigger DEP0190 (deprecated: args + shell:true).
       const child = spawn(toShellCommandString(command.cmd, command.args), {
-        cwd: this._projectPath,
+        cwd: plan.cwd,
         env: {
           ...process.env,
+          // Resolve wrapper-script binaries (nx, turbo, …) the way `npm run`
+          // would: the install root's node_modules/.bin first on PATH. Harmless
+          // for `<pm> run` commands, which do this themselves.
+          PATH: `${join(plan.cwd, 'node_modules', '.bin')}${delimiter}${process.env.PATH ?? ''}`,
           PORT: String(this._port),
           // For Vite
           VITE_PORT: String(this._port),
@@ -668,12 +918,15 @@ export class DevServerManager {
       // Persist an "owned dev server" record so the NEXT start can reap this child
       // if it gets orphaned by a window-reload race (see _reapOrphanedDevServer).
       if (child.pid) {
-        recordOwnedDevServer({
-          pid: child.pid,
-          projectPath: this._projectPath,
-          command: `${command.cmd} ${command.args.join(' ')}`.trim(),
-          startedAt: Date.now(),
-        });
+        recordOwnedDevServer(
+          {
+            pid: child.pid,
+            projectPath: this._projectPath,
+            command: `${command.cmd} ${command.args.join(' ')}`.trim(),
+            startedAt: Date.now(),
+          },
+          this._orphanBaseDir,
+        );
       }
 
       const isCurrentProcess = () => this._process === child;
@@ -727,7 +980,7 @@ export class DevServerManager {
         // The child is gone — drop its orphan record so the next start does not try
         // to reap an already-dead pid (or, worse, a recycled one).
         if (child.pid) {
-          clearOwnedDevServer(this._projectPath, child.pid);
+          clearOwnedDevServer(this._projectPath, child.pid, this._orphanBaseDir);
         }
         this._process = null;
         this._port = null;
@@ -797,18 +1050,22 @@ export class DevServerManager {
     // Bump the epoch: a stop must invalidate any in-flight _runStart's polling so it
     // does not keep waiting on a server we are tearing down (HYP-52, Layer 2).
     ++this._generation;
-    // Capture to local — this._process may be nullified by the exit handler
+    // Capture to locals — this._process may be nullified by the exit handler
     // between the guard and the async operations below
     const proc = this._process;
+    const adopted = this._adoptedRecord;
+    this._adoptedRecord = null;
     if (proc) {
       this._outputChannel.appendLine('[DevServer] Stopping server...');
+    } else if (adopted) {
+      this._outputChannel.appendLine('[DevServer] Stopping adopted dev server...');
     }
 
     // Clear this child's orphan record up front: a clean stop() means this child is
     // no longer something the next start should reap. Other recorded generations
     // for the same project may still be real orphans, so clearing is pid-specific.
     if (proc?.pid) {
-      clearOwnedDevServer(this._projectPath, proc.pid);
+      clearOwnedDevServer(this._projectPath, proc.pid, this._orphanBaseDir);
     }
 
     this._process = null;
@@ -840,6 +1097,12 @@ export class DevServerManager {
         // Try graceful shutdown first
         this._killProcessTree(proc, 'SIGTERM');
       });
+    } else if (adopted) {
+      // Attached server: no ChildProcess handle exists, so the teardown goes
+      // through the registry record's process group (same ladder as the orphan
+      // reaper) — otherwise stop() would leave the adopted server alive and a
+      // restart would silently re-attach to it (PR #692 review).
+      await this._stopAdoptedServer(adopted);
     }
 
     if (this._process === null) {
@@ -1117,19 +1380,20 @@ export class DevServerManager {
   }
 
   /**
+   * Attach-first probe (HYP-1160): does a dev server already answer HTTP on
+   * this port? Instance seam (like _findFreePort/_isPortOpen) so tests stay
+   * hermetic when the dev machine happens to have a real listener on the
+   * project's default port.
+   */
+  private _probeHttpServer(port: number): Promise<boolean> {
+    return probeHttp(port);
+  }
+
+  /**
    * Build command based on package manager
    */
   private _buildCommand(packageManager: PackageManager, script: string): { cmd: string; args: string[] } {
-    switch (packageManager) {
-      case 'bun':
-        return { cmd: 'bun', args: ['run', script] };
-      case 'pnpm':
-        return { cmd: 'pnpm', args: ['run', script] };
-      case 'yarn':
-        return { cmd: 'yarn', args: [script] };
-      default:
-        return { cmd: 'npm', args: ['run', script] };
-    }
+    return pmRunCommand(packageManager, script);
   }
 
   private async _repairDependencies(packageManager: PackageManager): Promise<void> {
@@ -1216,6 +1480,30 @@ export class DevServerManager {
   }
 
   /**
+   * Terminate an ADOPTED dev server on stop() (PR #692 review). We hold no
+   * ChildProcess for an attached server — only the registry record that proved
+   * we spawned it — so teardown uses the same process-group ladder as the
+   * orphan reaper (_killPidGroup by the recorded pid): SIGTERM, a bounded wait
+   * for the group to die, then SIGKILL. The record is cleared FIRST so the next
+   * start never re-attaches to the dying server — it spawns fresh.
+   */
+  private async _stopAdoptedServer(record: OwnedDevServerRecord): Promise<void> {
+    clearOwnedDevServer(this._projectPath, record.pid, this._orphanBaseDir);
+    // Never signal our own process group: a record whose pid was recycled onto
+    // THIS extension host must not turn stop() into suicide.
+    if (record.pid === process.pid) return;
+    this._killPidGroup(record.pid, 'SIGTERM');
+    const deadline = Date.now() + 5000;
+    while (isProcessAlive(record.pid) || isProcessGroupAlive(record.pid)) {
+      if (Date.now() >= deadline) {
+        this._killPidGroup(record.pid, 'SIGKILL');
+        return;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 50)); // executor form: tsconfig lib predates Promise.withResolvers (es2024)
+    }
+  }
+
+  /**
    * Reap orphaned dev servers from previous sessions for the current project.
    * Delegates ownership/aliveness checks to the registry and the actual termination
    * to _reapOrphanPid (the shared kill ladder).
@@ -1223,6 +1511,7 @@ export class DevServerManager {
    */
   private _reapOrphanedDevServer(): void {
     const reaped = reapStaleOwnedDevServer(this._projectPath, (pid) => this._reapOrphanPid(pid), {
+      baseDir: this._orphanBaseDir,
       onLog: (message) => this._outputChannel.appendLine(message),
     });
     if (reaped !== null) {

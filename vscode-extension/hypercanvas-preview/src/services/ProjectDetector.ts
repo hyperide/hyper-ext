@@ -11,6 +11,7 @@
  */
 
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { invokesBunRuntime, readNxDevCommand } from '@lib/preview-generator/framework-routing';
 import type { NxPackageJson } from '@lib/preview-generator/framework-routing';
@@ -816,9 +817,107 @@ export async function getPackageScripts(projectPath: string): Promise<Record<str
 }
 
 /**
+ * Lock files that identify a package manager, strongest first within one
+ * directory. `package-lock.json` is LAST so a stale npm lock inside a
+ * bun/pnpm/yarn-managed directory never flips detection — but a nested
+ * npm-managed project (its own package-lock.json, ancestor bun.lock) still
+ * stops the walk-up at its own lock instead of inheriting the ancestor
+ * manager (PR #692 review).
+ */
+const PACKAGE_MANAGER_LOCKFILES: ReadonlyArray<readonly [string, 'npm' | 'yarn' | 'pnpm' | 'bun']> = [
+  ['bun.lockb', 'bun'],
+  ['bun.lock', 'bun'],
+  ['pnpm-lock.yaml', 'pnpm'],
+  ['yarn.lock', 'yarn'],
+  ['package-lock.json', 'npm'],
+];
+
+/** Lock file directly inside `dir` and the package manager it names, or null. */
+async function lockfileInDir(dir: string): Promise<{ path: string; manager: 'npm' | 'yarn' | 'pnpm' | 'bun' } | null> {
+  for (const [file, manager] of PACKAGE_MANAGER_LOCKFILES) {
+    const candidate = path.join(dir, file);
+    if (await fileExists(candidate)) return { path: candidate, manager };
+  }
+  return null;
+}
+
+/** Case-insensitive-off-Linux directory comparison (macOS/Windows filesystems are case-insensitive). */
+function sameDirectory(a: string, b: string): boolean {
+  const ra = path.resolve(a);
+  const rb = path.resolve(b);
+  return process.platform === 'linux' ? ra === rb : ra.toLowerCase() === rb.toLowerCase();
+}
+
+/**
+ * Shared ancestor-walk primitive behind the lockfile / workspace-root walks
+ * (PR #692 review: three hand-rolled copies had drifted apart). Yields
+ * `startDir` and each ancestor in turn, bounded by the user's home directory:
+ * `$HOME` itself is yielded only when it IS `startDir` (a project living
+ * directly in the home dir still gets its own files checked), and the walk
+ * NEVER ascends into it from below or above it. Without this bound a project
+ * with no `.git` anywhere above it walked to the filesystem root and could
+ * inherit a stray `~/bun.lock` / `~/nx.json` — files in `$HOME` are not
+ * project evidence. Consumers layer their own stop conditions (e.g. the VCS
+ * root) on top.
+ */
+function* ancestorDirs(startDir: string, homeDir: string = os.homedir()): Generator<string> {
+  let dir = startDir;
+  for (;;) {
+    const atHome = sameDirectory(dir, homeDir);
+    if (atHome && !sameDirectory(dir, startDir)) return; // reached $HOME from below — do not enter
+    yield dir;
+    if (atHome) return; // $HOME as startDir: check it, never ascend above
+    const parent = path.dirname(dir);
+    if (parent === dir) return;
+    dir = parent;
+  }
+}
+
+/**
+ * Filesystem markers that identify a workspace/install root while walking up
+ * from a monorepo subpackage: any package-manager lock file, a task-runner
+ * config (nx/turbo), a pnpm workspace manifest, or the VCS root (`.git`).
+ */
+const WORKSPACE_ROOT_MARKERS: readonly string[] = [
+  ...PACKAGE_MANAGER_LOCKFILES.map(([file]) => file),
+  'nx.json',
+  'turbo.json',
+  'pnpm-workspace.yaml',
+  '.git',
+];
+
+/**
+ * Nearest ancestor of `startDir` (inclusive) that looks like the workspace /
+ * install root — the directory monorepo task-runner commands (nx, turbo) must
+ * be spawned from (HYP-1160: the Nx project graph fails to resolve when `nx
+ * run …` executes with cwd inside a subpackage). Returns `startDir` when no
+ * marker exists anywhere above. The walk never ascends into or above `$HOME`
+ * (PR #692 review) — a stray `~/nx.json` must not make the home directory the
+ * spawn cwd.
+ */
+export async function findWorkspaceRoot(startDir: string, homeDir: string = os.homedir()): Promise<string> {
+  for (const dir of ancestorDirs(startDir, homeDir)) {
+    for (const marker of WORKSPACE_ROOT_MARKERS) {
+      if (await fileExists(path.join(dir, marker))) return dir;
+    }
+  }
+  return startDir;
+}
+
+/**
  * Detect package manager used in project.
  *
- * Priority: lock files → `packageManager` field in package.json → npm.
+ * Priority: lock files (nearest ancestor first) → `packageManager` field in
+ * package.json → npm.
+ *
+ * Monorepo subpackages don't carry their own lock file — the lock lives at the
+ * install root — so the lock-file check walks UP from `projectPath` to the
+ * workspace root (HYP-1160: conloca's targets/conloca-app has no lockfile, the
+ * repo root has bun.lock; detecting from the app dir used to fall through to
+ * npm). The walk is bounded by the VCS root (the first ancestor containing
+ * `.git`, inclusive) so a stray lockfile above the repository never leaks in,
+ * and by `$HOME` (exclusive) so a stray `~/bun.lock` is not inherited either
+ * when no `.git` exists anywhere above (PR #692 review).
  *
  * The `packageManager` field is checked AFTER lock files because a lock file is
  * authoritative evidence of what was actually used to install. The field alone
@@ -829,12 +928,15 @@ export async function getPackageScripts(projectPath: string): Promise<Record<str
  * shim wasn't enabled — observed on bulka-the-dog (`packageManager: pnpm@10.14.0`,
  * no lockfile) blocking dev-server bring-up.
  */
-export async function detectPackageManager(projectPath: string): Promise<'npm' | 'yarn' | 'pnpm' | 'bun'> {
-  // Check for lock files first — these are the strongest signal.
-  if (await fileExists(path.join(projectPath, 'bun.lockb'))) return 'bun';
-  if (await fileExists(path.join(projectPath, 'bun.lock'))) return 'bun';
-  if (await fileExists(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
-  if (await fileExists(path.join(projectPath, 'yarn.lock'))) return 'yarn';
+export async function detectPackageManager(
+  projectPath: string,
+  homeDir: string = os.homedir(),
+): Promise<'npm' | 'yarn' | 'pnpm' | 'bun'> {
+  // Check for lock files first — these are the strongest signal. The walk-up
+  // (workspace root, bounded by the VCS root AND $HOME) is shared with
+  // detectPackageManagerLockfile so the two can never disagree (PR #692 review).
+  const lockfile = await detectPackageManagerLockfile(projectPath, homeDir);
+  if (lockfile) return lockfile.manager;
 
   // Fall back to the `packageManager` field — corepack-style declaration
   // common in projects that don't commit lock files but pin a manager.
@@ -853,4 +955,27 @@ export async function detectPackageManager(projectPath: string): Promise<'npm' |
   }
 
   return 'npm';
+}
+
+/**
+ * The lock file that would determine {@link detectPackageManager}, and the
+ * package manager it names — the package-manager EVIDENCE for a project, used
+ * to invalidate a persisted dev-server spawn plan when the evidence
+ * CONFIDENTLY contradicts it (a lock file naming a different package manager means a
+ * package-manager migration). Walks up from `projectPath` bounded by the VCS
+ * root AND `$HOME` (PR #692 review), exactly like detectPackageManager — the
+ * two share the walk so they can never disagree. Returns null when no lock file is
+ * present (pm came from the package.json field or the npm fallback) — absent
+ * evidence must never invalidate a plan.
+ */
+export async function detectPackageManagerLockfile(
+  projectPath: string,
+  homeDir: string = os.homedir(),
+): Promise<{ path: string; manager: 'npm' | 'yarn' | 'pnpm' | 'bun' } | null> {
+  for (const dir of ancestorDirs(projectPath, homeDir)) {
+    const lockfile = await lockfileInDir(dir);
+    if (lockfile) return lockfile;
+    if (await fileExists(path.join(dir, '.git'))) break; // VCS root — stop
+  }
+  return null;
 }

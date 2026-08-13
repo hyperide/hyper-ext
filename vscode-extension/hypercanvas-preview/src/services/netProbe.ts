@@ -22,6 +22,7 @@
  *   via listenLoopback; consolidation here is the shared address-extraction
  *   plumbing, not a shared bind surface.
  */
+import * as http from 'node:http';
 import * as net from 'node:net';
 
 const LOOPBACK_HOSTS = ['127.0.0.1', '::1'] as const;
@@ -52,6 +53,59 @@ export function probeOpen(port: number): Promise<boolean> {
     });
 
   return Promise.all(LOOPBACK_HOSTS.map(connectOne)).then((results) => results.some(Boolean));
+}
+
+/**
+ * Probe whether a port answers HTTP on loopback — i.e. a real dev server is
+ * already serving there (HYP-1160 attach-first). Stronger than {@link probeOpen}:
+ * a TCP listener that never speaks HTTP (a database, a stale socket holder)
+ * must NOT count as "dev server already running", or we would attach the
+ * preview to a non-HTTP service. Sends `GET /` to both loopback families in
+ * parallel and resolves true on the FIRST response with ANY status code (even
+ * a 404/500 proves an HTTP server) — a family that hangs never delays an answer
+ * the other family already gave; resolves false only after both families
+ * fail/timeout.
+ */
+export function probeHttp(port: number): Promise<boolean> {
+  const requestOne = (host: string): Promise<boolean> =>
+    new Promise((resolve) => {
+      let settled = false;
+      const finish = (answers: boolean): void => {
+        if (settled) return;
+        settled = true;
+        resolve(answers);
+      };
+      const req = http.request({ host, port, path: '/', method: 'GET', timeout: PROBE_TIMEOUT_MS }, (res) => {
+        res.resume(); // drain and discard — the status line alone is the answer
+        finish(true);
+      });
+      req.once('error', () => finish(false));
+      req.once('timeout', () => {
+        req.destroy();
+        finish(false);
+      });
+      req.end();
+    });
+
+  // First response WINS (PR #692 review): a hung family (e.g. a blackholed ::1
+  // that accepts nothing and never errors) must not hold the answer for the
+  // full timeout when the other family already responded. Promise.all would
+  // wait for BOTH — resolve true on the first answer, false only once both
+  // families failed/timed out. Extra resolutions after the first are no-ops.
+  // (Executor form: tsconfig lib predates Promise.withResolvers / es2024.)
+  return new Promise<boolean>((resolve) => {
+    let failures = 0;
+    for (const host of LOOPBACK_HOSTS) {
+      void requestOne(host).then((answers) => {
+        if (answers) {
+          resolve(true);
+          return;
+        }
+        failures += 1;
+        if (failures === LOOPBACK_HOSTS.length) resolve(false);
+      });
+    }
+  });
 }
 
 /**

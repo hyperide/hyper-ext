@@ -31,8 +31,10 @@ const {
   getProjectInfo,
   detectUIKit,
   detectPackageManager,
+  detectPackageManagerLockfile,
   getPackageScripts,
   detectUnsupportedProject,
+  findWorkspaceRoot,
 } = await import('../ProjectDetector');
 
 function setPackageJson(projectPath: string, content: Record<string, unknown>) {
@@ -295,10 +297,121 @@ describe('detectPackageManager', () => {
   });
 
   it('bun has priority over pnpm and yarn', async () => {
-    setFileExists('/proj/bun.lockb');
+    setFileExists('/proj/bun.lock');
     setFileExists('/proj/pnpm-lock.yaml');
     setFileExists('/proj/yarn.lock');
     expect(await detectPackageManager('/proj')).toBe('bun');
+  });
+
+  it('walks up to the workspace root lockfile when the subpackage has none (HYP-1160)', async () => {
+    // conloca shape: targets/conloca-app carries no lockfile; the workspace
+    // root has bun.lock. Detection from the app dir must resolve bun, not the
+    // npm fallback.
+    setFileExists('/repo/bun.lock');
+    expect(await detectPackageManager('/repo/targets/conloca-app')).toBe('bun');
+  });
+
+  it('nearest lockfile wins over an ancestor one (HYP-1160)', async () => {
+    setFileExists('/repo/bun.lock');
+    setFileExists('/repo/targets/conloca-app/pnpm-lock.yaml');
+    expect(await detectPackageManager('/repo/targets/conloca-app')).toBe('pnpm');
+  });
+
+  it('does not walk past the git repo root (HYP-1160)', async () => {
+    // A stray lockfile ABOVE the repository must not leak into the project.
+    setFileExists('/bun.lock');
+    setFileExists('/repo/.git');
+    expect(await detectPackageManager('/repo/targets/conloca-app')).toBe('npm');
+  });
+
+  it('stops the walk-up at a nested npm project lockfile (PR #692 review)', async () => {
+    // An npm-managed nested project inside a bun repo: its own
+    // package-lock.json is authoritative for THAT project; inheriting bun
+    // from the ancestor would spawn bun where npm is expected.
+    setFileExists('/repo/bun.lock');
+    setFileExists('/repo/packages/legacy-app/package-lock.json');
+    expect(await detectPackageManager('/repo/packages/legacy-app')).toBe('npm');
+  });
+
+  it('a stale package-lock.json does not flip a bun-managed directory', async () => {
+    // bun.lock outranks package-lock.json WITHIN one directory (the npm lock
+    // is the weakest evidence) — a lockfile left behind by a past npm install
+    // must not flip a bun project.
+    setFileExists('/proj/bun.lock');
+    setFileExists('/proj/package-lock.json');
+    expect(await detectPackageManager('/proj')).toBe('bun');
+  });
+
+  it('detectPackageManagerLockfile returns the determining lock and its manager', async () => {
+    setFileExists('/repo/bun.lock');
+    const evidence = await detectPackageManagerLockfile('/repo/targets/conloca-app');
+    expect(evidence).toEqual({ path: '/repo/bun.lock', manager: 'bun' });
+  });
+
+  it('detectPackageManagerLockfile returns null when no lockfile exists', async () => {
+    expect(await detectPackageManagerLockfile('/proj')).toBeNull();
+  });
+
+  describe('home-directory walk bound (PR #692 review)', () => {
+    // With no .git anywhere above, the walk used to reach the filesystem root
+    // and inherit a stray ~/bun.lock. $HOME is now a hard bound: its own files
+    // are not project evidence, and the walk never ascends above it.
+    it('does not inherit a stray lockfile from $HOME when no .git exists above', async () => {
+      setFileExists('/home/u/bun.lock');
+      expect(await detectPackageManager('/home/u/work/proj', '/home/u')).toBe('npm');
+    });
+
+    it('detectPackageManagerLockfile stops before $HOME', async () => {
+      setFileExists('/home/u/bun.lock');
+      expect(await detectPackageManagerLockfile('/home/u/work/proj', '/home/u')).toBeNull();
+    });
+
+    it('still finds evidence between the project and $HOME', async () => {
+      setFileExists('/home/u/work/bun.lock');
+      expect(await detectPackageManager('/home/u/work/proj', '/home/u')).toBe('bun');
+    });
+
+    it('checks $HOME itself when the project IS the home directory', async () => {
+      setFileExists('/home/u/bun.lock');
+      expect(await detectPackageManager('/home/u', '/home/u')).toBe('bun');
+    });
+
+    it('a project outside $HOME is unaffected by the bound', async () => {
+      setFileExists('/repo/bun.lock');
+      expect(await detectPackageManager('/repo/targets/app', '/home/u')).toBe('bun');
+    });
+  });
+});
+
+describe('findWorkspaceRoot (HYP-1160)', () => {
+  it('returns the nearest ancestor carrying a lockfile', async () => {
+    setFileExists('/repo/bun.lock');
+    expect(await findWorkspaceRoot('/repo/targets/conloca-app')).toBe('/repo');
+  });
+
+  it('returns the nearest ancestor with a task-runner config when no lockfile exists', async () => {
+    setFileExists('/repo/nx.json');
+    expect(await findWorkspaceRoot('/repo/targets/conloca-app')).toBe('/repo');
+  });
+
+  it('falls back to the git root when neither lockfile nor task-runner config exists', async () => {
+    setFileExists('/repo/.git');
+    expect(await findWorkspaceRoot('/repo/targets/conloca-app')).toBe('/repo');
+  });
+
+  it('returns the start dir when no root markers exist anywhere above', async () => {
+    expect(await findWorkspaceRoot('/proj/sub/app')).toBe('/proj/sub/app');
+  });
+
+  it('returns the start dir itself when it carries a marker', async () => {
+    setFileExists('/proj/turbo.json');
+    expect(await findWorkspaceRoot('/proj')).toBe('/proj');
+  });
+
+  it('does not return $HOME for a stray marker there (PR #692 review)', async () => {
+    // A stray ~/nx.json must not make the home directory the spawn cwd.
+    setFileExists('/home/u/nx.json');
+    expect(await findWorkspaceRoot('/home/u/work/proj', '/home/u')).toBe('/home/u/work/proj');
   });
 });
 
