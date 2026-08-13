@@ -22,6 +22,14 @@
  *    extension-host session (a probe burst per dev-server start would add
  *    noticeable latency); markToolAvailable() patches the cache after a
  *    successful install so a just-installed tool is not re-installed.
+ *    Round 3: a tool that does NOT answer on the process PATH is probed in
+ *    the well-known install locations (WinGet Links shims, ~/.bun/bin,
+ *    registry user-PATH entries on win32, the per-user bin dirs on unix —
+ *    probeToolBinaryDirs) and verified with the resolved dir prepended to
+ *    PATH before being declared missing. Ground truth: Alex's Windows box
+ *    had bun 1.3.14 installed via winget but invisible to the VS Code
+ *    process PATH; detection declared it missing and the extension ran a
+ *    doomed winget reinstall (0x8A15002B, "already installed").
  *
  * Every platform primitive (spawn probe, file read) is injectable so tests
  * never spawn or install anything (repo convention, same seam shape as
@@ -31,8 +39,9 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { detectPackageManagerLockfile } from './ProjectDetector';
+import { probeToolBinaryDirs } from './toolchainPath';
 
 export type ToolchainTool = 'node' | 'npm' | 'bun' | 'pnpm' | 'yarn';
 export type LinuxDistro = 'debian' | 'ubuntu' | 'other';
@@ -56,6 +65,18 @@ export interface ToolchainDetectorDeps {
   homeDir?: string;
   /** "Does `<command>` exit 0 within the timeout?" — default spawns via the OS shell. */
   probe?: (command: string) => Promise<boolean>;
+  /**
+   * Round 3: "does `<command>` exit 0 with `extraDirs` PREPENDED to PATH?" —
+   * the installed-but-invisible verification. Default: same bounded shell
+   * spawn as `probe`, with a rebuilt env.
+   */
+  probeWithPath?: (command: string, extraDirs: readonly string[]) => Promise<boolean>;
+  /**
+   * Well-known install dirs that verifiably contain the tool's binary
+   * (default: probeToolBinaryDirs — WinGet Links, ~/.bun/bin, registry user
+   * PATH mentions on win32, per-user bin dirs on unix).
+   */
+  probeDirs?: (tool: ToolchainTool) => Promise<string[]>;
   /** Text file reader (os-release, package.json) — defaults to fs.readFile utf8. */
   readFile?: (path: string) => Promise<string>;
 }
@@ -68,7 +89,7 @@ const PROBE_TIMEOUT_MS = 5_000;
  * shims) resolve; output is drained-and-discarded, the process is killed at
  * the timeout so a hung shim can never wedge detection.
  */
-function defaultProbe(command: string): Promise<boolean> {
+function defaultProbe(command: string, env?: NodeJS.ProcessEnv): Promise<boolean> {
   // `new Promise` (not Promise.withResolvers): the extension tsconfig targets
   // ES2022, where withResolvers is not in the lib — same shape as
   // DevServerManager._repairDependencies.
@@ -81,7 +102,7 @@ function defaultProbe(command: string): Promise<boolean> {
       resolve(ok);
     };
     // nosemgrep: spawn-shell-true -- fixed probe strings (`<tool> --version`), never user input
-    const child = spawn(command, { shell: true, stdio: ['ignore', 'ignore', 'ignore'] });
+    const child = spawn(command, { shell: true, stdio: ['ignore', 'ignore', 'ignore'], env });
     const timer = setTimeout(() => {
       try {
         child.kill('SIGKILL');
@@ -94,6 +115,19 @@ function defaultProbe(command: string): Promise<boolean> {
     child.on('error', () => finish(false));
     child.on('exit', (code) => finish(code === 0));
   });
+}
+
+/**
+ * Default round-3 probe: verify `<tool> --version` with the resolved binary
+ * dirs FIRST on PATH (a stale entry elsewhere must not shadow them).
+ */
+function defaultProbeWithPath(command: string, extraDirs: readonly string[]): Promise<boolean> {
+  const basePath = process.env.PATH ?? process.env.Path ?? '';
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: [...extraDirs, ...basePath.split(delimiter).filter(Boolean)].join(delimiter),
+  };
+  return defaultProbe(command, env);
 }
 
 const PACKAGE_MANAGER_FIELD_TOOLS: Record<string, ToolchainTool> = {
@@ -209,7 +243,8 @@ export function invalidateToolAvailability(tool: ToolchainTool): void {
  * bypass the cache so injected probes are actually observed).
  */
 export async function detectAvailableTools(deps: ToolchainDetectorDeps = {}): Promise<ToolAvailability> {
-  const useCache = !deps.platform && !deps.probe && !deps.readFile && !deps.homeDir;
+  const useCache =
+    !deps.platform && !deps.probe && !deps.probeWithPath && !deps.probeDirs && !deps.readFile && !deps.homeDir;
   if (useCache && cachedAvailability) return cachedAvailability;
 
   const platform = deps.platform ?? process.platform;
@@ -242,6 +277,26 @@ export async function detectAvailableTools(deps: ToolchainDetectorDeps = {}): Pr
     brew,
     linuxDistro,
   };
+  // Round 3: "not on the process PATH" is not "missing". The extension host
+  // snapshots PATH at VS Code launch, so a tool installed before launch via
+  // winget/brew/the bun script can be invisible here while perfectly usable.
+  // Probe the well-known install locations and re-verify with the resolved
+  // dir prepended BEFORE declaring absence — the downstream installer trusts
+  // this boolean, and a false "missing" used to trigger a doomed reinstall
+  // (Alex's bun 1.3.14, winget 0x8A15002B). Tools that already answered on
+  // the plain PATH never pay for this (no fs/registry probing at all).
+  const missing = (Object.keys(toolProbes) as ToolchainTool[]).filter((tool) => !result[tool]);
+  if (missing.length > 0) {
+    const probeDirs = deps.probeDirs ?? ((tool: ToolchainTool) => probeToolBinaryDirs(tool, { platform }));
+    const probeWithPath = deps.probeWithPath ?? defaultProbeWithPath;
+    await Promise.all(
+      missing.map(async (tool) => {
+        const dirs = await probeDirs(tool);
+        if (dirs.length === 0) return;
+        if (await probeWithPath(`${tool} --version`, dirs)) result[tool] = true;
+      }),
+    );
+  }
   if (useCache) cachedAvailability = result;
   return result;
 }

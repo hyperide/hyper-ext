@@ -8,6 +8,7 @@ import {
   detectRequiredTool,
   markToolAvailable,
   parseLinuxDistro,
+  type ToolchainTool,
 } from '../toolchainDetector';
 
 /**
@@ -132,7 +133,12 @@ describe('detectAvailableTools', () => {
 
   it('probes every tool in parallel and reports presence per tool', async () => {
     const probe = probeAllowing('node --version', 'bun --version');
-    const available = await detectAvailableTools({ platform: 'linux', probe, readFile: async () => 'ID=debian\n' });
+    const available = await detectAvailableTools({
+      platform: 'linux',
+      probe,
+      probeDirs: async () => [],
+      readFile: async () => 'ID=debian\n',
+    });
     expect(available.node).toBe(true);
     expect(available.bun).toBe(true);
     expect(available.npm).toBe(false);
@@ -142,7 +148,7 @@ describe('detectAvailableTools', () => {
 
   it('probes winget only on win32', async () => {
     const probe = probeAllowing('winget --version', 'node --version');
-    const available = await detectAvailableTools({ platform: 'win32', probe });
+    const available = await detectAvailableTools({ platform: 'win32', probe, probeDirs: async () => [] });
     expect(available.winget).toBe(true);
     expect(available.brew).toBeNull();
     expect(available.linuxDistro).toBeNull();
@@ -151,7 +157,7 @@ describe('detectAvailableTools', () => {
 
   it('probes brew only on darwin', async () => {
     const probe = probeAllowing('brew --version');
-    const available = await detectAvailableTools({ platform: 'darwin', probe });
+    const available = await detectAvailableTools({ platform: 'darwin', probe, probeDirs: async () => [] });
     expect(available.brew).toBe(true);
     expect(available.winget).toBeNull();
     expect(probe).not.toHaveBeenCalledWith('winget --version');
@@ -162,6 +168,7 @@ describe('detectAvailableTools', () => {
     const available = await detectAvailableTools({
       platform: 'linux',
       probe,
+      probeDirs: async () => [],
       readFile: async (p) => (p === '/etc/os-release' ? 'ID=ubuntu\n' : ''),
     });
     expect(available.linuxDistro).toBe('ubuntu');
@@ -174,6 +181,7 @@ describe('detectAvailableTools', () => {
     const available = await detectAvailableTools({
       platform: 'linux',
       probe,
+      probeDirs: async () => [],
       readFile: async () => {
         throw new Error('ENOENT');
       },
@@ -195,5 +203,78 @@ describe('detectAvailableTools', () => {
     markToolAvailable('bun');
     const after = await detectAvailableTools();
     expect(after.bun).toBe(true);
+  });
+
+  describe('well-known install locations (HYP-1169 round 3: installed-but-not-on-PATH is NOT missing)', () => {
+    it("win32: bun invisible on the process PATH but present in WinGet Links is AVAILABLE (Alex's bun 1.3.14)", async () => {
+      // Ground truth: bun 1.3.14 installed via winget, the VS Code process
+      // PATH never saw it, detection declared it missing and the extension
+      // ran a doomed winget reinstall. Detection must probe the well-known
+      // install locations and verify `<tool> --version` with the resolved
+      // dir prepended BEFORE declaring absence.
+      const linksDir = 'C:\\Users\\x\\AppData\\Local\\Microsoft\\WinGet\\Links';
+      const probe = probeAllowing(); // nothing answers on the stale process PATH
+      const probeDirs = mock(async (tool: ToolchainTool) => (tool === 'bun' ? [linksDir] : []));
+      const probeWithPath = mock(
+        async (command: string, extraDirs: readonly string[]) =>
+          command === 'bun --version' && extraDirs.includes(linksDir),
+      );
+      const available = await detectAvailableTools({ platform: 'win32', probe, probeDirs, probeWithPath });
+      expect(available.bun).toBe(true);
+      expect(probeWithPath).toHaveBeenCalledWith('bun --version', [linksDir]);
+    });
+
+    it('unix: ~/.bun/bin is probed the same way', async () => {
+      const probe = probeAllowing();
+      const probeDirs = mock(async (tool: ToolchainTool) => (tool === 'bun' ? ['/home/u/.bun/bin'] : []));
+      const probeWithPath = mock(async (command: string) => command === 'bun --version');
+      const available = await detectAvailableTools({
+        platform: 'linux',
+        probe,
+        probeDirs,
+        probeWithPath,
+        readFile: async () => 'ID=debian\n',
+      });
+      expect(available.bun).toBe(true);
+      expect(available.npm).toBe(false);
+    });
+
+    it('a tool answering on the plain PATH never pays for the location probe', async () => {
+      const probe = probeAllowing(
+        'node --version',
+        'npm --version',
+        'bun --version',
+        'pnpm --version',
+        'yarn --version',
+      );
+      const probeDirs = mock(async () => ['x']);
+      const available = await detectAvailableTools({ platform: 'darwin', probe, probeDirs });
+      expect(available.bun).toBe(true);
+      expect(probeDirs).not.toHaveBeenCalled();
+    });
+
+    it('stays missing when no well-known dir contains the binary (no pointless re-probe)', async () => {
+      const probe = probeAllowing();
+      const probeWithPath = mock(async () => true);
+      const available = await detectAvailableTools({
+        platform: 'win32',
+        probe,
+        probeDirs: async () => [],
+        probeWithPath,
+      });
+      expect(available.bun).toBe(false);
+      expect(probeWithPath).not.toHaveBeenCalled();
+    });
+
+    it('stays missing when the located binary still fails <tool> --version (corrupt install)', async () => {
+      const probe = probeAllowing();
+      const available = await detectAvailableTools({
+        platform: 'win32',
+        probe,
+        probeDirs: async (tool: ToolchainTool) => (tool === 'bun' ? ['C:\\dead\\bun'] : []),
+        probeWithPath: async () => false,
+      });
+      expect(available.bun).toBe(false);
+    });
   });
 });

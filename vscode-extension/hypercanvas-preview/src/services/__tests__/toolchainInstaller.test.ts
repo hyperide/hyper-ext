@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, mock, vi } from 'bun:test';
+import { EventEmitter } from 'node:events';
 import {
   _resetToolchainAvailabilityCacheForTests,
   detectAvailableTools,
@@ -9,14 +10,18 @@ import {
 } from '../toolchainDetector';
 import {
   buildInstallPlan,
+  createThrottledLineReporter,
   ensureDependencies,
   ensureTool,
   findMissingLocalBinaries,
   installDocsUrl,
+  isToleratedExitCode,
   requiredToolsForPackageManager,
   shouldInstallDependencies,
   ToolchainInstallError,
   type InstallEnvironment,
+  type SpawnStepProcess,
+  type StepChildProcess,
 } from '../toolchainInstaller';
 
 /**
@@ -48,6 +53,22 @@ function availability(overrides: Partial<ToolAvailability>): ToolAvailability {
     linuxDistro: null,
     ...overrides,
   };
+}
+
+/**
+ * A fake step child process (the ToolchainExecDeps.spawnProcess seam): emits
+ * the given stdout lines, then exits with `exitCode`. No real process ever
+ * spawns — the repo convention for installer tests.
+ */
+function fakeChild(exitCode: number | null, ...stdoutLines: string[]): StepChildProcess {
+  const stdout = new EventEmitter();
+  const stderr = new EventEmitter();
+  const child = new EventEmitter();
+  queueMicrotask(() => {
+    for (const line of stdoutLines) stdout.emit('data', Buffer.from(`${line}\n`));
+    child.emit('exit', exitCode);
+  });
+  return { stdout, stderr, on: child.on.bind(child), kill: mock(() => {}) };
 }
 
 describe('requiredToolsForPackageManager', () => {
@@ -202,15 +223,19 @@ describe('ensureTool — execution', () => {
 
   it('runs every plan step through the runner, in order', async () => {
     const commands: string[] = [];
+    // Round 3: a live pre-install probe can skip the whole plan, so the
+    // install-path tests gate `verify` on the steps having actually run.
+    let installed = false;
     await ensureTool('pnpm', {
       availability: availability({ brew: true, node: false }),
       output,
       exec: {
         platform: 'darwin',
-        verify: async () => true,
+        verify: async () => installed,
         probeDirs: async () => [],
         runStep: async (step) => {
           commands.push(step.command);
+          installed = true;
         },
       },
     });
@@ -219,6 +244,7 @@ describe('ensureTool — execution', () => {
 
   it('asks for sudo confirmation on linux node installs and runs the apt plan when confirmed', async () => {
     const commands: string[] = [];
+    let installed = false;
     const confirmSudo = mock(async () => true);
     await ensureTool('node', {
       availability: availability({ linuxDistro: 'debian' }),
@@ -226,10 +252,11 @@ describe('ensureTool — execution', () => {
       confirmSudo,
       exec: {
         platform: 'linux',
-        verify: async () => true,
+        verify: async () => installed,
         probeDirs: async () => [],
         runStep: async (step) => {
           commands.push(step.command);
+          installed = true;
         },
       },
     });
@@ -243,7 +270,7 @@ describe('ensureTool — execution', () => {
       availability: availability({ linuxDistro: 'debian' }),
       output,
       confirmSudo,
-      exec: { platform: 'linux', runStep: async () => {}, verify: async () => true, probeDirs: async () => [] },
+      exec: { platform: 'linux', runStep: async () => {}, verify: async () => false, probeDirs: async () => [] },
     }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ToolchainInstallError);
     expect((error as ToolchainInstallError).docsUrl).toBe(installDocsUrl('node'));
@@ -251,6 +278,7 @@ describe('ensureTool — execution', () => {
 
   it('asks for sudo confirmation when a pnpm install must chain a node install on linux', async () => {
     const commands: string[] = [];
+    let installed = false;
     const confirmSudo = mock(async () => true);
     await ensureTool('pnpm', {
       availability: availability({ linuxDistro: 'ubuntu', node: false }),
@@ -258,10 +286,11 @@ describe('ensureTool — execution', () => {
       confirmSudo,
       exec: {
         platform: 'linux',
-        verify: async () => true,
+        verify: async () => installed,
         probeDirs: async () => [],
         runStep: async (step) => {
           commands.push(step.command);
+          installed = true;
         },
       },
     });
@@ -274,7 +303,7 @@ describe('ensureTool — execution', () => {
     const error = await ensureTool('node', {
       availability: availability({}),
       output,
-      exec: { platform: 'darwin', runStep: async () => {}, verify: async () => true, probeDirs: async () => [] },
+      exec: { platform: 'darwin', runStep: async () => {}, verify: async () => false, probeDirs: async () => [] },
     }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ToolchainInstallError);
     expect((error as ToolchainInstallError).tool).toBe('node');
@@ -282,19 +311,24 @@ describe('ensureTool — execution', () => {
   });
 });
 
+/**
+ * Populate the session availability cache with real (default-deps) probes,
+ * then force one tool's entry. Hoisted to module scope: the round-3
+ * describes prime the cache the same way.
+ */
+async function primeAvailabilityCache(tool: ToolchainTool, available: boolean): Promise<void> {
+  _resetToolchainAvailabilityCacheForTests();
+  await detectAvailableTools(); // populates the session cache (real probes, no installs)
+  if (available) markToolAvailable(tool);
+  else invalidateToolAvailability(tool);
+}
+
 describe('ensureTool — post-install verification gates markToolAvailable (HYP-1169 round 2)', () => {
   const output = { appendLine: mock() };
 
   afterEach(() => {
     _resetToolchainAvailabilityCacheForTests();
   });
-
-  async function primeAvailabilityCache(tool: ToolchainTool, available: boolean): Promise<void> {
-    _resetToolchainAvailabilityCacheForTests();
-    await detectAvailableTools(); // populates the session cache (real probes, no installs)
-    if (available) markToolAvailable(tool);
-    else invalidateToolAvailability(tool);
-  }
 
   it('a successful install that FAILS the live --version probe throws and never marks the tool available', async () => {
     await primeAvailabilityCache('bun', false);
@@ -319,14 +353,20 @@ describe('ensureTool — post-install verification gates markToolAvailable (HYP-
   it('win32: after install the probe finds bun in %USERPROFILE%\\.bun\\bin and the verify env PATH contains it', async () => {
     await primeAvailabilityCache('bun', false);
     let verifiedPath = '';
+    // Round 3: the pre-install live probe runs with the SAME seams — gate on
+    // the install having run so this test exercises the post-install path.
+    let installed = false;
     const dirs = await ensureTool('bun', {
       availability: availability({ bun: false, winget: true }),
       output,
       exec: {
         platform: 'win32',
-        runStep: async () => {},
+        runStep: async () => {
+          installed = true;
+        },
         probeDirs: async () => ['C:\\Users\\x\\.bun\\bin'],
         verify: async (_tool, env) => {
+          if (!installed) return false;
           verifiedPath = env.PATH ?? '';
           return verifiedPath.includes('C:\\Users\\x\\.bun\\bin');
         },
@@ -403,6 +443,197 @@ describe('ensureTool — post-install verification gates markToolAvailable (HYP-
     expect(verified).toContain('node');
     expect(verified).toContain('npm');
     expect((await detectAvailableTools()).node).toBe(false);
+  });
+});
+
+describe('ensureTool — round 3: the live probe wins over a "missing" detection (skip the install entirely)', () => {
+  const output = { appendLine: mock() };
+
+  afterEach(() => {
+    _resetToolchainAvailabilityCacheForTests();
+  });
+
+  it("bun declared missing but answering a live probe from a well-known dir → NO install, dir returned, cache patched (Alex's bun 1.3.14)", async () => {
+    await primeAvailabilityCache('bun', false);
+    const linksDir = 'C:\\Users\\x\\AppData\\Local\\Microsoft\\WinGet\\Links';
+    const runStep = mock(async () => {});
+    const dirs = await ensureTool('bun', {
+      availability: availability({ bun: false, winget: true }),
+      output,
+      exec: {
+        platform: 'win32',
+        runStep,
+        verify: async (_tool, env) => (env.PATH ?? '').includes(linksDir),
+        probeDirs: async () => [linksDir],
+      },
+    });
+    expect(runStep).not.toHaveBeenCalled();
+    expect(dirs).toEqual([linksDir]);
+    // The session cache learned the truth — the next start trusts it.
+    expect((await detectAvailableTools()).bun).toBe(true);
+  });
+
+  it('a node check probes BOTH node and npm before skipping the install', async () => {
+    const probed: ToolchainTool[] = [];
+    const runStep = mock(async () => {});
+    await ensureTool('node', {
+      availability: availability({ node: false, npm: false }),
+      output,
+      exec: {
+        platform: 'darwin',
+        runStep,
+        verify: async (tool) => {
+          probed.push(tool);
+          return true;
+        },
+        probeDirs: async () => [],
+      },
+    });
+    expect(runStep).not.toHaveBeenCalled();
+    expect(probed).toContain('node');
+    expect(probed).toContain('npm');
+  });
+});
+
+describe('toleratedExitCodes — winget "already installed" is not a failure (HYP-1169 round 3)', () => {
+  const output = { appendLine: mock() };
+
+  afterEach(() => {
+    _resetToolchainAvailabilityCacheForTests();
+  });
+
+  it('the winget bun/node steps tolerate 0x8A15002B; non-winget steps tolerate nothing', () => {
+    expect(buildInstallPlan('bun', env({ platform: 'win32', winget: true }))[0].toleratedExitCodes).toContain(
+      0x8a15002b,
+    );
+    expect(buildInstallPlan('node', env({ platform: 'win32', winget: true }))[0].toleratedExitCodes).toContain(
+      0x8a15002b,
+    );
+    expect(buildInstallPlan('bun', env({ platform: 'darwin', brew: true }))[0].toleratedExitCodes ?? []).toHaveLength(
+      0,
+    );
+    expect(buildInstallPlan('bun', env({ platform: 'linux' }))[0].toleratedExitCodes ?? []).toHaveLength(0);
+  });
+
+  it('isToleratedExitCode normalizes the signed/unsigned 32-bit forms of the same code', () => {
+    expect(isToleratedExitCode([0x8a15002b], 2316632107)).toBe(true); // unsigned DWORD (what Node reports)
+    expect(isToleratedExitCode([0x8a15002b], -1978335189)).toBe(true); // signed int32 form
+    expect(isToleratedExitCode([0x8a15002b], 1)).toBe(false);
+    expect(isToleratedExitCode([0x8a15002b], null)).toBe(false); // signal kill
+    expect(isToleratedExitCode(undefined, 2316632107)).toBe(false);
+  });
+
+  it("winget's 0x8A15002B no longer aborts the start — the post-install live probe is the arbiter (Alex's exact failure)", async () => {
+    await primeAvailabilityCache('bun', false);
+    const linksDir = 'C:\\Users\\x\\AppData\\Local\\Microsoft\\WinGet\\Links';
+    // Before winget runs, the binary is nowhere (the Links dir probe raced
+    // winget's refresh); after the tolerated no-op exit it appears on disk.
+    let wingetRan = false;
+    const spawnProcess: SpawnStepProcess = mock(() => {
+      wingetRan = true;
+      return fakeChild(2316632107, 'Found an existing package already installed. No available upgrade found.');
+    });
+    const dirs = await ensureTool('bun', {
+      availability: availability({ bun: false, winget: true }),
+      output,
+      exec: {
+        platform: 'win32',
+        spawnProcess,
+        probeDirs: async () => (wingetRan ? [linksDir] : []),
+        verify: async (_tool, env) => (env.PATH ?? '').includes(linksDir),
+      },
+    });
+    expect(spawnProcess).toHaveBeenCalled();
+    expect(dirs).toEqual([linksDir]);
+    expect((await detectAvailableTools()).bun).toBe(true);
+    // The tolerated exit is logged AS tolerated — never silently swallowed.
+    const lines = output.appendLine.mock.calls.map((call) => String(call[0]));
+    expect(lines.some((line) => line.includes('tolerated'))).toBe(true);
+  });
+
+  it('a tolerated exit that verification does NOT confirm is still a failure', async () => {
+    await primeAvailabilityCache('bun', false);
+    const spawnProcess = mock(() => fakeChild(2316632107));
+    const error = await ensureTool('bun', {
+      availability: availability({ bun: false, winget: true }),
+      output,
+      exec: {
+        platform: 'win32',
+        spawnProcess,
+        probeDirs: async () => [],
+        verify: async () => false,
+      },
+    }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ToolchainInstallError);
+    expect((error as Error).message).toContain('not reachable');
+    expect((await detectAvailableTools()).bun).toBe(false);
+  });
+
+  it('a NON-tolerated non-zero exit still fails the step immediately', async () => {
+    const spawnProcess = mock(() => fakeChild(1, 'some real winget error'));
+    const error = await ensureTool('bun', {
+      availability: availability({ bun: false, winget: true }),
+      output,
+      exec: { platform: 'win32', spawnProcess, probeDirs: async () => [], verify: async () => false },
+    }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ToolchainInstallError);
+    expect((error as Error).message).toContain('exit code 1');
+  });
+});
+
+describe('live install progress (HYP-1169 round 3)', () => {
+  const output = { appendLine: mock() };
+
+  afterEach(() => {
+    _resetToolchainAvailabilityCacheForTests();
+  });
+
+  it('throttles output lines: the first line reports immediately, a burst collapses to the latest, dispose flushes', () => {
+    // Fake timers: bun's vi.setSystemTime does not exist, but the leading
+    // edge needs no fixed clock (lastReportAt starts at 0, so the first push
+    // always reports) and the trailing flush is timer-driven.
+    vi.useFakeTimers();
+    try {
+      const reported: string[] = [];
+      const reporter = createThrottledLineReporter((message) => reported.push(message), 500);
+      reporter.push('downloading');
+      reporter.push('extracting');
+      reporter.push('linking');
+      expect(reported).toEqual(['downloading']);
+      vi.advanceTimersByTime(500); // trailing edge: the LATEST line, never a stale one
+      expect(reported).toEqual(['downloading', 'linking']);
+      reporter.push('done');
+      reporter.dispose(); // a pending line is never lost
+      expect(reported).toEqual(['downloading', 'linking', 'done']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("streams the installer's last non-empty output line into the progress sink", async () => {
+    const reported: string[] = [];
+    let installed = false;
+    const spawnProcess = mock(() => {
+      installed = true;
+      return fakeChild(0, '', 'Resolving Oven-sh.Bun...', '', 'Installing...');
+    });
+    await ensureTool('bun', {
+      availability: availability({ bun: false, winget: true }),
+      output,
+      exec: {
+        platform: 'win32',
+        spawnProcess,
+        progress: { report: (message) => reported.push(message) },
+        probeDirs: async () => [],
+        verify: async () => installed,
+      },
+    });
+    expect(spawnProcess).toHaveBeenCalled();
+    expect(reported[0]).toBe('Installing Bun via winget…');
+    expect(reported).toContain('Resolving Oven-sh.Bun...');
+    expect(reported).toContain('Installing...');
+    // Blank lines never reach the notification.
+    expect(reported.some((message) => message.trim() === '')).toBe(false);
   });
 });
 

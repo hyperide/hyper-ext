@@ -43,6 +43,15 @@ __pycache__/
 # Harness auto/permission mode (rig writes permissions.defaultMode here) — LOCAL only,
 # never commit auto-mode/bypass into the product repo. Per-developer opt-in.
 .claude/settings.local.json
+# Tool-state lock: rewritten by whichever agent session holds it (sessionId/pid).
+# Pure machine-local state — tracking it makes every checkout permanently dirty.
+.claude/scheduled_tasks.lock
+# Backups rig apply leaves next to files it rewrites (*.rig-bak-YYYYMMDDHHMMSS).
+# One-time safety artifacts, never meant to be committed.
+*.rig-bak-*
+# Worktrees must live OUTSIDE the main checkout (~/work/hyper-canvas-draft-worktrees/).
+# A nested .wt-*/ checkout shows up as untracked dirt in the parent's git status.
+/.wt-*/
 
 # SOPS decrypted secrets (never commit!)
 *.dec.yaml
@@ -88,3 +97,4 @@ client/lib/*.js.map
 agent-scratch/
 # Agent-generated architecture visualization (docs/master-diagram). Machine-local, never committed.
 docs/master-diagram/
+/.build/
