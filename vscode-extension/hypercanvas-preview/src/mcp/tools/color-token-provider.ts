@@ -12,8 +12,8 @@ import {
   findNearestTamaguiTokens,
   getAllTamaguiColors,
   getTamaguiColorHex,
-  TAMAGUI_COLORS,
-  TAMAGUI_SEMANTIC_TOKENS,
+  getTamaguiColorNames,
+  getTamaguiSemanticNames,
 } from '@lib/tamagui/values';
 import { colorDistance, hexToRgb } from '@shared/utils/color';
 import twColors from 'tailwindcss/colors';
@@ -166,13 +166,17 @@ class TamaguiColorTokenProvider implements ColorTokenProvider {
     if (!family) return all;
     const f = family.toLowerCase();
     return all.filter((c) => {
-      const colorName = c.token.replace(/\d+$/, '');
+      // Case-insensitive: custom palette families can be mixed-case (brandPrimary
+      // from brandPrimary1), and getFamilies() returns them original-cased.
+      const colorName = c.token.replace(/\d+$/, '').toLowerCase();
       return colorName === f;
     });
   }
 
   getFamilies(): string[] {
-    return [...Object.keys(TAMAGUI_COLORS), ...Object.keys(TAMAGUI_SEMANTIC_TOKENS)];
+    // Palette-aware: getTamaguiColorNames() reflects the active project palette
+    // when one is installed, otherwise the hardcoded Radix families.
+    return [...getTamaguiColorNames(), ...getTamaguiSemanticNames()];
   }
 
   findNearest(hex: string, count: number): Array<ColorEntry & { distance: number }> {

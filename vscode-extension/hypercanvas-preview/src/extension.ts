@@ -67,6 +67,8 @@ import {
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
 import { generatePreviewWrapper, writePreviewWrapper } from './services/WrapperGenerator';
 import { VSCodeFileIO } from './vscode-file-io';
+import { loadTamaguiPalette } from '@lib/tamagui/load-palette';
+import { setTamaguiPalette } from '@lib/tamagui/values';
 
 // Global references
 let mcpServer: HyperMcpServer | null = null;
@@ -557,6 +559,30 @@ export function activate(context: vscode.ExtensionContext) {
     aiChatProvider?.sendAIPrompt(prompt);
   });
 
+  // HYP-288: compute the project's Tamagui color palette from its config, or null
+  // for non-Tamagui projects and unparseable (spread/imported) configs. Best-effort
+  // static analysis only; callers fall back to the hardcoded Radix palette.
+  const computeTamaguiPalette = async (root: string, isTamagui: boolean): Promise<Record<string, string> | null> => {
+    if (!isTamagui) return null;
+    try {
+      return (await loadTamaguiPalette(root, new VSCodeFileIO()))?.palette ?? null;
+    } catch (err) {
+      console.warn('[HyperIDE] Failed to load Tamagui palette:', err);
+      return null;
+    }
+  };
+
+  // Dedicated monotonic guard for palette installs. Shared by BOTH the detection
+  // path and the config-watcher path so an in-flight async load can't overwrite a
+  // newer one (e.g. a workspace-folder switch mid-reload). Separate from
+  // detectionSeq so a config save doesn't abort an in-flight full detection.
+  let paletteSeq = 0;
+  const applyTamaguiPalette = async (root: string, isTamagui: boolean): Promise<void> => {
+    const seq = ++paletteSeq;
+    const palette = await computeTamaguiPalette(root, isTamagui);
+    if (seq === paletteSeq) setTamaguiPalette(palette);
+  };
+
   let detectionSeq = 0;
   const runProjectDetection = (root: string): void => {
     const seq = ++detectionSeq;
@@ -586,6 +612,11 @@ export function activate(context: vscode.ExtensionContext) {
         if (projectError) {
           console.log('[HyperIDE] Unsupported project detected:', projectError.type);
         }
+
+        // HYP-288: install the project's Tamagui color palette for the MCP color
+        // token provider, or reset to Radix for non-Tamagui projects. paletteSeq
+        // serializes this against concurrent watcher reloads.
+        await applyTamaguiPalette(root, kit === 'tamagui');
       })
       .catch((err) => {
         console.warn('[HyperIDE] Failed to detect project info:', err);
@@ -594,6 +625,19 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Read package.json once and run all detectors against it
   runProjectDetection(workspaceRoot);
+
+  // HYP-288: re-sync the Tamagui palette when the config file changes — a focused
+  // palette reload (not a full re-detect, so it won't reset inspector/preview UI
+  // mid-session), resolving the CURRENT folder root at fire-time so an edit after
+  // a workspace-folder change doesn't reload against the stale root.
+  const tamaguiConfigWatcher = vscode.workspace.createFileSystemWatcher('**/tamagui.config.{ts,tsx}');
+  const reloadTamaguiPalette = (): Promise<void> =>
+    applyTamaguiPalette(getWorkspaceRoot() ?? workspaceRoot, stateHub?.state.projectUIKit === 'tamagui');
+  const onTamaguiConfigChange = () => void reloadTamaguiPalette();
+  tamaguiConfigWatcher.onDidChange(onTamaguiConfigChange);
+  tamaguiConfigWatcher.onDidCreate(onTamaguiConfigChange);
+  tamaguiConfigWatcher.onDidDelete(onTamaguiConfigChange);
+  context.subscriptions.push(tamaguiConfigWatcher);
 
   // Flush .hyperide/ to disk on first component open (deferred write).
   // Only unsubscribe after flush actually writes — scan may still be in progress.

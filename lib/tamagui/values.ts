@@ -192,9 +192,35 @@ export const TAMAGUI_COLORS = {
 };
 
 /**
- * Get all available color names (palette colors)
+ * Project-derived color palette (flat token → hex), installed at runtime by the
+ * Tamagui palette loader when a project ships a parseable `tokens.color`. When
+ * null (the default), all readers fall back to the hardcoded Radix palette.
+ * See parse-config-colors.ts and HYP-288.
+ */
+let _activePalette: Record<string, string> | null = null;
+
+/**
+ * Install (or clear) the active project color palette. An empty palette is
+ * treated as no override. Clears the getAllTamaguiColors cache so subsequent
+ * reads reflect the new palette.
+ */
+export function setTamaguiPalette(palette: Record<string, string> | null): void {
+  _activePalette = palette && Object.keys(palette).length > 0 ? palette : null;
+  _cachedAllColors = null;
+}
+
+/**
+ * Get all available color names (palette colors). When a project palette is
+ * active, families are derived from its token names (digits stripped).
  */
 export function getTamaguiColorNames(): string[] {
+  if (_activePalette) {
+    const families = new Set<string>();
+    for (const token of Object.keys(_activePalette)) {
+      families.add(token.replace(/\d+$/, ''));
+    }
+    return [...families];
+  }
   return Object.keys(TAMAGUI_COLORS);
 }
 
@@ -214,6 +240,24 @@ export function getTamaguiSemanticNames(): string[] {
 export function getTamaguiColorHex(token: string): string | null {
   // Remove $ prefix if present
   const cleanToken = token.startsWith('$') ? token.slice(1) : token;
+
+  // Active project palette wins — it's a flat token → hex map. Resolution is
+  // limited to the project palette plus the (still-advertised) semantic tokens;
+  // hardcoded Radix tokens are deliberately NOT resolvable so we never hand out
+  // a token that listColors()/getFamilies() hide.
+  if (_activePalette) {
+    const fromPalette = _activePalette[cleanToken];
+    if (fromPalette) return fromPalette;
+    const m = cleanToken.match(/^([a-z]+)(\d+)$/i);
+    if (m) {
+      const semanticData = TAMAGUI_SEMANTIC_TOKENS[m[1].toLowerCase() as keyof typeof TAMAGUI_SEMANTIC_TOKENS];
+      if (semanticData) {
+        const shadeNum = Number.parseInt(m[2], 10) as keyof typeof semanticData;
+        return semanticData[shadeNum] || null;
+      }
+    }
+    return null;
+  }
 
   // Parse color name and shade
   const match = cleanToken.match(/^([a-z]+)(\d+)$/i);
@@ -249,6 +293,22 @@ export function getTamaguiTokenFromHex(hex: string): string | null {
   if (!hex) return null;
   const normalizedHex = hex.toLowerCase();
 
+  // Active project palette wins — flat token → hex map.
+  if (_activePalette) {
+    for (const [token, tokenHex] of Object.entries(_activePalette)) {
+      if (tokenHex.toLowerCase() === normalizedHex) return token;
+    }
+    // Semantic tokens stay advertised (getAllTamaguiColors/getFamilies include
+    // them), so the reverse lookup must check them too — but NOT the hardcoded
+    // Radix palette, which the project palette replaced.
+    for (const [semanticName, shades] of Object.entries(TAMAGUI_SEMANTIC_TOKENS)) {
+      for (const [shade, shadeHex] of Object.entries(shades)) {
+        if (shadeHex.toLowerCase() === normalizedHex) return `${semanticName}${shade}`;
+      }
+    }
+    return null;
+  }
+
   // Check palette colors first (more specific)
   for (const [colorName, shades] of Object.entries(TAMAGUI_COLORS)) {
     for (const [shade, shadeHex] of Object.entries(shades)) {
@@ -279,9 +339,17 @@ let _cachedAllColors: Array<{ token: string; hex: string }> | null = null;
 export function getAllTamaguiColors(): Array<{ token: string; hex: string }> {
   if (_cachedAllColors) return _cachedAllColors;
   const entries: Array<{ token: string; hex: string }> = [];
-  for (const [colorName, shades] of Object.entries(TAMAGUI_COLORS)) {
-    for (const [shade, shadeHex] of Object.entries(shades)) {
-      entries.push({ token: `${colorName}${shade}`, hex: shadeHex });
+  if (_activePalette) {
+    // Project palette replaces the hardcoded Radix scale; semantic tokens
+    // (theme-level $color/$background) stay as a reasonable default.
+    for (const [token, hex] of Object.entries(_activePalette)) {
+      entries.push({ token, hex });
+    }
+  } else {
+    for (const [colorName, shades] of Object.entries(TAMAGUI_COLORS)) {
+      for (const [shade, shadeHex] of Object.entries(shades)) {
+        entries.push({ token: `${colorName}${shade}`, hex: shadeHex });
+      }
     }
   }
   for (const [semanticName, shades] of Object.entries(TAMAGUI_SEMANTIC_TOKENS)) {
