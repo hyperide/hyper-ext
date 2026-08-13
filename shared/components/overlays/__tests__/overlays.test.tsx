@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { fireEvent, render } from '@testing-library/react';
 import { GlobalWindow } from 'happy-dom';
 import { renderToString } from 'react-dom/server';
+import { TID } from '../../../data-testid-map';
 import { ConnectionErrorOverlay } from '../ConnectionErrorOverlay';
 import { LoadingOverlay } from '../LoadingOverlay';
 import { NoComponentOverlay } from '../NoComponentOverlay';
@@ -118,6 +119,41 @@ describe('ConnectionErrorOverlay', () => {
     const html = renderToString(<ConnectionErrorOverlay message="Error" retryCount={0} />);
     expect(html).not.toContain('Connection attempts');
   });
+
+  it('renders no action button by default', () => {
+    const { container } = render(<ConnectionErrorOverlay message="Error" />);
+    expect(container.querySelector('button')).toBeNull();
+  });
+
+  it('renders the action button with label and testid', () => {
+    const html = renderToString(
+      <ConnectionErrorOverlay
+        message="Dev server disconnected"
+        action={{ label: 'Start Dev Server', onClick: () => {}, testId: 'start-server-btn' }}
+      />,
+    );
+    expect(html).toContain('Start Dev Server');
+    expect(html).toContain('data-testid="start-server-btn"');
+  });
+
+  it('action button click invokes onClick', () => {
+    const onClick = mock(() => {});
+    const { getByText } = render(
+      <ConnectionErrorOverlay message="Dev server disconnected" action={{ label: 'Start Dev Server', onClick }} />,
+    );
+    fireEvent.click(getByText('Start Dev Server'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies a custom root testId', () => {
+    const html = renderToString(<ConnectionErrorOverlay message="Error" testId="hyper-preview-reconnecting" />);
+    expect(html).toContain('data-testid="hyper-preview-reconnecting"');
+  });
+
+  it('keeps the default root testId when not overridden', () => {
+    const html = renderToString(<ConnectionErrorOverlay message="Error" />);
+    expect(html).toContain('data-testid="connection-error-overlay"');
+  });
 });
 
 describe('ParseErrorOverlay', () => {
@@ -218,6 +254,46 @@ describe('PreviewSetupOverlay', () => {
     expect(queryByText('Dismiss')).toBeNull();
     expect(queryByText('Fix Setup')).toBeNull();
     expect(queryByText('Auto Fix')).toBeNull();
+  });
+
+  it('renders a custom description in the unsupported variant', () => {
+    const html = renderToString(
+      <PreviewSetupOverlay status="unsupported" description="No supported bundler found in package.json." />,
+    );
+    expect(html).toContain('No supported bundler found in package.json.');
+    expect(html).not.toContain('HyperIDE could not detect a supported framework');
+  });
+
+  it('renders a custom description in the needs-patch variant', () => {
+    const html = renderToString(<PreviewSetupOverlay status="needs-patch" description="Custom router explanation." />);
+    expect(html).toContain('Custom router explanation.');
+    expect(html).not.toContain('HyperIDE could not find a React Router configuration file');
+  });
+
+  it('applies a custom root testId', () => {
+    const html = renderToString(
+      <PreviewSetupOverlay status="unsupported" testId="hyper-preview-unsupported-framework" />,
+    );
+    expect(html).toContain('data-testid="hyper-preview-unsupported-framework"');
+  });
+
+  it('keeps the default root testId when not overridden', () => {
+    const html = renderToString(<PreviewSetupOverlay status="unsupported" />);
+    expect(html).toContain('data-testid="preview-setup-overlay"');
+  });
+
+  it('emits per-framework row testids from the shared testid map', () => {
+    const html = renderToString(
+      <PreviewSetupOverlay
+        status="unsupported"
+        frameworkSupport={[
+          { name: 'Next.js', level: 'supported' },
+          { name: 'Remix', level: 'planned' },
+        ]}
+      />,
+    );
+    expect(html).toContain(`data-testid="${TID.preview.unsupportedFrameworkRow('Next.js')}"`);
+    expect(html).toContain(`data-testid="${TID.preview.unsupportedFrameworkRow('Remix')}"`);
   });
 });
 

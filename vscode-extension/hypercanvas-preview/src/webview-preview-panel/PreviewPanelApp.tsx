@@ -5,11 +5,11 @@
  * Manages iframe preview, overlay rendering, and context menu.
  */
 
+import { LoadingOverlay, NoComponentOverlay } from '@shared/components/overlays';
 import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import {
   createSharedDispatch,
@@ -21,6 +21,7 @@ import {
 import type { PlatformMessage } from '@/lib/platform/types';
 import { TID } from '../shared/data-testid-map';
 import type { UnsupportedProjectError } from '../types';
+import { DisconnectedScreen } from './DisconnectedScreen';
 import { PreviewLoadErrorOverlay } from './PreviewLoadErrorOverlay';
 import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
 import { PropsForm } from './PropsForm';
@@ -103,7 +104,7 @@ function PreviewContent() {
   const [readonlyDismissed, setReadonlyDismissed] = useState(false);
   const isReadonly = projectCapabilities?.readonly === true;
 
-  // Track iframe load state so we can show the SaaS loading spinner while the
+  // Track iframe load state so we can show the shared LoadingOverlay while the
   // dev server / preview HTML is fetching. Without this, the iframe shows a
   // bare blank/dev-server-default screen until first paint, which the user
   // perceives as an indefinite "Loading…" hang.
@@ -197,15 +198,11 @@ function PreviewContent() {
 
   const shellScreen = getPreviewShellScreen(devServerRunning, disconnected);
 
-  // Dev server stopped after a successful connection — keep a dedicated disconnected
-  // shell instead of relying on a transient blend of banner + stale iframe content.
+  // Dev server stopped after a successful connection — dedicated disconnected
+  // shell (shared ConnectionErrorOverlay + Start Dev Server action) instead of
+  // relying on a transient blend of banner + stale iframe content.
   if (shellScreen === 'disconnected') {
-    return (
-      <>
-        <ReconnectingBanner />
-        <DisconnectedPreviewScreen onStart={handleStartDevServer} />
-      </>
-    );
+    return <DisconnectedScreen onStart={handleStartDevServer} />;
   }
 
   // Dev server not running before any successful connection — show initial start screen.
@@ -242,11 +239,7 @@ function PreviewContent() {
           onError={handleIframeError}
         />
         <div ref={overlayCallbackRef} style={overlayStyle} />
-        {iframeSrc && !iframeLoaded && !componentError && !iframeLoadTimedOut && !iframeError && (
-          <div data-testid={TID.preview.loadingOverlay} style={loadingOverlayStyle}>
-            <LoadingSpinner label="Loading component..." />
-          </div>
-        )}
+        {iframeSrc && !iframeLoaded && !componentError && !iframeLoadTimedOut && !iframeError && <LoadingOverlay />}
         {iframeSrc && !componentError && !iframeError && iframeLoadTimedOut && (
           <PreviewLoadTimeoutOverlay onRetry={handleRetry} onOpenOutput={handleOpenOutput} />
         )}
@@ -279,7 +272,7 @@ function PreviewContent() {
         />
       )}
 
-      {showNoComponentHint && <NoComponentHint />}
+      {showNoComponentHint && <NoComponentOverlay variant="no-selection" />}
 
       <ModeToolbar canvas={canvas} />
 
@@ -340,27 +333,6 @@ function StartDevServerScreen({
       <button type="button" style={settingsLinkStyle} onClick={onOpenSettings}>
         Open in Settings: Hyper Canvas › Auto-start
       </button>
-    </div>
-  );
-}
-
-function DisconnectedPreviewScreen({ onStart }: { onStart: () => void }) {
-  return (
-    <div data-testid="hyper-preview-disconnected-screen" style={disconnectedScreenStyle}>
-      <h2 style={headingStyle}>Hyper Preview</h2>
-      <p style={subtextStyle}>The dev server stopped. Start it again to restore the live preview.</p>
-      <button type="button" data-testid={TID.preview.startServerButton} style={buttonStyle} onClick={onStart}>
-        Start Dev Server
-      </button>
-    </div>
-  );
-}
-
-function NoComponentHint() {
-  return (
-    <div style={{ ...centerScreenStyle, ...absoluteFillStyle }}>
-      <h2 style={headingStyle}>No component selected</h2>
-      <p style={subtextStyle}>Open a .tsx or .jsx file to preview it</p>
     </div>
   );
 }
@@ -512,18 +484,6 @@ function UnsupportedProjectScreen({ error, onFix }: { error: UnsupportedProjectE
       <button type="button" data-testid={TID.preview.unsupportedFixButton} style={buttonStyle} onClick={onFix}>
         {error.fixLabel}
       </button>
-    </div>
-  );
-}
-
-// ============================================================================
-// Reconnecting Banner (shown when dev server disconnects)
-// ============================================================================
-
-function ReconnectingBanner() {
-  return (
-    <div data-testid="hyper-preview-reconnecting" style={reconnectingBannerStyle}>
-      Dev server disconnected
     </div>
   );
 }
@@ -934,15 +894,6 @@ const overlayStyle: React.CSSProperties = {
   zIndex: 10,
 };
 
-const loadingOverlayStyle: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  // Above the canvas-interaction overlay (z=10) and below the component error
-  // overlay (z=100), so a render error replaces the spinner immediately
-  // instead of showing both stacked.
-  zIndex: 15,
-};
-
 const centerScreenStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -954,14 +905,6 @@ const centerScreenStyle: React.CSSProperties = {
   fontFamily: 'var(--vscode-font-family)',
   textAlign: 'center',
   padding: 20,
-};
-
-const absoluteFillStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
 };
 
 const headingStyle: React.CSSProperties = {
@@ -1005,28 +948,6 @@ const settingsLinkStyle: React.CSSProperties = {
   marginTop: 6,
   padding: 0,
   textDecoration: 'underline',
-};
-
-const reconnectingBannerStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  padding: '8px 16px',
-  background: 'var(--vscode-editorWarning-foreground, #e5a100)',
-  color: '#fff',
-  fontSize: 12,
-  fontFamily: 'var(--vscode-font-family)',
-  textAlign: 'center',
-  zIndex: 1001,
-};
-
-const disconnectedScreenStyle: React.CSSProperties = {
-  ...centerScreenStyle,
-  ...absoluteFillStyle,
-  justifyContent: 'flex-start',
-  gap: 12,
-  paddingTop: 88,
 };
 
 const warningIconStyle: React.CSSProperties = {

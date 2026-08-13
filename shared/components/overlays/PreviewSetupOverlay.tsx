@@ -2,10 +2,15 @@
  * @file Shown when framework needs router patching or is unsupported.
  * Merges SaaS PreviewSetupOverlay + extension UnsupportedProjectScreen.
  *
- * Accessed via: Preview panel — Priority 2 overlay.
+ * Accessed via: Preview panel — Priority 2 overlay. The VS Code extension's
+ *   UnsupportedFrameworkScreen is a thin wrapper over the `unsupported`
+ *   variant (HYP-647): it passes a detection-specific `description` and the
+ *   e2e-pinned root testId. Framework rows always carry
+ *   `TID.preview.unsupportedFrameworkRow(name)` testids on both platforms.
  */
 
 import type { CSSProperties } from 'react';
+import { TID } from '../../data-testid-map';
 import { OverlayShell } from './OverlayShell';
 
 type SupportLevel = 'supported' | 'planned' | 'not-planned';
@@ -13,6 +18,10 @@ type SupportLevel = 'supported' | 'planned' | 'not-planned';
 interface PreviewSetupOverlayProps {
   status: 'needs-patch' | 'unsupported';
   frameworkSupport?: Array<{ name: string; level: SupportLevel }>;
+  /** Overrides the default explanatory paragraph of the active variant */
+  description?: string;
+  /** data-testid override for the root element */
+  testId?: string;
   onDismiss?: () => void;
   onAutoFix?: (prompt: string) => void;
   onManualFix?: () => void;
@@ -112,21 +121,27 @@ const FALLBACK_PROMPT = `HyperIDE needs a \`/test-preview\` route in my JSX rout
 export function PreviewSetupOverlay({
   status,
   frameworkSupport,
+  description,
+  testId = 'preview-setup-overlay',
   onDismiss,
   onAutoFix,
   onManualFix,
 }: PreviewSetupOverlayProps) {
   if (status === 'needs-patch') {
     return (
-      <OverlayShell testId="preview-setup-overlay">
+      <OverlayShell testId={testId}>
         <div style={cardStyle}>
           <div style={{ ...warningStyle, color: 'var(--overlay-warning)' }}>⚠</div>
           <h2 style={headingStyle}>Router setup required</h2>
-          <p style={descStyle}>
-            HyperIDE could not find a React Router configuration file. To enable component preview, a{' '}
-            <code style={{ fontFamily: 'var(--overlay-font-mono)', fontSize: 12 }}>/test-preview</code> route must be
-            added to your router.
-          </p>
+          {description ? (
+            <p style={descStyle}>{description}</p>
+          ) : (
+            <p style={descStyle}>
+              HyperIDE could not find a React Router configuration file. To enable component preview, a{' '}
+              <code style={{ fontFamily: 'var(--overlay-font-mono)', fontSize: 12 }}>/test-preview</code> route must be
+              added to your router.
+            </p>
+          )}
           <div style={btnRowStyle}>
             {onDismiss && (
               <button type="button" onClick={onDismiss} style={secondaryBtnStyle}>
@@ -151,11 +166,11 @@ export function PreviewSetupOverlay({
 
   // unsupported
   return (
-    <OverlayShell testId="preview-setup-overlay">
+    <OverlayShell testId={testId}>
       <div style={{ ...cardStyle, overflowY: 'auto', maxHeight: '100%' }}>
         <div style={{ ...warningStyle, color: 'var(--overlay-destructive)' }}>⚠</div>
         <h2 style={headingStyle}>Framework not supported</h2>
-        <p style={descStyle}>HyperIDE could not detect a supported framework in this project.</p>
+        <p style={descStyle}>{description ?? 'HyperIDE could not detect a supported framework in this project.'}</p>
         {frameworkSupport && frameworkSupport.length > 0 && (
           <div style={tableStyle}>
             <div style={tableHeaderStyle}>
@@ -163,7 +178,7 @@ export function PreviewSetupOverlay({
               <span>Status</span>
             </div>
             {frameworkSupport.map(({ name, level }) => (
-              <div key={name} style={tableRowStyle}>
+              <div key={name} data-testid={TID.preview.unsupportedFrameworkRow(name)} style={tableRowStyle}>
                 <span style={{ textAlign: 'left' }}>{name}</span>
                 <span style={{ fontSize: 12, color: BADGE_COLORS[level] ?? 'var(--overlay-muted)' }}>
                   {BADGE_LABELS[level] ?? level}
