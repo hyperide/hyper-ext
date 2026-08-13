@@ -237,8 +237,11 @@ export class AstService {
       workspaceRoot: this._workspaceRoot,
       fileParser: this._fileParser,
       updateNodeMap: (fp: string) => this._updateNodeMap(fp),
-      resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) =>
-        this._resolveElement(ast, nodeRef, filePath),
+      // Element-ops must follow a nodeRef into the file it actually lives in (a child
+      // component, not the open entry) before mutating — otherwise duplicate/wrap/insert/
+      // paste search+write the wrong AST and report "Element not found" for valid cross-file
+      // selections. Mirrors _mutationWrapperDeps.
+      resolveElementInCorrectFile: (ap: string, nr: NodeRef) => this._resolveElementInCorrectFile(ap, nr),
     };
   }
 

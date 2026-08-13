@@ -66,6 +66,12 @@ ci:
     leftover-grep:     { enabled: true, tier: block }
     review-threads:    { enabled: true, tier: block }
 
+# ── Ticket tracker — hyperide files tickets in Linear team HYP (CTO decision #4136.4),
+# not GitHub Issues (Issues are disabled on this repo). task-cli reads this block. ───────
+task:
+  backend: linear
+  team: HYP
+
 # ── MCP — none provisioned for this repo (developers manage their own). ──────────────────
 mcp:
   enabled: false
