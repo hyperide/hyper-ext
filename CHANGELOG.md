@@ -6,6 +6,12 @@ All notable changes to HyperCanvas Preview are documented here.
 
 ### Bug fixes
 
+## [0.1.71] — 2026-07-15
+
+### Bug fixes
+
+- **Inspector style writes no longer fail with "Element not found" on React 19 + Vite dev-server apps (residual leaf-seed path)** — the HYP-970 fix (0.1.70) source-mapped the `_debugStack` _ancestor_ call-site, but the leaf seed on the click path and the `getSourceLocation` fallback still trusted the raw COMPILED `_debugStack` frame, which under React 19 + Vite is the position in the jsxDEV-transformed module (a line past EOF), not the original source. On a cold source map that compiled position was committed and every inspector style write failed. A shared `isUnsymbolicatedReact19Fiber` predicate now treats a React-19 DOM seed with no `_debugSource` up-chain as untrusted on BOTH platforms (extension + SaaS): the cold compiled seed is suppressed and routed through the warm-and-defer branch, and the pending-click warm-retry is now correctly wired (was dead by-value) so it re-resolves to the real mapped position once the map warms. Extends the HYP-970 lineage (HYP-974, #660)
+
 ## [0.1.70] — 2026-07-14
 
 ### Bug fixes
