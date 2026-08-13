@@ -32,6 +32,9 @@
     "vite": "^5.0.0",
     "vite-tsconfig-paths": "^4.2.1"
   },
+  "overrides": {
+    "tar": ">=7.5.7"
+  },
   "engines": {
     "node": ">=20.0.0"
   }
