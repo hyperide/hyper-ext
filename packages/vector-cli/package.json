@@ -8,6 +8,7 @@
   "type": "module",
   "main": "src/context.ts",
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "vector-engine": "workspace:*",
     "vector-wasm": "workspace:*"
   }

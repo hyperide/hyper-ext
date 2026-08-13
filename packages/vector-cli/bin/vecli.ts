@@ -8,7 +8,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { runBatch } from '../src/batch';
 import { getHelp } from '../src/help';
-import { isRsvgAvailable, svgToPng } from '../src/png';
+import { svgToPng } from '../src/png';
 
 const args = process.argv.slice(2);
 
@@ -90,10 +90,6 @@ async function main(): Promise<void> {
       const output = runBatch({ expression: code, canvasWidth, canvasHeight });
 
       if (format === 'png' && output) {
-        if (!isRsvgAvailable()) {
-          process.stderr.write('Error: rsvg-convert not found. Install with: brew install librsvg\n');
-          process.exit(1);
-        }
         const pngBuf = svgToPng(output);
         if (outputFile) {
           writeFileSync(outputFile, pngBuf);

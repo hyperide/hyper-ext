@@ -25,7 +25,7 @@ Usage:
 Flags:
   -e, --exec <file>     Execute script file
   -o, --output <file>   Output file (default: stdout)
-  --format <svg|png>    Output format (default: svg, png needs rsvg-convert)
+  --format <svg|png>    Output format (default: svg)
   --canvas <WxH>        Canvas size (default: 100x100)
   --preview <file>      Live SVG preview file
   -h, --help [topic]    Show help (optionally for a topic)
@@ -262,7 +262,7 @@ One-liners:
   cowsay(message, fontSize?)                      Speech bubble with ASCII cow
   label(str, x, y, opts?)                         SVG text annotation (no font needed)
 
-  .png(filename?, width?)                         Export as PNG (needs rsvg-convert)
+  .png(filename?, width?)                         Export as PNG
 
   input                           Stdin data (from pipe)
 

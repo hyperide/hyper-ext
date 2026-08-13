@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { ChainableNode } from '../src/chainable';
 import { createContext } from '../src/context';
-import { isRsvgAvailable, svgToPng } from '../src/png';
+import { svgToPng } from '../src/png';
 
 describe('ChainableNode', () => {
   it('should create a generator node', () => {
@@ -84,13 +84,7 @@ describe('ChainableNode', () => {
   });
 
   describe('png', () => {
-    const rsvgInstalled = isRsvgAvailable();
-
-    it('should convert SVG to PNG buffer', () => {
-      if (!rsvgInstalled) {
-        console.log('Skipping: rsvg-convert not installed');
-        return;
-      }
+    it('should convert SVG to PNG buffer with no external binary', () => {
       const svg =
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="red"/></svg>';
       const buf = svgToPng(svg, 200);
@@ -101,6 +95,9 @@ describe('ChainableNode', () => {
       expect(buf[1]).toBe(0x50); // P
       expect(buf[2]).toBe(0x4e); // N
       expect(buf[3]).toBe(0x47); // G
+      // IHDR dimensions: rendered at width 200, aspect preserved (100x100 viewBox)
+      expect(buf.readUInt32BE(16)).toBe(200);
+      expect(buf.readUInt32BE(20)).toBe(200);
     });
 
     it('should have png method on ChainableNode', () => {

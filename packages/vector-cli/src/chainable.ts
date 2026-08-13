@@ -203,7 +203,7 @@ export class ChainableNode {
     return Math.abs(pathArea(path.commands));
   }
 
-  /** Execute graph and write PNG via rsvg-convert. Writes to file or stdout. */
+  /** Execute graph and write PNG via @resvg/resvg-js. Writes to file or stdout. */
   png(filename?: string, width = 400): void {
     const svg = this.svg();
     const buf = svgToPng(svg, width);
