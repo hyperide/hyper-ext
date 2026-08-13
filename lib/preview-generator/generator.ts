@@ -17,7 +17,12 @@ import type { ExportStyle } from './scanner';
 // v11 -> v12: HYP-463 — emit `// @ts-nocheck` as line 1 + `override` on ErrorBoundary
 // lifecycle methods so the generated artifact opts out of the user's `tsc --build`.
 // Bump forces already-generated (still-erroring) files to regenerate WITH @ts-nocheck.
-export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v12';
+// v12 -> v13: HYP-448 — store/state fallback Proxies now delegate meta-key reads
+// (constructor/toString/valueOf/Symbols) to the {} target so they are safe to spread
+// onto a DOM node via `...rest` (previously threw on value.constructor.name → blank).
+// Separate bump from v12 (already live for @ts-nocheck) so files generated at v12
+// without the proxy fix are forced to regenerate and pick up the DOM-safe traps.
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v13';
 
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
@@ -602,8 +607,14 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   // This keeps BoardView-shaped components rendering instead of throwing on
   // destructure when no real store is supplied.
   lines.push('  store: new Proxy({}, {');
-  lines.push('    get: (_target, prop) => {');
-  lines.push("      if (typeof prop !== 'string') return undefined;");
+  lines.push('    get: (target, prop) => {');
+  // Non-string keys (Symbol.toPrimitive / Symbol.toStringTag) and the meta keys
+  // constructor / toString / valueOf must delegate to the real {} target. A
+  // component that `extends HTMLAttributes` and spreads `...rest` onto a DOM node
+  // captures this Proxy and passes it as a DOM attribute; React's unknown-object
+  // -attribute path reads `value.constructor.name` and stringifies the value, so a
+  // trap returning `undefined` for those keys throws and blanks the preview (HYP-448).
+  lines.push("      if (typeof prop !== 'string') return Reflect.get(target, prop);");
   lines.push('      if (/^(?:set|toggle|on|add|remove|update|clear|reset|open|close)[A-Z]/.test(prop)) {');
   lines.push('        return (_storeStubs[prop] ??= () => {});');
   lines.push('      }');
@@ -616,7 +627,9 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push(
     "      if (prop === 'commandPaletteOpen' || prop === 'isOpen' || prop === 'isLoading' || prop === 'isError') return false;",
   );
-  lines.push('      return undefined;');
+  // Unknown data keys → delegate to the {} target (undefined for arbitrary store
+  // reads, but constructor/toString/valueOf resolve to Object defaults → DOM-safe).
+  lines.push('      return Reflect.get(target, prop);');
   lines.push('    },');
   lines.push('  }),');
   // Generic context-shaped prop stubs for components that destructure
@@ -626,8 +639,12 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('  dispatch: () => {},');
   lines.push('  reducer: () => {},');
   lines.push('  state: new Proxy({}, {');
-  lines.push('    get: (_target, prop) => {');
-  lines.push("      if (typeof prop !== 'string') return undefined;");
+  lines.push('    get: (target, prop) => {');
+  // Same DOM-spread hazard as `store` above: a component that spreads `...rest`
+  // (extending HTMLAttributes) passes this Proxy as a DOM attribute, so the
+  // meta-keys constructor / toString / valueOf and Symbol keys must delegate to
+  // the real {} target rather than returning `undefined` (HYP-448).
+  lines.push("      if (typeof prop !== 'string') return Reflect.get(target, prop);");
   lines.push('      if (/^(?:set|toggle|on|add|remove|update|clear|reset|open|close)[A-Z]/.test(prop)) {');
   lines.push('        return (_stateStubs[prop] ??= () => {});');
   lines.push('      }');
@@ -640,7 +657,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push(
     "      if (prop === 'commandPaletteOpen' || prop === 'isOpen' || prop === 'isLoading' || prop === 'isError') return false;",
   );
-  lines.push('      return undefined;');
+  lines.push('      return Reflect.get(target, prop);');
   lines.push('    },');
   lines.push('  }),');
   lines.push('  theme: new Proxy({ colors: {}, spacing: {}, fontSizes: {}, shadows: {}, breakpoints: {} }, {');
