@@ -2,6 +2,14 @@
 
 All notable changes to HyperCanvas Preview are documented here.
 
+## [0.1.55] — 2026-05-29
+
+### Bug fixes
+
+- **Padding arrow key no longer produces bare `px` or resets selection** — `handleNumericKeyDown` now delegates to `computeNumericArrowValue` which clamps non-negative length properties at 0; vertical/horizontal combined padding inputs pass the displayed value (`paddingTop||paddingBottom`, `paddingLeft||paddingRight`) as `currentValue` so ArrowDown always decrements from what the user sees (`834e27ca`)
+
+---
+
 ## [0.1.54] — 2026-05-29
 
 ### Bug fixes
