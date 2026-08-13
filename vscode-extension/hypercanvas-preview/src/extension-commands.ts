@@ -9,6 +9,7 @@ import {
   GLM_RECOMMENDATION,
   PROVIDER_KEY_URLS,
   PROVIDER_LABELS,
+  PROVIDER_PURCHASE_HINTS,
 } from '../../../shared/ai-provider-info';
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
@@ -731,31 +732,31 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
       const providerItems: ProviderItem[] = [
         {
           label: `$(star-full) ${PROVIDER_LABELS.glm}`,
-          detail: `${GLM_RECOMMENDATION.description} ${plansLine}`,
+          detail: `${GLM_RECOMMENDATION.description} ${plansLine} — ${PROVIDER_PURCHASE_HINTS.glm.url}`,
           description: currentProvider === 'glm' ? 'current' : '',
           providerId: 'glm',
         },
         {
           label: PROVIDER_LABELS.firepass,
-          detail: `${FIREPASS_INFO.description} ${FIREPASS_INFO.plans[0].price}`,
+          detail: `${FIREPASS_INFO.description} ${FIREPASS_INFO.plans[0].price} — ${PROVIDER_PURCHASE_HINTS.firepass.url}`,
           description: currentProvider === 'firepass' ? 'current' : '',
           providerId: 'firepass',
         },
         {
           label: PROVIDER_LABELS.commandcode,
-          detail: `${COMMANDCODE_INFO.description} From ${COMMANDCODE_INFO.plans[0].price}`,
+          detail: `${COMMANDCODE_INFO.description} From ${COMMANDCODE_INFO.plans[0].price} — ${PROVIDER_PURCHASE_HINTS.commandcode.url}`,
           description: currentProvider === 'commandcode' ? 'current' : '',
           providerId: 'commandcode',
         },
         {
           label: PROVIDER_LABELS.claude,
-          detail: 'Per-token pricing via Anthropic API',
+          detail: `Per-token pricing via Anthropic API — ${PROVIDER_PURCHASE_HINTS.claude.url}`,
           description: currentProvider === 'claude' ? 'current' : '',
           providerId: 'claude',
         },
         {
           label: PROVIDER_LABELS.openai,
-          detail: 'GPT-4o and OpenAI-compatible APIs',
+          detail: `GPT-4o and OpenAI-compatible APIs — ${PROVIDER_PURCHASE_HINTS.openai.url}`,
           description: currentProvider === 'openai' ? 'current' : '',
           providerId: 'openai',
         },

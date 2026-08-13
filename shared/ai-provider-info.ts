@@ -60,3 +60,39 @@ export const PROVIDER_KEY_URLS: Partial<Record<AIProvider, { url: string; label:
   claude: { url: 'https://console.anthropic.com/settings/keys', label: 'Anthropic Console' },
   openai: { url: 'https://platform.openai.com/api-keys', label: 'OpenAI Platform' },
 };
+
+/**
+ * Per-provider purchase hint shown next to the API key field.
+ * text: one-liner telling the user which plan/subscription to buy.
+ * url:  direct link to the pricing or sign-up page.
+ */
+export const PROVIDER_PURCHASE_HINTS: Record<AIProvider, { text: string; url: string }> = {
+  glm: {
+    text: 'Flat-rate subscription from $10/mo at Z.ai — not per-token.',
+    url: GLM_RECOMMENDATION.subscribeUrl,
+  },
+  firepass: {
+    text: 'Buy a Fire Pass ($49/mo) for flat-rate Kimi K2.6 Turbo access at Fireworks AI.',
+    url: FIREPASS_INFO.subscribeUrl,
+  },
+  commandcode: {
+    text: 'Credit subscription from $1/mo at commandcode.ai — one API for the whole catalog.',
+    url: COMMANDCODE_INFO.subscribeUrl,
+  },
+  claude: {
+    text: 'Pay-as-you-go via Anthropic API — add credits at console.anthropic.com.',
+    url: 'https://console.anthropic.com/settings/billing',
+  },
+  openai: {
+    text: 'Pay-as-you-go via OpenAI API — add credits at platform.openai.com.',
+    url: 'https://platform.openai.com/settings/organization/billing',
+  },
+  proxy: {
+    text: 'Each proxied model uses its own provider key — see the model list for pricing.',
+    url: 'https://docs.litellm.ai/docs/providers',
+  },
+  opencode: {
+    text: 'Each OpenCode model uses its own provider key — see the model list for pricing.',
+    url: 'https://opencode.ai/docs',
+  },
+};

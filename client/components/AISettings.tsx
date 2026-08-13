@@ -9,7 +9,13 @@ import { useNetworkAwareFetch } from '@/hooks/useNetworkAwareFetch';
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../shared/ai-provider-defaults';
-import { COMMANDCODE_INFO, FIREPASS_INFO, GLM_RECOMMENDATION, PROVIDER_LABELS } from '../../shared/ai-provider-info';
+import {
+  COMMANDCODE_INFO,
+  FIREPASS_INFO,
+  GLM_RECOMMENDATION,
+  PROVIDER_LABELS,
+  PROVIDER_PURCHASE_HINTS,
+} from '../../shared/ai-provider-info';
 
 interface AIConfig {
   id: number;
@@ -589,6 +595,17 @@ export default function AISettings() {
                       Get API key
                     </a>
                   </p>
+                  <p className="text-xs text-muted-foreground">
+                    {PROVIDER_PURCHASE_HINTS.proxy.text}{' '}
+                    <a
+                      href={PROVIDER_PURCHASE_HINTS.proxy.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground"
+                    >
+                      Supported providers
+                    </a>
+                  </p>
                 </div>
               )}
             </>
@@ -634,6 +651,17 @@ export default function AISettings() {
                     {keyInfo.helpText}{' '}
                     <a href={keyInfo.helpUrl} target="_blank" rel="noopener noreferrer" className="underline">
                       Get API key
+                    </a>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {PROVIDER_PURCHASE_HINTS.opencode.text}{' '}
+                    <a
+                      href={PROVIDER_PURCHASE_HINTS.opencode.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground"
+                    >
+                      OpenCode docs
                     </a>
                   </p>
                 </div>
@@ -690,6 +718,17 @@ export default function AISettings() {
                     className="underline hover:text-foreground"
                   >
                     Create &amp; Manage API key — Z.ai
+                  </a>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {PROVIDER_PURCHASE_HINTS.glm.text}{' '}
+                  <a
+                    href={PROVIDER_PURCHASE_HINTS.glm.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  >
+                    Subscribe
                   </a>
                 </p>
               </div>
@@ -758,6 +797,17 @@ export default function AISettings() {
                     className="underline hover:text-foreground"
                   >
                     Create &amp; Manage API key — Fireworks AI
+                  </a>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {PROVIDER_PURCHASE_HINTS.firepass.text}{' '}
+                  <a
+                    href={PROVIDER_PURCHASE_HINTS.firepass.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  >
+                    Get Fire Pass
                   </a>
                 </p>
               </div>
@@ -829,6 +879,17 @@ export default function AISettings() {
                     Create &amp; Manage API key — Command Code Studio
                   </a>
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  {PROVIDER_PURCHASE_HINTS.commandcode.text}{' '}
+                  <a
+                    href={PROVIDER_PURCHASE_HINTS.commandcode.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  >
+                    See plans
+                  </a>
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -880,6 +941,17 @@ export default function AISettings() {
                     Get API key — Anthropic Console
                   </a>
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  {PROVIDER_PURCHASE_HINTS.claude.text}{' '}
+                  <a
+                    href={PROVIDER_PURCHASE_HINTS.claude.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  >
+                    Add credits
+                  </a>
+                </p>
               </div>
             </>
           ) : (
@@ -919,6 +991,19 @@ export default function AISettings() {
                     Get API key — OpenAI Platform
                   </a>
                 </p>
+                {PROVIDER_PURCHASE_HINTS[config.provider] && (
+                  <p className="text-xs text-muted-foreground">
+                    {PROVIDER_PURCHASE_HINTS[config.provider].text}{' '}
+                    <a
+                      href={PROVIDER_PURCHASE_HINTS[config.provider].url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground"
+                    >
+                      Pricing
+                    </a>
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
