@@ -149,7 +149,7 @@
     "picomatch": ">=2.3.2",
     "qs": ">=6.14.1",
     "rollup": ">=4.59.0",
-    "undici": ">=7.24.0",
+    "undici": "^7.28.0",
     "ws": ">=8.21.0"
   },
   "overrides": {
@@ -160,6 +160,7 @@
     "path-to-regexp": "^8.4.0",
     "picomatch": "^2.3.2",
     "protobufjs": "^7.6.1",
+    "undici": "^7.28.0",
     "ws": "^8.21.0"
   },
   "patchedDependencies": {
