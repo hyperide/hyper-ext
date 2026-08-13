@@ -26,6 +26,17 @@ pre-commit:
     lint:
       glob: '*.{ts,tsx,js,jsx}'
       run: |
+        # Related problem to scripts/resolve-node-modules-bin.ts (HYP-1145), but a
+        # DIFFERENT mechanism and precedence, deliberately: this line prefers the
+        # PRIMARY checkout's oxlint even when the committing worktree has its own
+        # (possibly differently-pinned) node_modules, so every worktree lints
+        # against the same version by default — that only holds while lockfiles
+        # agree across worktrees; a branch that deliberately bumps oxlint should
+        # update the comparison here too, not silently keep linting with the old
+        # primary version. Uses `<git-common-dir>/..` (assumes the common dir is
+        # literally `<primary>/.git`, true for every worktree this repo actually
+        # creates today), not `git worktree list` (robust under --separate-git-dir
+        # too) — port to that if the assumption ever stops holding.
         OXLINT="$(git rev-parse --path-format=absolute --git-common-dir)/../node_modules/.bin/oxlint"
         if [ -x "$OXLINT" ]; then
           "$OXLINT" --config .oxlintrc.json --no-error-on-unmatched-pattern {staged_files} < /dev/null
