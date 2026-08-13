@@ -41,6 +41,7 @@ function createMockResolver(overrides: Partial<TracingResolver> = {}): TracingRe
     getItemIndex: mock(() => 0),
     resolveClickLocal: mock(() => null),
     findDOMElement: mock(() => null),
+    warmElementSource: mock(() => {}),
     ...overrides,
   };
 }

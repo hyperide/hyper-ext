@@ -305,6 +305,14 @@ interface ResolvedDrop {
 function _resolveDrop(ctx: DragHandlerContext, e: PointerEvent): ResolvedDrop | null {
   const target = _resolveDropTarget(e);
   if (!target) return null;
+  // Warm the hit-tested leaf's source map BEFORE resolving (#31 residual). Without this,
+  // a COLD leaf (React 19 / RSC, chunk map not yet fetched) fails Step 1 of resolveDragSource
+  // and the resolver WALKS UP to the leaf's already-warm CONTAINER — landing the move at the
+  // wrong element. Warming is async (chunk fetch / server round-trip), so it can't help THIS
+  // move, but the AST write is deferred to drop (pointerup) and a drag emits many moves: by
+  // drop time the hovered leaf's map is warm and the last move resolves the LEAF via Step 1.
+  // Optional-call guards a resolver shape without the method (e.g. older mocks).
+  ctx.iframeResolver.warmElementSource?.(target);
   const resolved = resolveDragSource(
     target,
     (el) => ctx.iframeResolver.getSourceLocation(el),
@@ -484,9 +492,15 @@ export function _dragCleanup(): void {
 
 export function _dragPointerUp(ctx: DragHandlerContext, e: PointerEvent): void {
   if (_dragCapturedPointerId !== null && e.pointerId !== _dragCapturedPointerId) return;
-  // Snapshot the deferred drop BEFORE cleanup (cleanup resets module state). The whole
-  // gesture commits EXACTLY ONE write here — never per-move — to avoid racing source rewrites.
-  const pending = _dragPendingDrop;
+  // Re-resolve the drop target here to pick up any source-map warming that completed since
+  // the last pointermove (Codex P2 / HYP-31 residual). If the user hover-then-drops without
+  // an extra pointermove after warmElementSource's async chunk fetch returns, _dragPendingDrop
+  // still holds a stale CONTAINER-resolved write — the now-warm leaf never got a second move.
+  // Re-resolving at the same coordinates uses the current (warm) source-map state.
+  // Fall back to _dragPendingDrop when re-resolve returns null (elementFromPoint unavailable
+  // in happy-dom, cursor over the source itself, or cursor over a descendant).
+  const freshDrop = _resolveDrop(ctx, e);
+  const pending = freshDrop?.pending ?? _dragPendingDrop;
   _dragCleanup();
   if (pending) _emitPendingDrop(ctx, pending);
 }

@@ -86,6 +86,30 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
       return resolveCallSiteTarget(source, fiber, ctx.renderedComponentPath, directItemIndex).itemIndex;
     },
 
+    warmElementSource(element: HTMLElement): void {
+      // Kick off source-map warming for a drop-target element whose source is COLD
+      // (React 19 / RSC, where chunk maps aren't yet fetched). Mirrors the cold branch
+      // of resolveClickLocal but does NOT touch pendingClickElement (click-only state).
+      //
+      // Warming is ASYNC: warmServerChunkFrames posts a resolveServerSourceMap message
+      // and warmFiberChunkFrames kicks off chunk fetches — neither populates the cache
+      // synchronously, so the immediately-following getSourceLocation may still be cold.
+      // The drag fires this on every pointermove and the AST write is deferred to drop
+      // (pointerup), so by drop time the map for the hovered leaf is warm and the last
+      // move's resolveDragSource resolves the LEAF (Step 1) instead of walking up to its
+      // already-warm container (the #31 residual).
+      const fiber = getFiberFromDOM(element);
+      if (fiber === null) return;
+      // OWN-fiber-only checks only. resolveViaClientSourceMap and getSourceLocationFromDOM
+      // both walk the .return ancestor chain — they would find the CONTAINER's warm source
+      // for a COLD LEAF and early-return, skipping the warm-up entirely (the exact scenario
+      // this method exists to fix: HYP-31). Use own-fiber checks as in getMappedSourceLocation.
+      if (resolveOwnServerSourceMap(fiber)) return;                        // own server source cached
+      if (resolveOwnClientSourceMap(fiber).resolved !== undefined) return; // own client resolved or definitive miss
+      ctx.warmServerChunkFrames(fiber);
+      ctx.warmFiberChunkFrames(fiber);
+    },
+
     resolveClickLocal(element: HTMLElement): LocalResolveResult | null {
       ctx.pendingClickElement = null;
       let source = getSourceLocationFromDOM(element);

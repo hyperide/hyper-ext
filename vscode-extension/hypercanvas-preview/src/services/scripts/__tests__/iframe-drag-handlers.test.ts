@@ -482,6 +482,243 @@ describe('_dragPointerMove drop-target normalization (review finding #2)', () =>
   });
 });
 
+describe('_resolveDrop warms a cold leaf before resolving (#31 residual)', () => {
+  // The #31 residual: at a leaf child's center, elementFromPoint returns the leaf, but
+  // the leaf's source map is COLD (React 19 / RSC) so resolveDragSource Step 1 fails and
+  // WALKS UP to the leaf's already-warm CONTAINER → the move lands at the wrong element.
+  // The fix warms the hit-tested leaf via iframeResolver.warmElementSource before resolving.
+  //
+  // Warming is ASYNC in production. We model the async gap by NOT flipping leafWarm inside
+  // the warmElementSource mock — instead we flip it manually between moves, simulating the
+  // server-chunk fetch or client-map fetch completing between pointermove events. This way:
+  //   Move 1 over leaf: warmElementSource(leaf) fires; leaf stays COLD for THIS resolve →
+  //     resolveDragSource walks up to the already-warm CONTAINER.
+  //   Between moves: leafWarm = true (async warm completed).
+  //   Move 2 over leaf: getSourceLocation(leaf) returns LEAF_SRC → resolveDragSource
+  //     resolves the LEAF (Step 1, not the container).
+  //   pointerup: the pending drop targets the LEAF.
+  test('warmElementSource is called for the leaf and the final drop resolves the LEAF', () => {
+    const source = document.createElement('div');
+    source.textContent = 'source';
+    // container > leaf nesting: the leaf is the drop target, the container its ancestor.
+    const container = document.createElement('div');
+    const leaf = document.createElement('div');
+    leaf.textContent = 'leaf';
+    container.appendChild(leaf);
+    document.body.append(source, container);
+
+    const SRC: SourceLocation = { fileName: '/src/App.tsx', line: 5, column: 2 };
+    const CONTAINER_SRC: SourceLocation = { fileName: '/src/App.tsx', line: 11, column: 2 };
+    const LEAF_SRC: SourceLocation = { fileName: '/src/App.tsx', line: 13, column: 4 };
+
+    // The container is ALWAYS warm; the leaf starts COLD and is manually warmed between
+    // moves to model the async source-map fetch completing (see describe comment above).
+    let leafWarm = false;
+    const warmElementSource = mock((_el: HTMLElement) => {
+      // Async warm — no immediate side effect. Test flips leafWarm between moves.
+    });
+    const getSourceLocation = mock((el: HTMLElement): SourceLocation | null => {
+      if (el === source) return SRC;
+      if (el === container) return CONTAINER_SRC;
+      if (el === leaf) return leafWarm ? LEAF_SRC : null;
+      return null;
+    });
+    const ctx: DragHandlerContext = {
+      state: { engineMode: 'design', selectedIds: [] },
+      iframeResolver: { getSourceLocation, warmElementSource } as unknown as DragHandlerContext['iframeResolver'],
+      renderedComponentPath: '/src/App.tsx',
+      selectionGraceCache: { invalidateForFile: mock(() => {}) },
+      findElementsByRef: mock(() => []),
+    };
+
+    const posted: unknown[] = [];
+    const realPostMessage = window.parent.postMessage;
+    (window.parent as unknown as { postMessage: (m: unknown) => void }).postMessage = (m: unknown) => {
+      posted.push(m);
+    };
+    const realElementFromPoint = document.elementFromPoint;
+    // Cursor sits over the leaf (its center), as in PI-5-DR-1.
+    (document as unknown as { elementFromPoint: (x: number, y: number) => Element | null }).elementFromPoint = () =>
+      leaf;
+
+    try {
+      _dragPointerDown(ctx, makePointerEvent(source, 10, 10));
+      _dragPointerMove(ctx, makePointerEvent(source, 40, 40)); // enter dragging
+
+      // Move 1: leaf is cold → warmElementSource(leaf) is called, leaf stays cold for
+      // THIS resolve → resolveDragSource walks up to the warm container.
+      _dragPointerMove(ctx, makePointerEvent(source, 200, 200));
+      expect(warmElementSource).toHaveBeenCalledWith(leaf);
+
+      // Simulate async warm completing between moves (chunk fetch / server round-trip).
+      leafWarm = true;
+
+      // Move 2: leaf is now warm → Step 1 of resolveDragSource resolves the LEAF.
+      _dragPointerMove(ctx, makePointerEvent(source, 201, 201));
+
+      _dragPointerUp(ctx, makePointerEvent(source, 201, 201));
+
+      const moveMsg = posted.find(
+        (m): m is { type: string; targetId: string } =>
+          typeof m === 'object' &&
+          m !== null &&
+          'type' in m &&
+          (m as { type?: string }).type === 'hypercanvas:moveElement',
+      );
+      expect(moveMsg).toBeDefined();
+      // The smoking gun: targetId is the LEAF, NOT the container ancestor.
+      expect(moveMsg?.targetId).toBe('/src/App.tsx:13:4');
+      expect(moveMsg?.targetId).not.toBe('/src/App.tsx:11:2');
+    } finally {
+      (window.parent as unknown as { postMessage: typeof realPostMessage }).postMessage = realPostMessage;
+      (document as unknown as { elementFromPoint: typeof realElementFromPoint }).elementFromPoint =
+        realElementFromPoint;
+      source.remove();
+      container.remove();
+    }
+  });
+
+  // Codex P2 residual: warm completes BETWEEN the last pointermove and pointerup, but no
+  // extra pointermove fires. _dragPendingDrop holds the stale container write. _dragPointerUp
+  // must re-resolve with the now-warm leaf and prefer that result over the stale pending.
+  test('hover-then-drop without extra move: pointerup re-resolves after async warm (Codex P2)', () => {
+    const source = document.createElement('div');
+    source.textContent = 'source';
+    const container = document.createElement('div');
+    const leaf = document.createElement('div');
+    leaf.textContent = 'leaf';
+    container.appendChild(leaf);
+    document.body.append(source, container);
+
+    const SRC: SourceLocation = { fileName: '/src/App.tsx', line: 5, column: 2 };
+    const CONTAINER_SRC: SourceLocation = { fileName: '/src/App.tsx', line: 11, column: 2 };
+    const LEAF_SRC: SourceLocation = { fileName: '/src/App.tsx', line: 13, column: 4 };
+
+    // Leaf starts cold; warm flips it without a pointermove (models async fetch completing).
+    let leafWarm = false;
+    const warmElementSource = mock((_el: HTMLElement) => {
+      // No immediate side effect — the async warm completes between moves, not inline.
+    });
+    const getSourceLocation = mock((el: HTMLElement): SourceLocation | null => {
+      if (el === source) return SRC;
+      if (el === container) return CONTAINER_SRC;
+      if (el === leaf) return leafWarm ? LEAF_SRC : null;
+      return null;
+    });
+    const ctx: DragHandlerContext = {
+      state: { engineMode: 'design', selectedIds: [] },
+      iframeResolver: { getSourceLocation, warmElementSource } as unknown as DragHandlerContext['iframeResolver'],
+      renderedComponentPath: '/src/App.tsx',
+      selectionGraceCache: { invalidateForFile: mock(() => {}) },
+      findElementsByRef: mock(() => []),
+    };
+
+    const posted: unknown[] = [];
+    const realPostMessage = window.parent.postMessage;
+    (window.parent as unknown as { postMessage: (m: unknown) => void }).postMessage = (m: unknown) => {
+      posted.push(m);
+    };
+    const realElementFromPoint = document.elementFromPoint;
+    // Cursor is always over the leaf (as in PI-5-DR-1).
+    (document as unknown as { elementFromPoint: (x: number, y: number) => Element | null }).elementFromPoint = () =>
+      leaf;
+
+    try {
+      _dragPointerDown(ctx, makePointerEvent(source, 10, 10));
+      _dragPointerMove(ctx, makePointerEvent(source, 40, 40)); // enter dragging
+
+      // Move 1: leaf cold → warmElementSource fires, but resolves to container.
+      // _dragPendingDrop = { targetId: container (11:2) } — the stale write.
+      _dragPointerMove(ctx, makePointerEvent(source, 200, 200));
+      expect(warmElementSource).toHaveBeenCalledWith(leaf);
+
+      // Async warm completes — no additional pointermove fires before the user releases.
+      leafWarm = true;
+
+      // Drop: pointerup must re-resolve and find the now-warm leaf, NOT use the stale pending.
+      _dragPointerUp(ctx, makePointerEvent(source, 200, 200));
+
+      const moveMsg = posted.find(
+        (m): m is { type: string; targetId: string } =>
+          typeof m === 'object' &&
+          m !== null &&
+          'type' in m &&
+          (m as { type?: string }).type === 'hypercanvas:moveElement',
+      );
+      expect(moveMsg).toBeDefined();
+      // The smoking gun: targetId is the LEAF (13:4), NOT the stale CONTAINER (11:2).
+      expect(moveMsg?.targetId).toBe('/src/App.tsx:13:4');
+      expect(moveMsg?.targetId).not.toBe('/src/App.tsx:11:2');
+    } finally {
+      (window.parent as unknown as { postMessage: typeof realPostMessage }).postMessage = realPostMessage;
+      (document as unknown as { elementFromPoint: typeof realElementFromPoint }).elementFromPoint =
+        realElementFromPoint;
+      source.remove();
+      container.remove();
+    }
+  });
+
+  // Guard the bug it fixes: WITHOUT warming, the same cold leaf resolves to the CONTAINER.
+  // This proves the test above is exercising the residual, not passing vacuously.
+  test('cold leaf with NO warm method resolves to the container (the residual being fixed)', () => {
+    const source = document.createElement('div');
+    source.textContent = 'source';
+    const container = document.createElement('div');
+    const leaf = document.createElement('div');
+    leaf.textContent = 'leaf';
+    container.appendChild(leaf);
+    document.body.append(source, container);
+
+    const SRC: SourceLocation = { fileName: '/src/App.tsx', line: 5, column: 2 };
+    const CONTAINER_SRC: SourceLocation = { fileName: '/src/App.tsx', line: 11, column: 2 };
+    const getSourceLocation = mock((el: HTMLElement): SourceLocation | null => {
+      if (el === source) return SRC;
+      if (el === container) return CONTAINER_SRC;
+      return null; // leaf is permanently cold (no warm method present)
+    });
+    const ctx: DragHandlerContext = {
+      state: { engineMode: 'design', selectedIds: [] },
+      // No warmElementSource: the optional-call guard skips it, leaf stays cold.
+      iframeResolver: { getSourceLocation } as unknown as DragHandlerContext['iframeResolver'],
+      renderedComponentPath: '/src/App.tsx',
+      selectionGraceCache: { invalidateForFile: mock(() => {}) },
+      findElementsByRef: mock(() => []),
+    };
+
+    const posted: unknown[] = [];
+    const realPostMessage = window.parent.postMessage;
+    (window.parent as unknown as { postMessage: (m: unknown) => void }).postMessage = (m: unknown) => {
+      posted.push(m);
+    };
+    const realElementFromPoint = document.elementFromPoint;
+    (document as unknown as { elementFromPoint: (x: number, y: number) => Element | null }).elementFromPoint = () =>
+      leaf;
+
+    try {
+      _dragPointerDown(ctx, makePointerEvent(source, 10, 10));
+      _dragPointerMove(ctx, makePointerEvent(source, 40, 40));
+      _dragPointerMove(ctx, makePointerEvent(source, 200, 200));
+      _dragPointerUp(ctx, makePointerEvent(source, 200, 200));
+
+      const moveMsg = posted.find(
+        (m): m is { type: string; targetId: string } =>
+          typeof m === 'object' &&
+          m !== null &&
+          'type' in m &&
+          (m as { type?: string }).type === 'hypercanvas:moveElement',
+      );
+      // Without warming, the cold leaf walks up to the container — the residual bug.
+      expect(moveMsg?.targetId).toBe('/src/App.tsx:11:2');
+    } finally {
+      (window.parent as unknown as { postMessage: typeof realPostMessage }).postMessage = realPostMessage;
+      (document as unknown as { elementFromPoint: typeof realElementFromPoint }).elementFromPoint =
+        realElementFromPoint;
+      source.remove();
+      container.remove();
+    }
+  });
+});
+
 describe('_normalizeEventTarget (shared by pointerdown + pointermove)', () => {
   test('passes a real HTMLElement through unchanged', () => {
     const el = document.createElement('div');

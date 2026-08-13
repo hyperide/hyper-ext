@@ -264,6 +264,15 @@ export class ElementTracer implements TracingResolver {
   }
 
   /**
+   * No-op: the SaaS tracer resolves drop targets from server-pushed node maps, not
+   * from client/RSC chunk source maps, so there is nothing to warm. Present to satisfy
+   * the shared TracingResolver contract consumed by drag-source resolution (HYP-31).
+   */
+  warmElementSource(_element: HTMLElement): void {
+    // intentionally empty — see method doc
+  }
+
+  /**
    * Find DOM elements for a nodeRef with itemIndex support.
    * When itemIndex is non-null, returns at most one element (specific .map() item).
    * When null, returns all elements rendered at that source location.

@@ -76,6 +76,16 @@ export interface TracingResolver {
   getItemIndex(element: HTMLElement): number;
   resolveClickLocal(element: HTMLElement): LocalResolveResult | null;
   findDOMElement(source: SourceLocation, itemIndex: number): HTMLElement | null;
+  /**
+   * Warm the source-map resolution for a drop-target element whose source is cold
+   * (React 19 / RSC, chunk maps not yet fetched), BEFORE resolveDragSource runs.
+   * Idempotent and cheap; a no-op for resolvers that don't do source-map warming
+   * (e.g. the SaaS ElementTracer, which resolves from server-pushed node maps).
+   * Warming is async, so callers must warm on each drag pointermove and defer the
+   * AST write to drop (pointerup), by which time the hovered leaf's map is warm —
+   * otherwise resolveDragSource walks up a cold leaf to its warm container (HYP-31).
+   */
+  warmElementSource?(element: HTMLElement): void;
 }
 
 export interface ClickHandlerCallbacks {
