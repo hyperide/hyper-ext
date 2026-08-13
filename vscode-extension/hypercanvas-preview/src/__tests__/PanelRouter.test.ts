@@ -1,25 +1,29 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import type { AstService } from '../services/AstService';
+import type { ComponentService } from '../services/ComponentService';
 
 /**
  * PanelRouter test.
  *
- * We mock leaf dependencies (AstService, ComponentService, etc.)
- * but let AstBridge and EditorBridge stay real — this avoids
- * mock.module conflicts with their own test files (bun mock.module
- * is global and can't be scoped per-file).
+ * We feed PanelRouter fake leaf services (AstService, ComponentService) through
+ * its constructor config — NOT mock.module. bun's mock.module is process-global
+ * and irreversible (mock.restore does not undo it), so module-level mocks of
+ * '../services/AstService' / '../services/ComponentService' here leaked the stubs
+ * into those services' own tests under a non-isolated run, failing them (HYP-579).
+ * Constructor injection keeps the fakes local. AstBridge and EditorBridge stay real.
  */
 
-// Leaf mocks — these don't have their own test files that would conflict
-mock.module('../services/AstService', () => ({
-  AstService: class {
-    ensureInitialized = mock(() => Promise.resolve());
-    updateStyles = mock(() => Promise.resolve({ success: true, className: 'c' }));
-    updateProps = mock(() => Promise.resolve({ success: true }));
-    insertElement = mock(() => Promise.resolve({ success: true, newId: 'n', index: 0 }));
-    deleteElements = mock(() => Promise.resolve({ success: true, data: {} }));
-    duplicateElement = mock(() => Promise.resolve({ success: true, newId: 'd' }));
-    updateText = mock(() => Promise.resolve({ success: true }));
-    wrapElement = mock(() => Promise.resolve({ success: true, wrapperId: 'w' }));
+/** Fake AstService PanelRouter receives via config.astService. */
+function createFakeAstService(): AstService {
+  return {
+    ensureInitialized: mock(() => Promise.resolve()),
+    updateStyles: mock(() => Promise.resolve({ success: true, className: 'c' })),
+    updateProps: mock(() => Promise.resolve({ success: true })),
+    insertElement: mock(() => Promise.resolve({ success: true, newId: 'n', index: 0 })),
+    deleteElements: mock(() => Promise.resolve({ success: true, data: {} })),
+    duplicateElement: mock(() => Promise.resolve({ success: true, newId: 'd' })),
+    updateText: mock(() => Promise.resolve({ success: true })),
+    wrapElement: mock(() => Promise.resolve({ success: true, wrapperId: 'w' })),
     get nodeMapService() {
       return {
         resolveNodeRef: () => null,
@@ -27,33 +31,30 @@ mock.module('../services/AstService', () => ({
         getNodeMap: () => [],
         getTrackedFiles: () => [],
       };
-    }
-  },
-}));
-mock.module('../services/ComponentService', () => ({
-  ComponentService: class {
-    _root: string;
-    _getApiKey: () => Promise<string | undefined>;
-    constructor(root: string, getApiKey: () => Promise<string | undefined>) {
-      this._root = root;
-      this._getApiKey = getApiKey;
-    }
-    scanComponentGroups = mock(() => Promise.resolve({ data: [], needsSetup: false }));
-    scanComponents = mock(() => Promise.resolve([]));
-    scanComponentTests = mock(() => Promise.resolve([]));
-    getComponent = mock(() => Promise.resolve(null));
-    parseStructure = mock(() => Promise.resolve(null));
-  },
-  parseComponentSource: () => null,
-}));
+    },
+  } as unknown as AstService;
+}
+
+/** Fake ComponentService PanelRouter receives via config.componentService. */
+function createFakeComponentService(): ComponentService {
+  return {
+    scanComponentGroups: mock(() => Promise.resolve({ data: [], needsSetup: false })),
+    scanComponents: mock(() => Promise.resolve([])),
+    scanComponentTests: mock(() => Promise.resolve([])),
+    getComponent: mock(() => Promise.resolve(null)),
+    parseStructure: mock(() => Promise.resolve(null)),
+  } as unknown as ComponentService;
+}
+
 // StyleReadService is NOT mocked — it's a leaf class with its own test file (StyleReadService.test.ts).
-// Mocking it here would poison that test file (bun mock.module is global).
-// AstService mock above provides nodeMapService returning null so StyleReadService
-// returns empty results without file I/O.
-// VSCodeFileIO is NOT mocked — its constructor is a no-op and AstService resolves
-// before VSCodeFileIO.readFile is reached. Mocking it with `class {}` would poison
-// VSCodeFileIO.test.ts (mock.module is global).
+// Mocking it here would poison that test file (bun mock.module is global). The injected AstService fake
+// provides a nodeMapService returning nulls so StyleReadService yields empty results without file I/O.
+// VSCodeFileIO is NOT mocked — its constructor is a no-op. The fs/promises mock below covers any read.
+// Spread the real module so this global mock can't break other test files (AGENTS.md global-mock rule).
+const realFsPromises = await import('node:fs/promises');
 mock.module('node:fs/promises', () => ({
+  ...realFsPromises,
+  default: realFsPromises,
   readFile: mock(() => Promise.resolve('file content')),
   mkdir: mock(() => Promise.resolve(undefined)),
   writeFile: mock(() => Promise.resolve(undefined)),
@@ -106,6 +107,8 @@ describe('PanelRouter', () => {
       workspaceRoot: '/test-workspace',
       stateHub: stateHub as never,
       context: createMockContext() as never,
+      astService: createFakeAstService(),
+      componentService: createFakeComponentService(),
     });
   });
 

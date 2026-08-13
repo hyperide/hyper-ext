@@ -5,20 +5,31 @@ import type { DevServerStatus } from '../types';
  * DevServerManager test — focuses on log parsing, state machine,
  * and callback wiring. Does NOT test actual process spawning.
  *
- * Only mock PreviewProxy (it reads build artifacts at import time).
  * Do NOT mock ProjectDetector — it loads fine without mocks and
  * a global mock would break ProjectDetector's own tests
  * (bun mock.module is global, not scoped per file).
+ *
+ * PreviewProxy reads iframe-*.js via fs.readFileSync AT IMPORT TIME, and those
+ * files only exist next to the bundled output, not in src/. Previously this file
+ * globally mock.module'd '../services/PreviewProxy' with a stub class — but that
+ * mock is process-global and IRREVERSIBLE (bun's mock.restore does not undo
+ * module mocks), so under a non-isolated run it leaked into
+ * PreviewProxy.serving.test.ts, whose assertions need the REAL proxy (the stub
+ * lacks setIsServing) — 3 spurious failures (HYP-579). The tests here never
+ * instantiate PreviewProxy anyway; every case that needs a proxy injects its own
+ * local `{ stop: mock() }` via Object.assign(manager, { _previewProxy }). So we
+ * only need the import to succeed: stub readFileSync for iframe-* (spreading real
+ * fs so every other read is untouched — AGENTS.md global-mock rule), exactly like
+ * PreviewProxy.serving.test.ts does. The real module then imports cleanly and
+ * nothing leaks.
  */
-
-// Mock PreviewProxy — it does fs.readFileSync at import time for
-// iframe scripts that only exist after esbuild build step.
-mock.module('../services/PreviewProxy', () => ({
-  PreviewProxy: class {
-    port = 9999;
-    url = 'http://localhost:9999';
-    start = mock(() => Promise.resolve());
-    stop = mock();
+const realFs = await import('node:fs');
+mock.module('node:fs', () => ({
+  ...realFs,
+  default: realFs,
+  readFileSync: (file: string, enc?: unknown) => {
+    if (typeof file === 'string' && file.includes('iframe-')) return '/* stub */';
+    return realFs.readFileSync(file as string, enc as never);
   },
 }));
 const {

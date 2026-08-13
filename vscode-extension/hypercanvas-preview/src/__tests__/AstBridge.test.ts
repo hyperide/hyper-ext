@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import type { AstService } from '../services/AstService';
 
-// Mock AstService — we test the bridge routing, not AST logic
+// Fake AstService — we test the bridge routing, not AST logic. Injected via
+// AstBridge's constructor (NOT mock.module). bun's mock.module is process-global
+// and irreversible, so a module-level mock of '../services/AstService' here leaked
+// the stub into AstService's own tests under a non-isolated run, failing them
+// (HYP-579). Constructor injection keeps the fake local to this file.
 const mockAstService = {
   updateStyles: mock(() => Promise.resolve({ success: true, className: 'text-red' })),
   updateProps: mock(() => Promise.resolve({ success: true })),
@@ -14,19 +19,20 @@ const mockAstService = {
   updateI18nKey: mock(() => Promise.resolve({ success: true, resolvedPath: '/workspace/Greet.tsx' })),
 };
 
-mock.module('../services/AstService', () => ({
-  AstService: class {
-    ensureInitialized = mock(() => Promise.resolve());
-    updateStyles = mockAstService.updateStyles;
-    updateProps = mockAstService.updateProps;
-    insertElement = mockAstService.insertElement;
-    deleteElements = mockAstService.deleteElements;
-    duplicateElement = mockAstService.duplicateElement;
-    updateText = mockAstService.updateText;
-    wrapElement = mockAstService.wrapElement;
-    pasteElement = mockAstService.pasteElement;
-    moveElement = mockAstService.moveElement;
-    updateI18nKey = mockAstService.updateI18nKey;
+/** Build the fake AstService instance AstBridge receives via DI. */
+function createFakeAstService(): AstService {
+  return {
+    ensureInitialized: mock(() => Promise.resolve()),
+    updateStyles: mockAstService.updateStyles,
+    updateProps: mockAstService.updateProps,
+    insertElement: mockAstService.insertElement,
+    deleteElements: mockAstService.deleteElements,
+    duplicateElement: mockAstService.duplicateElement,
+    updateText: mockAstService.updateText,
+    wrapElement: mockAstService.wrapElement,
+    pasteElement: mockAstService.pasteElement,
+    moveElement: mockAstService.moveElement,
+    updateI18nKey: mockAstService.updateI18nKey,
     get nodeMapService() {
       return {
         resolveNodeRef: () => null,
@@ -34,19 +40,19 @@ mock.module('../services/AstService', () => ({
         getNodeMap: () => [],
         getTrackedFiles: () => [],
       };
-    }
-  },
-}));
+    },
+  } as unknown as AstService;
+}
 
 // Real UndoRedoService is used — do NOT mock it (mock.module is global in bun,
 // would poison UndoRedoService.test.ts). vscode is already mocked via test/mock-vscode.ts preload.
-// VSCodeFileIO is NOT mocked — its constructor is a no-op and AstService is mocked above,
+// VSCodeFileIO is NOT mocked — its constructor is a no-op and the AstService fake is injected,
 // so VSCodeFileIO methods are never called by AstService. But _withUndoTracking now calls
 // readFile directly — we control this via workspace.textDocuments mock.
 
 import * as vscode from 'vscode';
 
-const { AstBridge } = await import('../bridges/AstBridge');
+import { AstBridge } from '../bridges/AstBridge';
 
 function createMockWebview() {
   const messages: unknown[] = [];
@@ -96,7 +102,7 @@ describe('AstBridge', () => {
   let bridge: InstanceType<typeof AstBridge>;
 
   beforeEach(() => {
-    bridge = new AstBridge('/workspace');
+    bridge = new AstBridge('/workspace', createFakeAstService());
     for (const fn of Object.values(mockAstService)) {
       fn.mockClear();
     }

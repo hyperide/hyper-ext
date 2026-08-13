@@ -47,10 +47,17 @@ export class AstBridge {
    */
   private _subProjectPrefix = '';
 
-  constructor(workspaceRoot: string) {
+  /**
+   * @param astService Optional pre-built AstService. Production passes nothing
+   *   and gets the real repo-rooted service. Tests inject a fake here instead of
+   *   `mock.module('../services/AstService')`, whose process-global, irreversible
+   *   module mock leaked into AstService's own tests under a non-isolated run
+   *   (HYP-579). The default preserves the original construction exactly.
+   */
+  constructor(workspaceRoot: string, astService?: AstService) {
     this._workspaceRoot = workspaceRoot;
     this._fileIO = new VSCodeFileIO();
-    this._astService = new AstService(workspaceRoot, this._fileIO);
+    this._astService = astService ?? new AstService(workspaceRoot, this._fileIO);
     this._undoRedoService = new UndoRedoService(workspaceRoot);
   }
 

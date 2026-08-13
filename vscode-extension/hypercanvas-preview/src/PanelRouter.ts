@@ -16,6 +16,7 @@ import { AstBridge } from './bridges/AstBridge';
 import { toRepoRelativeElementId, toRepoRelativePath } from './bridges/monorepo-path-translate';
 import { type EditorMessage, handleEditorMessage } from './EditorBridge';
 import type { StateHub } from './StateHub';
+import type { AstService } from './services/AstService';
 import type { ColorProbeCandidate, ColorProbeRequest } from './services/color-probe-types';
 import { ComponentService } from './services/ComponentService';
 import { StyleReadService } from './services/StyleReadService';
@@ -26,6 +27,18 @@ interface PanelRouterConfig {
   workspaceRoot: string;
   stateHub: StateHub;
   context: vscode.ExtensionContext;
+  /**
+   * Optional pre-built leaf services for tests. Production omits both and gets
+   * the real repo-rooted services. Tests inject fakes here instead of
+   * `mock.module('../services/AstService' | '../services/ComponentService')`,
+   * whose process-global, irreversible module mocks leaked into those services'
+   * own tests under a non-isolated run (HYP-579). Both default to the original
+   * construction, so production behavior is unchanged. Injected instances are
+   * only used for the initial workspace; a later workspace switch
+   * (`_ensureCurrentWorkspace`) rebuilds the real services, which tests never hit.
+   */
+  astService?: AstService;
+  componentService?: ComponentService;
 }
 
 export class PanelRouter {
@@ -69,10 +82,10 @@ export class PanelRouter {
   private _subProjectPrefix = '';
 
   constructor(config: PanelRouterConfig) {
-    this._astBridge = new AstBridge(config.workspaceRoot);
+    this._astBridge = new AstBridge(config.workspaceRoot, config.astService);
     this._stateHub = config.stateHub;
     this._context = config.context;
-    this._componentService = this._createComponentService(config.workspaceRoot);
+    this._componentService = config.componentService ?? this._createComponentService(config.workspaceRoot);
     this._styleReadService = this._createStyleReadService(config.workspaceRoot);
     this._workspaceRoot = config.workspaceRoot;
   }
