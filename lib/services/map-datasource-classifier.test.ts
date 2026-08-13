@@ -233,6 +233,51 @@ describe('classifyMapDataSource', () => {
       `;
       expect(classifyMapDataSource('', source).category).toBe('generator');
     });
+
+    it('does not crash on a top-level name collision; degrades to generator (HYP-789)', () => {
+      // HYP-789 — read-path crash class (sibling of HYP-784/HYP-785). A file whose
+      // user import collides with a same-named top-level declaration —
+      // `import { Layout } from 'antd'` + `export function Layout` — parses fine,
+      // but babel's SCOPE crawl (which this classifier needs for binding
+      // resolution, so it can't be noScope-routed like the structural walks)
+      // throws `Duplicate declaration "Layout"` while resolving the receiver's
+      // binding. Before the fix this threw uncaught out of classifyMapDataSource;
+      // it must instead degrade to the safe generator/AI path.
+      const source = `
+        import { Layout } from 'antd';
+
+        export function Layout() {
+          const items = [1, 2, 3];
+          return <ul>{items.map((i) => <li key={i}>{i}</li>)}</ul>;
+        }
+      `;
+      let result: ReturnType<typeof classifyMapDataSource> | undefined;
+      expect(() => {
+        result = classifyMapDataSource('items', source);
+      }).not.toThrow();
+      // Unresolvable under the collision → category 4 (the safe AI fallback),
+      // same outcome as when no binding is found.
+      expect(result?.category).toBe('generator');
+      if (result?.category === 'generator') {
+        expect(result.reason).toBe('unresolved');
+      }
+    });
+
+    it('still classifies a normal (non-colliding) datasource correctly after the guard (HYP-789)', () => {
+      // Guard: the collision try/catch must NOT change the normal path. The same
+      // shape as the collision case minus the name clash must classify cleanly —
+      // proving the catch only fires on the scope-crawl failure, never otherwise.
+      const source = `
+        import { Sidebar } from 'antd';
+
+        export function MyLayout() {
+          const items = [1, 2, 3];
+          return <ul>{items.map((i) => <li key={i}>{i}</li>)}</ul>;
+        }
+      `;
+      const result = classifyMapDataSource('items', source);
+      expect(result.category).toBe('literal-array');
+    });
   });
 });
 
@@ -306,5 +351,29 @@ describe('attachMapDataSourceCategories (HYP-290h)', () => {
     // Must not throw; plain nodes get no category.
     attachMapDataSourceCategories(tree as never, 'not <<< valid');
     expect(tree[0].mapItem).toBeUndefined();
+  });
+
+  it('does not crash the read path on a top-level name collision (HYP-789, real entry point)', () => {
+    // This is the production entry point parseComponent calls. With a top-level
+    // name collision in the source (HYP-784/785 class), the per-node
+    // classifyMapDataSource scope crawl threw uncaught here BEFORE the fix —
+    // crashing the whole parse-component read path. It must now tag the map node
+    // with the safe `generator` fallback instead.
+    const source = `
+      import { Layout } from 'antd';
+
+      export function Layout({ items }) {
+        return <ul>{items.map((i) => <li key={i}>{i}</li>)}</ul>;
+      }
+    `;
+    const tree: MapNode[] = [
+      {
+        id: 'item-1',
+        type: 'li',
+        mapItem: { parentMapId: 'map-items', depth: 0, expression: 'items' },
+      },
+    ];
+    expect(() => attachMapDataSourceCategories(tree as never, source)).not.toThrow();
+    expect(tree[0].mapItem?.category).toBe('generator');
   });
 });

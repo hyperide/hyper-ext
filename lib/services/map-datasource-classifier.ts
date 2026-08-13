@@ -212,15 +212,49 @@ function classifyBinding(rootName: string, isMember: boolean, source: string): M
   // `getBinding` returns a stable object per binding within one traverse, so a
   // Set deduplicates references that resolve to the same declaration.
   const bindings = new Set<{ kind: string; path: NodePath }>();
-  traverse(ast, {
-    Identifier(path: NodePath<t.Identifier>) {
-      if (path.node.name !== rootName) return;
-      // Skip declaration sites and property keys — we want use-site references.
-      if (!path.isReferencedIdentifier()) return;
-      const binding = path.scope.getBinding(rootName);
-      if (binding) bindings.add(binding);
-    },
-  });
+  try {
+    // SCOPE-ENABLED crawl (deliberately NOT traverseWithoutScope): the visitor
+    // reads `path.scope.getBinding` + `isReferencedIdentifier`, which genuinely
+    // need babel's scope, so this site cannot be noScope-routed like the
+    // structural walks were (HYP-785 / #542/#543/#545).
+    //
+    // HYP-789: that scope crawl is the same one that throws on a top-level name
+    // collision — e.g. a file with `import { Layout } from 'antd'` AND
+    // `export function Layout`. `@babel/parser` tolerates the duplicate, but the
+    // scope crawl's binding registration does not, and it throws while building
+    // the "Duplicate declaration" error. The throw is structurally confined to
+    // this `traverse` call: the parse already succeeded above (its own try/catch),
+    // and `Set#add` cannot fail — so the only failure mode here is the scope crawl.
+    // Degrade gracefully instead of propagating an uncaught throw out of the
+    // read path (which would crash classification and trip the preview's
+    // console.error gate, HYP-784): treat the receiver as unresolvable and defer
+    // to the safe generator/AI path — identical to the `bindings.size === 0`
+    // outcome below, so the normal (non-colliding) path is unchanged.
+    traverse(ast, {
+      Identifier(path: NodePath<t.Identifier>) {
+        if (path.node.name !== rootName) return;
+        // Skip declaration sites and property keys — we want use-site references.
+        if (!path.isReferencedIdentifier()) return;
+        const binding = path.scope.getBinding(rootName);
+        if (binding) bindings.add(binding);
+      },
+    });
+  } catch (err) {
+    // The catch stays broad on purpose: narrowing by error type/message is unsafe
+    // here. On a real collision babel throws a TypeError while *building* the
+    // "Duplicate declaration" error (`this.path.hub.buildError` — the bare-File
+    // traverse has no hub), NOT a SyntaxError, so an `instanceof SyntaxError` /
+    // message-match guard would rethrow the very crash this fix exists to absorb.
+    // The block is already structurally confined to the scope crawl (parse is
+    // guarded above, Set#add can't fail), so a throw is the collision. Log it so a
+    // future visitor regression is diagnosable instead of silently masked, then
+    // degrade to the safe generator/AI path.
+    console.warn(
+      `[map-datasource-classifier] scope resolution failed for "${rootName}", defaulting to generator:`,
+      err,
+    );
+    return generatorResult('unresolved');
+  }
 
   if (bindings.size === 0) return generatorResult('unresolved');
   if (bindings.size > 1) return generatorResult('ambiguous');
