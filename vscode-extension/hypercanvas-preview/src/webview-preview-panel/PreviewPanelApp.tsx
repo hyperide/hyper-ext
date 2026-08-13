@@ -290,6 +290,7 @@ function PreviewContent() {
       {isReadonly && !readonlyDismissed && (
         <ReadonlyStubScreen
           cssSystem={projectCapabilities?.cssSystem ?? 'unknown'}
+          projectType={projectCapabilities?.projectType}
           renderSucceeded={devServerRunning && !componentError && !showNoComponentHint}
           onContinueReadonly={() => setReadonlyDismissed(true)}
         />
@@ -361,35 +362,47 @@ function NoComponentHint() {
 // Readonly Stub — shown for CSS systems that can render but not edit
 // ============================================================================
 
-const SUPPORTED_CSS_TABLE: Array<{ name: string; supported: boolean }> = [
-  { name: 'Tailwind CSS', supported: true },
-  { name: 'CSS Modules', supported: true },
-  { name: 'styled-components', supported: true },
-  { name: 'Emotion', supported: true },
-  { name: 'Tamagui', supported: true },
-  { name: 'shadcn/ui', supported: true },
-  { name: 'DaisyUI', supported: true },
-  { name: 'MUI (Material UI)', supported: false },
-  { name: 'Ant Design', supported: false },
-  { name: 'Chakra UI', supported: false },
-  { name: 'Mantine', supported: false },
-  { name: 'Fluent UI', supported: false },
-  { name: 'NextUI', supported: false },
-  { name: 'Vanilla Extract', supported: false },
-  { name: 'Panda CSS', supported: false },
-  { name: 'UnoCSS', supported: false },
-  { name: 'StyleX', supported: false },
+const SUPPORTED_CSS_TABLE: Array<{ name: string; key: string; supported: boolean }> = [
+  { name: 'Tailwind CSS', key: 'tailwind', supported: true },
+  { name: 'CSS Modules', key: 'cssmodules', supported: true },
+  { name: 'styled-components', key: 'styled-components', supported: true },
+  { name: 'Emotion', key: 'emotion', supported: true },
+  { name: 'Tamagui', key: 'tamagui', supported: true },
+  { name: 'shadcn/ui', key: 'shadcn', supported: true },
+  { name: 'DaisyUI', key: 'daisyui', supported: true },
+  { name: 'MUI (Material UI)', key: 'mui', supported: false },
+  { name: 'Ant Design', key: 'antd', supported: false },
+  { name: 'Chakra UI', key: 'chakra', supported: false },
+  { name: 'Mantine', key: 'mantine', supported: false },
+  { name: 'Fluent UI', key: 'fluentui', supported: false },
+  { name: 'NextUI', key: 'nextui', supported: false },
+  { name: 'Vanilla Extract', key: 'vanilla-extract', supported: false },
+  { name: 'Panda CSS', key: 'pandacss', supported: false },
+  { name: 'UnoCSS', key: 'unocss', supported: false },
+  { name: 'StyleX', key: 'stylex', supported: false },
 ];
+
+const PROJECT_TYPE_LABELS: Record<string, string> = {
+  vite: 'Vite',
+  nextjs: 'Next.js',
+  cra: 'CRA',
+  remix: 'Remix',
+  webpack: 'webpack',
+  unknown: 'Unknown bundler',
+};
 
 function ReadonlyStubScreen({
   cssSystem,
+  projectType,
   renderSucceeded,
   onContinueReadonly,
 }: {
   cssSystem: string;
+  projectType?: string;
   renderSucceeded: boolean;
   onContinueReadonly: () => void;
 }) {
+  const projectLabel = projectType ? (PROJECT_TYPE_LABELS[projectType] ?? projectType) : 'Unknown bundler';
   return (
     <div
       data-testid="hyper-preview-readonly-stub"
@@ -403,16 +416,16 @@ function ReadonlyStubScreen({
     >
       <div style={warningIconStyle}>🔒</div>
       <h2 style={headingStyle}>Readonly mode</h2>
-      <p style={{ ...subtextStyle, maxWidth: 480 }}>
-        Visual editing is not available for this project — the CSS system is <strong>{cssSystem}</strong>, but the
-        bundler (Next.js / Remix) does not yet support AST-based style writes. The CSS framework itself may be editable
-        on Vite / webpack — see the table below.
+      <p style={{ ...subtextStyle, maxWidth: 480, marginBottom: 4 }}>
+        Visual editing is not available — <strong>{projectLabel}</strong> does not support AST-based style writes. The
+        CSS framework <strong>{cssSystem}</strong> is compatible; editing will work once the project uses a supported
+        bundler (Vite, webpack, Next.js).
         {renderSucceeded
           ? ' Preview rendered successfully — you can inspect computed styles in readonly mode.'
           : ' Waiting for preview to render...'}
       </p>
 
-      <table style={{ margin: '16px 0', borderCollapse: 'collapse', fontSize: 12, color: '#ccc' }}>
+      <table style={{ margin: '12px 0', borderCollapse: 'collapse', fontSize: 12, color: '#ccc' }}>
         <thead>
           <tr>
             <th style={{ textAlign: 'left', padding: '4px 12px', borderBottom: '1px solid #555' }}>CSS Framework</th>
@@ -420,12 +433,23 @@ function ReadonlyStubScreen({
           </tr>
         </thead>
         <tbody>
-          {SUPPORTED_CSS_TABLE.map((row) => (
-            <tr key={row.name} style={{ opacity: row.supported ? 1 : 0.6 }}>
-              <td style={{ padding: '3px 12px' }}>{row.name}</td>
-              <td style={{ textAlign: 'center', padding: '3px 12px' }}>{row.supported ? '✅' : '—'}</td>
-            </tr>
-          ))}
+          {SUPPORTED_CSS_TABLE.map((row) => {
+            const isDetected = row.key === cssSystem;
+            return (
+              <tr key={row.name} style={{ opacity: row.supported ? 1 : 0.6 }}>
+                <td
+                  style={{
+                    padding: '3px 12px',
+                    fontWeight: isDetected ? 700 : 400,
+                    color: isDetected ? '#fff' : undefined,
+                  }}
+                >
+                  {row.name}
+                </td>
+                <td style={{ textAlign: 'center', padding: '3px 12px' }}>{row.supported ? '✅' : '—'}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 

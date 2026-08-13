@@ -76,6 +76,8 @@ export interface ProjectCapabilities {
   cssSystem: CssSystem;
   /** Detected UI kit ('tailwind' | 'tamagui' | 'none') — backward compat */
   uiKit: 'tailwind' | 'tamagui' | 'none';
+  /** Detected project/bundler type */
+  projectType?: ProjectType;
   /** Whether the extension can write styles (AST mutations) */
   canWriteStyles: boolean;
   /** Whether the preview can render (Vite/webpack dev server works) */

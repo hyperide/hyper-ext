@@ -356,6 +356,7 @@ export function computeCapabilities(
   return {
     cssSystem,
     uiKit,
+    projectType,
     canWriteStyles,
     canRender,
     readonly: canRender && !canWriteStyles,

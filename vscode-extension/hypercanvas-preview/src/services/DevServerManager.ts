@@ -15,7 +15,9 @@ import { PreviewProxy } from './PreviewProxy';
 import { detectPackageManager, getPackageScripts, getProjectInfo } from './ProjectDetector';
 
 const MAX_LOG_ENTRIES = 200;
-const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+// Strips all ANSI/VT escape sequences: CSI (ESC[...final), OSC (ESC]...BEL/ST), and bare ESC+char.
+// CSI pattern covers color codes AND terminal mode sequences like \x1b[?2004h that Bun emits.
+const ANSI_ESCAPE_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[A-Z\\[\]^_@]/g;
 type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
 
 export interface LogEntry {
@@ -735,7 +737,9 @@ export class DevServerManager {
     if (!Number.isFinite(detectedPort) || detectedPort <= 0 || detectedPort > 65535) return;
     this._portDetected = true;
     if (detectedPort === this._port) return;
+    const msg = `[DevServer] Port auto-corrected: ${this._port} → ${detectedPort} (server ignored PORT env var)`;
     console.log(`[HyperIDE] DevServer bound to port ${detectedPort} (assigned ${this._port}), correcting proxy target`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    this._outputChannel.appendLine(msg);
     this._port = detectedPort;
     this._previewProxy.setTargetPort(detectedPort);
   }
