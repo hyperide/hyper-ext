@@ -156,7 +156,13 @@ describe('ReactAdapter', () => {
       expect(withResolver.getSourceLocation(el)).toEqual(mapped);
     });
 
-    it('getSourceLocation falls back to raw fiber parsing when the resolver misses', () => {
+    it('getSourceLocation returns null for a React-19 fiber when the resolver misses (does NOT commit the compiled _debugStack seed) — HYP-974', () => {
+      // The Hero.tsx:19:21 frame is a COMPILED jsxDEV position (past the real file's EOF). When the
+      // source map is cold (resolveFiberSource → null) the adapter must NOT fall back to it —
+      // committing it gives an unresolvable nodeRef and every inspector style write fails. Returns
+      // null so the click defers to the ClickRetryQueue warm-retry / server resolve-element, which
+      // re-resolves the mapped original position once the module's map lands. (Mirrors the extension
+      // iframe-resolver getSourceLocation suppression — both platforms behave identically.)
       const withResolver = new ReactAdapter(undefined, { resolveFiberSource: () => null });
       const fiber = mockFiber({
         _debugStack: {
@@ -165,7 +171,36 @@ describe('ReactAdapter', () => {
       });
       const el = withFiber(fiber);
 
-      expect(withResolver.getSourceLocation(el)).toEqual({ fileName: 'src/components/Hero.tsx', line: 19, column: 20 });
+      expect(withResolver.getSourceLocation(el)).toBeNull();
+    });
+
+    it('getSourceLocation with NO resolver returns the raw React-19 _debugStack position (documented standalone contract) — HYP-974', () => {
+      // A standalone/legacy `new ReactAdapter()` has NO source-map resolver — there is no
+      // warm-retry / server-resolve path to defer to. Suppressing the raw seed there would make
+      // React-19 tracing UNtraceable, regressing the documented ReactAdapterOptions contract
+      // ("raw fiber parsing as fallback"). Suppression is gated on a configured resolver, so the
+      // no-resolver adapter still returns the raw parsed position.
+      const bare = new ReactAdapter(); // no resolveFiberSource
+      const fiber = mockFiber({
+        _debugStack: { stack: 'Error\n    at Hero (http://localhost:8080/src/components/Hero.tsx:19:21)' } as Error,
+      });
+      expect(bare.getSourceLocation(withFiber(fiber))).toEqual({
+        fileName: 'src/components/Hero.tsx',
+        line: 19,
+        column: 20,
+      });
+    });
+
+    it('getSourceLocation STILL falls back to the React-18 _debugSource when the resolver misses (no over-suppression) — HYP-974', () => {
+      // React 18 sets `_debugSource` — a REAL original position, not a compiled frame. When the
+      // injected resolver misses, the adapter must still return it (only raw React-19 `_debugStack`
+      // seeds are suppressed). findNearestDebugSource finds the _debugSource, so it is not treated
+      // as an unsymbolicated React-19 fiber.
+      const withResolver = new ReactAdapter(undefined, { resolveFiberSource: () => null });
+      const fiber = mockFiber({ _debugSource: { fileName: 'src/components/Hero.tsx', lineNumber: 7, columnNumber: 5 } });
+      const el = withFiber(fiber);
+
+      expect(withResolver.getSourceLocation(el)).toEqual({ fileName: 'src/components/Hero.tsx', line: 7, column: 4 });
     });
 
     it('getComponentChain sources go through the injected resolver', () => {

@@ -101,9 +101,31 @@ export function findNearestDebugSource(fiber: Fiber | null): DebugSource | null 
     if (fromType !== null) {
       return fromType;
     }
-    current = current.return;
+    // React 19 may set the root fiber's `.return` to `undefined` (not `null`). Normalise so the
+    // `!== null` loop guard terminates instead of dereferencing `undefined._debugSource` — for a
+    // React-19 tree with NO `_debugSource` anywhere this walks to the root every call
+    // (`isUnsymbolicatedReact19Fiber`, HYP-974), so an unguarded `undefined` would crash there.
+    current = (current.return as Fiber | null | undefined) ?? null;
   }
   return null;
+}
+
+/**
+ * True when a fiber's nearest source can ONLY come from a raw React-19 `_debugStack`
+ * frame — i.e. there is no React-18 `_debugSource` anywhere up its `.return` chain.
+ *
+ * `_debugSource` (React ≤18) and `_debugStack` (React 19) are set by the React RUNTIME at
+ * fiber creation and are mutually exclusive per React version (see the field docs above), so
+ * a whole fiber tree is uniformly one or the other — no `_debugSource` anywhere ⇒ React 19.
+ * For such a fiber, `findNearestSourceLocation` returns a `parseDebugStack` result, which under
+ * Vite/jsxDEV is the COMPILED position in the transformed module (a line often past the real
+ * file's EOF), NOT an original source. That frame is only an INPUT to source-map symbolication
+ * and must NEVER be committed as a source: when the source map is cold, callers suppress it and
+ * defer to the warm-retry instead of committing an unresolvable position (HYP-974 — the leaf
+ * seed on the click path AND the `getSourceLocation` fallback both route through here).
+ */
+export function isUnsymbolicatedReact19Fiber(fiber: Fiber | null): boolean {
+  return fiber !== null && findNearestDebugSource(fiber) === null;
 }
 
 /* ─── Comparison ─────────────────────────────────────────────────── */

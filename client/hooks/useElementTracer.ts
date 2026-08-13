@@ -7,12 +7,11 @@
  */
 
 import { findNearestSourceLocation } from '@shared/element-tracing/fiber-internals';
-import { getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-index';
-import type { SourceLocation } from '@shared/element-tracing/types';
 import { useEffect, useRef, useState } from 'react';
 import { setActiveTracer } from '@/lib/element-tracing/active-tracer';
 import { ClickRetryQueue } from '@/lib/element-tracing/click-retry-queue';
 import { ElementTracer } from '@/lib/element-tracing/element-tracer';
+import { createFiberSourceResolvers } from '@/lib/element-tracing/fiber-source-resolvers';
 import { FiberSourceIndex, hookIntoReactCommits } from '@/lib/element-tracing/fiber-source-index';
 import type { Fiber } from '@/lib/element-tracing/fiber-utils';
 import { FiberTag, getFiberFromDOM } from '@/lib/element-tracing/fiber-utils';
@@ -149,8 +148,6 @@ export function useElementTracer({
       // React 19 _debugStack frames carry Vite-TRANSFORMED module coords (HYP-594) —
       // map them back to ORIGINAL source coords through the module's own source map so
       // FiberSourceIndex keys and click resolution match server AST/node-map positions.
-      // Mirrors the extension's iframe-resolver composition: platform source-map
-      // resolver first, raw fiber parsing as fallback.
       let invalidateSourceIndex: (() => void) | null = null;
       let clickRetryQueue: ClickRetryQueue | null = null;
       const moduleSourceMapResolver = new ModuleSourceMapResolver({
@@ -161,10 +158,17 @@ export function useElementTracer({
           clickRetryQueue?.notifyResolved();
         },
       });
-      const resolveFiberSource = (fiber: Fiber): SourceLocation | null =>
-        moduleSourceMapResolver.resolveFiberSource(fiber) ?? getOwnFiberSourceLocation(fiber);
+      // Two resolvers, NOT one (HYP-974): the ReactAdapter leaf-seed path is MAPPED-ONLY so a
+      // cold-map React-19 fiber returns null and the adapter's `isUnsymbolicatedReact19Fiber`
+      // guard defers instead of committing the raw compiled `_debugStack` seed; the
+      // FiberSourceIndex path keeps the folded (mapped ?? own compiled) resolver because the
+      // index has no `_debugSource` fallback and needs a stable per-element key. Mirrors the
+      // extension's iframe-resolver (mapped-only leaf seed + folded index resolver). See
+      // fiber-source-resolvers.ts for the full rationale.
+      const { forAdapter: resolveMappedFiberSource, forSourceIndex: resolveFiberSource } =
+        createFiberSourceResolvers(moduleSourceMapResolver);
 
-      const adapter = new ReactAdapter(doc, { resolveFiberSource });
+      const adapter = new ReactAdapter(doc, { resolveFiberSource: resolveMappedFiberSource });
 
       // Patch: ReactAdapter.getSourceIndex() internally uses findReactRoot which has
       // `instanceof HTMLElement` (Bun-cached, fails cross-realm). Override sourceIndex

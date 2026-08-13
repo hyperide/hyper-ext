@@ -59,7 +59,7 @@ describe('call-site mapper: distinguishes COLD (warm it) from definitive NULL (s
     const warmedFiber: Fiber[] = [];
     const ctx = {
       renderedComponentPath: 'src/App.tsx',
-      pendingClickElement: null as HTMLElement | null,
+      pendingClickElement: { current: null as HTMLElement | null },
       pendingClickTimestamp: { value: 0 },
       warmServerChunkFrames: (f: Fiber) => warmedServer.push(f),
       warmFiberChunkFrames: (f: Fiber) => warmedFiber.push(f),
@@ -116,7 +116,7 @@ describe('call-site mapper: distinguishes COLD (warm it) from definitive NULL (s
     // Feed.tsx:65:84 line. resolveClickLocal is side-effect-free for hover reuse: no pending
     // click is registered.
     expect(result?.nodeRef).toBe('src/components/Tweet.tsx:20:3');
-    expect(ctx.pendingClickElement).toBeNull();
+    expect(ctx.pendingClickElement.current).toBeNull();
     // The cold call-site frame was warmed so the NEXT pass resolves the true call site.
     expect(warmedFiber).toContain(callSite);
   });
@@ -133,7 +133,7 @@ describe('call-site mapper: distinguishes COLD (warm it) from definitive NULL (s
     const result = resolver.resolveClickLocal(attach({}, leaf));
 
     expect(result?.nodeRef).toBe('src/components/Feed.tsx:46:10');
-    expect(ctx.pendingClickElement).toBeNull();
+    expect(ctx.pendingClickElement.current).toBeNull();
   });
 
   test('an ancestor with NO unresolved frame (definitive/frameless) is SKIPPED, not treated as cold — walk reaches the warm call site (Codex P1 #3)', () => {
@@ -151,6 +151,199 @@ describe('call-site mapper: distinguishes COLD (warm it) from definitive NULL (s
 
     // Walked PAST the frameless ancestor to the WARM Feed call site — not stuck on the leaf.
     expect(result?.nodeRef).toBe('src/components/Feed.tsx:46:10');
+  });
+});
+
+describe('resolveClickLocal LEAF seed: never commit a raw React-19 compiled _debugStack position (HYP-970 residual)', () => {
+  // react-vite-tw4-twitter: clicking a host <div> written DIRECTLY in the rendered App.tsx.
+  // Under React 19 + Vite the leaf's OWN _debugStack first frame is the COMPILED position in the
+  // jsxDEV-transformed App.tsx module (e.g. src/App.tsx:101:32 — past the 58-line source's EOF),
+  // NOT the original source. getSourceLocationFromDOM (parseDebugStack) hands this compiled frame
+  // to resolveClickLocal as the seed. Because compiled+original share the SAME fileName (Vite
+  // transforms in-place), resolveCallSiteTarget's isFromRenderedFile short-circuit returns it
+  // verbatim — so the cross-file mapper HYP-970 added to the ancestor walk never sees it. When the
+  // client source map is COLD, the compiled seed must NOT be committed: AstService can't resolve
+  // line 101 and EVERY inspector style write fails ("Element not found"/"Style update failed").
+  // DevTools-faithful rule: a raw _debugStack frame is only an INPUT to symbolication; if unmapped,
+  // warm + defer (retryPendingClick re-resolves once the map lands), never emit the compiled line.
+  const APP_URL = 'http://localhost:5173/src/App.tsx';
+
+  function attach(el: object, fiber: Fiber): HTMLElement {
+    (el as Record<'__reactFiber$test', Fiber>).__reactFiber$test = fiber;
+    return el as HTMLElement;
+  }
+  function makeCtx() {
+    const warmedFiber: Fiber[] = [];
+    const ctx = {
+      renderedComponentPath: 'src/App.tsx',
+      pendingClickElement: { current: null as HTMLElement | null },
+      pendingClickTimestamp: { value: 0 },
+      warmServerChunkFrames: (_f: Fiber) => {},
+      warmFiberChunkFrames: (f: Fiber) => warmedFiber.push(f),
+    };
+    return { ctx, warmedFiber };
+  }
+
+  test('COLD compiled leaf frame in the rendered file → DEFERS (never commits the compiled src/App.tsx:101 line)', () => {
+    // Leaf's own frame src/App.tsx:101:32 is COMPILED and NOT cached (cold).
+    const leaf = makeFiberWithFrame(APP_URL, 101, 32);
+    const { ctx, warmedFiber } = makeCtx();
+    const resolver = createIframeResolver(ctx);
+
+    const result = resolver.resolveClickLocal(attach({}, leaf));
+
+    // Must NOT commit the compiled position (line 101 does not exist in the 58-line source).
+    expect(result).toBeNull();
+    // Deferred to the warm-retry: pending click registered + the leaf's own frame warmed so the
+    // NEXT pass (retryPendingClick) resolves the mapped original position.
+    expect(ctx.pendingClickElement.current).not.toBeNull();
+    expect(warmedFiber).toContain(leaf);
+  });
+
+  test('WARM compiled leaf frame → commits the source-map-MAPPED original position (src/App.tsx:46:8)', () => {
+    // The same compiled frame, now warmed: the map resolves src/App.tsx:101:32 → the real App.tsx:46:8.
+    clientSourceMapCache.set(`${APP_URL}:101:32`, { fileName: 'src/App.tsx', line: 46, column: 8 });
+    const leaf = makeFiberWithFrame(APP_URL, 101, 32);
+    const { ctx } = makeCtx();
+    const resolver = createIframeResolver(ctx);
+
+    const result = resolver.resolveClickLocal(attach({}, leaf));
+
+    expect(result?.nodeRef).toBe('src/App.tsx:46:8');
+    expect(ctx.pendingClickElement.current).toBeNull();
+  });
+
+  test('React-18 _debugSource leaf in the rendered file is STILL trusted without a source map (no over-defer)', () => {
+    // React 18 projects: getSourceLocationFromDOM returns a REAL original position from
+    // _debugSource — the seed must be committed directly, never deferred. Guards the fix from
+    // regressing the _debugSource path (conloca-style resolution stays intact).
+    const leaf = {
+      tag: 5,
+      type: 'div',
+      stateNode: null,
+      return: null,
+      child: null,
+      sibling: null,
+      memoizedProps: {},
+      _debugSource: { fileName: 'src/App.tsx', lineNumber: 12, columnNumber: 7 },
+      _debugStack: null,
+      _debugOwner: null,
+    } as unknown as Fiber;
+    const { ctx } = makeCtx();
+    const resolver = createIframeResolver(ctx);
+
+    const result = resolver.resolveClickLocal(attach({}, leaf));
+
+    // _debugSource.columnNumber is 1-based → SourceLocation.column 0-based (7 → 6).
+    expect(result?.nodeRef).toBe('src/App.tsx:12:6');
+    expect(ctx.pendingClickElement.current).toBeNull();
+  });
+});
+
+describe('getSourceLocation FALLBACK: never return a raw compiled React-19 seed (HYP-974 companion)', () => {
+  // click-handler.ts falls back to resolver.getSourceLocation(target) when resolveClickLocal
+  // returns null (a deliberate defer). If getSourceLocation re-derives the SAME compiled
+  // `_debugStack` seed and returns it, the extension commits it (onElementClick →
+  // computeEffectiveRef(null, source) = src/App.tsx:101:32) and the defer is defeated — the past-EOF
+  // nodeRef still fails every style write. getSourceLocation must suppress the compiled cold seed
+  // too, so the fallback yields null and the click defers to the warm-retry.
+  const APP_URL = 'http://localhost:5173/src/App.tsx';
+
+  function attach(el: object, fiber: Fiber): HTMLElement {
+    (el as Record<'__reactFiber$test', Fiber>).__reactFiber$test = fiber;
+    return el as HTMLElement;
+  }
+  function makeCtx() {
+    return {
+      renderedComponentPath: 'src/App.tsx',
+      pendingClickElement: { current: null as HTMLElement | null },
+      pendingClickTimestamp: { value: 0 },
+      warmServerChunkFrames: (_f: Fiber) => {},
+      warmFiberChunkFrames: (_f: Fiber) => {},
+    };
+  }
+
+  test('COLD compiled leaf frame → getSourceLocation returns null (suppresses the compiled seed)', () => {
+    const leaf = makeFiberWithFrame(APP_URL, 101, 32); // cold, not cached
+    const resolver = createIframeResolver(makeCtx());
+    expect(resolver.getSourceLocation(attach({}, leaf))).toBeNull();
+  });
+
+  test('WARM compiled leaf frame → getSourceLocation returns the mapped original position', () => {
+    clientSourceMapCache.set(`${APP_URL}:101:32`, { fileName: 'src/App.tsx', line: 46, column: 8 });
+    const leaf = makeFiberWithFrame(APP_URL, 101, 32);
+    const resolver = createIframeResolver(makeCtx());
+    expect(resolver.getSourceLocation(attach({}, leaf))).toEqual({ fileName: 'src/App.tsx', line: 46, column: 8 });
+  });
+
+  test('React-18 _debugSource leaf → getSourceLocation returns the real position (no suppression)', () => {
+    const leaf = {
+      tag: 5,
+      type: 'div',
+      stateNode: null,
+      return: null,
+      child: null,
+      sibling: null,
+      memoizedProps: {},
+      _debugSource: { fileName: 'src/App.tsx', lineNumber: 12, columnNumber: 7 },
+      _debugStack: null,
+      _debugOwner: null,
+    } as unknown as Fiber;
+    const resolver = createIframeResolver(makeCtx());
+    expect(resolver.getSourceLocation(attach({}, leaf))).toEqual({ fileName: 'src/App.tsx', line: 12, column: 6 });
+  });
+});
+
+describe('pending-click warm-retry wiring: resolver write must reach the host retry reader (HYP-971)', () => {
+  // The auto-recovery was architecturally DEAD: the resolver wrote `ctx.pendingClickElement`
+  // (a by-VALUE copy of a bare `HTMLElement | null` primitive passed into ctx), while
+  // `retryPendingClick` in iframe-interaction.ts read a SEPARATE module var that was only ever
+  // assigned null. So a cold-map click no-op'd and never auto-recovered (only a manual second
+  // click resolved), yet PR comments/tests claimed "defers to the warm-retry (verified working)".
+  // Boxing the ref (`{ current }`, like pendingClickTimestamp) and passing the SAME object makes
+  // the resolver's write visible to the retry — this suite proves BOTH halves of that wiring.
+  const APP_URL = 'http://localhost:5173/src/App.tsx';
+
+  function attach(el: object, fiber: Fiber): HTMLElement {
+    (el as Record<'__reactFiber$test', Fiber>).__reactFiber$test = fiber;
+    return el as HTMLElement;
+  }
+
+  test('resolveClickLocal writes the deferred element onto the SHARED boxed ref that retryPendingClick reads', () => {
+    // Reproduces the production wiring: a single boxed pending-click object is the ctx field.
+    // A cold compiled React-19 leaf defers (HYP-974) and registers the pending click. The value
+    // the host retry guard reads (`pendingClickElementRef.current`) IS this shared box's `.current`.
+    const pendingClickElement = { current: null as HTMLElement | null };
+    const ctx = {
+      renderedComponentPath: 'src/App.tsx',
+      pendingClickElement,
+      pendingClickTimestamp: { value: 0 },
+      warmServerChunkFrames: (_f: Fiber) => {},
+      warmFiberChunkFrames: (_f: Fiber) => {},
+    };
+    const leaf = makeFiberWithFrame(APP_URL, 101, 32); // cold (uncached) compiled leaf
+    const el = attach({}, leaf);
+
+    const result = createIframeResolver(ctx).resolveClickLocal(el);
+
+    // Deferred (no bogus compiled commit) AND the shared box now holds the clicked element —
+    // so `retryPendingClick`'s `if (!pendingClickElementRef.current)` guard passes (was dead:
+    // a by-value copy left the module var null, so the guard always early-returned).
+    expect(result).toBeNull();
+    expect(pendingClickElement.current).toBe(el);
+    expect(ctx.pendingClickTimestamp.value).toBeGreaterThan(0);
+  });
+
+  test('iframe-interaction.ts wires the SAME boxed ref to the resolver AND reads it in retryPendingClick (no dead by-value copy)', () => {
+    const src = readFileSync(join(import.meta.dir, '..', 'iframe-interaction.ts'), 'utf8');
+    // No bare mutable primitive — that was the by-value copy whose write never reached the retry.
+    expect(src).not.toMatch(/let\s+pendingClickElement\b/);
+    // The pending click is a BOXED ref…
+    expect(src).toMatch(/const\s+pendingClickElementRef\s*:\s*\{\s*current:/);
+    // …passed BY REFERENCE (same object) into the resolver ctx…
+    expect(src).toMatch(/pendingClickElement:\s*pendingClickElementRef/);
+    // …and the host retry + empty-click guard read that same box.
+    expect(src).toMatch(/pendingClickElementRef\.current/);
   });
 });
 

@@ -13,6 +13,7 @@ import {
   findNearestSourceLocation,
   getItemIndexFromFiber,
   isRenderedFilePath,
+  isUnsymbolicatedReact19Fiber,
   parseDebugStackFrames,
   recoverNonSyntheticSourceLocation,
 } from './fiber-internals';
@@ -269,6 +270,34 @@ describe('getItemIndexFromFiber — React 19 .map() of components', () => {
     expect(getItemIndexFromFiber(texts[0])).toBe(0);
     expect(getItemIndexFromFiber(texts[1])).toBe(1);
     expect(getItemIndexFromFiber(texts[2])).toBe(2);
+  });
+
+  it('isUnsymbolicatedReact19Fiber: true for a React-19 (_debugStack-only) tree, false when any _debugSource exists — HYP-974', () => {
+    // React 19: _debugStack only, no _debugSource anywhere → the nearest source is a compiled
+    // parseDebugStack frame that must be symbolicated, never committed.
+    const react19Parent = mockFiber({ _debugStack: { stack: 'Error\n    at App (http://x/src/App.tsx:99:21)' } as unknown as Error });
+    const react19Leaf = mockFiber({ _debugStack: { stack: 'Error\n    at App (http://x/src/App.tsx:101:32)' } as unknown as Error, return: react19Parent });
+    expect(isUnsymbolicatedReact19Fiber(react19Leaf)).toBe(true);
+
+    // React 18: a _debugSource anywhere up-chain → real source, not suppressed.
+    const react18Parent = mockFiber({ _debugSource: { fileName: 'src/App.tsx', lineNumber: 12, columnNumber: 7 } });
+    const react18Leaf = mockFiber({ return: react18Parent });
+    expect(isUnsymbolicatedReact19Fiber(react18Leaf)).toBe(false);
+
+    // null fiber → false (nothing to suppress).
+    expect(isUnsymbolicatedReact19Fiber(null)).toBe(false);
+  });
+
+  it('findNearestDebugSource / isUnsymbolicatedReact19Fiber do NOT crash when a fiber .return is undefined (React-19 root) — HYP-971/974', () => {
+    // React 19 may set the root fiber's `.return` to `undefined` (not `null`). A no-_debugSource
+    // React-19 tree is walked to the root every call, so an unguarded `while (current !== null)`
+    // would dereference `undefined._debugSource` and throw. The `?? null` guard must terminate.
+    const rootish = mockFiber({
+      _debugStack: { stack: 'Error\n    at App (http://x/src/App.tsx:99:21)' } as unknown as Error,
+      return: undefined as unknown as Fiber | null,
+    });
+    expect(() => isUnsymbolicatedReact19Fiber(rootish)).not.toThrow();
+    expect(isUnsymbolicatedReact19Fiber(rootish)).toBe(true);
   });
 
   it('climbs through a LazyComponent (tag=16) to find the repeated level', () => {

@@ -143,8 +143,16 @@ const pendingClientFetches = new Set<string>();
  * Pending click to retry once source maps finish warming.
  * Registered when resolveViaClientSourceMap returns null because cache entries are
  * undefined (source map fetch still in flight). Cleared after successful retry or TTL.
+ *
+ * BOXED (`{ current }`), NOT a bare `HTMLElement | null`, so the by-REFERENCE write the
+ * resolver performs (`ctx.pendingClickElement.current = element`) is visible to
+ * `retryPendingClick` here — a bare primitive passed into the resolver `ctx` was a
+ * by-VALUE copy, so the resolver's write never reached this module var and the warm-retry
+ * was architecturally dead (first cold click no-op'd, only a manual second click resolved).
+ * Mirrors `pendingClickTimestamp` (already boxed for the same reason). This SAME object is
+ * passed as `ctx.pendingClickElement` below so writer and reader share one reference. (HYP-971)
  */
-let pendingClickElement: HTMLElement | null = null;
+const pendingClickElementRef: { current: HTMLElement | null } = { current: null };
 const pendingClickTimestamp = { value: 0 };
 const PENDING_CLICK_TTL_MS = 5000;
 async function loadInlineSourceMap(url: string): Promise<SourceMapV3 | null> {
@@ -272,20 +280,21 @@ function warmClientSourceMaps(): void {
  * Called from warmClientChunk and serverSourceMapResult when new locations are cached.
  */
 function retryPendingClick(): void {
-  if (!pendingClickElement) return; // codeql[js/useless-conditional] -- pendingClickElement is mutable state; null-check is a live guard
+  const pending = pendingClickElementRef.current;
+  if (!pending) return;
   if (Date.now() - pendingClickTimestamp.value > PENDING_CLICK_TTL_MS) {
-    pendingClickElement = null;
+    pendingClickElementRef.current = null;
     return;
   }
-  const fiber = getFiberFromDOM(pendingClickElement);
+  const fiber = getFiberFromDOM(pending);
   if (!fiber) {
-    pendingClickElement = null;
+    pendingClickElementRef.current = null;
     return;
   }
   let source = resolveViaClientSourceMap(fiber) ?? resolveViaServerSourceMap(fiber);
   if (!source) return; // still warming — keep pending
-  const element = pendingClickElement;
-  pendingClickElement = null;
+  const element = pending;
+  pendingClickElementRef.current = null;
   const directItemIndex = getItemIndexFromDOM(element);
   const target = resolveCallSiteTarget(source, fiber, renderedComponentPath, directItemIndex, mapOwnFiberSource);
   source = target.source;
@@ -489,7 +498,9 @@ const activeInstanceId: string | null = null;
 document.addEventListener('click', _dragClickSuppressor, true);
 const iframeResolver = createIframeResolver({
   renderedComponentPath,
-  pendingClickElement,
+  // Pass the BOXED ref (same object) so the resolver's `ctx.pendingClickElement.current = el`
+  // write is visible to `retryPendingClick` / `onEmptyClick` here — not a by-value copy. (HYP-971)
+  pendingClickElement: pendingClickElementRef,
   pendingClickTimestamp: pendingClickTimestamp,
   warmServerChunkFrames,
   warmFiberChunkFrames,
@@ -573,7 +584,7 @@ attachClickHandler(
       );
     },
     onEmptyClick: (emptyClickEvent) => {
-      if (pendingClickElement) return; // codeql[js/useless-conditional] -- pendingClickElement is mutable state; guard prevents empty-click while a click is pending
+      if (pendingClickElementRef.current) return; // guard: don't clear selection while a click is pending the warm-retry
       if (isAdditiveSelectionEvent(emptyClickEvent)) return;
       window.parent.postMessage({ type: 'hypercanvas:emptyClick' }, '*');
     },

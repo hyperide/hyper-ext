@@ -5,6 +5,7 @@ import {
   type Fiber,
   findNearestDebugSource,
   getFiberFromDOM,
+  isUnsymbolicatedReact19Fiber,
   stripNodePodPrefix,
 } from '@shared/element-tracing/fiber-internals';
 import { FiberSourceIndex, getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-index';
@@ -25,7 +26,14 @@ import { findHostRootFiber } from './react-dom-utils';
 
 export interface ResolverContext {
   renderedComponentPath: string | null;
-  pendingClickElement: HTMLElement | null;
+  /**
+   * BOXED pending-click ref (`{ current }`), shared by REFERENCE with the host's
+   * `retryPendingClick`/`onEmptyClick`. Writing `ctx.pendingClickElement.current = el` here is
+   * therefore visible to the warm-retry — a bare `HTMLElement | null` field was a by-value copy
+   * whose write never reached the host, leaving the auto-retry dead (HYP-971). Mirrors
+   * `pendingClickTimestamp`, which was already boxed for the same reason.
+   */
+  pendingClickElement: { current: HTMLElement | null };
   pendingClickTimestamp: { value: number };
   warmServerChunkFrames: (fiber: Fiber) => void;
   warmFiberChunkFrames: (fiber: Fiber) => void;
@@ -126,7 +134,18 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
       let loc = getSourceLocationFromDOM(element);
       if (fiber) {
         const smLoc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
-        if (smLoc) loc = smLoc;
+        if (smLoc) {
+          loc = smLoc;
+        } else if (loc && isUnsymbolicatedReact19Fiber(fiber)) {
+          // `loc` is a RAW COMPILED React-19 `_debugStack` seed (getSourceLocationFromDOM →
+          // parseDebugStack) and the source map is cold — committing it gives an unresolvable
+          // nodeRef past the file's EOF. This is the click-handler FALLBACK path that would
+          // otherwise defeat resolveClickLocal's defer (it re-derives the same compiled seed and
+          // commits it via computeEffectiveRef). Suppress it → the fallback yields null → the click
+          // defers to the warm-retry (resolveClickLocal already registered the pending click), which
+          // re-resolves the mapped original position once the map lands. (HYP-974)
+          loc = null;
+        }
       }
       if (loc) {
         return resolveCallSiteSource(loc, fiber, ctx.renderedComponentPath, mapFiberSource);
@@ -199,7 +218,7 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
     },
 
     resolveClickLocal(element: HTMLElement): LocalResolveResult | null {
-      ctx.pendingClickElement = null;
+      ctx.pendingClickElement.current = null;
       let source = getSourceLocationFromDOM(element);
       const fiber = getFiberFromDOM(element);
       // Warm the fiber's chunk frames and mark this click pending so the warm-retry
@@ -208,14 +227,42 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
       const deferToWarmRetry = (f: Fiber): void => {
         ctx.warmServerChunkFrames(f);
         ctx.warmFiberChunkFrames(f);
-        ctx.pendingClickElement = element;
+        ctx.pendingClickElement.current = element;
         ctx.pendingClickTimestamp.value = Date.now();
       };
       if (fiber !== null) {
+        // React 19: getSourceLocationFromDOM (findNearestSourceLocation → parseDebugStack) hands
+        // back the RAW COMPILED `_debugStack` frame — a position in the jsxDEV-transformed module
+        // (e.g. src/App.tsx:101 for a host div written directly in the rendered 58-line App.tsx),
+        // NOT an original source position. Only a React-18 `_debugSource` seed is already a real
+        // source. `findNearestDebugSource(fiber) === null` means there is no `_debugSource` anywhere
+        // up the tree → the DOM seed MUST have come from `parseDebugStack`, so it is a compiled
+        // frame that AstService can never resolve (every inspector style write would fail with
+        // "Element not found"). `resolveCallSiteTarget` cannot rescue it: compiled and original
+        // share the SAME fileName (Vite transforms in-place), so `isFromRenderedFile` short-circuits
+        // and returns the compiled seed verbatim — the HYP-970 cross-file mapper never sees it.
+        // DevTools-faithful rule: a raw `_debugStack` frame is only an INPUT to source-map
+        // symbolication; when unmapped, warm + defer (retryPendingClick re-resolves once the map
+        // lands), never commit the compiled line (HYP-970 residual, react-vite-tw4-twitter).
+        //
+        // `isUnsymbolicatedReact19Fiber` (no `_debugSource` anywhere up-chain) reliably means
+        // React 19 — `_debugSource`/`_debugStack` are runtime-uniform per React version, so this
+        // can't misclassify a real React-18 seed (see the helper's doc in fiber-internals.ts). The
+        // SAME predicate gates the `getSourceLocation` fallback so the two commit paths can't drift.
+        //
+        // Defer is TTL-bounded (`PENDING_CLICK_TTL_MS`): if the map genuinely never lands the
+        // pending click expires (no infinite wait) and the click is a no-op — the intended
+        // DevTools behavior for an unmappable frame (show nothing, never a bogus commit). For the
+        // extension preview this is moot: Vite dev always serves inline source maps, so the frame
+        // resolves on the warm-retry (verified: src/App.tsx:101:32 → the real App.tsx line).
+        const domSeedIsCompiled = source !== null && isUnsymbolicatedReact19Fiber(fiber);
         const smSource = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
         if (smSource) {
           source = smSource;
-        } else if (source === null) {
+        } else if (source === null || domSeedIsCompiled) {
+          // Drop the untrusted compiled seed so a still-cold map defers to the warm-retry
+          // (below) rather than committing the compiled position.
+          source = null;
           ctx.warmServerChunkFrames(fiber);
           source = resolveViaServerSourceMap(fiber);
           if (source === null) {
@@ -235,7 +282,7 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
               return hasUnresolvedServerFrames(fiber);
             })();
             if (hasPending) {
-              ctx.pendingClickElement = element;
+              ctx.pendingClickElement.current = element;
               ctx.pendingClickTimestamp.value = Date.now();
             }
           }

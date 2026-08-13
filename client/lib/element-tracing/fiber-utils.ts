@@ -20,6 +20,7 @@ export {
   findNearestSourceLocation,
   getFiberFromDOM,
   getItemIndexFromFiber,
+  isUnsymbolicatedReact19Fiber,
   parseDebugStack,
 } from '../../../shared/element-tracing/fiber-internals';
 

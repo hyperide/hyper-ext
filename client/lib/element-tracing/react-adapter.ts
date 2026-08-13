@@ -22,6 +22,7 @@ import {
   getFiberDisplayName,
   getFiberFromDOM,
   getItemIndexFromFiber,
+  isUnsymbolicatedReact19Fiber,
   isUserComponent,
   traceToRoot,
 } from './fiber-utils';
@@ -49,7 +50,22 @@ export class ReactAdapter implements FrameworkAdapter {
 
   /** Injected resolver first, raw fiber parsing as fallback. */
   private resolveSourceLocation(fiber: Fiber): SourceLocation | null {
-    return this.resolveFiberSource?.(fiber) ?? findNearestSourceLocation(fiber);
+    const mapped = this.resolveFiberSource?.(fiber);
+    if (mapped) return mapped;
+    // HYP-974: a React-19 fiber with no `_debugSource` resolves via `parseDebugStack` to a
+    // COMPILED position (jsxDEV-transformed module, often past the file's EOF). When the source
+    // map is cold (`resolveFiberSource` returned null) do NOT fall back to that compiled seed —
+    // committing it gives an unresolvable nodeRef and every inspector style write fails. Return
+    // null so the click defers to the ClickRetryQueue warm-retry (and server resolve-element),
+    // which re-resolves the mapped original position once the module's map lands — mirrors the
+    // extension's `getSourceLocation` suppression so both platforms behave identically.
+    //
+    // GATED on a configured resolver: suppression is only safe when a source-map resolver
+    // (hence a warm-retry / server-resolve path) exists to eventually produce the real position.
+    // A standalone/legacy `new ReactAdapter()` with NO resolver has no such path, so raw parsing
+    // stays the documented, only-available behavior (per ReactAdapterOptions) — do not strand it.
+    if (this.resolveFiberSource !== null && isUnsymbolicatedReact19Fiber(fiber)) return null;
+    return findNearestSourceLocation(fiber);
   }
 
   setProjectRoot(projectRoot: string): void {
