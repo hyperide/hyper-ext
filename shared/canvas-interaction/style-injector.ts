@@ -6,6 +6,7 @@
  * mode-dependent CSS (empty container styling, cursor override, etc.)
  */
 
+import { DRAG_GHOST_CLASS, DRAG_SOURCE_CLASS } from './drag-class-names';
 import type { DesignStylesOptions } from './types';
 
 const STYLE_ELEMENT_ID = 'hyper-canvas-dynamic-styles';
@@ -95,9 +96,18 @@ html.design-mode * {
 }`);
   }
 
+  // Dragged source subtree: disable pointer-events on the element AND every descendant
+  // so document.elementFromPoint at the drop coords skips the dragged node and its
+  // children, resolving to the real sibling under the cursor rather than an inner child
+  // (e.g. a <span> inside the dragged <div>) that would otherwise hit-test first.
+  // The class is applied/cleared by the VS Code iframe drag script; SaaS canvas drag
+  // lives in the host layer and never sets it, so this rule is inert there (see HYP-55).
+  parts.push(`
+.${DRAG_SOURCE_CLASS}, .${DRAG_SOURCE_CLASS} * { pointer-events: none !important; }`);
+
   // Ghost element for drag/reorder visual feedback — follows cursor as a floating clone.
   parts.push(`
-.hyper-drag-ghost {
+.${DRAG_GHOST_CLASS} {
   position: fixed !important;
   z-index: 2147483647 !important;
   pointer-events: none !important;

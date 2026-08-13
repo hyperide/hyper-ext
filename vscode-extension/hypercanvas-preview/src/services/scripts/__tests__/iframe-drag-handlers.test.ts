@@ -25,6 +25,7 @@ import {
   _normalizeEventTarget,
   type DragHandlerContext,
 } from '../iframe-drag-handlers';
+import { DRAG_SOURCE_CLASS } from '@shared/canvas-interaction/drag-class-names';
 import type { SourceLocation } from '@shared/element-tracing/types';
 
 const BUTTON_SRC: SourceLocation = { fileName: '/src/App.tsx', line: 7, column: 2 };
@@ -321,6 +322,73 @@ describe('_dragPointerMove drop-target normalization (review finding #2)', () =>
     }
   });
 
+  // Dropping onto a DESCENDANT of the source (a DOM child of the dragged subtree) is an
+  // invalid self-nesting move: AstService.moveElement would throw jsxContains ("cannot move
+  // a node into one of its descendants") and the fire-and-forget bridge swallows it → silent
+  // no-write. The descendant guard in _resolveDrop must reject it so the gesture is a clean
+  // no-op. Trigger: the source is a CONTAINER and the cursor releases over one of its inner
+  // children — elementFromPoint hit-tests that child, whose distinct source ref slips past
+  // the targetId === sourceId no-op return, so the guard is what stops the bad write.
+  test('drop over a DESCENDANT of the source posts no moveElement', () => {
+    const source = document.createElement('div');
+    const child = document.createElement('span');
+    child.textContent = 'inner';
+    source.appendChild(child); // child is a DOM descendant of the dragged source
+    const drop = document.createElement('div');
+    drop.textContent = 'drop';
+    document.body.append(source, drop);
+
+    const SRC: SourceLocation = { fileName: '/src/App.tsx', line: 5, column: 2 };
+    const CHILD: SourceLocation = { fileName: '/src/App.tsx', line: 6, column: 4 };
+    const DROP: SourceLocation = { fileName: '/src/App.tsx', line: 9, column: 2 };
+    // The child has its OWN distinct ref: without the guard, a moveElement with
+    // targetId = the child's ref (6:4 ≠ source 5:2) WOULD be emitted.
+    const ctx = makeContext(
+      new Map<HTMLElement, SourceLocation>([
+        [source, SRC],
+        [child, CHILD],
+        [drop, DROP],
+      ]),
+    );
+
+    const posted: unknown[] = [];
+    const realPostMessage = window.parent.postMessage;
+    (window.parent as unknown as { postMessage: (m: unknown) => void }).postMessage = (m: unknown) => {
+      posted.push(m);
+    };
+    const realElementFromPoint = document.elementFromPoint;
+    // First the cursor hovers a valid `drop` (pending set), then lands over the inner
+    // `child` (a descendant of the dragged source → the guard must CLEAR pending).
+    let hit: HTMLElement = drop;
+    (document as unknown as { elementFromPoint: (x: number, y: number) => Element | null }).elementFromPoint = () =>
+      hit;
+
+    try {
+      _dragPointerDown(ctx, makePointerEvent(source, 10, 10));
+      _dragPointerMove(ctx, makePointerEvent(source, 40, 40)); // enter dragging
+      _dragPointerMove(ctx, makePointerEvent(source, 200, 200)); // over drop → pending set
+      hit = child;
+      _dragPointerMove(ctx, makePointerEvent(source, 12, 12)); // over descendant → pending cleared
+
+      _dragPointerUp(ctx, makePointerEvent(source, 12, 12));
+
+      const moveMsg = posted.find(
+        (m): m is { type: string } =>
+          typeof m === 'object' &&
+          m !== null &&
+          'type' in m &&
+          (m as { type?: string }).type === 'hypercanvas:moveElement',
+      );
+      expect(moveMsg).toBeUndefined();
+    } finally {
+      (window.parent as unknown as { postMessage: typeof realPostMessage }).postMessage = realPostMessage;
+      (document as unknown as { elementFromPoint: typeof realElementFromPoint }).elementFromPoint =
+        realElementFromPoint;
+      source.remove();
+      drop.remove();
+    }
+  });
+
   // Escape / cancel mid-drag must write NOTHING even with a pending drop queued.
   test('Escape (_dragCleanup) mid-drag fires no write', () => {
     const source = document.createElement('div');
@@ -365,6 +433,47 @@ describe('_dragPointerMove drop-target normalization (review finding #2)', () =>
       expect(moveMsg).toBeUndefined();
     } finally {
       (window.parent as unknown as { postMessage: typeof realPostMessage }).postMessage = realPostMessage;
+      (document as unknown as { elementFromPoint: typeof realElementFromPoint }).elementFromPoint =
+        realElementFromPoint;
+      source.remove();
+      drop.remove();
+    }
+  });
+
+  // DRAG_SOURCE_CLASS pulls in the `pointer-events:none` subtree CSS; it MUST be added
+  // when the drag begins and removed once it ends — on BOTH the success path
+  // (_dragPointerUp → _dragCleanup) and the cancel path — or the source element would
+  // stay non-interactive after a drop. _dragPointerUp routes through _dragCleanup, so
+  // the success path is the one most likely to silently regress if that link breaks.
+  test('DRAG_SOURCE_CLASS is added on drag start and removed after a successful pointerUp', () => {
+    const source = document.createElement('div');
+    source.textContent = 'source';
+    const drop = document.createElement('div');
+    drop.textContent = 'drop';
+    document.body.append(source, drop);
+
+    const SRC: SourceLocation = { fileName: '/src/App.tsx', line: 5, column: 2 };
+    const DROP: SourceLocation = { fileName: '/src/App.tsx', line: 9, column: 2 };
+    const ctx = makeContext(
+      new Map<HTMLElement, SourceLocation>([
+        [source, SRC],
+        [drop, DROP],
+      ]),
+    );
+    const realElementFromPoint = document.elementFromPoint;
+    (document as unknown as { elementFromPoint: (x: number, y: number) => Element | null }).elementFromPoint = () =>
+      drop;
+
+    try {
+      _dragPointerDown(ctx, makePointerEvent(source, 10, 10));
+      _dragPointerMove(ctx, makePointerEvent(source, 40, 40)); // enter dragging → class added
+      expect(source.classList.contains(DRAG_SOURCE_CLASS)).toBe(true);
+
+      _dragPointerMove(ctx, makePointerEvent(source, 200, 200)); // over drop → valid pending
+      _dragPointerUp(ctx, makePointerEvent(source, 200, 200)); // success path → cleanup
+      // The transient class must be gone so the dropped element is interactive again.
+      expect(source.classList.contains(DRAG_SOURCE_CLASS)).toBe(false);
+    } finally {
       (document as unknown as { elementFromPoint: typeof realElementFromPoint }).elementFromPoint =
         realElementFromPoint;
       source.remove();

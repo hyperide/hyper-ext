@@ -1,3 +1,9 @@
+import {
+  DRAG_BADGE_CLASS,
+  DRAG_GHOST_CLASS,
+  DRAG_SOURCE_CLASS,
+  DROP_INDICATOR_CLASS,
+} from '@shared/canvas-interaction/drag-class-names';
 import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
 import { isHorizontalLayout as _isHorizontalLayoutShared } from '@shared/canvas-interaction/drop-indicator-orientation';
 import { normalizeEventTarget } from '@shared/canvas-interaction/normalize-event-target';
@@ -184,9 +190,14 @@ export function _dragPointerMove(ctx: DragHandlerContext, e: PointerEvent): void
 
         _dragSourceEl.style.opacity = '0.35';
         _dragSourceEl.style.pointerEvents = 'none';
+        // The inline pointerEvents above only disables the source ELEMENT; its descendants
+        // still hit-test. The DRAG_SOURCE_CLASS pulls in a CSS subtree rule (defined in
+        // style-injector.ts) so elementFromPoint also skips inner children and the drop
+        // resolves to the real sibling, not a node inside the dragged subtree.
+        _dragSourceEl.classList.add(DRAG_SOURCE_CLASS);
 
         const ghost = _dragSourceEl.cloneNode(true) as HTMLElement;
-        ghost.className = 'hyper-drag-ghost';
+        ghost.className = DRAG_GHOST_CLASS;
         ghost.removeAttribute('data-uniq-id');
         ghost.style.width = `${rect.width}px`;
         ghost.style.height = `${rect.height}px`;
@@ -218,11 +229,12 @@ export function _dragPointerMove(ctx: DragHandlerContext, e: PointerEvent): void
         ghost.style.overflow = 'hidden';
 
         const indicator = document.createElement('div');
-        // Canonical class is `hyper-drop-indicator` — it MUST match the CSS in
-        // style-injector.ts (`.hyper-drop-indicator[data-dir]`) and the e2e specs that
-        // locate `.hyper-drop-indicator`. A decompose refactor (#383) renamed it to
-        // `hyper-drag-indicator` and orphaned both; do not rename it again.
-        indicator.className = 'hyper-drop-indicator';
+        // Canonical class is `hyper-drop-indicator` (DROP_INDICATOR_CLASS) — it MUST match
+        // the CSS in style-injector.ts (`.hyper-drop-indicator[data-dir]`) and the e2e specs
+        // that locate `.hyper-drop-indicator`. A decompose refactor (#383) renamed it to
+        // `hyper-drag-indicator` and orphaned both; the shared constant is the guard against
+        // that drift recurring.
+        indicator.className = DROP_INDICATOR_CLASS;
         indicator.style.position = 'fixed';
         indicator.style.zIndex = '9998';
         indicator.style.pointerEvents = 'none';
@@ -232,7 +244,7 @@ export function _dragPointerMove(ctx: DragHandlerContext, e: PointerEvent): void
         _dragIndicatorEl = indicator;
 
         const badge = document.createElement('div');
-        badge.className = 'hyper-drag-badge';
+        badge.className = DRAG_BADGE_CLASS;
         badge.textContent = `${rect.width.toFixed(0)} × ${rect.height.toFixed(0)}`;
         badge.style.position = 'fixed';
         badge.style.zIndex = '10000';
@@ -324,6 +336,20 @@ function _resolveDrop(ctx: DragHandlerContext, e: PointerEvent): ResolvedDrop | 
   const targetId = `${dropSrc.fileName}:${dropSrc.line}:${dropSrc.column}`;
   if (targetId === sourceId) return null;
 
+  // A drop whose target is a DOM descendant of the dragged element is an invalid
+  // self-nesting move (AstService.moveElement throws jsxContains → swallowed no-write).
+  // Reaches here when the source is a CONTAINER and the cursor releases over one of its
+  // own inner children — elementFromPoint hit-tests that child, which has its own distinct
+  // source ref (targetId !== sourceId, so the equal-element return above does not catch it).
+  // In a real browser the DRAG_SOURCE_CLASS `pointer-events:none` subtree rule is the
+  // PRIMARY safeguard (elementFromPoint skips the dragged subtree entirely); this
+  // `.contains()` check is defense-in-depth for environments where that CSS does not apply
+  // (e.g. the happy-dom unit runner) or a child that somehow escapes the rule. Reject it so
+  // the gesture is a clean no-op. This is the descendant half of the containment guard in
+  // iframe-drag-order.ts's findReorderSiblings; the reverse direction (dropEl.contains(source))
+  // is a valid reparent for the move path, so it is not rejected.
+  if (_dragSourceEl.contains(dropEl)) return null;
+
   const orderPlan = resolveOrderWritePlan(_dragSourceEl, dropEl, e.clientX, e.clientY, {
     getSourceLocation: (el) => ctx.iframeResolver.getSourceLocation(el),
     isHorizontalLayout: _isHorizontalLayout,
@@ -412,6 +438,7 @@ export function _dragCleanup(): void {
   if (_dragSourceEl) {
     _dragSourceEl.style.opacity = '';
     _dragSourceEl.style.pointerEvents = '';
+    _dragSourceEl.classList.remove(DRAG_SOURCE_CLASS);
   }
   if (_dragGhostEl) {
     _dragGhostEl.remove();

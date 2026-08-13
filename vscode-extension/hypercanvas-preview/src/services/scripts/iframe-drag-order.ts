@@ -3,6 +3,7 @@
  * Builds order-write plans for Tailwind `order-N` class mutations.
  */
 
+import { stripTransientDragClasses } from '@shared/canvas-interaction/drag-class-names';
 import type { OrderWritePlan, SiblingInfo } from '@shared/canvas-interaction/order-drag-detect';
 import { computeOrderWritePlan } from '@shared/canvas-interaction/order-drag-detect';
 
@@ -68,7 +69,10 @@ export function resolveOrderWritePlan(
     siblings.push({
       elementId: `${loc.fileName}:${loc.line}:${loc.column}`,
       filePath: loc.fileName,
-      className: child.getAttribute('class') ?? '',
+      // Strip transient drag-overlay classes (e.g. DRAG_SOURCE_CLASS added to the
+      // dragged element mid-gesture): this className is persisted to the user's JSX
+      // by the order-rewrite path, so the live class must never leak into source.
+      className: stripTransientDragClasses(child.getAttribute('class') ?? ''),
       domIndex: domIndex++,
     });
   }
