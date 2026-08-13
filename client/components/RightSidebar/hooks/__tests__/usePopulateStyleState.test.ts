@@ -187,4 +187,92 @@ describe('usePopulateStyleState — stale-data guard', () => {
 
     expect(setBackgroundColor).toHaveBeenLastCalledWith('#00ff00');
   });
+
+  it('does NOT repopulate the same element while an inspector input is focused (HYP-1001)', () => {
+    // Regression: typing a margin/gap value fired a style write → HMR re-read → this
+    // effect re-ran and reset the focused field to the (not-yet-applied) computed value,
+    // eating keystrokes ("12px" → "2px") and reverting the value so ArrowUp nudged an
+    // empty field to "1" instead of the visible value to "11".
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+
+    const setWidth = mock(() => {});
+    try {
+      const { rerender } = renderHook((props) => usePopulateStyleState(props), {
+        initialProps: makeDeps({ selectedId: 'element-A', parsedStyles: STYLES_A, setWidth }),
+      });
+      expect(setWidth).toHaveBeenLastCalledWith('100px');
+      setWidth.mockClear();
+
+      // User is now typing in a focused inspector field.
+      input.focus();
+      expect(document.activeElement).toBe(input);
+
+      // Same element, updated parsedStyles arrives from the post-write re-read.
+      act(() => {
+        rerender(makeDeps({ selectedId: 'element-A', parsedStyles: STYLES_B, setWidth }));
+      });
+
+      // Must NOT clobber the focused field.
+      expect(setWidth).not.toHaveBeenCalled();
+    } finally {
+      input.blur();
+      input.remove();
+    }
+  });
+
+  it('resumes populating for the same element after the field blurs', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+
+    const setWidth = mock(() => {});
+    try {
+      const { rerender } = renderHook((props) => usePopulateStyleState(props), {
+        initialProps: makeDeps({ selectedId: 'element-A', parsedStyles: STYLES_A, setWidth }),
+      });
+      setWidth.mockClear();
+
+      input.focus();
+      act(() => {
+        rerender(makeDeps({ selectedId: 'element-A', parsedStyles: STYLES_B, setWidth }));
+      });
+      expect(setWidth).not.toHaveBeenCalled();
+
+      // Field blurs (commit) — the next re-read must repopulate.
+      input.blur();
+      const updated: Partial<ParsedStyles> = { ...STYLES_B, width: '250px' };
+      act(() => {
+        rerender(makeDeps({ selectedId: 'element-A', parsedStyles: updated, setWidth }));
+      });
+      expect(setWidth).toHaveBeenLastCalledWith('250px');
+    } finally {
+      input.blur();
+      input.remove();
+    }
+  });
+
+  it('a focused non-text input (checkbox/color) does NOT block population', () => {
+    // Clicking a color swatch or a toggle focuses a non-text input — there is no
+    // in-progress text edit to protect, so population must proceed as normal.
+    for (const type of ['checkbox', 'color', 'range'] as const) {
+      const control = document.createElement('input');
+      control.type = type;
+      document.body.appendChild(control);
+      const setWidth = mock(() => {});
+      try {
+        const { rerender } = renderHook((props) => usePopulateStyleState(props), {
+          initialProps: makeDeps({ selectedId: 'element-A', parsedStyles: STYLES_A, setWidth }),
+        });
+        setWidth.mockClear();
+        control.focus();
+        act(() => {
+          rerender(makeDeps({ selectedId: 'element-A', parsedStyles: STYLES_B, setWidth }));
+        });
+        expect(setWidth).toHaveBeenLastCalledWith('200px');
+      } finally {
+        control.blur();
+        control.remove();
+      }
+    }
+  });
 });

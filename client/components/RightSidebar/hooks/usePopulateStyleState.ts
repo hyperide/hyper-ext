@@ -4,6 +4,39 @@ import type { CanvasEngine } from '@/lib/canvas-engine';
 import type { EffectItem, StrokeItem } from '../types';
 import { cssToPosition, mapShadowSizeToValues, parseHexWithAlpha } from '../utils';
 
+// Text-entry input types whose focus means "the user is typing a value". Excludes
+// checkbox/radio/color/range/etc. — clicking a color swatch or toggle must NOT freeze
+// inspector population.
+const TEXT_ENTRY_INPUT_TYPES = new Set(['text', 'number', 'search', 'tel', 'url', 'email', 'password']);
+
+/**
+ * True when the user is currently typing into an inspector numeric/text field.
+ *
+ * Every inspector style write triggers an HMR re-read that re-runs the populate effect.
+ * If the edited field is focused, repopulating it with the last-committed computed value
+ * clobbers the in-progress edit — keystrokes get eaten (typing "12px" landed as "2px") and
+ * the value reverts to the computed default the moment it is written, so an ArrowUp nudge
+ * increments an empty field to "1" instead of the visible value to "11" (HYP-1001).
+ *
+ * Scope note: the inspector (RightSidebar) renders inside its OWN webview document —
+ * separate from the AI-chat and left-sidebar webviews — so any focused text-entry input in
+ * this document is an inspector field. The guard is intentionally document-wide within the
+ * inspector rather than per-field: while one field is being edited, the whole populate pass
+ * is skipped, so a simultaneous EXTERNAL change to a different field (canvas drag-resize,
+ * undo, AI edit) is not reflected until the next re-read after blur/commit — an acceptable
+ * trade for never eating the user's keystrokes. The normal edit flow always triggers that
+ * follow-up re-read (the commit writes → re-reads); a purely external change with no
+ * subsequent re-read is the only case that stays stale until the next inspector interaction.
+ */
+function isInspectorFieldFocused(): boolean {
+  if (typeof document === 'undefined') return false;
+  const el = document.activeElement;
+  if (!el) return false;
+  if (el.tagName === 'TEXTAREA') return true;
+  if (el.tagName !== 'INPUT') return false;
+  return TEXT_ENTRY_INPUT_TYPES.has((el as HTMLInputElement).type);
+}
+
 interface UsePopulateStyleStateDeps {
   selectedId: string | null;
   parsedStyles: Partial<ParsedStyles> | null;
@@ -162,6 +195,12 @@ export function usePopulateStyleState(deps: UsePopulateStyleStateDeps) {
       setIsTextFromProps(false);
       return;
     }
+
+    // Same element still selected (a genuine selection change already cleared+returned
+    // above). If the user is mid-edit in a focused field, do NOT repopulate — the re-read
+    // that triggered this run must not overwrite what they are typing (see
+    // isInspectorFieldFocused). On blur the next re-read repopulates normally.
+    if (isInspectorFieldFocused()) return;
 
     const ep = effectiveParsed;
 

@@ -12,6 +12,7 @@ import cn from 'clsx';
 import { memo } from 'react';
 import IconFlexRow from '../../icons/IconFlexRow';
 import IconSpacingHorizontal from '../../icons/IconSpacingHorizontal';
+import { HintTooltip } from '../../ui/hint-tooltip';
 import { Input } from '../../ui/input';
 import type { LayoutType, UIKitType } from '../types';
 import { GridLayoutControls, LayoutGrid, PaddingControls, useLayoutSection } from './layout-section';
@@ -154,100 +155,122 @@ export const LayoutSection = memo(function LayoutSection({
 
       {/* Layout type buttons */}
       <div className="toggle-container flex items-center mb-3">
-        <button
-          type="button"
-          data-testid={TID.inspector.layoutDisplaySelect}
-          onClick={() => onLayoutChange('layout')}
-          className={cn(
-            'flex-1 h-6 px-1 rounded-l flex items-center justify-center',
-            selectedLayout === 'layout' && 'toggle-active',
-          )}
-        >
-          <IconLayout className="w-4 h-4" stroke={1.5} />
-        </button>
-        <button
-          type="button"
-          data-testid={TID.inspector.layoutFlexDirection}
-          onClick={() => onLayoutChange('col')}
-          className={cn(
-            'flex-1 h-6 px-1 flex items-center justify-center',
-            selectedLayout === 'col' && 'toggle-active',
-          )}
-        >
-          <IconSortDescending2 className="w-5 h-5" stroke={1.5} />
-        </button>
-        <button
-          type="button"
-          data-testid={TID.inspector.viewToggle('row')}
-          onClick={() => onLayoutChange('row')}
-          className={cn(
-            'flex-1 h-6 px-1 flex items-center justify-center',
-            projectUIKit === 'tamagui' ? 'rounded-r' : '',
-            selectedLayout === 'row' && 'toggle-active',
-          )}
-        >
-          <IconFlexRow className="w-5 h-5" />
-        </button>
-        {projectUIKit !== 'tamagui' && (
+        <HintTooltip label="Block — normal document flow (display: block)">
           <button
             type="button"
-            data-testid={TID.inspector.viewToggle('grid')}
-            onClick={() => onLayoutChange('grid')}
+            data-testid={TID.inspector.layoutDisplaySelect}
+            onClick={() => onLayoutChange('layout')}
+            aria-label="Block layout"
+            aria-pressed={selectedLayout === 'layout'}
             className={cn(
-              'flex-1 h-6 px-1 rounded-r flex items-center justify-center',
-              selectedLayout === 'grid' && 'toggle-active',
+              'flex-1 h-6 px-1 rounded-l flex items-center justify-center',
+              selectedLayout === 'layout' && 'toggle-active',
             )}
           >
-            <IconLayoutGrid className="w-5 h-5" stroke={1.5} />
+            <IconLayout className="w-4 h-4" stroke={1.5} />
           </button>
+        </HintTooltip>
+        <HintTooltip label="Vertical stack — children flow top to bottom (flex column)">
+          <button
+            type="button"
+            data-testid={TID.inspector.layoutFlexDirection}
+            onClick={() => onLayoutChange('col')}
+            aria-label="Vertical stack layout"
+            aria-pressed={selectedLayout === 'col'}
+            className={cn(
+              'flex-1 h-6 px-1 flex items-center justify-center',
+              selectedLayout === 'col' && 'toggle-active',
+            )}
+          >
+            <IconSortDescending2 className="w-5 h-5" stroke={1.5} />
+          </button>
+        </HintTooltip>
+        <HintTooltip label="Horizontal stack — children flow left to right (flex row)">
+          <button
+            type="button"
+            data-testid={TID.inspector.viewToggle('row')}
+            onClick={() => onLayoutChange('row')}
+            aria-label="Horizontal stack layout"
+            aria-pressed={selectedLayout === 'row'}
+            className={cn(
+              'flex-1 h-6 px-1 flex items-center justify-center',
+              projectUIKit === 'tamagui' ? 'rounded-r' : '',
+              selectedLayout === 'row' && 'toggle-active',
+            )}
+          >
+            <IconFlexRow className="w-5 h-5" />
+          </button>
+        </HintTooltip>
+        {projectUIKit !== 'tamagui' && (
+          <HintTooltip label="Grid — rows and columns (display: grid)">
+            <button
+              type="button"
+              data-testid={TID.inspector.viewToggle('grid')}
+              onClick={() => onLayoutChange('grid')}
+              aria-label="Grid layout"
+              aria-pressed={selectedLayout === 'grid'}
+              className={cn(
+                'flex-1 h-6 px-1 rounded-r flex items-center justify-center',
+                selectedLayout === 'grid' && 'toggle-active',
+              )}
+            >
+              <IconLayoutGrid className="w-5 h-5" stroke={1.5} />
+            </button>
+          </HintTooltip>
         )}
       </div>
 
       {/* Width/Height */}
       <div className="flex items-center gap-1.5 mb-3">
         <div className="flex items-center gap-1.5 flex-1">
-          <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
-            <span className="text-xs text-muted-foreground">W</span>
-            <Input
-              type="text"
-              testId={TID.inspector.layoutWidth}
-              value={width.replace(' Auto', '')}
-              onChange={(e) => handleWidthInputChange(e.target.value)}
-              onBlur={onWidthBlur}
-              onKeyDown={(e) => onNumericKeyDown(e, width, (v) => onWidthChange(v), 'width')}
-              placeholder="auto"
-              className={cn(
-                'h-auto border-0 bg-transparent !text-[11px] p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1',
-                width.includes('Auto') ? 'text-muted-foreground' : 'text-foreground',
+          <HintTooltip label="Width — press ↑/↓ to nudge by 1px, Shift+↑/↓ by 10px">
+            <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">W</span>
+              <Input
+                type="text"
+                testId={TID.inspector.layoutWidth}
+                aria-label="Width"
+                value={width.replace(' Auto', '')}
+                onChange={(e) => handleWidthInputChange(e.target.value)}
+                onBlur={onWidthBlur}
+                onKeyDown={(e) => onNumericKeyDown(e, width, (v) => onWidthChange(v), 'width')}
+                placeholder="auto"
+                className={cn(
+                  'h-auto border-0 bg-transparent !text-[11px] p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1',
+                  width.includes('Auto') ? 'text-muted-foreground' : 'text-foreground',
+                )}
+              />
+              {width.includes('Auto') && (
+                <span className="text-[11px] font-medium text-foreground">
+                  {selectedLayout === 'col' || selectedLayout === 'row' ? 'Hug' : 'Auto'}
+                </span>
               )}
-            />
-            {width.includes('Auto') && (
-              <span className="text-[11px] font-medium text-foreground">
-                {selectedLayout === 'col' || selectedLayout === 'row' ? 'Hug' : 'Auto'}
-              </span>
-            )}
-          </div>
-          <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
-            <span className="text-xs text-muted-foreground">H</span>
-            <Input
-              type="text"
-              testId={TID.inspector.layoutHeight}
-              value={height.replace(' Auto', '')}
-              onChange={(e) => handleHeightInputChange(e.target.value)}
-              onBlur={onHeightBlur}
-              onKeyDown={(e) => onNumericKeyDown(e, height, (v) => onHeightChange(v), 'height')}
-              placeholder="auto"
-              className={cn(
-                'h-auto border-0 bg-transparent !text-[11px] p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1',
-                height.includes('Auto') ? 'text-muted-foreground' : 'text-foreground',
+            </div>
+          </HintTooltip>
+          <HintTooltip label="Height — press ↑/↓ to nudge by 1px, Shift+↑/↓ by 10px">
+            <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">H</span>
+              <Input
+                type="text"
+                testId={TID.inspector.layoutHeight}
+                aria-label="Height"
+                value={height.replace(' Auto', '')}
+                onChange={(e) => handleHeightInputChange(e.target.value)}
+                onBlur={onHeightBlur}
+                onKeyDown={(e) => onNumericKeyDown(e, height, (v) => onHeightChange(v), 'height')}
+                placeholder="auto"
+                className={cn(
+                  'h-auto border-0 bg-transparent !text-[11px] p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1',
+                  height.includes('Auto') ? 'text-muted-foreground' : 'text-foreground',
+                )}
+              />
+              {height.includes('Auto') && (
+                <span className="text-[11px] font-medium text-foreground">
+                  {selectedLayout === 'col' || selectedLayout === 'row' ? 'Hug' : 'Auto'}
+                </span>
               )}
-            />
-            {height.includes('Auto') && (
-              <span className="text-[11px] font-medium text-foreground">
-                {selectedLayout === 'col' || selectedLayout === 'row' ? 'Hug' : 'Auto'}
-              </span>
-            )}
-          </div>
+            </div>
+          </HintTooltip>
         </div>
         <button
           type="button"
@@ -274,25 +297,28 @@ export const LayoutSection = memo(function LayoutSection({
               onDoubleClick={handleLayoutGridDoubleClick}
             />
 
-            <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
-              <IconSpacingHorizontal
-                className={cn('w-3 h-3 text-muted-foreground transition-transform', {
-                  'rotate-90': selectedLayout === 'col',
-                })}
-              />
-              <Input
-                type="text"
-                testId={TID.inspector.layoutGap}
-                value={gap}
-                onChange={(e) => {
-                  onGapChange(e.target.value);
-                  syncStyleChange('gap', e.target.value);
-                }}
-                onKeyDown={(e) => onNumericKeyDown(e, gap, onGapChange, 'gap')}
-                className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                placeholder="0px"
-              />
-            </div>
+            <HintTooltip label="Gap — spacing between stacked children">
+              <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
+                <IconSpacingHorizontal
+                  className={cn('w-3 h-3 text-muted-foreground transition-transform', {
+                    'rotate-90': selectedLayout === 'col',
+                  })}
+                />
+                <Input
+                  type="text"
+                  testId={TID.inspector.layoutGap}
+                  aria-label="Gap between children"
+                  value={gap}
+                  onChange={(e) => {
+                    onGapChange(e.target.value);
+                    syncStyleChange('gap', e.target.value);
+                  }}
+                  onKeyDown={(e) => onNumericKeyDown(e, gap, onGapChange, 'gap')}
+                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                  placeholder="0px"
+                />
+              </div>
+            </HintTooltip>
 
             <button type="button" className="w-6 h-6 rounded flex items-center justify-center invisible">
               <IconAdjustmentsHorizontal className="w-4 h-4 text-foreground" stroke={1.5} />

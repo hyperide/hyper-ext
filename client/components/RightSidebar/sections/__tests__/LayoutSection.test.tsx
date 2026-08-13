@@ -56,6 +56,37 @@ describe('LayoutSection toggle classes', () => {
     expect(colButton?.classList.contains('toggle-active')).toBe(true);
   });
 
+  // HYP-1001: mode-icon hints render via HintTooltip (Radix, in-DOM, capturable), NOT the
+  // native `title` attribute (Chromium-drawn, uncapturable by Playwright/CDP). The button
+  // keeps aria-label + aria-pressed for accessibility; the hint text lives in the Radix
+  // TooltipContent, which only mounts (portaled to body) on hover/focus.
+  it('labels each layout-mode button with aria-label + aria-pressed and no native title (HYP-1001)', () => {
+    const cases = [
+      { layout: 'layout' as const, tid: TID.inspector.layoutDisplaySelect, label: 'Block layout' },
+      { layout: 'col' as const, tid: TID.inspector.layoutFlexDirection, label: 'Vertical stack layout' },
+      { layout: 'row' as const, tid: TID.inspector.viewToggle('row'), label: 'Horizontal stack layout' },
+      { layout: 'grid' as const, tid: TID.inspector.viewToggle('grid'), label: 'Grid layout' },
+    ];
+    for (const { layout, tid, label } of cases) {
+      const { container } = render(<LayoutSection {...defaultProps} selectedLayout={layout} />);
+      const btn = container.querySelector(`[data-testid="${tid}"]`);
+      expect(btn?.getAttribute('aria-label')).toBe(label);
+      // No native title tooltip — it was replaced by an in-DOM Radix hint.
+      expect(btn?.getAttribute('title')).toBeNull();
+      expect(btn?.getAttribute('aria-pressed')).toBe('true');
+    }
+  });
+
+  // HYP-1001: prove the hint is a REAL in-DOM tooltip — focusing the Block mode button makes
+  // its hint text appear in the document (would fail if HintTooltip rendered nothing / a title).
+  it('renders the Block mode-icon hint text in-DOM when the button is focused (HYP-1001)', async () => {
+    const { container, findAllByText } = render(<LayoutSection {...defaultProps} selectedLayout="layout" />);
+    const btn = container.querySelector(`[data-testid="${TID.inspector.layoutDisplaySelect}"]`) as HTMLElement;
+    fireEvent.focus(btn);
+    const found = await findAllByText(/Block — normal document flow/);
+    expect(found.length).toBeGreaterThan(0);
+  });
+
   it('does not apply bg-muted or bg-background to inactive buttons', () => {
     const { container } = render(<LayoutSection {...defaultProps} selectedLayout="layout" />);
     const colButton = container.querySelector('[data-testid="hyper-inspector-layout-flex-direction"]');
