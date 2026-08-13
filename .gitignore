@@ -85,3 +85,5 @@ client/lib/*.js.map
 # Agent scratch — feature-matrix artifacts, viz scripts, local .venv. Machine-local,
 # never tracked and never in the Docker build context.
 agent-scratch/
+# Agent-generated architecture visualization (docs/master-diagram). Machine-local, never committed.
+docs/master-diagram/

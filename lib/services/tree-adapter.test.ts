@@ -186,18 +186,59 @@ describe('tree-adapter', () => {
       expect(result.label).toBe('div "sidebar"');
     });
 
-    it('keeps a real expression child quoted (not the {children} passthrough)', () => {
-      // `<div>{user.name}</div>` is informative as `div "{user.name}"`; only the bare
-      // `{children}` passthrough is special-cased.
+    it('labels a {user.name} member-expression child as an unquoted brace binding', () => {
+      // `<div>{user.name}</div>` parses to childrenType 'expression-complex' with the raw
+      // JSX text `{user.name}`. It is a value binding, not on-screen text, so it must NOT be
+      // quoted (`div "{user.name}"` misreads as a literal string). Keep the braces, drop the
+      // quotes — generalized from the former `{children}`-only special-case.
       const node: ComponentNode = {
         id: '1',
         type: 'div',
         props: { children: '{user.name}' },
         children: [],
+        childrenType: 'expression-complex',
+      };
+      const result = convertComponentNodeToTreeNode(node);
+      expect(result.label).toBe('div {user.name}');
+    });
+
+    it('labels a {count} identifier child as an unquoted brace binding', () => {
+      const node: ComponentNode = {
+        id: '1',
+        type: 'span',
+        props: { children: '{count}' },
+        children: [],
         childrenType: 'expression',
       };
       const result = convertComponentNodeToTreeNode(node);
-      expect(result.label).toBe('div "{user.name}"');
+      expect(result.label).toBe('span {count}');
+    });
+
+    it('labels a numeric-literal expression child as an unquoted brace binding', () => {
+      const node: ComponentNode = {
+        id: '1',
+        type: 'span',
+        props: { children: '{42}' },
+        children: [],
+        childrenType: 'expression-complex',
+      };
+      const result = convertComponentNodeToTreeNode(node);
+      expect(result.label).toBe('span {42}');
+    });
+
+    it('keeps mixed text + expression content QUOTED (not a pure binding leaf)', () => {
+      // `<button>Click {count} times</button>` parses to childrenType 'expression-complex'
+      // with raw text `Click {count} times`. The bare words `Click`/`times` ARE on-screen
+      // text, so the whole label stays quoted — only a PURE `{…}` expression is unquoted.
+      const node: ComponentNode = {
+        id: '1',
+        type: 'button',
+        props: { children: 'Click {count} times' },
+        children: [],
+        childrenType: 'expression-complex',
+      };
+      const result = convertComponentNodeToTreeNode(node);
+      expect(result.label).toBe('button "Click {count} times"');
     });
 
     it('uses placeholder for input label', () => {
@@ -429,6 +470,103 @@ describe('tree-adapter', () => {
       const svgNode = footer?.children?.find((c) => c.label === 'svg');
       expect(svgNode).toBeDefined();
       expect(svgNode?.children).toEqual([]);
+    });
+  });
+
+  describe('expression children: non-JSX bindings vs JSX-bearing descent (real parser)', () => {
+    // Parse a single-component source through the SHARED component-parser and convert the
+    // root JSX to a TreeNode — exercises the real childrenType classification, not a hand-
+    // built node. (The unit tests above hand-build nodes; these prove the end-to-end path.)
+    const parseRoot = (source: string) => {
+      const ast = parseCode(source);
+      const t = require('@babel/types');
+      const _traverse = require('@babel/traverse');
+      const traverse = _traverse.default ?? _traverse;
+      let rootJSX: import('@babel/types').JSXElement | null = null;
+      traverse(ast, {
+        ReturnStatement(path: import('@babel/traverse').NodePath<import('@babel/types').ReturnStatement>) {
+          if (t.isJSXElement(path.node.argument)) {
+            rootJSX = path.node.argument;
+            path.stop();
+          }
+        },
+      });
+      if (!rootJSX) throw new Error('rootJSX not found');
+      const parseContext: ParseContext = { fileAST: ast };
+      const node = parseJSXElement(rootJSX, undefined, undefined, undefined, parseContext);
+      if (!node) throw new Error('componentNode is null');
+      return convertComponentNodeToTreeNode(node);
+    };
+
+    it('labels a non-JSX {user.name} binding UNQUOTED (real parse → expression-complex)', () => {
+      const tree = parseRoot(`function C() { return <div>{user.name}</div>; }`);
+      expect(tree.label).toBe('div {user.name}');
+      expect(tree.children).toEqual([]);
+    });
+
+    it('labels a non-JSX {count} binding UNQUOTED (real parse → expression)', () => {
+      const tree = parseRoot(`function C() { return <span>{count}</span>; }`);
+      expect(tree.label).toBe('span {count}');
+    });
+
+    it('labels a non-JSX {42} numeric-literal binding UNQUOTED (real parse → expression-complex)', () => {
+      const tree = parseRoot(`function C() { return <span>{42}</span>; }`);
+      expect(tree.label).toBe('span {42}');
+    });
+
+    it('keeps plain on-screen text QUOTED (childrenType text, not an expression)', () => {
+      const tree = parseRoot(`function C() { return <button>Submit</button>; }`);
+      expect(tree.label).toBe('button "Submit"');
+    });
+
+    it('keeps MIXED text + expression QUOTED (real parse → expression-complex with bare text)', () => {
+      const tree = parseRoot(`function C() { return <button>Click {count} times</button>; }`);
+      expect(tree.label).toBe('button "Click {count} times"');
+    });
+
+    it('labels a {string-literal} const UNQUOTED — a {…} expression is a binding, not bare text', () => {
+      // Intentional per the generalization: a value wrapped in JSX expression braces is a
+      // binding (`span {'hello'}`), NOT on-screen text. Bare JSX text would be `<span>hello`
+      // → childrenType 'text' → quoted. Source: HYP-794 requirement (string/number const).
+      const tree = parseRoot(`function C() { return <span>{'hello'}</span>; }`);
+      expect(tree.label).toBe("span {'hello'}");
+    });
+
+    it('labels MULTIPLE pure expressions UNQUOTED (real parse → expression-complex, no text)', () => {
+      const tree = parseRoot(`function C() { return <div>{a} {b}</div>; }`);
+      expect(tree.label).toBe('div {a} {b}');
+    });
+
+    it('keeps text INTERLEAVED between two expressions QUOTED (purity scan catches bare text)', () => {
+      const tree = parseRoot(`function C() { return <div>{a} text {b}</div>; }`);
+      expect(tree.label).toBe('div "{a} text {b}"');
+    });
+
+    it('DESCENDS into a JSX-bearing {items.map(()=><Item/>)} expression (map wrapper child)', () => {
+      const tree = parseRoot(`function C() { return <ul>{items.map((i) => <Item key={i.id} />)}</ul>; }`);
+      // Parser classifies the map expression as childrenType 'jsx' and descends, so the
+      // tree gets a synthetic map wrapper child — NOT a quoted leaf label.
+      expect(tree.label).toBe('ul');
+      const mapNode = tree.children?.find((c) => c.type === 'map');
+      expect(mapNode).toBeDefined();
+      expect(mapNode?.label).toBe('items.map()');
+      expect(mapNode?.children).toHaveLength(1);
+      expect(mapNode?.children?.[0].label).toBe('Item');
+    });
+
+    it('DESCENDS into a ternary-with-JSX expression (both branches become children)', () => {
+      const tree = parseRoot(`function C() { return <div>{flag ? <Approved /> : <Rejected />}</div>; }`);
+      expect(tree.label).toBe('div');
+      const labels = (tree.children ?? []).map((c) => c.label);
+      expect(labels).toContain('Approved');
+      expect(labels).toContain('Rejected');
+    });
+
+    it('DESCENDS into a logical-and-with-JSX expression (right branch becomes a child)', () => {
+      const tree = parseRoot(`function C() { return <div>{isVisible && <Banner />}</div>; }`);
+      expect(tree.label).toBe('div');
+      const labels = (tree.children ?? []).map((c) => c.label);
+      expect(labels).toContain('Banner');
     });
   });
 });

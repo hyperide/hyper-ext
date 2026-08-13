@@ -66,11 +66,10 @@ ci:
     leftover-grep:     { enabled: true, tier: block }
     review-threads:    { enabled: true, tier: block }
 
-# ── Ticket tracker — hyperide files tickets in Linear team HYP (CTO decision #4136.4),
-# not GitHub Issues (Issues are disabled on this repo). task-cli reads this block. ───────
-task:
-  backend: linear
-  team: HYP
+# ── Ticket tracker — task-cli routing (Linear team HYP, CTO decision #4136.4) lives in the
+# sibling native ./task.yaml, NOT here: rig-cli's schema is closed at the top level and rejects
+# any key it doesn't own (`task` → "unknown top-level key", exit 2), which blocked rig apply.
+# task-cli reads ./task.yaml with higher precedence than this file, so routing is unchanged. ──
 
 # ── MCP — none provisioned for this repo (developers manage their own). ──────────────────
 mcp:

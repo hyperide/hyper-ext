@@ -32,24 +32,95 @@ export function extractTextFromNode(node: ComponentNode): string {
 }
 
 /**
- * True for a node whose only content is the bare `{children}` passthrough
- * (`<button>{children}</button>`). The static AST walk records this as the raw
- * JSX-expression text `{children}` with childrenType 'expression'. Quoting it in
- * the tree (`button "{children}"`) reads as literal on-screen text, which is
- * misleading — it is a children binding, invariant to any runtime sample. We
- * keep the braces (they signal a JSX binding/expression) but drop the
- * surrounding quotes, labeling it `button {children}`. Narrow on purpose: a real
- * expression like `{user.name}` stays quoted and informative.
+ * Contract: the `childrenType` taxonomy produced by the static AST walk in `analyzeJSXChildren`
+ * (`lib/ast/traverser.ts`) and consumed by component-parser. User-facing impact: a `{…}`
+ * expression child is a value BINDING, not on-screen text; quoting it in
+ * the inspector tree (`div "{user.name}"`) misreads as a literal string the node renders.
+ *
+ * Return the raw `{…}` text to show UNQUOTED when a node's children are a PURE non-JSX
+ * expression — generalizing the former `{children}`-only special-case to every pure non-JSX
+ * expression (`{children}`, `{user.name}`, `{count}`, a string/number literal). On-screen TEXT
+ * (childrenType 'text') is NOT an expression and stays quoted via {@link extractTextFromNode}.
+ *
+ * Node shapes (props.children is the generated child source from analyzeJSXChildren):
+ *
+ *   <button>{children}</button>      →  'expression',         '{children}'        → unquote
+ *   <span>{count}</span>             →  'expression',         '{count}'           → unquote
+ *   <div>{user.name}</div>           →  'expression-complex', '{user.name}'       → unquote
+ *   <span>{42}</span>                →  'expression-complex', '{42}'              → unquote
+ *   <button>Click {count} times</…>  →  'expression-complex', 'Click {count} times' → KEEP QUOTED (mixed)
+ *
+ * childrenType 'expression' is always a single simple expression (identifier / string- or
+ * template-literal, never interleaved with text), so it always unquotes. This intentionally
+ * includes a string/number literal const written as a `{…}` expression (`<span>{'hello'}</span>`
+ * → `span {'hello'}`): a value wrapped in JSX expression braces is a BINDING, not bare on-screen
+ * text — that is the whole point of generalizing the `{children}` special-case. (Bare JSX text
+ * `<span>hello</span>` is childrenType 'text' and stays quoted.) childrenType 'expression-complex'
+ * covers BOTH a pure multi/complex expression AND text mixed with an expression; only the PURE
+ * case is a binding leaf, so mixed content (real on-screen text around a `{…}`) is filtered by
+ * {@link isPureExpressionChildText} and stays quoted.
+ *
+ * JSX-BEARING expressions never reach here: component-parser's `containsJSX` descends into
+ * `{items.map(()=><Item/>)}` / ternary-with-JSX / logical-with-JSX and records childrenType
+ * 'jsx' with real child ComponentNodes, so those subtrees surface as tree CHILDREN (e.g. an
+ * `items.map()` wrapper), never a leaf label. Returns null when the node is not a pure
+ * expression leaf (caller falls through to text/testid/default labeling).
  */
-function isChildrenPassthrough(node: ComponentNode): boolean {
-  return node.childrenType === 'expression' && node.props?.children === '{children}';
+function expressionBindingLabel(node: ComponentNode): string | null {
+  const childrenType = node.childrenType;
+  if (childrenType !== 'expression' && childrenType !== 'expression-complex') {
+    return null;
+  }
+  const children = node.props?.children;
+  if (typeof children !== 'string' || children.length === 0) {
+    return null;
+  }
+  // 'expression-complex' may be a pure multi/complex expression OR text interleaved with a
+  // `{…}` (`Click {count} times`); only the pure case is a binding leaf. ('expression' is
+  // always a single simple expression with no surrounding text, so it skips the check.)
+  if (childrenType === 'expression-complex' && !isPureExpressionChildText(children)) {
+    return null;
+  }
+  return children;
+}
+
+/**
+ * True when `text` (analyzeJSXChildren's generated child source) is entirely `{…}` expression
+ * groups with only whitespace between/around them — i.e. NO bare on-screen text. Balanced-brace
+ * scan, not a start/end check, so interleaved text is caught:
+ *
+ *   '{user.name}'           → pure   (single expression)
+ *   '{a} {b}'               → pure   (two expressions, whitespace between)
+ *   '{{\n  a: 1\n}}'        → pure   (object-literal expression)
+ *   'Click {count} times'   → mixed  (bare words 'Click'/'times' at brace depth 0)
+ *   '{a} text {b}'          → mixed  ('text' at brace depth 0)
+ *
+ * A brace inside a string literal could miscount depth in EITHER direction — a stray `}` drops
+ * depth early, a stray `{` leaves depth > 0 at end — but both rare cases resolve to "mixed" →
+ * quoted, the safe pre-existing label, never a worse outcome.
+ */
+function isPureExpressionChildText(text: string): boolean {
+  let depth = 0;
+  let sawExpression = false;
+  for (const ch of text) {
+    if (ch === '{') {
+      depth++;
+      sawExpression = true;
+    } else if (ch === '}') {
+      if (depth > 0) depth--;
+    } else if (depth === 0 && !/\s/.test(ch)) {
+      return false; // bare on-screen text outside any `{…}` → mixed content
+    }
+  }
+  return sawExpression && depth === 0;
 }
 
 function computeLabel(node: ComponentNode): string {
   const tag = node.type;
 
   if (tag === 'button') {
-    if (isChildrenPassthrough(node)) return `button {children}`;
+    const buttonBinding = expressionBindingLabel(node);
+    if (buttonBinding) return `button ${buttonBinding}`;
     const buttonText = extractTextFromNode(node);
     if (buttonText) return `button "${buttonText}"`;
     const buttonType = (node.props?.type as string) || 'submit';
@@ -64,21 +135,24 @@ function computeLabel(node: ComponentNode): string {
 
   if (FRAME_TAGS.has(tag)) {
     if (node.props?.['data-testid']) return `${tag} "${node.props['data-testid']}"`;
-    if (isChildrenPassthrough(node)) return `${tag} {children}`;
+    const frameBinding = expressionBindingLabel(node);
+    if (frameBinding) return `${tag} ${frameBinding}`;
     const text = extractTextFromNode(node);
     if (text) return `${tag} "${text}"`;
     return tag;
   }
 
   if (/^[A-Z]/.test(tag)) {
-    if (isChildrenPassthrough(node)) return `${tag} {children}`;
+    const componentBinding = expressionBindingLabel(node);
+    if (componentBinding) return `${tag} ${componentBinding}`;
     const componentText = extractTextFromNode(node);
     if (componentText) return `${tag} "${componentText}"`;
     return tag;
   }
 
   if (node.props?.['data-testid']) return `${tag} "${node.props['data-testid']}"`;
-  if (isChildrenPassthrough(node)) return `${tag} {children}`;
+  const elementBinding = expressionBindingLabel(node);
+  if (elementBinding) return `${tag} ${elementBinding}`;
   const elementText = extractTextFromNode(node);
   if (elementText) return `${tag} "${elementText}"`;
   return tag;

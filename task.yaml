@@ -1,0 +1,16 @@
+# task.yaml — per-repo task-cli config (native format, read by task-cli's config cascade).
+#
+# Routes `task new` to Linear team HYP (CTO decision #4136.4). GitHub Issues are DISABLED on this
+# repo, so the default `github-issues` backend hits a disabled endpoint (HTTP 410) and ticket
+# creation fails. This routing previously lived in rig.yaml's top-level `task:` block, but rig-cli's
+# schema is closed at the top level and rejects any key it does not own — `task` raised
+# "unknown top-level key: task" (exit 2), blocking `rig status` / `rig apply` on this repo.
+#
+# task-cli's cascade (tasklib/config.py: defaults → ~/.config global → rig.yaml `task:` →
+# this task.yaml → --config) reads this native file with HIGHER precedence than rig.yaml, so the
+# resolved backend is identical to the old rig.yaml block. Native shape uses task-cli's own nesting
+# (`linear.team`), not the rig flat shorthand (`team`).
+version: 1
+backend: linear
+linear:
+  team: HYP
