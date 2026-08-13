@@ -472,7 +472,18 @@ describe('HYP-1160 (c2): attach supersede + adopted-server lifecycle (PR #692 re
 
       await manager.stop();
       // The adopted server was killed via its recorded process group and its
-      // registry record cleared — nothing may re-attach to it.
+      // registry record cleared — nothing may re-attach to it. The SIGTERM →
+      // poll → SIGKILL ladder is async-bounded, so under CI runner load the
+      // exit can lag the stop() resolution — poll briefly instead of asserting
+      // on the very first tick (HYP-1187: this failed in-suite at the 5s
+      // default timeout while passing standalone). Real-clock poll justified:
+      // an OS process death cannot be driven by fake timers.
+      const deathDeadline = Date.now() + 3_000;
+      while (isProcessAlive(serverPid) && Date.now() < deathDeadline) {
+        const { promise: tick, resolve: tickDone } = Promise.withResolvers<void>();
+        setTimeout(tickDone, 50);
+        await tick;
+      }
       expect(isProcessAlive(serverPid)).toBe(false);
       expect(readOwnedDevServers(dir, store)).toEqual([]);
       expect(manager.getState().status).toBe('stopped');
@@ -498,7 +509,7 @@ describe('HYP-1160 (c2): attach supersede + adopted-server lifecycle (PR #692 re
         }
       }
     }
-  });
+  }, 20_000);
 });
 
 describe('HYP-1160 (e): plan invalidation on edited scripts (PR #692 review)', () => {
