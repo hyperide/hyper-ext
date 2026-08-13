@@ -54,6 +54,8 @@ type GeneratorReason =
   | 'chained-call' // receiver is a CallExpression (.filter/.slice/gen()) — breaks itemIndex (A6)
   | 'unresolved' // root identifier has no resolvable local binding (imported / unknown)
   | 'non-array-init' // local binding exists but its init is neither an array literal nor a hook
+  | 'nested-param' // receiver is a param of a nested helper/callback, not the component's own prop
+  | 'mutable-array-binding' // let/var array literal — may be reassigned before render, not the rendered array
   | 'ambiguous'; // could not pin the receiver expression to a single binding
 
 /**

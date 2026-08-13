@@ -47,6 +47,33 @@ export interface ReorderElementResult {
   error?: string;
 }
 
+/**
+ * DOM-mode map-iteration op on a Sample-file array prop (HYP-290d, category 1).
+ * Splices the array passed via `propName` to the Sample export, NOT the JSX template.
+ */
+export interface MapSampleArrayOpParams {
+  /** Sample file path (`*.samples.tsx`); also the snapshot target for undo. */
+  filePath: string;
+  /** Component file containing the `.map()` — the classifier gate reads it. */
+  componentFilePath: string;
+  /** Sample export whose JSX passes the array prop, e.g. "SampleDefault". */
+  sampleName: string;
+  /** Raw `.map()` receiver source (from getSelectedMapContext); must be a bare identifier. */
+  mapExpression: string;
+  /** Array-element index (== rendered itemIndex for a bare map). */
+  itemIndex: number;
+  operation: 'delete' | 'duplicate' | 'reorder';
+  /** Destination index for `reorder`. */
+  targetIndex?: number;
+}
+
+export interface MapSampleArrayOpResult {
+  success: boolean;
+  /** Pre-mutation file snapshot id (from fileSnapshotMiddleware) — used for undo. */
+  snapshotId?: number;
+  error?: string;
+}
+
 export interface DuplicateElementResult {
   success: boolean;
   newId?: string;
@@ -144,6 +171,7 @@ export interface ASTApiService {
   deleteElements(params: DeleteElementsParams): Promise<ApiResult>;
   duplicateElement(params: DuplicateElementParams): Promise<DuplicateElementResult>;
   reorderElement(params: ReorderElementParams): Promise<ReorderElementResult>;
+  mapSampleArrayOp(params: MapSampleArrayOpParams): Promise<MapSampleArrayOpResult>;
   pasteElement(params: PasteElementParams): Promise<PasteElementResult>;
   updateStyles(params: UpdateStylesParams): Promise<UpdateStylesResult>;
   updateProp(params: UpdatePropParams): Promise<ApiResult>;

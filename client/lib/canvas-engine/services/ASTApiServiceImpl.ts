@@ -14,6 +14,8 @@ import type {
   EditConditionResult,
   InsertElementParams,
   InsertElementResult,
+  MapSampleArrayOpParams,
+  MapSampleArrayOpResult,
   ParseComponentResult,
   PasteElementParams,
   PasteElementResult,
@@ -82,6 +84,15 @@ export class ASTApiServiceImpl implements ASTApiService {
         filePath: params.filePath,
         targetIndex: params.targetIndex,
       }),
+    });
+    return response.json();
+  }
+
+  async mapSampleArrayOp(params: MapSampleArrayOpParams): Promise<MapSampleArrayOpResult> {
+    const response = await authFetch('/api/map-sample-array-op', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
     });
     return response.json();
   }

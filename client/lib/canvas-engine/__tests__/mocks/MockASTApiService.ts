@@ -14,6 +14,8 @@ import type {
   EditConditionResult,
   InsertElementParams,
   InsertElementResult,
+  MapSampleArrayOpParams,
+  MapSampleArrayOpResult,
   ParseComponentResult,
   PasteElementParams,
   PasteElementResult,
@@ -58,6 +60,9 @@ export class MockASTApiService implements ASTApiService {
    * (asserts ASTReorderOperation awaits `_pendingPromise`, no race).
    */
   reorderElementGate?: Promise<void>;
+  mapSampleArrayOpResult: MapSampleArrayOpResult = { success: true, snapshotId: 7 };
+  /** Gate to keep the sample-array write in-flight (mirrors reorderElementGate). */
+  mapSampleArrayOpGate?: Promise<void>;
   updateStylesResult: UpdateStylesResult = {
     success: true,
     snapshotId: 1,
@@ -102,6 +107,12 @@ export class MockASTApiService implements ASTApiService {
     this.calls.push({ method: 'reorderElement', args: [params] });
     if (this.reorderElementGate) await this.reorderElementGate;
     return { ...this.reorderElementResult };
+  }
+
+  async mapSampleArrayOp(params: MapSampleArrayOpParams): Promise<MapSampleArrayOpResult> {
+    this.calls.push({ method: 'mapSampleArrayOp', args: [params] });
+    if (this.mapSampleArrayOpGate) await this.mapSampleArrayOpGate;
+    return { ...this.mapSampleArrayOpResult };
   }
 
   async updateStyles(params: UpdateStylesParams): Promise<UpdateStylesResult> {
@@ -154,6 +165,7 @@ export class MockASTApiService implements ASTApiService {
     this.calls = [];
     this.snapshotCounter = 10;
     this.reorderElementGate = undefined;
+    this.mapSampleArrayOpGate = undefined;
   }
 
   getCallsFor(method: string): MockCall[] {
