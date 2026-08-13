@@ -46,19 +46,35 @@ export function parseTamaguiConfigColors(source: string): TamaguiPalette | null 
   // tokens.color is treated as unparseable (null).
   let unresolved = false;
 
-  traverse(ast, {
-    ObjectProperty(path) {
-      if (!isKeyNamed(path.node.key, 'color')) return;
-      // Only consider a `color` object that lives inside a `tokens` context —
-      // e.g. `tokens: { color: {...} }`, `const tokens = { color: {...} }`,
-      // `createTokens({ color: {...} })`, possibly with `as const` wrappers.
-      if (!isInsideTokens(path)) return;
-      const colorObj = resolveColorObject(path);
-      // A `color` in a tokens context we can't statically resolve makes the
-      // palette untrustworthy → reject (Radix fallback) rather than guess.
-      if (!colorObj || !collectStringEntries(colorObj, palette)) unresolved = true;
-    },
-  });
+  // HYP-784: unlike the structure-only residual sites, this traverse GENUINELY needs scope —
+  // `resolveColorObject` follows a `tokens: { color }` identifier reference via
+  // `path.scope.getBinding`, so it cannot be made scope-free. A user tamagui config with a
+  // top-level name collision (e.g. `import { Layout } from 'antd'` + `export function Layout`)
+  // makes babel's scope crawl throw `Duplicate declaration`. We can't trust a partially-walked
+  // palette, so degrade to `null` — exactly the "nothing statically resolvable" result, which
+  // makes callers fall back to the built-in Radix palette.
+  try {
+    traverse(ast, {
+      ObjectProperty(path) {
+        if (!isKeyNamed(path.node.key, 'color')) return;
+        // Only consider a `color` object that lives inside a `tokens` context —
+        // e.g. `tokens: { color: {...} }`, `const tokens = { color: {...} }`,
+        // `createTokens({ color: {...} })`, possibly with `as const` wrappers.
+        if (!isInsideTokens(path)) return;
+        const colorObj = resolveColorObject(path);
+        // A `color` in a tokens context we can't statically resolve makes the
+        // palette untrustworthy → reject (Radix fallback) rather than guess.
+        if (!colorObj || !collectStringEntries(colorObj, palette)) unresolved = true;
+      },
+    });
+  } catch (error) {
+    console.warn(
+      `[tamagui] parseTamaguiConfigColors: scope crawl failed (${
+        error instanceof Error ? error.message : String(error)
+      }); falling back to the default palette`,
+    );
+    return null;
+  }
 
   if (unresolved) return null;
   return Object.keys(palette).length > 0 ? palette : null;

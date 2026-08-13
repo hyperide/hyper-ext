@@ -11,16 +11,18 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
 
 import { readAndParseFile } from '../../ast/parser.node';
-import { findAllJSXElements } from '../../ast/traverser';
+import { findAllJSXElements, traverseWithoutScope } from '../../ast/traverser';
 import type { ComponentAnalysis, CvaVariantInfo, PropDefinition, PropsInterfaceInfo } from '../types';
 import { toKebabCase } from '../utils/naming';
 import { findInteractiveElements } from './interactive-detector';
 
-const traverse: typeof _traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
+// HYP-784: every walk below (props interface, CVA variants, exports, legacy sample detection) is
+// structure-only and never reads `path.scope`. Routing through `traverseWithoutScope` skips babel's
+// scope crawl, which throws `Duplicate declaration` on a user component with a top-level name
+// collision (e.g. `import { Card } from 'antd'` + `export function Card`).
 
 /**
  * Extract component name from file path
@@ -43,7 +45,7 @@ function extractPropsInterface(ast: t.File, componentName: string): PropsInterfa
   // Common props interface naming patterns
   const possibleNames = [`${componentName}Props`, `I${componentName}Props`, `${componentName}PropsType`, 'Props'];
 
-  traverse(ast, {
+  traverseWithoutScope(ast, {
     // Handle interface declarations
     TSInterfaceDeclaration(path) {
       const name = path.node.id.name;
@@ -227,7 +229,7 @@ function extractLeadingComment(node: t.Node): string | undefined {
 function extractCvaVariants(ast: t.File): CvaVariantInfo[] {
   const variants: CvaVariantInfo[] = [];
 
-  traverse(ast, {
+  traverseWithoutScope(ast, {
     CallExpression(path) {
       // Look for cva(...) calls
       if (!t.isIdentifier(path.node.callee) || path.node.callee.name !== 'cva') {
@@ -292,7 +294,7 @@ function extractCvaVariants(ast: t.File): CvaVariantInfo[] {
 function hasSampleRenderExport(ast: t.File): boolean {
   let found = false;
 
-  traverse(ast, {
+  traverseWithoutScope(ast, {
     ExportNamedDeclaration(path) {
       if (path.node.declaration) {
         if (t.isVariableDeclaration(path.node.declaration)) {
@@ -342,7 +344,7 @@ function hasSampleRenderExport(ast: t.File): boolean {
 function hasSampleRenderersExport(ast: t.File): boolean {
   let found = false;
 
-  traverse(ast, {
+  traverseWithoutScope(ast, {
     ExportNamedDeclaration(path) {
       if (path.node.declaration) {
         if (t.isVariableDeclaration(path.node.declaration)) {
@@ -386,7 +388,7 @@ function hasSampleRenderersExport(ast: t.File): boolean {
 function extractExports(ast: t.File): string[] {
   const exports: string[] = [];
 
-  traverse(ast, {
+  traverseWithoutScope(ast, {
     ExportNamedDeclaration(path) {
       if (path.node.declaration) {
         if (t.isVariableDeclaration(path.node.declaration)) {
