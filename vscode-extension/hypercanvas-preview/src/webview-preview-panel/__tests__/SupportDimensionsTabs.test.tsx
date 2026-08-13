@@ -1,7 +1,11 @@
 /**
  * Unit tests for SupportDimensionsTabs — the per-(sub-)repo support breakdown shown in
- * the preview panel as one tab per BLOCKING dimension (unsupported | needs-setup), each a
- * table of WHY (reason + evidence rows).
+ * the preview panel for BLOCKING dimensions (unsupported | needs-setup). A single
+ * dimension renders straight to its screen (no tab bar); a tab bar is added ON TOP only
+ * when there's more than one. The 'framework'+'unsupported' dimension (Vue/Svelte/
+ * Angular/no-React) renders the legacy cross-framework compatibility table
+ * (`FrameworkUnsupportedContent`, same as `UnsupportedFrameworkScreen`) — HYP-913, the
+ * fix for Alex's repeated "this is some new screen" report.
  *
  * Renders through the extension's OWN react-dom/client (not @testing-library/react). The
  * extension declares react/react-dom locally while @testing-library/react resolves from
@@ -16,6 +20,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { FRAMEWORK_SUPPORT } from '@shared/framework-support';
 import { TID } from '@shared/data-testid-map';
 import type { SupportDimension } from '../../types';
 import { SupportDimensionsTabs } from '../SupportDimensionsTabs';
@@ -96,19 +101,37 @@ const rnDim: SupportDimension = {
 };
 
 describe('SupportDimensionsTabs', () => {
-  it('renders the root and one tab button per dimension', () => {
+  it('a single framework-unsupported dimension renders no tab bar and the legacy compatibility table', () => {
+    const container = renderLocal(<SupportDimensionsTabs dimensions={[frameworkDim]} />);
+    expect(findOptional(container, TID.preview.supportTabsRoot)).not.toBeNull();
+    expect(container.querySelectorAll('[role="tablist"]').length).toBe(0);
+    expect(container.textContent).not.toContain('This project needs attention');
+
+    const panel = find(container, TID.preview.supportTabPanel('framework'));
+    expect(panel.getAttribute('role')).toBeNull();
+    expect(panel.textContent).toContain('Framework not supported');
+    expect(panel.textContent).toContain('Vue.js projects not supported');
+    // The FULL cross-framework table, not just the detected framework's own evidence rows —
+    // same content as the pre-HYP-788 UnsupportedFrameworkScreen (HYP-913).
+    for (const { name } of FRAMEWORK_SUPPORT) {
+      expect(findOptional(container, TID.preview.unsupportedFrameworkRow(name))).not.toBeNull();
+    }
+  });
+
+  it('renders the root and one tab button per dimension when there is more than one', () => {
     const container = renderLocal(<SupportDimensionsTabs dimensions={[frameworkDim, bundlerDim]} />);
     expect(findOptional(container, TID.preview.supportTabsRoot)).not.toBeNull();
     expect(findOptional(container, TID.preview.supportTab('framework'))).not.toBeNull();
     expect(findOptional(container, TID.preview.supportTab('bundler'))).not.toBeNull();
   });
 
-  it('shows the first dimension reason + evidence by default', () => {
+  it('shows the legacy compatibility table for the framework dimension by default, as an ADDITION not a replacement', () => {
     const container = renderLocal(<SupportDimensionsTabs dimensions={[frameworkDim, bundlerDim]} />);
     const panel = find(container, TID.preview.supportTabPanel('framework'));
+    expect(panel.getAttribute('role')).toBe('tabpanel');
     expect(panel.textContent).toContain('Vue.js projects not supported');
-    expect(panel.textContent).toContain('Detected framework');
-    expect(panel.textContent).toContain('Vue');
+    expect(panel.textContent).toContain('Framework not supported');
+    expect(findOptional(container, TID.preview.unsupportedFrameworkRow('Vue'))).not.toBeNull();
   });
 
   it('switches the visible panel when another tab is clicked', () => {

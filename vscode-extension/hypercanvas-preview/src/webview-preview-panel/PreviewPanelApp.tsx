@@ -281,11 +281,13 @@ function PreviewContent() {
     canvas.sendEvent({ type: 'command:fixUnsupportedProject' });
   }, [canvas]);
 
-  // HYP-788: per-(sub-)repo support breakdown → one tab per BLOCKING dimension
-  // (unsupported | needs-setup), each a table of WHY, for the currently-open repo or the
-  // active monorepo sub-repo. This is the authoritative unsupported surface: it supersedes
-  // the legacy single-message screens when the host provides supportDimensions, and falls
-  // back to them when absent (older host) or when nothing is blocking.
+  // HYP-788/911: per-(sub-)repo support breakdown for the currently-open repo or the
+  // active monorepo sub-repo. This is the authoritative unsupported surface when the host
+  // provides supportDimensions (falls back to the legacy single-message screens below only
+  // when absent — older host — or when nothing is blocking). It does NOT invent a new
+  // screen for the common framework-unsupported case: SupportDimensionsTabs embeds the
+  // SAME legacy compatibility table as UnsupportedFrameworkScreen for that dimension, and
+  // only ADDS a tab bar on top when there's more than one blocking dimension (HYP-913).
   const supportTabs = selectDimensionTabs(projectCapabilities?.supportDimensions ?? []);
   if (supportTabs.length > 0) {
     return <SupportDimensionsTabs dimensions={supportTabs} onFix={handleDimensionFix} />;

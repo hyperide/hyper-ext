@@ -1,17 +1,23 @@
 /**
- * Support-dimension table (+ tabs when there is more than one) for the VS Code preview
- * panel (HYP-788, HYP-905 cleanup).
+ * Support-dimension screen for the VS Code preview panel (HYP-788, HYP-905/HYP-910, HYP-913).
  *
  * Accessed via: PreviewPanelApp — rendered when the currently-open repo (or the active
  * monorepo sub-repo) has one or more BLOCKING support dimensions (unsupported |
- * needs-setup). This is the SAME "why is this project not supported" table surface as
- * before HYP-788 — a single dimension renders the table with no tab bar (there is
- * nothing to switch between); a tab bar is added ONLY when there is more than one
- * blocking dimension to choose from. Each panel is a TABLE of WHY (reason + evidence
- * rows), plus an optional Fix action for auto-fixable needs-setup dimensions
- * (react-native-web). The heading is always the active dimension's own concrete
- * `reason` string (e.g. "Vue.js projects not supported") — never a generic
- * "needs attention"-style placeholder that doesn't say what's actually wrong.
+ * needs-setup).
+ *
+ * The BASE is always a single-screen surface, never a tab strip on its own:
+ *   - The 'framework' dimension with status 'unsupported' (Vue/Svelte/Angular/no-React)
+ *     renders the SAME cross-framework compatibility table as the pre-HYP-788
+ *     `UnsupportedFrameworkScreen` (via the shared `FrameworkUnsupportedContent`) — this
+ *     is the screen Alex has asked for three times (HYP-905/HYP-910/HYP-913): do not
+ *     replace it with a differently-shaped "why is THIS dimension blocked" table.
+ *   - Every other blocking dimension (bundler, styleSystem needs-setup, react-native
+ *     needs-setup) renders its own reason + evidence table — there is no legacy screen
+ *     for these, they were introduced by HYP-788 itself.
+ * A tab bar is added ON TOP of the base — pure addition, never a replacement — ONLY when
+ * there is more than one blocking dimension, so you can switch to see why an ADDITIONAL
+ * dimension is blocked. A single dimension never shows a tab bar and never shows the
+ * generic "This project needs attention" heading (dropped for good in HYP-905/HYP-913).
  *
  * Scope: the active (sub-)repo ONLY — the canvas does NOT crawl the whole monorepo (that
  * traversal is a separate capture tool, explicitly NOT this feature). CSS-in-JS / inspect-only
@@ -20,8 +26,15 @@
  */
 
 import { useState } from 'react';
+import { FrameworkUnsupportedContent } from '@shared/components/overlays';
+import { FRAMEWORK_SUPPORT } from '@shared/framework-support';
 import { TID } from '@shared/data-testid-map';
 import type { SupportDimension, SupportStatus } from '../types';
+
+/** The one case with a pre-existing legacy screen to preserve verbatim (HYP-913). */
+function isLegacyFrameworkScreen(dimension: SupportDimension): boolean {
+  return dimension.id === 'framework' && dimension.status === 'unsupported';
+}
 
 const STATUS_LABEL: Record<SupportStatus, string> = {
   supported: 'Supported',
@@ -56,9 +69,8 @@ export function SupportDimensionsTabs({
 
   return (
     <div data-testid={TID.preview.supportTabsRoot} style={rootStyle}>
-      {/* Tabs only make sense when there's more than one dimension to switch between —
-          a single blocking dimension renders straight to its table, same as the
-          pre-HYP-788 single-message screen. */}
+      {/* Tabs only make sense when there's more than one dimension to switch between — a
+          single blocking dimension renders straight to its screen, no tab bar (HYP-905/913). */}
       {hasTabs && (
         <div role="tablist" style={tabBarStyle}>
           {dimensions.map((d) => (
@@ -67,8 +79,6 @@ export function SupportDimensionsTabs({
         </div>
       )}
 
-      {/* codex review: role="tabpanel" is only valid ARIA when a tablist actually
-          owns it — an orphaned tabpanel with no tabs confuses assistive tech. */}
       <DimensionPanel dimension={active} onFix={onFix} asTabPanel={hasTabs} />
     </div>
   );
@@ -113,12 +123,23 @@ function DimensionPanel({
   /** Only apply tabpanel ARIA semantics when a tablist is actually present (HYP-905). */
   asTabPanel: boolean;
 }) {
+  // codex review (HYP-905): role="tabpanel" is only valid ARIA when a tablist actually
+  // owns it — an orphaned tabpanel with no tabs confuses assistive tech.
+  const role = asTabPanel ? 'tabpanel' : undefined;
+  const testId = TID.preview.supportTabPanel(dimension.id);
+
+  if (isLegacyFrameworkScreen(dimension)) {
+    return (
+      <div role={role} data-testid={testId} style={legacyFrameworkPanelStyle}>
+        <div style={legacyFrameworkCardStyle}>
+          <FrameworkUnsupportedContent description={dimension.reason} frameworkSupport={FRAMEWORK_SUPPORT} />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div
-      role={asTabPanel ? 'tabpanel' : undefined}
-      data-testid={TID.preview.supportTabPanel(dimension.id)}
-      style={panelStyle}
-    >
+    <div role={role} data-testid={testId} style={panelStyle}>
       <div style={statusRowStyle}>
         <span style={{ ...statusBadgeStyle, color: STATUS_COLOR[dimension.status] }}>
           {STATUS_LABEL[dimension.status]}
@@ -194,6 +215,27 @@ const dotStyle: React.CSSProperties = {
 
 const panelStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 12 };
 
+// Mirrors PreviewSetupOverlay's OverlayShell + card centering so the embedded legacy
+// framework screen looks identical to the standalone UnsupportedFrameworkScreen, even
+// though it lives in normal flow here (not an absolutely-positioned overlay) — HYP-913.
+const legacyFrameworkPanelStyle: React.CSSProperties = {
+  flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const legacyFrameworkCardStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 16,
+  maxWidth: 400,
+  width: '90%',
+  textAlign: 'center',
+  padding: '24px 0',
+};
+
 const statusRowStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4 };
 
 const statusBadgeStyle: React.CSSProperties = {
@@ -203,8 +245,6 @@ const statusBadgeStyle: React.CSSProperties = {
   letterSpacing: 0.5,
 };
 
-// The reason string doubles as this panel's heading now that the generic
-// "needs attention" header is gone — sized like one (HYP-905).
 const reasonStyle: React.CSSProperties = { fontSize: 16, fontWeight: 600 };
 
 const tableStyle: React.CSSProperties = {

@@ -7,6 +7,13 @@
  *   variant (HYP-647): it passes a detection-specific `description` and the
  *   e2e-pinned root testId. Framework rows always carry
  *   `TID.preview.unsupportedFrameworkRow(name)` testids on both platforms.
+ *
+ * `FrameworkUnsupportedContent` (the icon + heading + compatibility table, no
+ * OverlayShell/buttons) is exported separately so `SupportDimensionsTabs`
+ * (VS Code preview panel) can embed the SAME markup for its 'framework'
+ * dimension instead of a differently-shaped per-dimension evidence table
+ * (HYP-913 — the tab surface must never look like a "new screen" for the
+ * single most common unsupported case).
  */
 
 import type { CSSProperties } from 'react';
@@ -168,25 +175,7 @@ export function PreviewSetupOverlay({
   return (
     <OverlayShell testId={testId}>
       <div style={{ ...cardStyle, overflowY: 'auto', maxHeight: '100%' }}>
-        <div style={{ ...warningStyle, color: 'var(--overlay-destructive)' }}>⚠</div>
-        <h2 style={headingStyle}>Framework not supported</h2>
-        <p style={descStyle}>{description ?? 'HyperIDE could not detect a supported framework in this project.'}</p>
-        {frameworkSupport && frameworkSupport.length > 0 && (
-          <div style={tableStyle}>
-            <div style={tableHeaderStyle}>
-              <span style={{ textAlign: 'left' }}>Framework</span>
-              <span>Status</span>
-            </div>
-            {frameworkSupport.map(({ name, level }) => (
-              <div key={name} data-testid={TID.preview.unsupportedFrameworkRow(name)} style={tableRowStyle}>
-                <span style={{ textAlign: 'left' }}>{name}</span>
-                <span style={{ fontSize: 12, color: BADGE_COLORS[level] ?? 'var(--overlay-muted)' }}>
-                  {BADGE_LABELS[level] ?? level}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        <FrameworkUnsupportedContent description={description} frameworkSupport={frameworkSupport} />
         <div style={btnRowStyle}>
           {onDismiss && (
             <button type="button" onClick={onDismiss} style={secondaryBtnStyle}>
@@ -201,5 +190,44 @@ export function PreviewSetupOverlay({
         </div>
       </div>
     </OverlayShell>
+  );
+}
+
+/**
+ * The "framework not supported" identity — warning icon, heading, description, and the
+ * full cross-framework compatibility table (every entry in `frameworkSupport`, not just
+ * the one detected in the current project). This is the exact pre-HYP-788 screen content;
+ * kept as its own component (no OverlayShell, no buttons) so `SupportDimensionsTabs` can
+ * embed it unchanged for the 'framework' dimension (HYP-913).
+ */
+export function FrameworkUnsupportedContent({
+  description,
+  frameworkSupport,
+}: {
+  description?: string;
+  frameworkSupport?: Array<{ name: string; level: SupportLevel }>;
+}) {
+  return (
+    <>
+      <div style={{ ...warningStyle, color: 'var(--overlay-destructive)' }}>⚠</div>
+      <h2 style={headingStyle}>Framework not supported</h2>
+      <p style={descStyle}>{description ?? 'HyperIDE could not detect a supported framework in this project.'}</p>
+      {frameworkSupport && frameworkSupport.length > 0 && (
+        <div style={tableStyle}>
+          <div style={tableHeaderStyle}>
+            <span style={{ textAlign: 'left' }}>Framework</span>
+            <span>Status</span>
+          </div>
+          {frameworkSupport.map(({ name, level }) => (
+            <div key={name} data-testid={TID.preview.unsupportedFrameworkRow(name)} style={tableRowStyle}>
+              <span style={{ textAlign: 'left' }}>{name}</span>
+              <span style={{ fontSize: 12, color: BADGE_COLORS[level] ?? 'var(--overlay-muted)' }}>
+                {BADGE_LABELS[level] ?? level}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
