@@ -23,6 +23,8 @@
  *   would disable translation on Windows (HYP-435).
  */
 
+import { isAbsolute, join } from 'node:path';
+
 /** Convert any backslash separators to forward slashes. */
 function toForwardSlashes(p: string): string {
   return p.includes('\\') ? p.replace(/\\/g, '/') : p;
@@ -85,4 +87,25 @@ export function toRepoRelativeElementId(elementId: string, subProjectPrefix: str
   const translated = toRepoRelativePath(m[1], subProjectPrefix);
   if (translated === m[1]) return elementId;
   return `${translated}:${m[2]}:${m[3]}`;
+}
+
+/**
+ * Resolve a (possibly sub-project-relative) component path to an absolute path on
+ * disk, re-rooting it through the sub-project prefix first.
+ *
+ * In a monorepo opened at the repo root the iframe/error-boundary reports
+ * sub-project-relative paths (`src/app/ui/HostField.tsx`), but files live under
+ * the sub-project (`<workspaceRoot>/targets/conloca-app/src/app/ui/HostField.tsx`).
+ * Joining the sub-relative path straight onto the workspace root misses the prefix
+ * and the read fails ("Could not read component file"). Single-package projects
+ * have an empty prefix, so this is an identity re-root.
+ */
+export function resolveComponentAbsPath(
+  componentPath: string,
+  workspaceRoot: string,
+  subProjectPrefix: string,
+): string {
+  if (isAbsolute(componentPath)) return componentPath;
+  const repoRel = toRepoRelativePath(componentPath, subProjectPrefix);
+  return isAbsolute(repoRel) ? repoRel : join(workspaceRoot, repoRel);
 }

@@ -23,7 +23,7 @@ import {
 import { escapeRegex, extractComponentName } from '../../../lib/preview-generator/scanner';
 import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
-import { deriveSubProjectPrefix } from './bridges/monorepo-path-translate';
+import { deriveSubProjectPrefix, resolveComponentAbsPath } from './bridges/monorepo-path-translate';
 import {
   canNavigate,
   createComponentState,
@@ -677,7 +677,11 @@ export class PreviewPanel {
   ): Promise<boolean> {
     if (!componentPath) return false;
 
-    const absPath = path.isAbsolute(componentPath) ? componentPath : path.join(this._workspaceRoot, componentPath);
+    // componentPath from the error-boundary message is sub-project-relative in a
+    // monorepo (e.g. 'src/app/ui/HostField.tsx'); re-root it through the sub-project
+    // prefix so the file read doesn't miss 'targets/<app>/' and fail (HYP-479).
+    const subProjectPrefix = deriveSubProjectPrefix(this._currentComponent, this._previewComponent);
+    const absPath = resolveComponentAbsPath(componentPath, this._workspaceRoot, subProjectPrefix);
     const exportName = sampleName || 'SampleDefault';
     const revealInEditor = options?.revealInEditor ?? true;
     const notifySampleCreated = options?.notifySampleCreated ?? true;

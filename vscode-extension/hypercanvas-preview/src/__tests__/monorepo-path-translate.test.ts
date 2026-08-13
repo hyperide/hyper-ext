@@ -1,9 +1,32 @@
 import { describe, expect, it } from 'bun:test';
 import {
   deriveSubProjectPrefix,
+  resolveComponentAbsPath,
   toRepoRelativeElementId,
   toRepoRelativePath,
 } from '../bridges/monorepo-path-translate';
+
+describe('resolveComponentAbsPath', () => {
+  it('re-roots a sub-project-relative path through the prefix (monorepo)', () => {
+    expect(resolveComponentAbsPath('src/app/ui/HostField.tsx', '/repo', 'targets/conloca-app/')).toBe(
+      '/repo/targets/conloca-app/src/app/ui/HostField.tsx',
+    );
+  });
+
+  it('is identity re-root for single-package projects (empty prefix)', () => {
+    expect(resolveComponentAbsPath('src/app/ui/HostField.tsx', '/repo', '')).toBe('/repo/src/app/ui/HostField.tsx');
+  });
+
+  it('does not double-prepend an already repo-relative path', () => {
+    expect(resolveComponentAbsPath('targets/conloca-app/src/app/x.tsx', '/repo', 'targets/conloca-app/')).toBe(
+      '/repo/targets/conloca-app/src/app/x.tsx',
+    );
+  });
+
+  it('passes absolute paths through unchanged', () => {
+    expect(resolveComponentAbsPath('/abs/src/x.tsx', '/repo', 'targets/conloca-app/')).toBe('/abs/src/x.tsx');
+  });
+});
 
 describe('deriveSubProjectPrefix', () => {
   it('derives the prefix from repo-relative minus sub-relative suffix', () => {
