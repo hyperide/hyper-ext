@@ -4,7 +4,12 @@
  * Accessed via: Internal module, not exposed
  */
 import { describe, expect, it } from 'bun:test';
-import { findNearestTamaguiTokens, getAllTamaguiColors } from '../values';
+import {
+  findNearestTamaguiTokens,
+  getAllTamaguiColors,
+  getTamaguiTokenFromHex,
+  TAMAGUI_SEMANTIC_TOKENS,
+} from '../values';
 
 describe('getAllTamaguiColors', () => {
   it('should include palette tokens', () => {
@@ -43,6 +48,47 @@ describe('getAllTamaguiColors', () => {
   it('should have 144 entries total (120 palette + 24 semantic)', () => {
     const colors = getAllTamaguiColors();
     expect(colors).toHaveLength(144);
+  });
+});
+
+describe('getTamaguiTokenFromHex', () => {
+  it('should return palette token for a palette-only hex', () => {
+    // #0090ff is blue9 in palette, not in semantic tokens
+    expect(getTamaguiTokenFromHex('#0090ff')).toBe('blue9');
+  });
+
+  it('should prefer palette token over semantic for shared hex (e.g. gray9 over color9)', () => {
+    // #8d8d8d is both gray9 (palette) and color9/background9 (semantic) — palette must win
+    expect(getTamaguiTokenFromHex('#8d8d8d')).toBe('gray9');
+  });
+
+  it('should fall back to semantic token when hex is only in semantic tokens', () => {
+    // Mutate TAMAGUI_SEMANTIC_TOKENS temporarily to simulate a custom theme hex
+    // that exists only in semantic, not in palette.
+    const uniqueHex = '#abcdef'; // not present in any palette or semantic by default
+    const original = TAMAGUI_SEMANTIC_TOKENS.color[1];
+    // @ts-expect-error — mutate for test isolation
+    TAMAGUI_SEMANTIC_TOKENS.color[1] = uniqueHex;
+    try {
+      const result = getTamaguiTokenFromHex(uniqueHex);
+      expect(result).toBe('color1');
+    } finally {
+      // @ts-expect-error — restore
+      TAMAGUI_SEMANTIC_TOKENS.color[1] = original;
+    }
+  });
+
+  it('should return null for an unknown hex', () => {
+    expect(getTamaguiTokenFromHex('#123456')).toBeNull();
+  });
+
+  it('should return null for empty string', () => {
+    expect(getTamaguiTokenFromHex('')).toBeNull();
+  });
+
+  it('should be case-insensitive', () => {
+    expect(getTamaguiTokenFromHex('#0090FF')).toBe('blue9');
+    expect(getTamaguiTokenFromHex('#0090ff')).toBe('blue9');
   });
 });
 

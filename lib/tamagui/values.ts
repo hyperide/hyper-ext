@@ -239,8 +239,11 @@ export function getTamaguiColorHex(token: string): string | null {
 
 /**
  * Get Tamagui token from hex value
- * Prefers palette colors over semantic tokens (since semantic tokens map to gray)
+ * Prefers palette colors over semantic tokens (since semantic tokens map to gray by default).
+ * Falls back to semantic tokens when no palette match is found — useful for custom themes
+ * where semantic token hex values differ from the default gray scale.
  * @example getTamaguiTokenFromHex('#0090ff') => 'blue9'
+ * @example getTamaguiTokenFromHex('#646464') => 'gray11' (palette wins over color11/background11)
  */
 export function getTamaguiTokenFromHex(hex: string): string | null {
   if (!hex) return null;
@@ -251,6 +254,15 @@ export function getTamaguiTokenFromHex(hex: string): string | null {
     for (const [shade, shadeHex] of Object.entries(shades)) {
       if (shadeHex.toLowerCase() === normalizedHex) {
         return `${colorName}${shade}`;
+      }
+    }
+  }
+
+  // Fallback: check semantic tokens (e.g. custom themes where semantic hex differs from palette)
+  for (const [semanticName, shades] of Object.entries(TAMAGUI_SEMANTIC_TOKENS)) {
+    for (const [shade, shadeHex] of Object.entries(shades)) {
+      if (shadeHex.toLowerCase() === normalizedHex) {
+        return `${semanticName}${shade}`;
       }
     }
   }
