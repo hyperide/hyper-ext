@@ -406,7 +406,11 @@ describe('generateRouteFileContent', () => {
   // drops <script src> from <body> would turn this red. (React 19 would hoist it to
   // <head> — see the forward-compat caveat in framework-routing.ts.)
   it('react-18 SSR renders the <script src> tags inline in first-paint <body> HTML, once each', () => {
+    // Mirror the FULL generated Remix route's script set (5 scripts incl. the #79
+    // process-shim) so this SSR-survival invariant covers the shim too — a React
+    // regression that dropped/hoisted the shim <script> from <body> would turn this red.
     const scripts = [
+      { id: 'process-shim', src: '/__hypercanvas/process-shim.js' },
       { id: 'interaction', src: '/__hypercanvas/iframe-interaction.js' },
       { id: 'error-detection', src: '/__hypercanvas/iframe-error-detection.js' },
       { id: 'console-capture', src: '/__hypercanvas/iframe-console-capture.js' },
@@ -432,6 +436,39 @@ describe('generateRouteFileContent', () => {
     // The interaction <script> renders BEFORE the CanvasPreview stub — i.e. it is part of
     // the route's body subtree at first paint, not appended afterwards.
     expect(html.indexOf('data-hyper-inject="interaction"')).toBeLessThan(html.indexOf('data-stub="canvas-preview"'));
+  });
+
+  // #79: the process-shim. PreviewProxy injects a process-shim <script> into <head> for
+  // every NON-Remix framework, so a user app reading `process.env`/`process` at module-init
+  // does not crash the preview with "process is not defined". The Remix route renders its
+  // hyper-canvas scripts inline (the proxy skips Remix), so the shim must be rendered there
+  // too — FIRST, before the interaction/bridge scripts AND before <CanvasPreview>, so
+  // `process` is defined before any user code or the bridge runs.
+  it('remix route renders the process-shim BEFORE the interaction script and CanvasPreview (#79)', () => {
+    const content = generateRouteFileContent('remix', '../../src/__canvas_preview__');
+
+    // The shim is served by the proxy at /__hypercanvas/process-shim.js (same virtual-script
+    // mechanism as the other Remix scripts), so the route references it as a <script src>.
+    expect(content).toContain('data-hyper-inject="process-shim"');
+    expect(content).toContain('src="/__hypercanvas/process-shim.js"');
+
+    // It must live in the SERVER-rendered JSX so it is part of first-paint HTML.
+    const returnStart = content.indexOf('return (');
+    expect(returnStart).toBeGreaterThan(-1);
+    const jsx = content.slice(returnStart);
+    expect(jsx).toContain('data-hyper-inject="process-shim"');
+
+    // Ordering is load-bearing: the shim must precede the interaction script (so the bridge
+    // never reads a missing `process`) and precede <CanvasPreview> (so user code at
+    // module-init sees a defined `process`).
+    const shimIdx = jsx.indexOf('data-hyper-inject="process-shim"');
+    const interactionIdx = jsx.indexOf('data-hyper-inject="interaction"');
+    const previewIdx = jsx.indexOf('<CanvasPreview');
+    expect(shimIdx).toBeGreaterThan(-1);
+    expect(interactionIdx).toBeGreaterThan(-1);
+    expect(previewIdx).toBeGreaterThan(-1);
+    expect(shimIdx).toBeLessThan(interactionIdx);
+    expect(shimIdx).toBeLessThan(previewIdx);
   });
 
   it('astro route mounts CanvasPreview as a client:only React island', () => {

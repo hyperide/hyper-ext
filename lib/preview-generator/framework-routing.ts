@@ -291,12 +291,17 @@ export default function TestPreviewPage() {
     // (at most) nothing React owns. Hence pre-hydration execution is safe — no mismatch.
     //
     // Dedup is intrinsic: the proxy skips Remix and nothing else injects these, so each
-    // src loads exactly once. (Note: this is NOT byte-for-byte the non-Remix script set —
-    // the proxy injects process-shim + interaction + error-detection + console-capture,
-    // while Remix renders interaction + error-detection + console-capture + chrome-detection.
-    // Remix intentionally has NO process-shim here; that's pre-existing, not changed by this
-    // route.) The #51 bridge-ready handshake still fires when the script executes (now
-    // earlier and deterministically), so it remains the replay safety net.
+    // src loads exactly once. The #51 bridge-ready handshake still fires when the script
+    // executes (now earlier and deterministically), so it remains the replay safety net.
+    //
+    // #79 process-shim: the proxy injects a process-shim <script> into <head> for every
+    // NON-Remix framework (defines globalThis.process so a user app reading
+    // `process.env`/`process` at module-init doesn't crash the preview with "process is not
+    // defined" — see PreviewProxy.ts). The proxy skips Remix, so the route must render the
+    // shim itself. It is served at /__hypercanvas/process-shim.js (the same virtual-script
+    // path the proxy serves regardless of Remix mode), so we reference it as a <script src>
+    // exactly like the others — rendered FIRST, before the interaction/bridge scripts AND
+    // before <CanvasPreview>, so `process` is defined before any user code or the bridge runs.
     //
     // Forward-compat caveat: this relies on React 18 (Remix 2) behavior. React 19 HOISTS
     // <script src> to <head> during render, which would move these tags out of <body> on the
@@ -312,6 +317,7 @@ export default function TestPreviewRoute() {
 
   return (
     <div id="root">
+      <script data-hyper-inject="process-shim" src="/__hypercanvas/process-shim.js" />
       <script data-hyper-inject="interaction" src="/__hypercanvas/iframe-interaction.js" />
       <script data-hyper-inject="error-detection" src="/__hypercanvas/iframe-error-detection.js" />
       <script data-hyper-inject="console-capture" src="/__hypercanvas/iframe-console-capture.js" />
