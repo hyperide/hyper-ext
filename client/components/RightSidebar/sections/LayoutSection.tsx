@@ -585,7 +585,12 @@ export const LayoutSection = memo(function LayoutSection({
                       value={paddingLeft || paddingRight}
                       onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingLeft, (v) => handleHorizontalPaddingChange(v), 'paddingLeft')
+                        onNumericKeyDown(
+                          e,
+                          paddingLeft || paddingRight,
+                          (v) => handleHorizontalPaddingChange(v),
+                          'paddingLeft',
+                        )
                       }
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                       placeholder="0px"
@@ -602,7 +607,12 @@ export const LayoutSection = memo(function LayoutSection({
                       value={paddingTop || paddingBottom}
                       onChange={(e) => handleVerticalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingTop, (v) => handleVerticalPaddingChange(v), 'paddingTop')
+                        onNumericKeyDown(
+                          e,
+                          paddingTop || paddingBottom,
+                          (v) => handleVerticalPaddingChange(v),
+                          'paddingTop',
+                        )
                       }
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                       placeholder="0px"
@@ -1010,7 +1020,12 @@ export const LayoutSection = memo(function LayoutSection({
                       value={paddingLeft || paddingRight}
                       onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingLeft, (v) => handleHorizontalPaddingChange(v), 'paddingLeft')
+                        onNumericKeyDown(
+                          e,
+                          paddingLeft || paddingRight,
+                          (v) => handleHorizontalPaddingChange(v),
+                          'paddingLeft',
+                        )
                       }
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                       placeholder="0px"
@@ -1027,7 +1042,12 @@ export const LayoutSection = memo(function LayoutSection({
                       value={paddingTop || paddingBottom}
                       onChange={(e) => handleVerticalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
-                        onNumericKeyDown(e, paddingTop, (v) => handleVerticalPaddingChange(v), 'paddingTop')
+                        onNumericKeyDown(
+                          e,
+                          paddingTop || paddingBottom,
+                          (v) => handleVerticalPaddingChange(v),
+                          'paddingTop',
+                        )
                       }
                       className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                       placeholder="0px"
@@ -1142,7 +1162,12 @@ export const LayoutSection = memo(function LayoutSection({
                     value={paddingLeft || paddingRight}
                     onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
                     onKeyDown={(e) =>
-                      onNumericKeyDown(e, paddingLeft, (v) => handleHorizontalPaddingChange(v), 'paddingLeft')
+                      onNumericKeyDown(
+                        e,
+                        paddingLeft || paddingRight,
+                        (v) => handleHorizontalPaddingChange(v),
+                        'paddingLeft',
+                      )
                     }
                     className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                     placeholder="0px"
@@ -1159,7 +1184,12 @@ export const LayoutSection = memo(function LayoutSection({
                     value={paddingTop || paddingBottom}
                     onChange={(e) => handleVerticalPaddingChange(e.target.value)}
                     onKeyDown={(e) =>
-                      onNumericKeyDown(e, paddingTop, (v) => handleVerticalPaddingChange(v), 'paddingTop')
+                      onNumericKeyDown(
+                        e,
+                        paddingTop || paddingBottom,
+                        (v) => handleVerticalPaddingChange(v),
+                        'paddingTop',
+                      )
                     }
                     className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                     placeholder="0px"

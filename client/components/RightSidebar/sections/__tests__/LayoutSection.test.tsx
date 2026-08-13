@@ -106,4 +106,49 @@ describe('LayoutSection toggle classes', () => {
     expect(button.className).not.toContain('bg-blue-100');
     expect(button.innerHTML).not.toContain('3479DE');
   });
+
+  // HYP-374: asymmetric display-value bug — paddingTop="" but paddingBottom="2px"
+  // means display shows "2px" but onNumericKeyDown receives paddingTop="" as currentValue.
+  // After fix: call site passes paddingTop||paddingBottom so currentValue matches display.
+  it('passes display value (paddingTop||paddingBottom) as currentValue to onNumericKeyDown for vertical field', () => {
+    const calls: Array<[React.KeyboardEvent<HTMLInputElement>, string, (v: string) => void, string]> = [];
+    const { getByTestId } = render(
+      <LayoutSection
+        {...defaultProps}
+        paddingTop=""
+        paddingBottom="2px"
+        onNumericKeyDown={(e, currentValue, setValue, styleKey) =>
+          calls.push([e, currentValue, setValue, styleKey ?? ''])
+        }
+      />,
+    );
+
+    const verticalInput = getByTestId(TID.inspector.spacingInput('padding', 'vertical'));
+    fireEvent.keyDown(verticalInput, { key: 'ArrowDown' });
+
+    expect(calls).toHaveLength(1);
+    // currentValue must match display value (paddingTop||paddingBottom = "2px"), not empty paddingTop
+    expect(calls[0][1]).toBe('2px');
+  });
+
+  it('passes display value (paddingLeft||paddingRight) as currentValue to onNumericKeyDown for horizontal field', () => {
+    const calls: Array<[React.KeyboardEvent<HTMLInputElement>, string, (v: string) => void, string]> = [];
+    const { getByTestId } = render(
+      <LayoutSection
+        {...defaultProps}
+        paddingLeft=""
+        paddingRight="6px"
+        onNumericKeyDown={(e, currentValue, setValue, styleKey) =>
+          calls.push([e, currentValue, setValue, styleKey ?? ''])
+        }
+      />,
+    );
+
+    const horizontalInput = getByTestId(TID.inspector.spacingInput('padding', 'horizontal'));
+    fireEvent.keyDown(horizontalInput, { key: 'ArrowDown' });
+
+    expect(calls).toHaveLength(1);
+    // currentValue must match display value (paddingLeft||paddingRight = "6px"), not empty paddingLeft
+    expect(calls[0][1]).toBe('6px');
+  });
 });
