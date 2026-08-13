@@ -10,7 +10,13 @@
  *            callback could re-root the preview pipeline to the OLD monorepo
  *            sub-project after a newer selection landed. Fixed by gating the
  *            reroot on a monotonic selection sequence (createSequencedReroot).
+ *            HYP-435 follow-up (P2 #280) — the missing-component self-heal path
+ *            called setComponentParam with a single (sub-relative) arg, so the
+ *            derived monorepo prefix was cleared and regenerated-preview edits
+ *            broke. Fixed by resolveSelfHealComponentParams supplying BOTH the
+ *            repo-relative and sub-project-relative paths.
  */
+import { isAbsolute, join, relative } from 'node:path';
 
 /**
  * Returns true when the rejection stack trace originates from a foreign VS Code
@@ -95,5 +101,40 @@ export function createSequencedReroot(deps: {
     if (mySeq !== seq) return { root, stale: true };
     deps.reroot(root);
     return { root, stale: false };
+  };
+}
+
+export type SelfHealComponentParams = { componentPath: string; previewComponentPath: string };
+
+/**
+ * Resolve the two component-path arguments for setComponentParam from the
+ * monorepo missing-component self-heal path.
+ *
+ * The iframe's componentMissing signal carries the PREVIEW path — the
+ * `?component=` query value, which is relative to the dev server's root
+ * (the sub-project, `activeWorkspaceRoot`). The repo-rooted PreviewPanel /
+ * AstBridge key files repo-relative, so setComponentParam needs BOTH forms to
+ * derive the sub-project prefix:
+ *  - `componentPath` (repo-relative): resolved against `repoRoot`.
+ *  - `previewComponentPath` (sub-project-relative): resolved against
+ *    `activeWorkspaceRoot`.
+ *
+ * For single-package projects the two roots coincide, so both paths are equal
+ * and deriveSubProjectPrefix yields '' downstream (identity translation).
+ *
+ * The signalled `componentPath` may be absolute or sub-relative; it is resolved
+ * to an absolute path against `activeWorkspaceRoot` first (mirrors the dev
+ * server's rooting), then re-expressed relative to each root.
+ */
+export function resolveSelfHealComponentParams(input: {
+  componentPath: string;
+  activeWorkspaceRoot: string;
+  repoRoot: string;
+}): SelfHealComponentParams {
+  const { componentPath, activeWorkspaceRoot, repoRoot } = input;
+  const absPath = isAbsolute(componentPath) ? componentPath : join(activeWorkspaceRoot, componentPath);
+  return {
+    componentPath: relative(repoRoot, absPath),
+    previewComponentPath: relative(activeWorkspaceRoot, absPath),
   };
 }

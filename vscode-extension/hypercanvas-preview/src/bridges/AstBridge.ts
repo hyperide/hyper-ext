@@ -19,6 +19,7 @@ import { AstService } from '../services/AstService';
 import { UndoRedoService } from '../services/UndoRedoService';
 import type { AstMessage, AstResponse } from '../types';
 import { VSCodeFileIO } from '../vscode-file-io';
+import { toRepoRelativeElementId, toRepoRelativePath } from './monorepo-path-translate';
 
 // File sink only when explicitly requested or in CI — never in normal production use
 const _BRIDGE_DEBUG_LOG: string | null =
@@ -37,6 +38,14 @@ export class AstBridge {
   private _undoRedoService: UndoRedoService;
   private _workspaceRoot: string;
   private _webview: vscode.Webview | null = null;
+  /**
+   * Sub-project path prefix for a monorepo opened at the repo ROOT (e.g.
+   * `targets/conloca-app/`). Empty for single-package projects. Set by
+   * PreviewPanel on (re)select; applied to every iframe-supplied `filePath` /
+   * `elementId` so the repo-rooted AstService resolves the correct source file
+   * even when two sub-projects share a path suffix (HYP-430).
+   */
+  private _subProjectPrefix = '';
 
   constructor(workspaceRoot: string) {
     this._workspaceRoot = workspaceRoot;
@@ -61,7 +70,22 @@ export class AstBridge {
    * If targetWebview is provided, responses go to that webview
    * instead of the default one (fixes cross-panel response routing).
    */
+  /**
+   * Pin the monorepo sub-project prefix (e.g. `targets/conloca-app/`). Empty
+   * string for single-package projects (the default). PreviewPanel calls this
+   * whenever the active component changes so subsequent iframe-driven AST ops
+   * re-root their paths correctly (HYP-430).
+   */
+  setSubProjectPrefix(prefix: string): void {
+    this._subProjectPrefix = prefix;
+  }
+
   async handleMessage(message: AstMessage, targetWebview?: vscode.Webview): Promise<void> {
+    // Path re-rooting for monorepo sub-projects happens upstream in
+    // PanelRouter.routeMessage (the single ingress for ast:/editor:/styles:),
+    // so `message` already carries repo-relative paths here. The public
+    // direct-call methods below DO translate, because PreviewPanel invokes them
+    // directly, bypassing PanelRouter (HYP-435).
     _dbgBridge(`[AstBridge.handleMessage] type=${message.type}`);
 
     let response: AstResponse;
@@ -198,7 +222,9 @@ export class AstBridge {
 
   // === Public mutation methods (with undo tracking, for PreviewPanel direct calls) ===
 
-  async deleteElements(filePath: string, elementIds: string[]): Promise<AstOperationResult> {
+  async deleteElements(rawFilePath: string, rawElementIds: string[]): Promise<AstOperationResult> {
+    const filePath = toRepoRelativePath(rawFilePath, this._subProjectPrefix);
+    const elementIds = rawElementIds.map((id) => toRepoRelativeElementId(id, this._subProjectPrefix));
     const absolutePath = this._resolvePath(filePath);
     // Clear redo stack before ANY write — even when readFile fails (same invariant as _withUndoTracking).
     this._undoRedoService.beginTracking();
@@ -265,15 +291,21 @@ export class AstBridge {
     }
   }
 
-  async duplicateElement(filePath: string, elementId: string): Promise<DuplicateElementResult> {
+  async duplicateElement(rawFilePath: string, rawElementId: string): Promise<DuplicateElementResult> {
+    const filePath = toRepoRelativePath(rawFilePath, this._subProjectPrefix);
+    const elementId = toRepoRelativeElementId(rawElementId, this._subProjectPrefix);
     return this._withUndoTracking(filePath, () => this._astService.duplicateElement(filePath, elementId));
   }
 
-  async wrapElement(filePath: string, elementId: string, wrapperType: string): Promise<WrapElementResult> {
+  async wrapElement(rawFilePath: string, rawElementId: string, wrapperType: string): Promise<WrapElementResult> {
+    const filePath = toRepoRelativePath(rawFilePath, this._subProjectPrefix);
+    const elementId = toRepoRelativeElementId(rawElementId, this._subProjectPrefix);
     return this._withUndoTracking(filePath, () => this._astService.wrapElement(filePath, elementId, wrapperType));
   }
 
-  async pasteElement(filePath: string, targetId: string | null, tsxCode: string): Promise<InsertElementResult> {
+  async pasteElement(rawFilePath: string, rawTargetId: string | null, tsxCode: string): Promise<InsertElementResult> {
+    const filePath = toRepoRelativePath(rawFilePath, this._subProjectPrefix);
+    const targetId = rawTargetId === null ? null : toRepoRelativeElementId(rawTargetId, this._subProjectPrefix);
     return this._withUndoTracking(filePath, () => this._astService.pasteElement(filePath, targetId, tsxCode));
   }
 

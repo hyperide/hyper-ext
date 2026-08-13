@@ -35,7 +35,12 @@ import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../..
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import { goToCode } from './EditorBridge';
-import { createSequencedReroot, isForeignExtensionError, serializeRejectionReason } from './extension-utils';
+import {
+  createSequencedReroot,
+  isForeignExtensionError,
+  resolveSelfHealComponentParams,
+  serializeRejectionReason,
+} from './extension-utils';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
@@ -667,8 +672,15 @@ export function activate(context: vscode.ExtensionContext) {
       const count = componentMissingRetries.get(componentPath) ?? 0;
       if (count >= 2) return;
       const currentWorkspaceRoot = syncWorkspaceRuntime();
-      const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
-      const relPath = relative(currentWorkspaceRoot, absPath);
+      // The iframe signals the PREVIEW (sub-project-relative) path. Resolve BOTH
+      // the repo-relative and sub-project-relative forms so the regenerated
+      // preview keeps its monorepo prefix — a single-arg setComponentParam would
+      // clear it and break subsequent iframe edits (P2 #280, HYP-435).
+      const { componentPath: repoRelativePath, previewComponentPath: relPath } = resolveSelfHealComponentParams({
+        componentPath,
+        activeWorkspaceRoot: currentWorkspaceRoot,
+        repoRoot: workspaceFolderRoot(),
+      });
       componentMissingRetries.set(componentPath, count + 1);
       // Capture current component so a stale resolve doesn't snap the preview back
       // if the user switched to a different component while ensureComponent was running.
@@ -695,7 +707,7 @@ export function activate(context: vscode.ExtensionContext) {
           }
           componentMissingRetries.delete(componentPath);
           if (stateHub?.state.currentComponent?.path === capturedCurrentPath) {
-            previewPanel?.setComponentParam(relPath);
+            previewPanel?.setComponentParam(repoRelativePath, relPath);
           }
         })
         .catch((err) => {

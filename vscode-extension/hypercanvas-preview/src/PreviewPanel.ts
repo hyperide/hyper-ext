@@ -23,6 +23,7 @@ import {
 import { escapeRegex, extractComponentName } from '../../../lib/preview-generator/scanner';
 import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
+import { deriveSubProjectPrefix } from './bridges/monorepo-path-translate';
 import { VSCodeFileIO } from './vscode-file-io';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
@@ -139,6 +140,7 @@ export class PreviewPanel {
     this._currentComponent = undefined;
     this._navigableComponent = undefined;
     this._previewComponent = undefined;
+    this._panelRouter.setSubProjectPrefix?.('');
     this._requiresPreviewRegeneration = false;
     this._defaultComponent = undefined;
     this._devServerRunning = false;
@@ -348,6 +350,9 @@ export class PreviewPanel {
       (elementId) => this.sendGoToVisual(elementId),
       () => this._currentComponent,
     );
+    // Apply the current monorepo sub-project prefix — the service may be created
+    // lazily after setComponentParam already ran for this component (HYP-435).
+    this._syncService.setSubProjectPrefix(deriveSubProjectPrefix(this._currentComponent, this._previewComponent));
     this._syncService.start();
     // Not added to _disposables — disposed explicitly in onDidDispose and setWorkspaceRoot
     // to avoid accumulating stale entries on workspace switches.
@@ -1429,6 +1434,17 @@ export class PreviewPanel {
     this._navigableComponent = componentPath;
     this._previewComponent = previewComponentPath;
     this._requiresPreviewRegeneration = false;
+
+    // Re-root iframe-driven AST edits for monorepo sub-projects. The iframe sees
+    // sub-project-relative paths (previewComponentPath form) but the repo-rooted
+    // AstService keys files repo-relative (componentPath form). Pin the prefix so
+    // edits resolve the correct sub-project source even on suffix collisions
+    // across targets. Empty for single-package projects (paths coincide) — a
+    // no-op. (HYP-430)
+    const subProjectPrefix = deriveSubProjectPrefix(componentPath, previewComponentPath);
+    this._panelRouter.setSubProjectPrefix?.(subProjectPrefix);
+    this._syncService?.setSubProjectPrefix(subProjectPrefix);
+
     if (!this._panel) return;
 
     if (this._devServerRunning) {

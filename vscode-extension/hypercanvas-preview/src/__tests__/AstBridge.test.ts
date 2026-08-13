@@ -746,4 +746,35 @@ describe('AstBridge', () => {
       expect(last.error).toContain('source element not found');
     });
   });
+
+  // HYP-435: monorepo opened at repo root, preview rooted in a sub-project.
+  // PreviewPanel invokes the public direct-call mutation methods (delete/
+  // duplicate/wrap/paste) with a repo-relative filePath but a sub-relative
+  // elementId from the iframe fiber. These methods re-root the elementId so
+  // resolution hits the right sub-project file. (Message-routed ast:* ops are
+  // re-rooted upstream in PanelRouter.routeMessage — see PanelRouter.test.ts.)
+  describe('monorepo sub-project path translation (public direct-call methods)', () => {
+    it('re-roots sub-relative filePath + elementIds in deleteElements', async () => {
+      bridge.setSubProjectPrefix('targets/conloca-app/');
+      await bridge.deleteElements('src/app/page.tsx', ['src/app/page.tsx:12:4']);
+      expect(mockAstService.deleteElements).toHaveBeenCalledWith('targets/conloca-app/src/app/page.tsx', [
+        'targets/conloca-app/src/app/page.tsx:12:4',
+      ]);
+    });
+
+    it('re-roots elementId in duplicateElement, no double-prefix on repo-relative filePath', async () => {
+      bridge.setSubProjectPrefix('targets/conloca-app/');
+      await bridge.duplicateElement('targets/conloca-app/src/app/page.tsx', 'src/app/page.tsx:5:2');
+      expect(mockAstService.duplicateElement).toHaveBeenCalledWith(
+        'targets/conloca-app/src/app/page.tsx',
+        'targets/conloca-app/src/app/page.tsx:5:2',
+      );
+    });
+
+    it('is an identity no-op for single-package projects (empty prefix)', async () => {
+      bridge.setSubProjectPrefix('');
+      await bridge.deleteElements('src/App.tsx', ['src/App.tsx:5:2']);
+      expect(mockAstService.deleteElements).toHaveBeenCalledWith('src/App.tsx', ['src/App.tsx:5:2']);
+    });
+  });
 });

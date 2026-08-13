@@ -12,6 +12,7 @@ import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/so
 import type { I18nLibrary } from '@shared/i18n-text/types';
 import * as vscode from 'vscode';
 import { AstBridge } from './bridges/AstBridge';
+import { toRepoRelativeElementId, toRepoRelativePath } from './bridges/monorepo-path-translate';
 import { type EditorMessage, handleEditorMessage } from './EditorBridge';
 import type { StateHub } from './StateHub';
 import { ComponentService } from './services/ComponentService';
@@ -34,6 +35,15 @@ export class PanelRouter {
   private _context: vscode.ExtensionContext;
   private _currentWebview: vscode.Webview | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
+  /**
+   * Sub-project path prefix for a monorepo opened at the repo ROOT (e.g.
+   * `targets/conloca-app/`), empty for single-package projects. The dev server
+   * runs inside the sub-project, so every source path the iframe emits is
+   * relative to it; the repo-rooted services here key files repo-relative.
+   * routeMessage re-roots those paths once, for every consumer (ast edits,
+   * editor navigation, style reads). Set by PreviewPanel on each select (HYP-435).
+   */
+  private _subProjectPrefix = '';
 
   constructor(config: PanelRouterConfig) {
     this._astBridge = new AstBridge(config.workspaceRoot);
@@ -47,6 +57,67 @@ export class PanelRouter {
   get astBridge(): AstBridge {
     this._ensureCurrentWorkspace();
     return this._astBridge;
+  }
+
+  /**
+   * Pin the monorepo sub-project prefix (e.g. `targets/conloca-app/`), empty for
+   * single-package. Forwarded to AstBridge so its public direct-call mutation
+   * methods (delete/duplicate/wrap/paste, invoked straight from PreviewPanel)
+   * re-root too. routeMessage uses it to translate iframe-supplied paths on
+   * ast:/editor:/styles: messages (HYP-435).
+   */
+  setSubProjectPrefix(prefix: string): void {
+    this._subProjectPrefix = prefix;
+    this._astBridge.setSubProjectPrefix(prefix);
+  }
+
+  /**
+   * Re-root the sub-project-relative source paths the iframe emits to
+   * repo-relative. Covers the three message families that carry an iframe
+   * fiber-derived path into a repo-rooted service:
+   *  - ast:* — filePath + element-id fields (edits).
+   *  - editor:goToCode / editor:openFile — `path` (Go-to-Code navigation).
+   *  - styles:readClassName — elementId + componentPath (inspector style read).
+   * No-op when the prefix is empty. Returns a shallow clone; never mutates the
+   * caller's object. `componentFilePath` (insertElement, repo-rooted picker) and
+   * already-repo-relative paths are left untouched.
+   */
+  private _reRootMessage(message: unknown): unknown {
+    const prefix = this._subProjectPrefix;
+    if (!prefix) return message;
+    const m = message as { type?: string; [k: string]: unknown };
+    const type = m?.type;
+    if (!type) return message;
+
+    const pathField = (key: string, next: Record<string, unknown>): void => {
+      if (typeof m[key] === 'string') next[key] = toRepoRelativePath(m[key] as string, prefix);
+    };
+    const idField = (key: string, next: Record<string, unknown>): void => {
+      if (typeof m[key] === 'string') next[key] = toRepoRelativeElementId(m[key] as string, prefix);
+    };
+
+    if (type.startsWith('ast:')) {
+      const next = { ...m };
+      pathField('filePath', next);
+      idField('elementId', next);
+      idField('sourceId', next);
+      idField('targetId', next);
+      idField('parentId', next);
+      if (Array.isArray(m.elementIds)) next.elementIds = m.elementIds.map((id) => toRepoRelativeElementId(id, prefix));
+      return next;
+    }
+    if (type === 'editor:goToCode' || type === 'editor:openFile') {
+      const next = { ...m };
+      pathField('path', next);
+      return next;
+    }
+    if (type === 'styles:readClassName') {
+      const next = { ...m };
+      idField('elementId', next);
+      pathField('componentPath', next);
+      return next;
+    }
+    return message;
   }
 
   get componentService(): ComponentService {
@@ -73,8 +144,9 @@ export class PanelRouter {
    * Route a message from a panel to the appropriate handler.
    * Returns true if the message was handled.
    */
-  async routeMessage(message: unknown, webview: vscode.Webview): Promise<boolean> {
+  async routeMessage(rawMessage: unknown, webview: vscode.Webview): Promise<boolean> {
     this._ensureCurrentWorkspace();
+    const message = this._reRootMessage(rawMessage);
     const msg = message as { type?: string };
     const type = msg.type;
     if (!type) return false;

@@ -40,7 +40,10 @@ function createPanel(stateHub: ReturnType<typeof createStateHub>) {
     vscode.Uri.file('/extension'),
     '/workspace',
     stateHub as StateHub,
-    {} as PanelRouter,
+    {
+      setSubProjectPrefix: mock(() => {}),
+      astBridge: { setSubProjectPrefix: mock(() => {}) },
+    } as unknown as PanelRouter,
     {} as vscode.ExtensionContext,
   );
   const postMessage = mock(() => Promise.resolve(true));
@@ -619,5 +622,35 @@ export default function Home() {
     });
 
     expect(callbackPaths).toEqual([componentPath]);
+  });
+});
+
+// HYP-435: setComponentParam(repoRel, subRel) must derive and forward the
+// sub-project prefix to PanelRouter (which re-roots iframe paths for all panels).
+describe('PreviewPanel monorepo prefix wiring', () => {
+  it('forwards the derived sub-project prefix to PanelRouter on select', () => {
+    const stateHub = createStateHub();
+    Object.assign(vscode.workspace, {
+      workspaceFolders: [{ uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 }],
+    });
+    const setSubProjectPrefix = mock(() => {});
+    const panel = new PreviewPanel(
+      vscode.Uri.file('/extension'),
+      '/workspace',
+      stateHub as StateHub,
+      { setSubProjectPrefix, astBridge: { setSubProjectPrefix: mock(() => {}) } } as unknown as PanelRouter,
+      {} as vscode.ExtensionContext,
+    );
+    Object.assign(panel as PreviewPanel & { _devServerRunning: boolean; _panel: unknown }, {
+      _devServerRunning: true,
+      _panel: { dispose: mock(), webview: { postMessage: mock(() => Promise.resolve(true)) } },
+    });
+
+    panel.setComponentParam('targets/conloca-app/src/app/page.tsx', 'src/app/page.tsx');
+    expect(setSubProjectPrefix).toHaveBeenCalledWith('targets/conloca-app/');
+
+    // Single-package: both args coincide → empty prefix.
+    panel.setComponentParam('src/App.tsx');
+    expect(setSubProjectPrefix).toHaveBeenLastCalledWith('');
   });
 });

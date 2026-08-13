@@ -315,4 +315,63 @@ describe('PanelRouter', () => {
       expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'serverSourceMapResult', result: null }));
     });
   });
+
+  // HYP-435: PanelRouter is the single shared ingress for ast:/editor:/styles:
+  // messages from BOTH the preview and right-sidebar panels. For a monorepo
+  // opened at the repo root it re-roots the sub-project-relative paths the iframe
+  // emits to repo-relative, once, for every consumer.
+  describe('monorepo sub-project path re-rooting', () => {
+    type ReRoot = (m: unknown) => { type?: string; [k: string]: unknown };
+    const reRoot = (r: typeof router) => (m: unknown) => (r as unknown as { _reRootMessage: ReRoot })._reRootMessage(m);
+
+    it('re-roots ast:* filePath + element-id fields', () => {
+      router.setSubProjectPrefix('targets/conloca-app/');
+      const out = reRoot(router)({
+        type: 'ast:moveElement',
+        filePath: 'src/app/page.tsx',
+        sourceId: 'src/app/page.tsx:3:1',
+        targetId: 'src/app/page.tsx:9:1',
+      });
+      expect(out.filePath).toBe('targets/conloca-app/src/app/page.tsx');
+      expect(out.sourceId).toBe('targets/conloca-app/src/app/page.tsx:3:1');
+      expect(out.targetId).toBe('targets/conloca-app/src/app/page.tsx:9:1');
+    });
+
+    it('re-roots editor:goToCode path (Go-to-Code navigation)', () => {
+      router.setSubProjectPrefix('targets/conloca-app/');
+      const out = reRoot(router)({ type: 'editor:goToCode', path: 'src/app/ui/Row.tsx', line: 4, column: 2 });
+      expect(out.path).toBe('targets/conloca-app/src/app/ui/Row.tsx');
+      expect(out.line).toBe(4);
+    });
+
+    it('re-roots styles:readClassName elementId + componentPath (inspector read)', () => {
+      router.setSubProjectPrefix('targets/conloca-app/');
+      const out = reRoot(router)({
+        type: 'styles:readClassName',
+        requestId: 'r1',
+        elementId: 'src/app/page.tsx:9:2',
+        componentPath: 'src/app/page.tsx',
+      });
+      expect(out.elementId).toBe('targets/conloca-app/src/app/page.tsx:9:2');
+      expect(out.componentPath).toBe('targets/conloca-app/src/app/page.tsx');
+    });
+
+    it('does not double-prefix an already repo-relative path', () => {
+      router.setSubProjectPrefix('targets/conloca-app/');
+      const out = reRoot(router)({ type: 'editor:openFile', path: 'targets/conloca-app/src/app/page.tsx' });
+      expect(out.path).toBe('targets/conloca-app/src/app/page.tsx');
+    });
+
+    it('is an identity no-op for single-package projects (empty prefix)', () => {
+      router.setSubProjectPrefix('');
+      const msg = { type: 'editor:goToCode', path: 'src/App.tsx', line: 1, column: 1 };
+      expect(reRoot(router)(msg)).toBe(msg);
+    });
+
+    it('leaves unrelated message types untouched', () => {
+      router.setSubProjectPrefix('targets/conloca-app/');
+      const msg = { type: 'state:update', patch: { hoveredId: 'src/app/page.tsx:1:1' } };
+      expect(reRoot(router)(msg)).toBe(msg);
+    });
+  });
 });

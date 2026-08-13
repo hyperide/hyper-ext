@@ -14,6 +14,7 @@
 
 import type { SourceLocation } from '@shared/element-tracing/types';
 import * as vscode from 'vscode';
+import { toRepoRelativePath } from '../bridges/monorepo-path-translate';
 import { goToCode } from '../EditorBridge';
 import type { StateHub } from '../StateHub';
 import type { AstService } from './AstService';
@@ -32,6 +33,14 @@ export class SyncPositionService implements vscode.Disposable {
    * Consumed by _onPreviewSelectionChange for direct go-to-code (no AST lookup).
    */
   private _pendingSource: SourceLocation | null = null;
+  /**
+   * Sub-project path prefix for a monorepo opened at the repo ROOT (e.g.
+   * `targets/conloca-app/`), empty for single-package. The iframe reports click
+   * source paths relative to the sub-project (the dev server's root); goToCode
+   * resolves against the repo root, so a raw sub-relative path opens
+   * `repo/src/...` which does not exist. Re-root it first (HYP-435).
+   */
+  private _subProjectPrefix = '';
 
   constructor(
     private readonly _astService: AstService,
@@ -41,6 +50,11 @@ export class SyncPositionService implements vscode.Disposable {
     private readonly _getCurrentComponent: () => string | undefined,
   ) {
     this._enabled = vscode.workspace.getConfiguration('hypercanvas.preview').get<boolean>('syncPositions', true);
+  }
+
+  /** Pin the monorepo sub-project prefix (empty for single-package). */
+  setSubProjectPrefix(prefix: string): void {
+    this._subProjectPrefix = prefix;
   }
 
   /**
@@ -156,8 +170,10 @@ export class SyncPositionService implements vscode.Disposable {
     if (pendingSource) {
       try {
         this._suppressCursorSync = true;
-        // source.column is 0-based, goToCode expects 1-based column
-        await goToCode(pendingSource.fileName, pendingSource.line, pendingSource.column + 1);
+        // source.column is 0-based, goToCode expects 1-based column. Re-root the
+        // sub-project-relative fileName the iframe reported to repo-relative.
+        const fileName = toRepoRelativePath(pendingSource.fileName, this._subProjectPrefix);
+        await goToCode(fileName, pendingSource.line, pendingSource.column + 1);
       } finally {
         setTimeout(() => {
           this._suppressCursorSync = false;

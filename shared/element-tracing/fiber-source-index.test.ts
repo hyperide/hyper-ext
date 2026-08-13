@@ -485,6 +485,29 @@ describe('FiberSourceIndex.findClosestSourceDOMElements', () => {
       cleanup();
     }
   });
+
+  // Monorepo (HYP-435): after an AST edit re-rooted to the repo (AstBridge sub→repo
+  // translation), the minted/repeated selection id comes back REPO-relative
+  // (`targets/conloca-app/src/app/page.tsx`) while the iframe's FiberSourceIndex
+  // is keyed SUB-relative (`src/app/page.tsx`, what the dev server's Vite sees).
+  // The cross-format relaxed match must still re-highlight the clicked element,
+  // and (line, column) being identical it must report zero distance so itemIndex
+  // slicing stays valid.
+  it('matchPathAcrossFormats: repo-relative query matches sub-project-relative entry (monorepo re-highlight)', () => {
+    const { index, elements, cleanup } = setup([{ source: { fileName: 'src/app/page.tsx', line: 12, column: 4 } }]);
+    try {
+      const out = index.findClosestSourceDOMElements(
+        { fileName: 'targets/conloca-app/src/app/page.tsx', line: 12, column: 4 },
+        { matchPathAcrossFormats: true },
+      );
+      expect(out).not.toBeNull();
+      expect(out!.elements).toEqual([elements[0]]);
+      expect(out!.lineDistance).toBe(0);
+      expect(out!.columnDistance).toBe(0);
+    } finally {
+      cleanup();
+    }
+  });
 });
 
 /* ─── shouldSkipNestedMappedSource ──────────────────────────────────── */
