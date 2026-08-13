@@ -20,8 +20,33 @@ mock.module('../services/PreviewProxy', () => ({
     stop = mock();
   },
 }));
-const { appendScriptCliArgs, buildInstallCommand, DevServerManager, shouldRepairDependencies } =
+const { appendScriptCliArgs, buildInstallCommand, devScriptDeclaresPort, DevServerManager, shouldRepairDependencies } =
   await import('../services/DevServerManager');
+
+describe('devScriptDeclaresPort', () => {
+  it('detects a CLI --port / -p flag (the only reliable pin)', () => {
+    expect(devScriptDeclaresPort('vite dev --port 3000')).toBe(true);
+    expect(devScriptDeclaresPort('vite dev --port=3000')).toBe(true);
+    expect(devScriptDeclaresPort('next dev -p 4000')).toBe(true);
+    expect(devScriptDeclaresPort('next dev -p=4000')).toBe(true);
+  });
+
+  it('does NOT treat env-var port declarations as a pin (Vite ignores them; inline env overrides ours)', () => {
+    expect(devScriptDeclaresPort('PORT=3000 vite')).toBe(false);
+    expect(devScriptDeclaresPort('VITE_PORT=5180 vite')).toBe(false);
+    expect(devScriptDeclaresPort('cross-env PORT=3001 react-scripts start')).toBe(false);
+  });
+
+  it('returns false when the script leaves the port to us', () => {
+    expect(devScriptDeclaresPort('vite dev')).toBe(false);
+    expect(devScriptDeclaresPort('next dev')).toBe(false);
+    expect(devScriptDeclaresPort('remix vite:dev')).toBe(false);
+    expect(devScriptDeclaresPort('')).toBe(false);
+    // Must not false-positive on unrelated flags or substrings.
+    expect(devScriptDeclaresPort('vite dev --open --host')).toBe(false);
+    expect(devScriptDeclaresPort('node --import tsx server.ts')).toBe(false);
+  });
+});
 
 describe('DevServerManager', () => {
   let manager: InstanceType<typeof DevServerManager>;

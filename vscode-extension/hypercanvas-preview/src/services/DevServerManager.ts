@@ -34,6 +34,20 @@ export function appendScriptCliArgs(command: { args: string[] }, packageManager:
   command.args.push(...args);
 }
 
+/**
+ * True when a dev/start script already pins its own port via a CLI `--port`/`-p` flag
+ * (e.g. `vite dev --port 3000`, `next -p 4000`). In that case our injected `--port`
+ * would be a redundant second port that only confuses the user, so we skip injecting it
+ * and discover the real bound port from stdout (_maybeUpdatePortFromOutput).
+ *
+ * Only the CLI flag counts — env vars (`PORT=`, `VITE_PORT=`) are not reliable pins:
+ * Vite ignores them, and an inline `PORT=…` assignment in the script overrides whatever
+ * env we set anyway, so they never require suppressing our `--port` injection.
+ */
+export function devScriptDeclaresPort(script: string): boolean {
+  return /--port[=\s]+\d/.test(script) || /(?:^|\s)-p[=\s]+\d/.test(script);
+}
+
 export function shouldRepairDependencies(errorMessage: string, logs: LogEntry[]): boolean {
   const text = `${errorMessage}\n${logs.map((entry) => entry.line).join('\n')}`.toLowerCase();
   return (
@@ -243,24 +257,35 @@ export class DevServerManager {
       ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       this._outputChannel.appendLine(`[DevServer] Starting ${packageManager} run ${devScript}`);
       this._outputChannel.appendLine(`[DevServer] Project: ${this._projectPath}`);
-      this._outputChannel.appendLine(`[DevServer] Port: ${this._port}`);
+      // Skip injecting our CLI --port when the dev script already pins its own via a
+      // CLI flag (`vite dev --port 3000`, `next -p 4000`). A second --port is a
+      // confusing phantom; the real bound port is discovered from stdout
+      // (_maybeUpdatePortFromOutput). The PORT/VITE_PORT env below stays set but is
+      // harmless (Vite ignores it, and an inline PORT= in the script overrides ours).
+      const scriptDeclaresPort = devScriptDeclaresPort(scripts[devScript] ?? '');
+      this._outputChannel.appendLine(
+        scriptDeclaresPort
+          ? '[DevServer] Port: declared by dev script (auto-detected from output)'
+          : `[DevServer] Port: ${this._port}`,
+      );
 
       // Build command based on package manager
       const command = this._buildCommand(packageManager, devScript);
 
       // Pass --port via CLI for frameworks that support it.
       // Env vars PORT/VITE_PORT alone are not reliable (Vite ignores them).
-      if (projectInfo.type === 'vite' || projectInfo.type === 'remix') {
-        appendScriptCliArgs(command, packageManager, ['--port', String(this._port)]);
-      } else if (projectInfo.type === 'nextjs') {
-        appendScriptCliArgs(command, packageManager, ['-p', String(this._port)]);
-      } else if (projectInfo.type === 'webpack') {
-        appendScriptCliArgs(command, packageManager, ['--port', String(this._port)]);
+      if (!scriptDeclaresPort) {
+        if (projectInfo.type === 'vite' || projectInfo.type === 'remix') {
+          appendScriptCliArgs(command, packageManager, ['--port', String(this._port)]);
+        } else if (projectInfo.type === 'nextjs') {
+          appendScriptCliArgs(command, packageManager, ['-p', String(this._port)]);
+        } else if (projectInfo.type === 'webpack') {
+          appendScriptCliArgs(command, packageManager, ['--port', String(this._port)]);
+        }
+        // CRA reads PORT env var — no CLI flag needed
       }
-      // CRA reads PORT env var — no CLI flag needed
 
       // Spawn process
-      // nosemgrep: spawn-shell-true -- dev server requires shell for npm/pnpm/yarn scripts
       const child = spawn(command.cmd, command.args, {
         cwd: this._projectPath,
         env: {
