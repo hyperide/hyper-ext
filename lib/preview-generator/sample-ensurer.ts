@@ -8,7 +8,7 @@
 
 import type { FileIO } from '../ast/file-io';
 import { buildDeterministicContainerSampleScaffold } from './sample-scaffold';
-import { escapeRegex, scanSampleExports } from './scanner';
+import { detectCompoundExports, escapeRegex, scanSampleExports } from './scanner';
 
 /**
  * AI callback type: receives component source and metadata,
@@ -38,6 +38,39 @@ export interface EnsureSampleResult {
   generated: boolean;
   /** Whether the sample exists after the operation */
   exists: boolean;
+}
+
+function guessChildContent(name: string): string | null {
+  if (/Title/i.test(name)) return 'Heads up!';
+  if (/Description|Content|Body/i.test(name)) return 'Something important happened.';
+  if (/Action|Button|Footer/i.test(name)) return 'Dismiss';
+  if (/Icon|Indicator/i.test(name)) return null;
+  return name;
+}
+
+/** Build a deterministic container sample wrapping compound component children. */
+export function buildContainerSample(componentName: string, compoundComponents: string[], sampleName: string): string {
+  const children = compoundComponents
+    .map((child) => {
+      const content = guessChildContent(child);
+      return content === null ? `      <${child} />` : `      <${child}>${content}</${child}>`;
+    })
+    .join('\n');
+  return `export function ${sampleName}() {\n  return (\n    <${componentName}>\n${children}\n    </${componentName}>\n  );\n}`;
+}
+
+/**
+ * Try to build a deterministic sample for a container component using its compound siblings.
+ * Returns null if no compound siblings are found (AI generation should be used instead).
+ */
+export function tryDeterministicContainerSample(
+  sourceCode: string,
+  componentName: string,
+  sampleName: string,
+): string | null {
+  const compounds = detectCompoundExports(sourceCode, componentName);
+  if (compounds.length === 0) return null;
+  return buildContainerSample(componentName, compounds, sampleName);
 }
 
 /**

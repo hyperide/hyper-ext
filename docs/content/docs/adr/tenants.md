@@ -138,111 +138,111 @@ ROLES ENUM:
 ```typescript
 // server/database/schema/auth.ts
 
-import { pgTable, uuid, varchar, text, timestamp, inet, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, inet, pgEnum } from "drizzle-orm/pg-core";
 
-export const oauthProviderEnum = pgEnum('oauth_provider', ['google', 'github']);
+export const oauthProviderEnum = pgEnum("oauth_provider", ["google", "github"]);
 
-export const users = pgTable('users', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  email: varchar('email', { length: 255 }).notNull().unique(),
-  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
-  name: varchar('name', { length: 255 }),
-  avatarUrl: text('avatar_url'),
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  name: varchar("name", { length: 255 }),
+  avatarUrl: text("avatar_url"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const oauthAccounts = pgTable('oauth_accounts', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id')
+export const oauthAccounts = pgTable("oauth_accounts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
     .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  provider: oauthProviderEnum('provider').notNull(),
-  providerId: varchar('provider_id', { length: 255 }).notNull(),
-  accessToken: text('access_token').notNull(),
-  refreshToken: text('refresh_token'),
-  expiresAt: timestamp('expires_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    .references(() => users.id, { onDelete: "cascade" }),
+  provider: oauthProviderEnum("provider").notNull(),
+  providerId: varchar("provider_id", { length: 255 }).notNull(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const refreshTokens = pgTable('refresh_tokens', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id')
+export const refreshTokens = pgTable("refresh_tokens", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
     .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  tokenHash: varchar('token_hash', { length: 64 }).notNull(), // SHA-256
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  revokedAt: timestamp('revoked_at', { withTimezone: true }),
-  userAgent: text('user_agent'),
-  ipAddress: inet('ip_address'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull(), // SHA-256
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  userAgent: text("user_agent"),
+  ipAddress: inet("ip_address"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // server/database/schema/workspaces.ts
 
-export const workspaceRoleEnum = pgEnum('workspace_role', ['owner', 'admin', 'member', 'viewer']);
+export const workspaceRoleEnum = pgEnum("workspace_role", ["owner", "admin", "member", "viewer"]);
 
-export const workspaces = pgTable('workspaces', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: varchar('name', { length: 255 }).notNull(),
-  slug: varchar('slug', { length: 100 }).notNull().unique(),
-  ownerId: uuid('owner_id')
+export const workspaces = pgTable("workspaces", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  ownerId: uuid("owner_id")
     .notNull()
     .references(() => users.id),
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const workspaceMembers = pgTable(
-  'workspace_members',
+  "workspace_members",
   {
-    workspaceId: uuid('workspace_id')
+    workspaceId: uuid("workspace_id")
       .notNull()
-      .references(() => workspaces.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id')
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    role: workspaceRoleEnum('role').notNull().default('member'),
-    invitedBy: uuid('invited_by').references(() => users.id),
-    invitedAt: timestamp('invited_at', { withTimezone: true }),
-    joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: workspaceRoleEnum("role").notNull().default("member"),
+    invitedBy: uuid("invited_by").references(() => users.id),
+    invitedAt: timestamp("invited_at", { withTimezone: true }),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.workspaceId, table.userId] }),
   }),
 );
 
-export const workspaceInvites = pgTable('workspace_invites', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  workspaceId: uuid('workspace_id')
+export const workspaceInvites = pgTable("workspace_invites", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id")
     .notNull()
-    .references(() => workspaces.id, { onDelete: 'cascade' }),
-  email: varchar('email', { length: 255 }).notNull(),
-  role: workspaceRoleEnum('role').notNull().default('member'),
-  token: varchar('token', { length: 64 }).notNull().unique(), // nanoid
-  invitedBy: uuid('invited_by')
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  email: varchar("email", { length: 255 }).notNull(),
+  role: workspaceRoleEnum("role").notNull().default("member"),
+  token: varchar("token", { length: 64 }).notNull().unique(), // nanoid
+  invitedBy: uuid("invited_by")
     .notNull()
     .references(() => users.id),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // server/database/schema/audit.ts
 
-export const auditLogs = pgTable('audit_logs', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').references(() => users.id),
-  workspaceId: uuid('workspace_id').references(() => workspaces.id),
-  action: varchar('action', { length: 100 }).notNull(), // e.g., 'user.login', 'workspace.member.added'
-  entityType: varchar('entity_type', { length: 50 }), // e.g., 'workspace', 'project'
-  entityId: uuid('entity_id'),
-  ipAddress: inet('ip_address'),
-  userAgent: text('user_agent'),
-  metadata: jsonb('metadata'), // Additional context
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+export const auditLogs = pgTable("audit_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => users.id),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id),
+  action: varchar("action", { length: 100 }).notNull(), // e.g., 'user.login', 'workspace.member.added'
+  entityType: varchar("entity_type", { length: 50 }), // e.g., 'workspace', 'project'
+  entityId: uuid("entity_id"),
+  ipAddress: inet("ip_address"),
+  userAgent: text("user_agent"),
+  metadata: jsonb("metadata"), // Additional context
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 ```
 
@@ -437,18 +437,18 @@ server/
 ```typescript
 // Request flow through middleware
 
-app.use('*', errorHandler); // Catch all errors
-app.use('*', requestId); // Add X-Request-ID
-app.use('/api/*', rateLimiter); // Rate limit all API calls
+app.use("*", errorHandler); // Catch all errors
+app.use("*", requestId); // Add X-Request-ID
+app.use("/api/*", rateLimiter); // Rate limit all API calls
 
 // Auth routes (no auth required)
-app.route('/api/auth', authRoutes);
+app.route("/api/auth", authRoutes);
 
 // Protected routes
-app.use('/api/*', authMiddleware); // Validate JWT, set c.user
+app.use("/api/*", authMiddleware); // Validate JWT, set c.user
 
 // Workspace-scoped routes
-app.use('/api/workspaces/:id/*', workspaceMiddleware); // Check membership, set c.workspace, setup RLS
+app.use("/api/workspaces/:id/*", workspaceMiddleware); // Check membership, set c.workspace, setup RLS
 ```
 
 ## Security Considerations
@@ -485,8 +485,8 @@ app.use('/api/workspaces/:id/*', workspaceMiddleware); // Check membership, set 
 const refreshCookieOptions = {
   httpOnly: true, // No JS access
   secure: true, // HTTPS only
-  sameSite: 'strict', // CSRF protection
-  path: '/api/auth', // Only sent to auth endpoints
+  sameSite: "strict", // CSRF protection
+  path: "/api/auth", // Only sent to auth endpoints
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 ```

@@ -32,31 +32,31 @@ Run: `mkdir -p shared/utils`
 
 ```ts
 // shared/utils/color.test.ts
-import { describe, expect, test } from 'bun:test';
-import { hexToRgb } from './color';
+import { describe, expect, test } from "bun:test";
+import { hexToRgb } from "./color";
 
-describe('hexToRgb', () => {
-  test('converts 6-digit hex', () => {
-    expect(hexToRgb('#3b82f6')).toEqual({ r: 59, g: 130, b: 246 });
+describe("hexToRgb", () => {
+  test("converts 6-digit hex", () => {
+    expect(hexToRgb("#3b82f6")).toEqual({ r: 59, g: 130, b: 246 });
   });
 
-  test('converts hex without #', () => {
-    expect(hexToRgb('3b82f6')).toEqual({ r: 59, g: 130, b: 246 });
+  test("converts hex without #", () => {
+    expect(hexToRgb("3b82f6")).toEqual({ r: 59, g: 130, b: 246 });
   });
 
-  test('returns null for invalid input', () => {
-    expect(hexToRgb('xyz')).toBeNull();
-    expect(hexToRgb('')).toBeNull();
+  test("returns null for invalid input", () => {
+    expect(hexToRgb("xyz")).toBeNull();
+    expect(hexToRgb("")).toBeNull();
   });
 
-  test('handles black and white', () => {
-    expect(hexToRgb('#000000')).toEqual({ r: 0, g: 0, b: 0 });
-    expect(hexToRgb('#ffffff')).toEqual({ r: 255, g: 255, b: 255 });
+  test("handles black and white", () => {
+    expect(hexToRgb("#000000")).toEqual({ r: 0, g: 0, b: 0 });
+    expect(hexToRgb("#ffffff")).toEqual({ r: 255, g: 255, b: 255 });
   });
 
-  test('converts 3-digit hex', () => {
-    expect(hexToRgb('#abc')).toEqual({ r: 170, g: 187, b: 204 });
-    expect(hexToRgb('f00')).toEqual({ r: 255, g: 0, b: 0 });
+  test("converts 3-digit hex", () => {
+    expect(hexToRgb("#abc")).toEqual({ r: 170, g: 187, b: 204 });
+    expect(hexToRgb("f00")).toEqual({ r: 255, g: 0, b: 0 });
   });
 });
 ```
@@ -70,33 +70,33 @@ Expected: FAIL — `Cannot find module './color'`
 
 ```ts
 // append to shared/utils/color.test.ts
-import { colorDistance, hexToHsl, hexWithAlpha, hslToHex, hslToRgb, parseHexWithAlpha, rgbToHex } from './color';
+import { colorDistance, hexToHsl, hexWithAlpha, hslToHex, hslToRgb, parseHexWithAlpha, rgbToHex } from "./color";
 
-describe('rgbToHex', () => {
-  test('converts rgb to hex', () => {
-    expect(rgbToHex(59, 130, 246)).toBe('#3b82f6');
+describe("rgbToHex", () => {
+  test("converts rgb to hex", () => {
+    expect(rgbToHex(59, 130, 246)).toBe("#3b82f6");
   });
 
-  test('clamps values to 0-255', () => {
-    expect(rgbToHex(-10, 300, 128)).toBe('#00ff80');
+  test("clamps values to 0-255", () => {
+    expect(rgbToHex(-10, 300, 128)).toBe("#00ff80");
   });
 
-  test('handles black and white', () => {
-    expect(rgbToHex(0, 0, 0)).toBe('#000000');
-    expect(rgbToHex(255, 255, 255)).toBe('#ffffff');
+  test("handles black and white", () => {
+    expect(rgbToHex(0, 0, 0)).toBe("#000000");
+    expect(rgbToHex(255, 255, 255)).toBe("#ffffff");
   });
 });
 
-describe('hslToRgb', () => {
-  test('converts pure red', () => {
+describe("hslToRgb", () => {
+  test("converts pure red", () => {
     expect(hslToRgb(0, 100, 50)).toEqual({ r: 255, g: 0, b: 0 });
   });
 
-  test('converts pure green', () => {
+  test("converts pure green", () => {
     expect(hslToRgb(120, 100, 50)).toEqual({ r: 0, g: 255, b: 0 });
   });
 
-  test('converts achromatic gray', () => {
+  test("converts achromatic gray", () => {
     const { r, g, b } = hslToRgb(0, 0, 50);
     expect(r).toBe(g);
     expect(g).toBe(b);
@@ -104,79 +104,79 @@ describe('hslToRgb', () => {
   });
 });
 
-describe('hslToHex', () => {
-  test('converts hsl to hex', () => {
-    expect(hslToHex(0, 100, 50)).toBe('#ff0000');
+describe("hslToHex", () => {
+  test("converts hsl to hex", () => {
+    expect(hslToHex(0, 100, 50)).toBe("#ff0000");
   });
 });
 
-describe('hexToHsl', () => {
-  test('converts pure red', () => {
-    const { h, s, l } = hexToHsl('#ff0000');
+describe("hexToHsl", () => {
+  test("converts pure red", () => {
+    const { h, s, l } = hexToHsl("#ff0000");
     expect(h).toBe(0);
     expect(s).toBe(100);
     expect(l).toBe(50);
   });
 
-  test('converts blue-500', () => {
-    const { h, s, l } = hexToHsl('#3b82f6');
+  test("converts blue-500", () => {
+    const { h, s, l } = hexToHsl("#3b82f6");
     expect(h).toBeCloseTo(217, 0);
     expect(s).toBeCloseTo(91, 0);
     expect(l).toBeCloseTo(60, 0);
   });
 
-  test('converts gray (achromatic)', () => {
-    const { h, s, l } = hexToHsl('#808080');
+  test("converts gray (achromatic)", () => {
+    const { h, s, l } = hexToHsl("#808080");
     expect(h).toBe(0);
     expect(s).toBe(0);
     expect(l).toBeCloseTo(50, 0);
   });
 });
 
-describe('colorDistance', () => {
-  test('identical colors return 0', () => {
-    expect(colorDistance('#ff0000', '#ff0000')).toBe(0);
+describe("colorDistance", () => {
+  test("identical colors return 0", () => {
+    expect(colorDistance("#ff0000", "#ff0000")).toBe(0);
   });
 
-  test('black and white return max-ish distance', () => {
-    const d = colorDistance('#000000', '#ffffff');
+  test("black and white return max-ish distance", () => {
+    const d = colorDistance("#000000", "#ffffff");
     expect(d).toBeCloseTo(441.67, 0);
   });
 
-  test('returns Infinity for invalid input', () => {
-    expect(colorDistance('invalid', '#000000')).toBe(Infinity);
+  test("returns Infinity for invalid input", () => {
+    expect(colorDistance("invalid", "#000000")).toBe(Infinity);
   });
 });
 
-describe('hexWithAlpha', () => {
-  test('100% opacity adds ff', () => {
-    expect(hexWithAlpha('#3b82f6', '100')).toBe('#3b82f6ff');
+describe("hexWithAlpha", () => {
+  test("100% opacity adds ff", () => {
+    expect(hexWithAlpha("#3b82f6", "100")).toBe("#3b82f6ff");
   });
 
-  test('50% opacity adds 80', () => {
-    expect(hexWithAlpha('#3b82f6', '50')).toBe('#3b82f680');
+  test("50% opacity adds 80", () => {
+    expect(hexWithAlpha("#3b82f6", "50")).toBe("#3b82f680");
   });
 
-  test('0% opacity adds 00', () => {
-    expect(hexWithAlpha('#3b82f6', '0')).toBe('#3b82f600');
+  test("0% opacity adds 00", () => {
+    expect(hexWithAlpha("#3b82f6", "0")).toBe("#3b82f600");
   });
 
-  test('returns original for non-hex', () => {
-    expect(hexWithAlpha('$blue9', '50')).toBe('$blue9');
+  test("returns original for non-hex", () => {
+    expect(hexWithAlpha("$blue9", "50")).toBe("$blue9");
   });
 });
 
-describe('parseHexWithAlpha', () => {
-  test('parses #rrggbbaa format', () => {
-    expect(parseHexWithAlpha('#3b82f680')).toEqual({ color: '#3b82f6', opacity: '50' });
+describe("parseHexWithAlpha", () => {
+  test("parses #rrggbbaa format", () => {
+    expect(parseHexWithAlpha("#3b82f680")).toEqual({ color: "#3b82f6", opacity: "50" });
   });
 
-  test('parses #rrggbb format (no alpha)', () => {
-    expect(parseHexWithAlpha('#3b82f6')).toEqual({ color: '#3b82f6', opacity: undefined });
+  test("parses #rrggbb format (no alpha)", () => {
+    expect(parseHexWithAlpha("#3b82f6")).toEqual({ color: "#3b82f6", opacity: undefined });
   });
 
-  test('returns original for non-hex', () => {
-    expect(parseHexWithAlpha('$blue9')).toEqual({ color: '$blue9', opacity: undefined });
+  test("returns original for non-hex", () => {
+    expect(parseHexWithAlpha("$blue9")).toEqual({ color: "$blue9", opacity: undefined });
   });
 });
 ```
@@ -218,7 +218,7 @@ export function rgbToHex(r: number, g: number, b: number): string {
   const toHex = (n: number) =>
     Math.max(0, Math.min(255, Math.round(n)))
       .toString(16)
-      .padStart(2, '0');
+      .padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
@@ -301,12 +301,12 @@ export function colorDistance(hex1: string, hex2: string): number {
 }
 
 export function hexWithAlpha(hex: string, opacity: string): string {
-  if (!hex || !hex.startsWith('#')) return hex;
+  if (!hex || !hex.startsWith("#")) return hex;
   const opacityNum = Number.parseFloat(opacity);
   if (Number.isNaN(opacityNum)) return hex;
   const alpha = Math.round((opacityNum / 100) * 255);
-  const alphaHex = alpha.toString(16).padStart(2, '0');
-  const cleanHex = hex.slice(1).padEnd(6, '0').slice(0, 6);
+  const alphaHex = alpha.toString(16).padStart(2, "0");
+  const cleanHex = hex.slice(1).padEnd(6, "0").slice(0, 6);
   return `#${cleanHex}${alphaHex}`;
 }
 
@@ -314,7 +314,7 @@ export function parseHexWithAlpha(hex: string): {
   color: string;
   opacity: string | undefined;
 } {
-  if (!hex || !hex.startsWith('#')) return { color: hex, opacity: undefined };
+  if (!hex || !hex.startsWith("#")) return { color: hex, opacity: undefined };
   if (hex.length === 9) {
     const color = hex.slice(0, 7);
     const alphaHex = hex.slice(7, 9);
@@ -391,65 +391,65 @@ git commit -m "refactor: extract shared color utilities to shared/utils/color.ts
 
 ```ts
 // client/components/ui/color-search-parser.test.ts
-import { describe, expect, test } from 'bun:test';
-import { parseColorInput } from './color-search-parser';
+import { describe, expect, test } from "bun:test";
+import { parseColorInput } from "./color-search-parser";
 
 // No canvas mock needed — hex/rgb/hsl are parsed via regex.
 // Named colors (canvas fallback) return null in test env (typeof document === 'undefined').
 
-describe('parseColorInput', () => {
-  test('parses 6-digit hex with #', () => {
-    const result = parseColorInput('#3b82f6');
-    expect(result).toEqual({ hex: '#3b82f6', original: '#3b82f6', format: 'hex' });
+describe("parseColorInput", () => {
+  test("parses 6-digit hex with #", () => {
+    const result = parseColorInput("#3b82f6");
+    expect(result).toEqual({ hex: "#3b82f6", original: "#3b82f6", format: "hex" });
   });
 
-  test('parses 6-digit hex without #', () => {
-    const result = parseColorInput('3b82f6');
-    expect(result).toEqual({ hex: '#3b82f6', original: '3b82f6', format: 'hex' });
+  test("parses 6-digit hex without #", () => {
+    const result = parseColorInput("3b82f6");
+    expect(result).toEqual({ hex: "#3b82f6", original: "3b82f6", format: "hex" });
   });
 
-  test('parses 3-digit hex', () => {
-    const result = parseColorInput('#abc');
-    expect(result).toEqual({ hex: '#aabbcc', original: '#abc', format: 'hex-short' });
+  test("parses 3-digit hex", () => {
+    const result = parseColorInput("#abc");
+    expect(result).toEqual({ hex: "#aabbcc", original: "#abc", format: "hex-short" });
   });
 
-  test('parses 3-digit hex without #', () => {
-    const result = parseColorInput('000');
-    expect(result).toEqual({ hex: '#000000', original: '000', format: 'hex-short' });
+  test("parses 3-digit hex without #", () => {
+    const result = parseColorInput("000");
+    expect(result).toEqual({ hex: "#000000", original: "000", format: "hex-short" });
   });
 
-  test('parses 1-digit hex (#a → #aaaaaa)', () => {
-    expect(parseColorInput('#a')).toEqual({ hex: '#aaaaaa', original: '#a', format: 'hex-short' });
-    expect(parseColorInput('f')).toEqual({ hex: '#ffffff', original: 'f', format: 'hex-short' });
-    expect(parseColorInput('#0')).toEqual({ hex: '#000000', original: '#0', format: 'hex-short' });
+  test("parses 1-digit hex (#a → #aaaaaa)", () => {
+    expect(parseColorInput("#a")).toEqual({ hex: "#aaaaaa", original: "#a", format: "hex-short" });
+    expect(parseColorInput("f")).toEqual({ hex: "#ffffff", original: "f", format: "hex-short" });
+    expect(parseColorInput("#0")).toEqual({ hex: "#000000", original: "#0", format: "hex-short" });
   });
 
-  test('parses rgb format', () => {
-    const result = parseColorInput('rgb(59, 130, 246)');
-    expect(result?.format).toBe('rgb');
-    expect(result?.hex).toBe('#3b82f6');
+  test("parses rgb format", () => {
+    const result = parseColorInput("rgb(59, 130, 246)");
+    expect(result?.format).toBe("rgb");
+    expect(result?.hex).toBe("#3b82f6");
   });
 
-  test('parses rgb without commas', () => {
-    const result = parseColorInput('rgb(59 130 246)');
-    expect(result?.format).toBe('rgb');
-    expect(result?.hex).toBe('#3b82f6');
+  test("parses rgb without commas", () => {
+    const result = parseColorInput("rgb(59 130 246)");
+    expect(result?.format).toBe("rgb");
+    expect(result?.hex).toBe("#3b82f6");
   });
 
-  test('parses hsl format', () => {
-    const result = parseColorInput('hsl(0, 100%, 50%)');
-    expect(result?.format).toBe('hsl');
-    expect(result?.hex).toBe('#ff0000');
+  test("parses hsl format", () => {
+    const result = parseColorInput("hsl(0, 100%, 50%)");
+    expect(result?.format).toBe("hsl");
+    expect(result?.hex).toBe("#ff0000");
   });
 
-  test('returns null for non-color text', () => {
-    expect(parseColorInput('hello')).toBeNull();
-    expect(parseColorInput('blue-500')).toBeNull(); // token name, not CSS color
+  test("returns null for non-color text", () => {
+    expect(parseColorInput("hello")).toBeNull();
+    expect(parseColorInput("blue-500")).toBeNull(); // token name, not CSS color
   });
 
-  test('returns null for empty input', () => {
-    expect(parseColorInput('')).toBeNull();
-    expect(parseColorInput('   ')).toBeNull();
+  test("returns null for empty input", () => {
+    expect(parseColorInput("")).toBeNull();
+    expect(parseColorInput("   ")).toBeNull();
   });
 });
 ```
@@ -479,9 +479,9 @@ Expected: FAIL — module not found
  * Assumptions: runs in browser environment (canvas API for named color fallback)
  */
 
-import { hslToRgb, rgbToHex } from '@shared/utils/color';
+import { hslToRgb, rgbToHex } from "@shared/utils/color";
 
-export type ColorFormat = 'hex' | 'hex-short' | 'rgb' | 'hsl' | 'named';
+export type ColorFormat = "hex" | "hex-short" | "rgb" | "hsl" | "named";
 
 export interface ParsedColorInput {
   hex: string;
@@ -498,9 +498,9 @@ const HSL_RE = /^hsl\(\s*(\d{1,3})\s*[,\s]\s*(\d{1,3})%?\s*[,\s]\s*(\d{1,3})%?\s
 /** Expand 3-digit hex to 6-digit: abc → aabbcc */
 function expand3(short: string): string {
   return short
-    .split('')
+    .split("")
     .map((c) => c + c)
-    .join('');
+    .join("");
 }
 
 // hslToRgb is imported from @shared/utils/color — no local duplicate
@@ -509,17 +509,17 @@ function expand3(short: string): string {
 let canvasCtx: CanvasRenderingContext2D | null = null;
 
 function cssColorToHex(input: string): string | null {
-  if (typeof document === 'undefined') return null;
-  if (!canvasCtx) canvasCtx = document.createElement('canvas').getContext('2d');
+  if (typeof document === "undefined") return null;
+  if (!canvasCtx) canvasCtx = document.createElement("canvas").getContext("2d");
   if (!canvasCtx) return null;
 
-  canvasCtx.fillStyle = '#010101';
+  canvasCtx.fillStyle = "#010101";
   canvasCtx.fillStyle = input;
-  if (canvasCtx.fillStyle !== '#010101') return canvasCtx.fillStyle;
+  if (canvasCtx.fillStyle !== "#010101") return canvasCtx.fillStyle;
 
-  canvasCtx.fillStyle = '#020202';
+  canvasCtx.fillStyle = "#020202";
   canvasCtx.fillStyle = input;
-  if (canvasCtx.fillStyle !== '#020202') return canvasCtx.fillStyle;
+  if (canvasCtx.fillStyle !== "#020202") return canvasCtx.fillStyle;
 
   return null;
 }
@@ -531,20 +531,20 @@ export function parseColorInput(input: string): ParsedColorInput | null {
   // 6-digit hex
   const hex6 = HEX_6.exec(trimmed);
   if (hex6) {
-    return { hex: `#${hex6[1].toLowerCase()}`, original: trimmed, format: 'hex' };
+    return { hex: `#${hex6[1].toLowerCase()}`, original: trimmed, format: "hex" };
   }
 
   // 3-digit hex
   const hex3 = HEX_3.exec(trimmed);
   if (hex3) {
-    return { hex: `#${expand3(hex3[1].toLowerCase())}`, original: trimmed, format: 'hex-short' };
+    return { hex: `#${expand3(hex3[1].toLowerCase())}`, original: trimmed, format: "hex-short" };
   }
 
   // 1-digit hex: #a → #aaaaaa
   const hex1 = HEX_1.exec(trimmed);
   if (hex1) {
     const ch = hex1[1].toLowerCase();
-    return { hex: `#${ch.repeat(6)}`, original: trimmed, format: 'hex-short' };
+    return { hex: `#${ch.repeat(6)}`, original: trimmed, format: "hex-short" };
   }
 
   // rgb(r, g, b) or rgb(r g b)
@@ -554,7 +554,7 @@ export function parseColorInput(input: string): ParsedColorInput | null {
     const g = Number.parseInt(rgb[2], 10);
     const b = Number.parseInt(rgb[3], 10);
     if (r <= 255 && g <= 255 && b <= 255) {
-      return { hex: rgbToHex(r, g, b), original: trimmed, format: 'rgb' };
+      return { hex: rgbToHex(r, g, b), original: trimmed, format: "rgb" };
     }
   }
 
@@ -566,14 +566,14 @@ export function parseColorInput(input: string): ParsedColorInput | null {
     const l = Number.parseInt(hsl[3], 10);
     if (h <= 360 && s <= 100 && l <= 100) {
       const { r, g, b } = hslToRgb(h, s, l);
-      return { hex: rgbToHex(r, g, b), original: trimmed, format: 'hsl' };
+      return { hex: rgbToHex(r, g, b), original: trimmed, format: "hsl" };
     }
   }
 
   // Fallback: CSS named colors via canvas API
   const resolved = cssColorToHex(trimmed);
   if (resolved) {
-    return { hex: resolved, original: trimmed, format: 'named' };
+    return { hex: resolved, original: trimmed, format: "named" };
   }
 
   return null;
@@ -604,8 +604,8 @@ git commit -m "feat: add multi-format color input parser (hex, rgb, hsl, named)"
 At `color-combobox.tsx`, add import:
 
 ```ts
-import { parseColorInput } from './color-search-parser';
-import { colorDistance } from '@shared/utils/color';
+import { parseColorInput } from "./color-search-parser";
+import { colorDistance } from "@shared/utils/color";
 ```
 
 Replace the `filteredGroups` memo (lines 285-307) with:
@@ -661,7 +661,7 @@ In the search results rendering (lines 395-423), update the `CommandItem` conten
 ```tsx
 {
   options.map((option) => {
-    const distance = '_distance' in option ? (option as ColorOption & { _distance: number })._distance : Infinity;
+    const distance = "_distance" in option ? (option as ColorOption & { _distance: number })._distance : Infinity;
     const isExact = parsedSearchColor && distance === 0;
 
     return (
@@ -669,18 +669,18 @@ In the search results rendering (lines 395-423), update the `CommandItem` conten
         key={option.value}
         value={option.value}
         onSelect={() => handleSelect(option.value)}
-        className={cn('flex items-center gap-2 cursor-pointer', isExact && 'bg-yellow-100 dark:bg-yellow-900/30')}
+        className={cn("flex items-center gap-2 cursor-pointer", isExact && "bg-yellow-100 dark:bg-yellow-900/30")}
       >
         <div className="w-4 h-4 rounded border border-border shrink-0" style={{ backgroundColor: option.hex }} />
         <span className="flex-1 text-xs">
-          {tokenSystem === 'tamagui' ? `$${option.label}` : option.label}
+          {tokenSystem === "tamagui" ? `$${option.label}` : option.label}
           <span className="text-muted-foreground ml-1">{option.hex}</span>
         </span>
         {/* Show matched format if search was non-hex */}
         {isExact &&
           parsedSearchColor &&
-          parsedSearchColor.format !== 'hex' &&
-          parsedSearchColor.format !== 'hex-short' && (
+          parsedSearchColor.format !== "hex" &&
+          parsedSearchColor.format !== "hex-short" && (
             <span className="text-xs bg-yellow-200 dark:bg-yellow-800 px-1 rounded">{parsedSearchColor.original}</span>
           )}
         {currentToken === option.value && <IconCheck className="w-4 h-4 text-green-600 shrink-0" stroke={2} />}
@@ -726,18 +726,18 @@ git commit -m "feat: integrate multi-format color search into ColorCombobox"
 
 ```ts
 // client/components/ui/color-tooltip.test.ts
-import { describe, expect, test } from 'bun:test';
-import { formatColorValues } from './color-tooltip';
+import { describe, expect, test } from "bun:test";
+import { formatColorValues } from "./color-tooltip";
 
-describe('formatColorValues', () => {
-  test('generates all 4 formats for a token', () => {
-    const values = formatColorValues('blue-500', '#3b82f6');
+describe("formatColorValues", () => {
+  test("generates all 4 formats for a token", () => {
+    const values = formatColorValues("blue-500", "#3b82f6");
     expect(values).toHaveLength(4);
-    expect(values[0]).toEqual({ label: 'blue-500', hotkey: 't', value: 'blue-500' });
-    expect(values[1]).toEqual({ label: '#3b82f6', hotkey: '#', value: '#3b82f6' });
-    expect(values[2].hotkey).toBe('r');
+    expect(values[0]).toEqual({ label: "blue-500", hotkey: "t", value: "blue-500" });
+    expect(values[1]).toEqual({ label: "#3b82f6", hotkey: "#", value: "#3b82f6" });
+    expect(values[2].hotkey).toBe("r");
     expect(values[2].value).toMatch(/^rgb\(/);
-    expect(values[3].hotkey).toBe('h');
+    expect(values[3].hotkey).toBe("h");
     expect(values[3].value).toMatch(/^hsl\(/);
   });
 });
@@ -759,12 +759,12 @@ Expected: FAIL — module not found
  * Assumptions: requires TooltipProvider ancestor, clipboard API available
  */
 
-import { IconCopy } from '@tabler/icons-react';
-import cn from 'clsx';
-import * as React from 'react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { toast } from '@/hooks/use-toast';
-import { hexToHsl, hexToRgb } from '@shared/utils/color';
+import { IconCopy } from "@tabler/icons-react";
+import cn from "clsx";
+import * as React from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { toast } from "@/hooks/use-toast";
+import { hexToHsl, hexToRgb } from "@shared/utils/color";
 
 interface ColorValue {
   label: string;
@@ -785,17 +785,17 @@ export function formatColorValues(tokenName: string, hex: string): ColorValue[] 
   const hsl = hexToHsl(hex);
 
   return [
-    { label: tokenName, value: tokenName, hotkey: 't' },
-    { label: hex, value: hex, hotkey: '#' },
+    { label: tokenName, value: tokenName, hotkey: "t" },
+    { label: hex, value: hex, hotkey: "#" },
     {
       label: rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : hex,
       value: rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : hex,
-      hotkey: 'r',
+      hotkey: "r",
     },
     {
       label: `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)`,
       value: `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)`,
-      hotkey: 'h',
+      hotkey: "h",
     },
   ];
 }
@@ -824,8 +824,8 @@ export function ColorTooltip({ tokenName, hex, children, searchFocused }: ColorT
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, searchFocused, values]);
 
   return (
@@ -881,8 +881,8 @@ git commit -m "feat: add ColorTooltip with copy-to-clipboard and hotkeys"
 At top of `color-combobox.tsx`, add:
 
 ```ts
-import { ColorTooltip } from './color-tooltip';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { ColorTooltip } from "./color-tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 ```
 
 Add search focus tracking state inside component:
@@ -919,7 +919,7 @@ At lines 460-474 (grid palette buttons), wrap each button:
   options.map((option) => (
     <ColorTooltip
       key={option.value}
-      tokenName={tokenSystem === 'tamagui' ? `$${option.value}` : option.value}
+      tokenName={tokenSystem === "tamagui" ? `$${option.value}` : option.value}
       hex={option.hex}
       searchFocused={searchFocused}
     >
@@ -927,10 +927,10 @@ At lines 460-474 (grid palette buttons), wrap each button:
         type="button"
         onClick={() => handleSelect(option.value)}
         className={cn(
-          'w-5 h-5 rounded border transition-all hover:scale-110 hover:z-10',
+          "w-5 h-5 rounded border transition-all hover:scale-110 hover:z-10",
           currentToken === option.value
-            ? 'border-foreground ring-1 ring-foreground ring-offset-1 ring-offset-background'
-            : 'border-border hover:border-muted-foreground',
+            ? "border-foreground ring-1 ring-foreground ring-offset-1 ring-offset-background"
+            : "border-border hover:border-muted-foreground",
         )}
         style={{ backgroundColor: option.hex }}
       />
@@ -976,62 +976,62 @@ git commit -m "feat: integrate ColorTooltip into palette swatches"
 
 ```ts
 // client/components/ui/extract-component-colors.test.ts
-import { describe, expect, test } from 'bun:test';
-import { extractComponentColors } from './extract-component-colors';
-import type { ASTNode } from '@/lib/canvas-engine/types/ast';
+import { describe, expect, test } from "bun:test";
+import { extractComponentColors } from "./extract-component-colors";
+import type { ASTNode } from "@/lib/canvas-engine/types/ast";
 
 const makeNode = (id: string, props?: Record<string, unknown>, children?: ASTNode[]): ASTNode => ({
   id,
-  type: 'div',
+  type: "div",
   props,
   children,
 });
 
-describe('extractComponentColors', () => {
-  test('extracts backgroundColor from props.className (Tailwind)', () => {
-    const ast: ASTNode[] = [makeNode('1', { className: 'bg-blue-500 text-white p-4' })];
-    const result = extractComponentColors(ast, 'tailwind');
-    expect(result.some((c) => c.value === 'blue-500')).toBe(true);
-    expect(result.some((c) => c.value === 'white')).toBe(true);
+describe("extractComponentColors", () => {
+  test("extracts backgroundColor from props.className (Tailwind)", () => {
+    const ast: ASTNode[] = [makeNode("1", { className: "bg-blue-500 text-white p-4" })];
+    const result = extractComponentColors(ast, "tailwind");
+    expect(result.some((c) => c.value === "blue-500")).toBe(true);
+    expect(result.some((c) => c.value === "white")).toBe(true);
   });
 
-  test('deduplicates same color, counts occurrences', () => {
+  test("deduplicates same color, counts occurrences", () => {
     const ast: ASTNode[] = [
-      makeNode('1', { className: 'bg-blue-500' }),
-      makeNode('2', { className: 'bg-blue-500 text-blue-500' }),
+      makeNode("1", { className: "bg-blue-500" }),
+      makeNode("2", { className: "bg-blue-500 text-blue-500" }),
     ];
-    const result = extractComponentColors(ast, 'tailwind');
-    const blue500 = result.find((c) => c.value === 'blue-500');
+    const result = extractComponentColors(ast, "tailwind");
+    const blue500 = result.find((c) => c.value === "blue-500");
     expect(blue500?.count).toBe(3);
   });
 
-  test('sorts tokens first, then hex by count', () => {
-    const ast: ASTNode[] = [makeNode('1', { className: 'bg-[#ff0000]' }), makeNode('2', { className: 'bg-blue-500' })];
-    const result = extractComponentColors(ast, 'tailwind');
+  test("sorts tokens first, then hex by count", () => {
+    const ast: ASTNode[] = [makeNode("1", { className: "bg-[#ff0000]" }), makeNode("2", { className: "bg-blue-500" })];
+    const result = extractComponentColors(ast, "tailwind");
     expect(result[0].isToken).toBe(true);
   });
 
-  test('deduplicates token and hex with same resolved color', () => {
-    const ast: ASTNode[] = [makeNode('1', { className: 'bg-blue-500' }), makeNode('2', { className: 'bg-[#3b82f6]' })];
-    const result = extractComponentColors(ast, 'tailwind');
-    const blues = result.filter((c) => c.hex === '#3b82f6');
+  test("deduplicates token and hex with same resolved color", () => {
+    const ast: ASTNode[] = [makeNode("1", { className: "bg-blue-500" }), makeNode("2", { className: "bg-[#3b82f6]" })];
+    const result = extractComponentColors(ast, "tailwind");
+    const blues = result.filter((c) => c.hex === "#3b82f6");
     expect(blues).toHaveLength(1);
     expect(blues[0].isToken).toBe(true);
   });
 
-  test('returns empty for nodes without color props', () => {
-    const ast: ASTNode[] = [makeNode('1', { className: 'p-4 flex' })];
-    const result = extractComponentColors(ast, 'tailwind');
+  test("returns empty for nodes without color props", () => {
+    const ast: ASTNode[] = [makeNode("1", { className: "p-4 flex" })];
+    const result = extractComponentColors(ast, "tailwind");
     expect(result).toHaveLength(0);
   });
 
-  test('traverses children recursively', () => {
+  test("traverses children recursively", () => {
     const ast: ASTNode[] = [
-      makeNode('1', { className: 'bg-red-500' }, [
-        makeNode('2', { className: 'text-green-500' }, [makeNode('3', { className: 'border-blue-500' })]),
+      makeNode("1", { className: "bg-red-500" }, [
+        makeNode("2", { className: "text-green-500" }, [makeNode("3", { className: "border-blue-500" })]),
       ]),
     ];
-    const result = extractComponentColors(ast, 'tailwind');
+    const result = extractComponentColors(ast, "tailwind");
     expect(result).toHaveLength(3);
   });
 });
@@ -1053,10 +1053,10 @@ Expected: FAIL — module not found
  * Assumptions: AST is already loaded on client from parseComponent
  */
 
-import type { ASTNode } from '@/lib/canvas-engine/types/ast';
-import { getColorHex } from '@/lib/tailwind/tailwind-values';
-import { getTamaguiColorHex } from '@lib/tamagui/values';
-import type { TokenSystem } from './color-combobox';
+import type { ASTNode } from "@/lib/canvas-engine/types/ast";
+import { getColorHex } from "@/lib/tailwind/tailwind-values";
+import { getTamaguiColorHex } from "@lib/tamagui/values";
+import type { TokenSystem } from "./color-combobox";
 
 export interface ColorEntry {
   value: string;
@@ -1067,20 +1067,20 @@ export interface ColorEntry {
 
 /** Tailwind color class prefixes that carry color values */
 const TW_COLOR_PREFIXES = [
-  'bg-',
-  'text-',
-  'border-',
-  'shadow-',
-  'ring-',
-  'outline-',
-  'accent-',
-  'fill-',
-  'stroke-',
-  'decoration-',
+  "bg-",
+  "text-",
+  "border-",
+  "shadow-",
+  "ring-",
+  "outline-",
+  "accent-",
+  "fill-",
+  "stroke-",
+  "decoration-",
 ];
 
 /** Tamagui props that carry color values */
-const TAMAGUI_COLOR_PROPS = ['backgroundColor', 'color', 'borderColor', 'shadowColor'];
+const TAMAGUI_COLOR_PROPS = ["backgroundColor", "color", "borderColor", "shadowColor"];
 
 function extractTailwindColors(className: string): Array<{ value: string; hex: string; isToken: boolean }> {
   const classes = className.split(/\s+/);
@@ -1088,7 +1088,7 @@ function extractTailwindColors(className: string): Array<{ value: string; hex: s
 
   for (const cls of classes) {
     // Strip state variants (hover:, focus:, etc.)
-    const base = cls.includes(':') ? cls.split(':').pop()! : cls;
+    const base = cls.includes(":") ? cls.split(":").pop()! : cls;
 
     // Arbitrary color: bg-[#ff0000]
     const arbMatch =
@@ -1097,9 +1097,9 @@ function extractTailwindColors(className: string): Array<{ value: string; hex: s
       let hex = arbMatch[1];
       if (hex.length === 3)
         hex = hex
-          .split('')
+          .split("")
           .map((c) => c + c)
-          .join('');
+          .join("");
       colors.push({ value: `#${hex}`, hex: `#${hex.toLowerCase()}`, isToken: false });
       continue;
     }
@@ -1109,7 +1109,7 @@ function extractTailwindColors(className: string): Array<{ value: string; hex: s
       if (!base.startsWith(prefix)) continue;
       const token = base.slice(prefix.length);
       // Strip opacity modifier: blue-500/50 → blue-500
-      const tokenClean = token.includes('/') ? token.split('/')[0] : token;
+      const tokenClean = token.includes("/") ? token.split("/")[0] : token;
       const hex = getColorHex(tokenClean);
       if (hex) {
         colors.push({ value: tokenClean, hex, isToken: true });
@@ -1126,12 +1126,12 @@ function extractTamaguiColors(props: Record<string, unknown>): Array<{ value: st
 
   for (const prop of TAMAGUI_COLOR_PROPS) {
     const val = props[prop];
-    if (typeof val !== 'string' || !val) continue;
+    if (typeof val !== "string" || !val) continue;
 
-    if (val.startsWith('$')) {
+    if (val.startsWith("$")) {
       const hex = getTamaguiColorHex(val);
       if (hex) colors.push({ value: val, hex, isToken: true });
-    } else if (val.startsWith('#')) {
+    } else if (val.startsWith("#")) {
       colors.push({ value: val, hex: val, isToken: false });
     }
   }
@@ -1147,9 +1147,9 @@ function traverseAST(
   for (const node of nodes) {
     let extracted: Array<{ value: string; hex: string; isToken: boolean }> = [];
 
-    if (tokenSystem === 'tailwind' && typeof node.props?.className === 'string') {
+    if (tokenSystem === "tailwind" && typeof node.props?.className === "string") {
       extracted = extractTailwindColors(node.props.className);
-    } else if (tokenSystem === 'tamagui' && node.props) {
+    } else if (tokenSystem === "tamagui" && node.props) {
       extracted = extractTamaguiColors(node.props);
     }
 
@@ -1227,10 +1227,10 @@ Run: `mkdir -p client/components/ui/hooks`
  * Assumptions: engine may be null (VS Code context), AST available via root.metadata.astStructure
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import type { CanvasEngine } from '@/lib/canvas-engine/core/CanvasEngine';
-import type { TokenSystem } from '../color-combobox';
-import { type ColorEntry, extractComponentColors } from '../extract-component-colors';
+import { useEffect, useMemo, useState } from "react";
+import type { CanvasEngine } from "@/lib/canvas-engine/core/CanvasEngine";
+import type { TokenSystem } from "../color-combobox";
+import { type ColorEntry, extractComponentColors } from "../extract-component-colors";
 
 export function useComponentColors(
   engine: CanvasEngine | null,
@@ -1243,9 +1243,9 @@ export function useComponentColors(
     if (!engine) return;
 
     const handler = () => setTreeVersion((v) => v + 1);
-    engine.events.on('tree:change', handler);
+    engine.events.on("tree:change", handler);
     return () => {
-      engine.events.off('tree:change', handler);
+      engine.events.off("tree:change", handler);
     };
   }, [engine]);
 
@@ -1253,7 +1253,7 @@ export function useComponentColors(
     if (!engine || !componentPath) return [];
 
     const root = engine.getRoot();
-    const astStructure = root?.metadata?.astStructure as import('@/lib/canvas-engine/types/ast').ASTNode[] | undefined;
+    const astStructure = root?.metadata?.astStructure as import("@/lib/canvas-engine/types/ast").ASTNode[] | undefined;
     if (!astStructure) return [];
 
     return extractComponentColors(astStructure, tokenSystem);
@@ -1319,10 +1319,10 @@ const componentColors = useComponentColors(engine ?? null, componentPath ?? null
               }
             }}
             className={cn(
-              'w-5 h-5 rounded-full border shrink-0 transition-all hover:scale-110',
+              "w-5 h-5 rounded-full border shrink-0 transition-all hover:scale-110",
               currentHex === entry.hex
-                ? 'border-foreground ring-1 ring-foreground ring-offset-1 ring-offset-background'
-                : 'border-border hover:border-muted-foreground',
+                ? "border-foreground ring-1 ring-foreground ring-offset-1 ring-offset-background"
+                : "border-border hover:border-muted-foreground",
             )}
             style={{ backgroundColor: entry.hex }}
           />
@@ -1336,7 +1336,7 @@ const componentColors = useComponentColors(engine ?? null, componentPath ?? null
 Add import at top:
 
 ```ts
-import { useComponentColors } from './hooks/use-component-colors';
+import { useComponentColors } from "./hooks/use-component-colors";
 ```
 
 - [ ] **Step 3: Thread `engine` and `componentPath` from FillSection**
@@ -1428,21 +1428,21 @@ git commit -m "feat: add component color strip above palette in ColorCombobox"
 
 ```ts
 // client/components/ui/opacity-input.test.ts
-import { describe, expect, test } from 'bun:test';
-import { shouldShowOpacity } from './opacity-input';
+import { describe, expect, test } from "bun:test";
+import { shouldShowOpacity } from "./opacity-input";
 
-describe('shouldShowOpacity', () => {
-  test('shows in unlinked (hex) mode regardless of system', () => {
-    expect(shouldShowOpacity(false, 'tailwind')).toBe(true);
-    expect(shouldShowOpacity(false, 'tamagui')).toBe(true);
+describe("shouldShowOpacity", () => {
+  test("shows in unlinked (hex) mode regardless of system", () => {
+    expect(shouldShowOpacity(false, "tailwind")).toBe(true);
+    expect(shouldShowOpacity(false, "tamagui")).toBe(true);
   });
 
-  test('shows in linked mode for Tailwind (supports alpha)', () => {
-    expect(shouldShowOpacity(true, 'tailwind')).toBe(true);
+  test("shows in linked mode for Tailwind (supports alpha)", () => {
+    expect(shouldShowOpacity(true, "tailwind")).toBe(true);
   });
 
-  test('hides in linked mode for Tamagui (no alpha support)', () => {
-    expect(shouldShowOpacity(true, 'tamagui')).toBe(false);
+  test("hides in linked mode for Tamagui (no alpha support)", () => {
+    expect(shouldShowOpacity(true, "tamagui")).toBe(false);
   });
 });
 ```
@@ -1463,9 +1463,9 @@ Expected: FAIL — module not found
  * Assumptions: opacity is 0-100 integer scale
  */
 
-import * as React from 'react';
-import { Input } from '@/components/ui/input';
-import type { TokenSystem } from './color-combobox';
+import * as React from "react";
+import { Input } from "@/components/ui/input";
+import type { TokenSystem } from "./color-combobox";
 
 interface OpacityInputProps {
   value: string;
@@ -1484,10 +1484,10 @@ export function shouldShowOpacity(isLinked: boolean, tokenSystem: TokenSystem): 
 
 export function OpacityInput({ value, onChange, className }: OpacityInputProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace('%', '').trim();
+    const raw = e.target.value.replace("%", "").trim();
     const num = Number.parseInt(raw, 10);
-    if (raw === '' || raw === '-') {
-      onChange('');
+    if (raw === "" || raw === "-") {
+      onChange("");
       return;
     }
     if (!Number.isNaN(num)) {
@@ -1496,20 +1496,20 @@ export function OpacityInput({ value, onChange, className }: OpacityInputProps) 
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
-    const increment = e.key === 'ArrowUp' ? 1 : -1;
+    const increment = e.key === "ArrowUp" ? 1 : -1;
     const step = e.shiftKey || e.altKey ? 10 : 1;
-    const num = Number.parseFloat(value || '100') || 0;
+    const num = Number.parseFloat(value || "100") || 0;
     const newNum = Math.max(0, Math.min(100, num + increment * step));
     onChange(`${newNum}`);
   };
 
   return (
-    <div className={`h-6 w-14 px-2 bg-muted rounded flex items-center ${className || ''}`}>
+    <div className={`h-6 w-14 px-2 bg-muted rounded flex items-center ${className || ""}`}>
       <Input
         type="text"
-        value={`${value || '100'}%`}
+        value={`${value || "100"}%`}
         placeholder="100%"
         onChange={handleChange}
         onKeyDown={handleKeyDown}
@@ -1569,8 +1569,8 @@ At the end of the component render (before the link/unlink button, line 508-509)
       value={opacity}
       onChange={(newOpacity) => {
         onOpacityChange(newOpacity);
-        if (currentHex?.startsWith('#')) {
-          onChange(hexWithAlpha(currentHex, newOpacity || '100'));
+        if (currentHex?.startsWith("#")) {
+          onChange(hexWithAlpha(currentHex, newOpacity || "100"));
         }
       }}
     />
@@ -1587,8 +1587,8 @@ At the end of the component render (before the link/unlink button, line 508-509)
 Add imports:
 
 ```ts
-import { OpacityInput, shouldShowOpacity } from './opacity-input';
-import { hexWithAlpha } from '@shared/utils/color';
+import { OpacityInput, shouldShowOpacity } from "./opacity-input";
+import { hexWithAlpha } from "@shared/utils/color";
 ```
 
 - [ ] **Step 3: Add `textOpacity` state to RightSidebar**
@@ -1596,7 +1596,7 @@ import { hexWithAlpha } from '@shared/utils/color';
 At `RightSidebar.tsx`, add state next to existing `fillOpacity` (line 347):
 
 ```ts
-const [textOpacity, setTextOpacity] = useState('');
+const [textOpacity, setTextOpacity] = useState("");
 ```
 
 At line 741 where textColor is parsed, preserve opacity (currently discarded):
@@ -1605,7 +1605,7 @@ At line 741 where textColor is parsed, preserve opacity (currently discarded):
 if (ep.color) {
   const { color, opacity: parsedTextOpacity } = parseHexWithAlpha(ep.color);
   setTextColor(color);
-  setTextOpacity(parsedTextOpacity ?? '100');
+  setTextOpacity(parsedTextOpacity ?? "100");
 }
 ```
 
@@ -1637,16 +1637,16 @@ For text color — add opacity to `ColorCombobox`:
 
 ```tsx
 <ColorCombobox
-  value={textColor || ''}
+  value={textColor || ""}
   onChange={(val) => {
     onTextColorChange(val);
-    syncStyleChange('color', val);
+    syncStyleChange("color", val);
   }}
   opacity={textOpacity}
   onOpacityChange={onTextOpacityChange}
   inputPlaceholder="000000"
   className="flex-1"
-  tokenSystem={projectUIKit === 'tamagui' ? 'tamagui' : 'tailwind'}
+  tokenSystem={projectUIKit === "tamagui" ? "tamagui" : "tailwind"}
   engine={engine}
   componentPath={componentPath}
 />

@@ -1,19 +1,19 @@
-import { describe, expect, it } from 'bun:test';
-import type { FileIO } from '../../ast/file-io';
+import { describe, expect, it } from "bun:test";
+import type { FileIO } from "../../ast/file-io";
 import {
   detectFramework,
   generateBlankLayoutContent,
   generateRouteFileContent,
   getRouteFilePaths,
-} from '../framework-routing';
+} from "../framework-routing";
 
 function makeIO(pkg: Record<string, unknown>, files: string[] = []): FileIO {
   const fileSet = new Set(files);
   return {
     async readFile(p: string) {
-      if (p.endsWith('package.json')) return JSON.stringify(pkg);
+      if (p.endsWith("package.json")) return JSON.stringify(pkg);
       if (!fileSet.has(p)) throw new Error(`ENOENT: ${p}`);
-      return '';
+      return "";
     },
     async writeFile() {},
     async access(p: string) {
@@ -23,218 +23,218 @@ function makeIO(pkg: Record<string, unknown>, files: string[] = []): FileIO {
   };
 }
 
-const root = '/project';
+const root = "/project";
 
-describe('detectFramework — primary via package.json', () => {
+describe("detectFramework — primary via package.json", () => {
   it('detects Next.js App Router via app/layout.tsx, returns appDir: "app"', async () => {
-    const io = makeIO({ dependencies: { next: '^14.0.0' } }, [`${root}/app/layout.tsx`]);
+    const io = makeIO({ dependencies: { next: "^14.0.0" } }, [`${root}/app/layout.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe('nextjs-app-router');
-    expect(result.appDir).toBe('app');
+    expect(result.framework).toBe("nextjs-app-router");
+    expect(result.appDir).toBe("app");
   });
 
   it('detects Next.js App Router via src/app/layout.tsx, returns appDir: "src/app"', async () => {
-    const io = makeIO({ dependencies: { next: '^14.0.0' } }, [`${root}/src/app/layout.tsx`]);
+    const io = makeIO({ dependencies: { next: "^14.0.0" } }, [`${root}/src/app/layout.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe('nextjs-app-router');
-    expect(result.appDir).toBe('src/app');
+    expect(result.framework).toBe("nextjs-app-router");
+    expect(result.appDir).toBe("src/app");
   });
 
   it('detects Next.js Pages Router via pages/_app.tsx, returns pagesDir: "pages"', async () => {
-    const io = makeIO({ dependencies: { next: '^14.0.0' } }, [`${root}/pages/_app.tsx`]);
+    const io = makeIO({ dependencies: { next: "^14.0.0" } }, [`${root}/pages/_app.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe('nextjs-pages-router');
-    expect(result.pagesDir).toBe('pages');
+    expect(result.framework).toBe("nextjs-pages-router");
+    expect(result.pagesDir).toBe("pages");
   });
 
   it('detects Next.js Pages Router via src/pages/_app.tsx, returns pagesDir: "src/pages"', async () => {
-    const io = makeIO({ dependencies: { next: '^14.0.0' } }, [`${root}/src/pages/_app.tsx`]);
+    const io = makeIO({ dependencies: { next: "^14.0.0" } }, [`${root}/src/pages/_app.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe('nextjs-pages-router');
-    expect(result.pagesDir).toBe('src/pages');
+    expect(result.framework).toBe("nextjs-pages-router");
+    expect(result.pagesDir).toBe("src/pages");
   });
 
-  it('detects Next.js App Router by default when no filesystem signal', async () => {
-    const io = makeIO({ dependencies: { next: '^14.0.0' } });
-    expect((await detectFramework(root, io)).framework).toBe('nextjs-app-router');
+  it("detects Next.js App Router by default when no filesystem signal", async () => {
+    const io = makeIO({ dependencies: { next: "^14.0.0" } });
+    expect((await detectFramework(root, io)).framework).toBe("nextjs-app-router");
   });
 
   it('detects Remix via "@remix-run/react" dep, returns routesDir: "app/routes"', async () => {
-    const io = makeIO({ dependencies: { '@remix-run/react': '^2.0.0' } });
+    const io = makeIO({ dependencies: { "@remix-run/react": "^2.0.0" } });
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe('remix');
-    expect(result.routesDir).toBe('app/routes');
+    expect(result.framework).toBe("remix");
+    expect(result.routesDir).toBe("app/routes");
   });
 
   it('detects Vite SPA (file-based) via app/routes/, returns routesDir: "app/routes"', async () => {
-    const io = makeIO({ dependencies: { vite: '^5.0.0' } }, [`${root}/app/routes/home.tsx`]);
+    const io = makeIO({ dependencies: { vite: "^5.0.0" } }, [`${root}/app/routes/home.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe('vite-spa-file-based');
-    expect(result.routesDir).toBe('app/routes');
+    expect(result.framework).toBe("vite-spa-file-based");
+    expect(result.routesDir).toBe("app/routes");
   });
 
   it('detects Vite SPA (file-based) via src/routes/, returns routesDir: "src/routes"', async () => {
-    const io = makeIO({ dependencies: { vite: '^5.0.0' } }, [`${root}/src/routes/home.tsx`]);
+    const io = makeIO({ dependencies: { vite: "^5.0.0" } }, [`${root}/src/routes/home.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe('vite-spa-file-based');
-    expect(result.routesDir).toBe('src/routes');
+    expect(result.framework).toBe("vite-spa-file-based");
+    expect(result.routesDir).toBe("src/routes");
   });
 
   it('detects Vite SPA (JSX router) via "vite" dep, no routes dir', async () => {
-    const io = makeIO({ dependencies: { vite: '^5.0.0' } });
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+    const io = makeIO({ dependencies: { vite: "^5.0.0" } });
+    expect((await detectFramework(root, io)).framework).toBe("vite-spa-jsx-router");
   });
 
   it('detects CRA via "react-scripts" dep → webpack', async () => {
-    const io = makeIO({ dependencies: { 'react-scripts': '^5.0.0' } });
-    expect((await detectFramework(root, io)).framework).toBe('webpack');
+    const io = makeIO({ dependencies: { "react-scripts": "^5.0.0" } });
+    expect((await detectFramework(root, io)).framework).toBe("webpack");
   });
 
   it('detects plain webpack via "webpack" dep', async () => {
-    const io = makeIO({ devDependencies: { webpack: '^5.0.0' } });
-    expect((await detectFramework(root, io)).framework).toBe('webpack');
+    const io = makeIO({ devDependencies: { webpack: "^5.0.0" } });
+    expect((await detectFramework(root, io)).framework).toBe("webpack");
   });
 
   it('detects Astro via "astro" dep as vite-spa-jsx-router', async () => {
-    const io = makeIO({ devDependencies: { astro: '^4.0.0' } });
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+    const io = makeIO({ devDependencies: { astro: "^4.0.0" } });
+    expect((await detectFramework(root, io)).framework).toBe("vite-spa-jsx-router");
   });
 
-  it('detects Astro via astro.config.mjs when no deps (monorepo sub-package)', async () => {
+  it("detects Astro via astro.config.mjs when no deps (monorepo sub-package)", async () => {
     const io = makeIO({}, [`${root}/astro.config.mjs`]);
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+    expect((await detectFramework(root, io)).framework).toBe("vite-spa-jsx-router");
   });
 
-  it('detects Astro via astro.config.ts', async () => {
+  it("detects Astro via astro.config.ts", async () => {
     const io = makeIO({}, [`${root}/astro.config.ts`]);
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+    expect((await detectFramework(root, io)).framework).toBe("vite-spa-jsx-router");
   });
 
-  it('detects Astro via astro.config.cjs', async () => {
+  it("detects Astro via astro.config.cjs", async () => {
     const io = makeIO({}, [`${root}/astro.config.cjs`]);
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+    expect((await detectFramework(root, io)).framework).toBe("vite-spa-jsx-router");
   });
 
-  it('Astro takes precedence over bare vite dep', async () => {
-    const io = makeIO({ devDependencies: { astro: '^4.0.0', vite: '^5.0.0' } });
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  it("Astro takes precedence over bare vite dep", async () => {
+    const io = makeIO({ devDependencies: { astro: "^4.0.0", vite: "^5.0.0" } });
+    expect((await detectFramework(root, io)).framework).toBe("vite-spa-jsx-router");
   });
 
   it('detects Parcel via "parcel" dep', async () => {
-    const io = makeIO({ devDependencies: { parcel: '^2.0.0' } });
-    expect((await detectFramework(root, io)).framework).toBe('parcel');
+    const io = makeIO({ devDependencies: { parcel: "^2.0.0" } });
+    expect((await detectFramework(root, io)).framework).toBe("parcel");
   });
 
-  it('detects Bun from its lockfile and dev script', async () => {
-    const io = makeIO({ scripts: { dev: 'bun --hot src/index.ts' }, dependencies: { react: '^19.0.0' } }, [
+  it("detects Bun from its lockfile and dev script", async () => {
+    const io = makeIO({ scripts: { dev: "bun --hot src/index.ts" }, dependencies: { react: "^19.0.0" } }, [
       `${root}/bun.lock`,
     ]);
-    expect((await detectFramework(root, io)).framework).toBe('bun');
+    expect((await detectFramework(root, io)).framework).toBe("bun");
   });
 
-  it('keeps Vite precedence when a Vite project uses Bun as package manager', async () => {
-    const io = makeIO({ dependencies: { vite: '^5.0.0' } }, [`${root}/bun.lock`]);
-    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  it("keeps Vite precedence when a Vite project uses Bun as package manager", async () => {
+    const io = makeIO({ dependencies: { vite: "^5.0.0" } }, [`${root}/bun.lock`]);
+    expect((await detectFramework(root, io)).framework).toBe("vite-spa-jsx-router");
   });
 
-  it('returns unknown when no known deps and no config files', async () => {
-    const io = makeIO({ dependencies: { react: '^18.0.0' } });
-    expect((await detectFramework(root, io)).framework).toBe('unknown');
+  it("returns unknown when no known deps and no config files", async () => {
+    const io = makeIO({ dependencies: { react: "^18.0.0" } });
+    expect((await detectFramework(root, io)).framework).toBe("unknown");
   });
 
-  it('returns unknown when package.json is missing', async () => {
+  it("returns unknown when package.json is missing", async () => {
     const io: FileIO = {
       async readFile() {
-        throw new Error('ENOENT');
+        throw new Error("ENOENT");
       },
       async writeFile() {},
       async access() {
-        throw new Error('ENOENT');
+        throw new Error("ENOENT");
       },
     };
-    expect((await detectFramework(root, io)).framework).toBe('unknown');
+    expect((await detectFramework(root, io)).framework).toBe("unknown");
   });
 });
 
-describe('getRouteFilePaths', () => {
+describe("getRouteFilePaths", () => {
   it('returns app/test-preview/* for nextjs-app-router with appDir: "app"', () => {
-    const paths = getRouteFilePaths({ framework: 'nextjs-app-router', appDir: 'app' }, '/project');
-    expect(paths.routeFile).toBe('/project/app/test-preview/page.tsx');
-    expect(paths.layoutFile).toBe('/project/app/test-preview/layout.tsx');
+    const paths = getRouteFilePaths({ framework: "nextjs-app-router", appDir: "app" }, "/project");
+    expect(paths.routeFile).toBe("/project/app/test-preview/page.tsx");
+    expect(paths.layoutFile).toBe("/project/app/test-preview/layout.tsx");
   });
 
   it('returns src/app/test-preview/* for nextjs-app-router with appDir: "src/app"', () => {
-    const paths = getRouteFilePaths({ framework: 'nextjs-app-router', appDir: 'src/app' }, '/project');
-    expect(paths.routeFile).toBe('/project/src/app/test-preview/page.tsx');
-    expect(paths.layoutFile).toBe('/project/src/app/test-preview/layout.tsx');
+    const paths = getRouteFilePaths({ framework: "nextjs-app-router", appDir: "src/app" }, "/project");
+    expect(paths.routeFile).toBe("/project/src/app/test-preview/page.tsx");
+    expect(paths.layoutFile).toBe("/project/src/app/test-preview/layout.tsx");
   });
 
   it('returns pages/test-preview.tsx for nextjs-pages-router with pagesDir: "pages"', () => {
-    const paths = getRouteFilePaths({ framework: 'nextjs-pages-router', pagesDir: 'pages' }, '/project');
-    expect(paths.routeFile).toBe('/project/pages/test-preview.tsx');
+    const paths = getRouteFilePaths({ framework: "nextjs-pages-router", pagesDir: "pages" }, "/project");
+    expect(paths.routeFile).toBe("/project/pages/test-preview.tsx");
     expect(paths.layoutFile).toBeUndefined();
   });
 
   it('returns src/pages/test-preview.tsx for nextjs-pages-router with pagesDir: "src/pages"', () => {
-    const paths = getRouteFilePaths({ framework: 'nextjs-pages-router', pagesDir: 'src/pages' }, '/project');
-    expect(paths.routeFile).toBe('/project/src/pages/test-preview.tsx');
+    const paths = getRouteFilePaths({ framework: "nextjs-pages-router", pagesDir: "src/pages" }, "/project");
+    expect(paths.routeFile).toBe("/project/src/pages/test-preview.tsx");
     expect(paths.layoutFile).toBeUndefined();
   });
 
   it('returns app/routes/test-preview.tsx for remix with routesDir: "app/routes"', () => {
-    const paths = getRouteFilePaths({ framework: 'remix', routesDir: 'app/routes' }, '/project');
-    expect(paths.routeFile).toBe('/project/app/routes/test-preview.tsx');
+    const paths = getRouteFilePaths({ framework: "remix", routesDir: "app/routes" }, "/project");
+    expect(paths.routeFile).toBe("/project/app/routes/test-preview.tsx");
     expect(paths.layoutFile).toBeUndefined();
   });
 
   it('returns src/routes/test-preview.tsx for remix with routesDir: "src/routes"', () => {
-    const paths = getRouteFilePaths({ framework: 'remix', routesDir: 'src/routes' }, '/project');
-    expect(paths.routeFile).toBe('/project/src/routes/test-preview.tsx');
+    const paths = getRouteFilePaths({ framework: "remix", routesDir: "src/routes" }, "/project");
+    expect(paths.routeFile).toBe("/project/src/routes/test-preview.tsx");
   });
 });
 
-describe('generateRouteFileContent', () => {
-  it('nextjs-app-router route uses useSearchParams + Suspense', () => {
-    const content = generateRouteFileContent('nextjs-app-router', '../../src/__canvas_preview__');
+describe("generateRouteFileContent", () => {
+  it("nextjs-app-router route uses useSearchParams + Suspense", () => {
+    const content = generateRouteFileContent("nextjs-app-router", "../../src/__canvas_preview__");
     expect(content).toContain("'use client'");
-    expect(content).toContain('useSearchParams');
-    expect(content).toContain('Suspense');
-    expect(content).toContain('@hyperide-managed');
+    expect(content).toContain("useSearchParams");
+    expect(content).toContain("Suspense");
+    expect(content).toContain("@hyperide-managed");
     expect(content).toContain('id="root"');
-    expect(content).toContain('CanvasPreview');
+    expect(content).toContain("CanvasPreview");
     // Must pass component/mode props to CanvasPreview so it doesn't use window.location.search
     // (window is undefined during SSR in Next.js App Router)
     expect(content).toContain("params.get('component')");
     expect(content).toContain("params.get('mode')");
   });
 
-  it('nextjs-pages-router route renders CanvasPreview directly', () => {
-    const content = generateRouteFileContent('nextjs-pages-router', '../src/__canvas_preview__');
-    expect(content).toContain('CanvasPreview');
-    expect(content).toContain('@hyperide-managed');
+  it("nextjs-pages-router route renders CanvasPreview directly", () => {
+    const content = generateRouteFileContent("nextjs-pages-router", "../src/__canvas_preview__");
+    expect(content).toContain("CanvasPreview");
+    expect(content).toContain("@hyperide-managed");
     expect(content).toContain('id="root"');
-    expect(content).not.toContain('useSearchParams');
+    expect(content).not.toContain("useSearchParams");
   });
 
-  it('remix route renders CanvasPreview', () => {
-    const content = generateRouteFileContent('remix', '../../src/__canvas_preview__');
-    expect(content).toContain('CanvasPreview');
-    expect(content).toContain('@hyperide-managed');
+  it("remix route renders CanvasPreview", () => {
+    const content = generateRouteFileContent("remix", "../../src/__canvas_preview__");
+    expect(content).toContain("CanvasPreview");
+    expect(content).toContain("@hyperide-managed");
     expect(content).toContain('id="root"');
-    expect(content).toContain('useEffect');
-    expect(content).toContain('useSearchParams');
+    expect(content).toContain("useEffect");
+    expect(content).toContain("useSearchParams");
     expect(content).toContain("params.get('component')");
     expect(content).toContain("params.get('mode')");
-    expect(content).toContain('/__hypercanvas/iframe-interaction.js');
-    expect(content).not.toContain('suppressHydrationWarning');
+    expect(content).toContain("/__hypercanvas/iframe-interaction.js");
+    expect(content).not.toContain("suppressHydrationWarning");
   });
 });
 
-describe('generateBlankLayoutContent', () => {
-  it('returns a passthrough layout', () => {
+describe("generateBlankLayoutContent", () => {
+  it("returns a passthrough layout", () => {
     const content = generateBlankLayoutContent();
-    expect(content).toContain('@hyperide-managed');
-    expect(content).toContain('children');
-    expect(content).toContain('{children}');
+    expect(content).toContain("@hyperide-managed");
+    expect(content).toContain("children");
+    expect(content).toContain("{children}");
   });
 });

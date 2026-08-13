@@ -9,13 +9,13 @@
 `"logs panel opens after dev server stop"` in `tests/project-dependent/dev-server.spec.ts:80` (PD-2-7).
 
 ```typescript
-test('logs panel opens after dev server stop', async ({ window }) => {
+test("logs panel opens after dev server stop", async ({ window }) => {
   test.setTimeout(400_000); // devServer.stop() leaves extension in cleanup state; teardown takes ~3min
 
   const { cmd } = await setupPreviewWithDevServer(window);
   const devServer = new DevServerControls(window);
   await devServer.stop();
-  await cmd.runCommand('Hyper: Open Logs');
+  await cmd.runCommand("Hyper: Open Logs");
   const logs = new LogsPanel(window);
   const logCount = await logs.getLogCount();
   expect(logCount).toBeGreaterThanOrEqual(0);
@@ -89,21 +89,21 @@ Based on Task 1 findings, most likely fix:
 **In the PD-2-7 test body, explicitly clean up before teardown:**
 
 ```typescript
-test('logs panel opens after dev server stop', async ({ window }) => {
+test("logs panel opens after dev server stop", async ({ window }) => {
   test.setTimeout(400_000);
 
   const { cmd } = await setupPreviewWithDevServer(window);
   const devServer = new DevServerControls(window);
   await devServer.stop();
 
-  await cmd.runCommand('Hyper: Open Logs');
+  await cmd.runCommand("Hyper: Open Logs");
   const logs = new LogsPanel(window);
   const logCount = await logs.getLogCount();
   expect(logCount).toBeGreaterThanOrEqual(0);
 
   // Explicit cleanup: close the preview panel before teardown runs.
   // Without this, the fixture teardown hangs trying to close a frozen webview.
-  await cmd.runCommand('Hyper: Close Preview').catch(() => {
+  await cmd.runCommand("Hyper: Close Preview").catch(() => {
     /* already closed */
   });
   await window.waitForTimeout(500); // brief settle

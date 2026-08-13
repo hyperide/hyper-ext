@@ -44,7 +44,7 @@ interface VectorVertex {
   strokeCap?: StrokeCap;
   strokeJoin?: StrokeJoin;
   cornerRadius?: number;
-  handleMirroring?: 'none' | 'angle' | 'angleAndLength';
+  handleMirroring?: "none" | "angle" | "angleAndLength";
 }
 
 interface VectorSegment {
@@ -55,7 +55,7 @@ interface VectorSegment {
 }
 
 interface VectorRegion {
-  windingRule: 'evenOdd' | 'nonZero';
+  windingRule: "evenOdd" | "nonZero";
   loops: number[][]; // arrays of segment indices forming closed chains
   fills: FillStyle[];
 }
@@ -461,18 +461,18 @@ export interface PathValue {
 // -- Style --
 
 export type BlendMode =
-  | 'normal'
-  | 'multiply'
-  | 'screen'
-  | 'overlay'
-  | 'darken'
-  | 'lighten'
-  | 'colorDodge'
-  | 'colorBurn'
-  | 'hardLight'
-  | 'softLight'
-  | 'difference'
-  | 'exclusion';
+  | "normal"
+  | "multiply"
+  | "screen"
+  | "overlay"
+  | "darken"
+  | "lighten"
+  | "colorDodge"
+  | "colorBurn"
+  | "hardLight"
+  | "softLight"
+  | "difference"
+  | "exclusion";
 
 export interface GradientStop {
   offset: number;
@@ -480,7 +480,7 @@ export interface GradientStop {
 }
 
 export interface FillStyle {
-  type: 'solid' | 'linearGradient' | 'radialGradient' | 'conicGradient';
+  type: "solid" | "linearGradient" | "radialGradient" | "conicGradient";
   color?: string;
   stops?: GradientStop[];
   from?: Point;
@@ -492,8 +492,8 @@ export interface FillStyle {
 export interface StrokeStyle {
   color: string;
   width: number;
-  cap: 'butt' | 'round' | 'square';
-  join: 'miter' | 'round' | 'bevel';
+  cap: "butt" | "round" | "square";
+  join: "miter" | "round" | "bevel";
   dashArray?: number[];
   dashOffset?: number;
 }
@@ -517,18 +517,18 @@ export interface StyleValue {
 // -- Node value (discriminated union) --
 
 export type NodeValue =
-  | { type: 'path'; value: PathValue }
-  | { type: 'style'; value: StyleValue }
-  | { type: 'number'; value: number }
-  | { type: 'color'; value: string }
-  | { type: 'boolean'; value: boolean }
-  | { type: 'transform'; value: TransformMatrix };
+  | { type: "path"; value: PathValue }
+  | { type: "style"; value: StyleValue }
+  | { type: "number"; value: number }
+  | { type: "color"; value: string }
+  | { type: "boolean"; value: boolean }
+  | { type: "transform"; value: TransformMatrix };
 
-export type NodeValueType = NodeValue['type'];
+export type NodeValueType = NodeValue["type"];
 
 // -- Graph --
 
-export type ParamType = 'number' | 'string' | 'color' | 'boolean' | 'enum' | 'point' | 'gradient' | 'json';
+export type ParamType = "number" | "string" | "color" | "boolean" | "enum" | "point" | "gradient" | "json";
 
 export interface ParamDefinition {
   name: string;
@@ -547,7 +547,7 @@ export interface PortDefinition {
   multiple?: boolean;
 }
 
-export type NodeCategory = 'generator' | 'pathOp' | 'style' | 'transform' | 'utility';
+export type NodeCategory = "generator" | "pathOp" | "style" | "transform" | "utility";
 
 export interface NodeTypeDefinition {
   type: string;
@@ -620,7 +620,7 @@ export interface SceneGraph {
 
 // -- Execution --
 
-export type NodeExecutionState = 'ok' | 'error' | 'skipped' | 'cached';
+export type NodeExecutionState = "ok" | "error" | "skipped" | "cached";
 
 export interface NodeExecutionStatus {
   state: NodeExecutionState;
@@ -637,13 +637,13 @@ export interface ExecutionResult {
 // -- History --
 
 export type GraphDiff =
-  | { kind: 'paramChange'; nodeId: string; param: string; oldValue: unknown; newValue: unknown }
-  | { kind: 'addNode'; node: GraphNode }
-  | { kind: 'removeNode'; node: GraphNode; removedEdges: GraphEdge[] }
-  | { kind: 'addEdge'; edge: GraphEdge }
-  | { kind: 'removeEdge'; edge: GraphEdge }
-  | { kind: 'muteNode'; nodeId: string; muted: boolean }
-  | { kind: 'moveNode'; nodeId: string; oldPosition: Point; newPosition: Point };
+  | { kind: "paramChange"; nodeId: string; param: string; oldValue: unknown; newValue: unknown }
+  | { kind: "addNode"; node: GraphNode }
+  | { kind: "removeNode"; node: GraphNode; removedEdges: GraphEdge[] }
+  | { kind: "addEdge"; edge: GraphEdge }
+  | { kind: "removeEdge"; edge: GraphEdge }
+  | { kind: "muteNode"; nodeId: string; muted: boolean }
+  | { kind: "moveNode"; nodeId: string; oldPosition: Point; newPosition: Point };
 
 export interface HistoryEntry {
   timestamp: number;
@@ -654,11 +654,11 @@ export interface HistoryEntry {
 // -- Type guards --
 
 export function isSceneGroup(entry: SceneEntry): entry is SceneGroup {
-  return 'children' in entry;
+  return "children" in entry;
 }
 
 export function isSceneItem(entry: SceneEntry): entry is SceneItem {
-  return 'path' in entry;
+  return "path" in entry;
 }
 
 // -- Scene builder input --
@@ -676,7 +676,7 @@ export interface TerminalNodeOutput {
 - [ ] **Step 2: Export from index.ts**
 
 ```typescript
-export * from './types';
+export * from "./types";
 ```
 
 - [ ] **Step 3: Verify compilation**
@@ -707,11 +707,11 @@ with a type discriminant followed by coordinates.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { PathCmd, encodeCommands, decodeCommands, commandsToSvgD, svgDToCommands } from './commands';
+import { describe, expect, it } from "bun:test";
+import { PathCmd, encodeCommands, decodeCommands, commandsToSvgD, svgDToCommands } from "./commands";
 
-describe('PathCmd encoding', () => {
-  it('should encode move + line + close', () => {
+describe("PathCmd encoding", () => {
+  it("should encode move + line + close", () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -723,7 +723,7 @@ describe('PathCmd encoding', () => {
     expect(cmds.length).toBe(10); // 3 + 3 + 3 + 1
   });
 
-  it('should encode cubic bezier', () => {
+  it("should encode cubic bezier", () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Cubic, cx1: 10, cy1: 20, cx2: 30, cy2: 40, x: 50, y: 60 },
@@ -732,7 +732,7 @@ describe('PathCmd encoding', () => {
     expect(cmds.length).toBe(10);
   });
 
-  it('should roundtrip encode → decode', () => {
+  it("should roundtrip encode → decode", () => {
     const original = [
       { type: PathCmd.Move, x: 10, y: 20 },
       { type: PathCmd.Line, x: 30, y: 40 },
@@ -745,19 +745,19 @@ describe('PathCmd encoding', () => {
   });
 });
 
-describe('SVG d attribute conversion', () => {
-  it('should convert commands to SVG d string', () => {
+describe("SVG d attribute conversion", () => {
+  it("should convert commands to SVG d string", () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
       { type: PathCmd.Line, x: 100, y: 50 },
       { type: PathCmd.Close },
     ]);
-    expect(commandsToSvgD(cmds)).toBe('M 0 0 L 100 0 L 100 50 Z');
+    expect(commandsToSvgD(cmds)).toBe("M 0 0 L 100 0 L 100 50 Z");
   });
 
-  it('should parse SVG d string to commands', () => {
-    const cmds = svgDToCommands('M 10 20 L 30 40 C 1 2 3 4 5 6 Z');
+  it("should parse SVG d string to commands", () => {
+    const cmds = svgDToCommands("M 10 20 L 30 40 C 1 2 3 4 5 6 Z");
     const decoded = decodeCommands(cmds);
     expect(decoded).toEqual([
       { type: PathCmd.Move, x: 10, y: 20 },
@@ -767,8 +767,8 @@ describe('SVG d attribute conversion', () => {
     ]);
   });
 
-  it('should handle Q (quadratic) commands', () => {
-    const cmds = svgDToCommands('M 0 0 Q 50 100 100 0 Z');
+  it("should handle Q (quadratic) commands", () => {
+    const cmds = svgDToCommands("M 0 0 Q 50 100 100 0 Z");
     const decoded = decodeCommands(cmds);
     expect(decoded[1]).toEqual({ type: PathCmd.Quad, cx: 50, cy: 100, x: 100, y: 0 });
   });
@@ -954,12 +954,12 @@ const SVG_CMD_MAP: Record<string, PathCmd> = {
 };
 
 const REVERSE_CMD_MAP: Record<PathCmd, string> = {
-  [PathCmd.Move]: 'M',
-  [PathCmd.Line]: 'L',
-  [PathCmd.Cubic]: 'C',
-  [PathCmd.Quad]: 'Q',
-  [PathCmd.Arc]: 'A',
-  [PathCmd.Close]: 'Z',
+  [PathCmd.Move]: "M",
+  [PathCmd.Line]: "L",
+  [PathCmd.Cubic]: "C",
+  [PathCmd.Quad]: "Q",
+  [PathCmd.Arc]: "A",
+  [PathCmd.Close]: "Z",
 };
 
 export function commandsToSvgD(buffer: Float64Array): string {
@@ -988,7 +988,7 @@ export function commandsToSvgD(buffer: Float64Array): string {
     }
   }
 
-  return parts.join(' ');
+  return parts.join(" ");
 }
 
 export function svgDToCommands(d: string): Float64Array {
@@ -1077,12 +1077,12 @@ Fluent API for building paths. Used by all generator nodes.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { PathBuilder } from './builder';
-import { decodeCommands, PathCmd } from './commands';
+import { describe, expect, it } from "bun:test";
+import { PathBuilder } from "./builder";
+import { decodeCommands, PathCmd } from "./commands";
 
-describe('PathBuilder', () => {
-  it('should build a rectangle path', () => {
+describe("PathBuilder", () => {
+  it("should build a rectangle path", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
 
     expect(path.closed).toBe(true);
@@ -1092,13 +1092,13 @@ describe('PathBuilder', () => {
     expect(cmds[4]).toEqual({ type: PathCmd.Close });
   });
 
-  it('should build an open path', () => {
+  it("should build an open path", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(100, 100).build();
 
     expect(path.closed).toBe(false);
   });
 
-  it('should support cubic bezier curves', () => {
+  it("should support cubic bezier curves", () => {
     const path = new PathBuilder().moveTo(0, 0).cubicTo(10, 20, 30, 40, 50, 60).close().build();
 
     const cmds = decodeCommands(path.commands);
@@ -1113,7 +1113,7 @@ describe('PathBuilder', () => {
     });
   });
 
-  it('should support quadratic bezier curves', () => {
+  it("should support quadratic bezier curves", () => {
     const path = new PathBuilder().moveTo(0, 0).quadTo(50, 100, 100, 0).close().build();
 
     const cmds = decodeCommands(path.commands);
@@ -1146,8 +1146,8 @@ Sets `closed = true` if the last command is `PathCmd.Close`.
  * Accessed via: import { PathBuilder } from 'vector-engine'
  */
 
-import type { PathValue } from '../types';
-import { type PathCommand, PathCmd, encodeCommands } from './commands';
+import type { PathValue } from "../types";
+import { type PathCommand, PathCmd, encodeCommands } from "./commands";
 
 export class PathBuilder {
   private commands: PathCommand[] = [];
@@ -1217,31 +1217,31 @@ git commit -m "feat(vector-engine): fluent PathBuilder API (HYP-308)"
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { computeBounds } from './bounds';
-import { PathBuilder } from './builder';
+import { describe, expect, it } from "bun:test";
+import { computeBounds } from "./bounds";
+import { PathBuilder } from "./builder";
 
-describe('computeBounds', () => {
-  it('should compute bounds for a rectangle', () => {
+describe("computeBounds", () => {
+  it("should compute bounds for a rectangle", () => {
     const path = new PathBuilder().moveTo(10, 20).lineTo(110, 20).lineTo(110, 70).lineTo(10, 70).close().build();
 
     const bounds = computeBounds(path.commands);
     expect(bounds).toEqual({ x: 10, y: 20, width: 100, height: 50 });
   });
 
-  it('should compute bounds for a line', () => {
+  it("should compute bounds for a line", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(50, 100).build();
 
     const bounds = computeBounds(path.commands);
     expect(bounds).toEqual({ x: 0, y: 0, width: 50, height: 100 });
   });
 
-  it('should return zero bounds for empty path', () => {
+  it("should return zero bounds for empty path", () => {
     const bounds = computeBounds(new Float64Array(0));
     expect(bounds).toEqual({ x: 0, y: 0, width: 0, height: 0 });
   });
 
-  it('should include control points in bounds for cubic curves', () => {
+  it("should include control points in bounds for cubic curves", () => {
     const path = new PathBuilder().moveTo(0, 0).cubicTo(50, -100, 150, 200, 100, 0).build();
     const bounds = computeBounds(path.commands);
     // Control points extend to y=-100 and y=200
@@ -1282,59 +1282,59 @@ Central registry where node types are registered and looked up by `type` string.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it, beforeEach } from 'bun:test';
-import { NodeRegistry } from './registry';
-import type { NodeTypeDefinition, NodeValue } from '../types';
+import { describe, expect, it, beforeEach } from "bun:test";
+import { NodeRegistry } from "./registry";
+import type { NodeTypeDefinition, NodeValue } from "../types";
 
 const dummyNode: NodeTypeDefinition = {
-  type: 'test-rect',
-  label: 'Test Rectangle',
-  category: 'generator',
+  type: "test-rect",
+  label: "Test Rectangle",
+  category: "generator",
   inputs: [],
-  outputs: [{ name: 'path', type: 'path' }],
+  outputs: [{ name: "path", type: "path" }],
   params: [
-    { name: 'width', type: 'number', default: 100 },
-    { name: 'height', type: 'number', default: 100 },
+    { name: "width", type: "number", default: 100 },
+    { name: "height", type: "number", default: 100 },
   ],
   execute: (_inputs, params) => ({
     path: {
-      type: 'path',
+      type: "path",
       value: { commands: new Float64Array(0), closed: true },
     },
   }),
 };
 
-describe('NodeRegistry', () => {
+describe("NodeRegistry", () => {
   let registry: NodeRegistry;
 
   beforeEach(() => {
     registry = new NodeRegistry();
   });
 
-  it('should register and retrieve a node type', () => {
+  it("should register and retrieve a node type", () => {
     registry.register(dummyNode);
-    const def = registry.get('test-rect');
+    const def = registry.get("test-rect");
     expect(def).toBeDefined();
-    expect(def!.label).toBe('Test Rectangle');
+    expect(def!.label).toBe("Test Rectangle");
   });
 
-  it('should return undefined for unknown types', () => {
-    expect(registry.get('nonexistent')).toBeUndefined();
+  it("should return undefined for unknown types", () => {
+    expect(registry.get("nonexistent")).toBeUndefined();
   });
 
-  it('should throw on duplicate registration', () => {
+  it("should throw on duplicate registration", () => {
     registry.register(dummyNode);
     expect(() => registry.register(dummyNode)).toThrow(/already registered/);
   });
 
-  it('should list types by category', () => {
+  it("should list types by category", () => {
     registry.register(dummyNode);
-    const generators = registry.listByCategory('generator');
+    const generators = registry.listByCategory("generator");
     expect(generators).toHaveLength(1);
-    expect(generators[0].type).toBe('test-rect');
+    expect(generators[0].type).toBe("test-rect");
   });
 
-  it('should list all registered types', () => {
+  it("should list all registered types", () => {
     registry.register(dummyNode);
     expect(registry.listAll()).toHaveLength(1);
   });
@@ -1373,79 +1373,79 @@ serialization to/from `VectorGraph` JSON.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it, beforeEach } from 'bun:test';
-import { VectorGraphModel } from './vector-graph';
-import type { GraphNode } from '../types';
+import { describe, expect, it, beforeEach } from "bun:test";
+import { VectorGraphModel } from "./vector-graph";
+import type { GraphNode } from "../types";
 
-describe('VectorGraphModel', () => {
+describe("VectorGraphModel", () => {
   let graph: VectorGraphModel;
 
   beforeEach(() => {
-    graph = VectorGraphModel.create('test', 'Test Graph', 800, 600);
+    graph = VectorGraphModel.create("test", "Test Graph", 800, 600);
   });
 
-  it('should create an empty graph', () => {
+  it("should create an empty graph", () => {
     expect(graph.nodeCount).toBe(0);
     expect(graph.edgeCount).toBe(0);
-    expect(graph.toJSON().name).toBe('Test Graph');
+    expect(graph.toJSON().name).toBe("Test Graph");
   });
 
-  it('should add and retrieve nodes', () => {
-    const id = graph.addNode({ type: 'rectangle', params: { width: 100, height: 50 } });
+  it("should add and retrieve nodes", () => {
+    const id = graph.addNode({ type: "rectangle", params: { width: 100, height: 50 } });
     expect(graph.getNode(id)).toBeDefined();
-    expect(graph.getNode(id)!.type).toBe('rectangle');
+    expect(graph.getNode(id)!.type).toBe("rectangle");
     expect(graph.nodeCount).toBe(1);
   });
 
-  it('should remove nodes and their edges', () => {
-    const n1 = graph.addNode({ type: 'rectangle', params: {} });
-    const n2 = graph.addNode({ type: 'fill', params: {} });
-    graph.addEdge(n1, 'path', n2, 'path');
+  it("should remove nodes and their edges", () => {
+    const n1 = graph.addNode({ type: "rectangle", params: {} });
+    const n2 = graph.addNode({ type: "fill", params: {} });
+    graph.addEdge(n1, "path", n2, "path");
     expect(graph.edgeCount).toBe(1);
     graph.removeNode(n1);
     expect(graph.nodeCount).toBe(1);
     expect(graph.edgeCount).toBe(0);
   });
 
-  it('should add edges between nodes', () => {
-    const n1 = graph.addNode({ type: 'rectangle', params: {} });
-    const n2 = graph.addNode({ type: 'fill', params: {} });
-    const edgeId = graph.addEdge(n1, 'path', n2, 'path');
+  it("should add edges between nodes", () => {
+    const n1 = graph.addNode({ type: "rectangle", params: {} });
+    const n2 = graph.addNode({ type: "fill", params: {} });
+    const edgeId = graph.addEdge(n1, "path", n2, "path");
     expect(edgeId).toBeDefined();
     expect(graph.edgeCount).toBe(1);
   });
 
-  it('should reject cycles', () => {
-    const n1 = graph.addNode({ type: 'a', params: {} });
-    const n2 = graph.addNode({ type: 'b', params: {} });
-    graph.addEdge(n1, 'out', n2, 'in');
-    expect(() => graph.addEdge(n2, 'out', n1, 'in')).toThrow(/cycle/i);
+  it("should reject cycles", () => {
+    const n1 = graph.addNode({ type: "a", params: {} });
+    const n2 = graph.addNode({ type: "b", params: {} });
+    graph.addEdge(n1, "out", n2, "in");
+    expect(() => graph.addEdge(n2, "out", n1, "in")).toThrow(/cycle/i);
   });
 
-  it('should return topological order', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {} });
-    const n2 = graph.addNode({ type: 'offset', params: {} });
-    const n3 = graph.addNode({ type: 'fill', params: {} });
-    graph.addEdge(n1, 'path', n2, 'path');
-    graph.addEdge(n2, 'path', n3, 'path');
+  it("should return topological order", () => {
+    const n1 = graph.addNode({ type: "rect", params: {} });
+    const n2 = graph.addNode({ type: "offset", params: {} });
+    const n3 = graph.addNode({ type: "fill", params: {} });
+    graph.addEdge(n1, "path", n2, "path");
+    graph.addEdge(n2, "path", n3, "path");
     const order = graph.topologicalOrder();
     expect(order.indexOf(n1)).toBeLessThan(order.indexOf(n2));
     expect(order.indexOf(n2)).toBeLessThan(order.indexOf(n3));
   });
 
-  it('should get input node ids for a node', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {} });
-    const n2 = graph.addNode({ type: 'fill', params: {} });
-    graph.addEdge(n1, 'path', n2, 'path');
+  it("should get input node ids for a node", () => {
+    const n1 = graph.addNode({ type: "rect", params: {} });
+    const n2 = graph.addNode({ type: "fill", params: {} });
+    graph.addEdge(n1, "path", n2, "path");
     const inputs = graph.getInputEdges(n2);
     expect(inputs).toHaveLength(1);
     expect(inputs[0].source).toBe(n1);
   });
 
-  it('should serialize and deserialize', () => {
-    const n1 = graph.addNode({ type: 'rect', params: { width: 100 } });
-    const n2 = graph.addNode({ type: 'fill', params: { color: '#f00' } });
-    graph.addEdge(n1, 'path', n2, 'path');
+  it("should serialize and deserialize", () => {
+    const n1 = graph.addNode({ type: "rect", params: { width: 100 } });
+    const n2 = graph.addNode({ type: "fill", params: { color: "#f00" } });
+    graph.addEdge(n1, "path", n2, "path");
 
     const json = graph.toJSON();
     const restored = VectorGraphModel.fromJSON(json);
@@ -1454,40 +1454,40 @@ describe('VectorGraphModel', () => {
     expect(restored.getNode(n1)!.params.width).toBe(100);
   });
 
-  it('should set and get muted state', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {} });
+  it("should set and get muted state", () => {
+    const n1 = graph.addNode({ type: "rect", params: {} });
     expect(graph.isMuted(n1)).toBe(false);
     graph.setMuted(n1, true);
     expect(graph.isMuted(n1)).toBe(true);
   });
 
-  it('should set param value', () => {
-    const n1 = graph.addNode({ type: 'rect', params: { width: 100 } });
-    graph.setParam(n1, 'width', 200);
+  it("should set param value", () => {
+    const n1 = graph.addNode({ type: "rect", params: { width: 100 } });
+    graph.setParam(n1, "width", 200);
     expect(graph.getNode(n1)!.params.width).toBe(200);
   });
 
-  it('should set node position', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {} });
+  it("should set node position", () => {
+    const n1 = graph.addNode({ type: "rect", params: {} });
     graph.setPosition(n1, { x: 100, y: 200 });
     expect(graph.getNode(n1)!.position).toEqual({ x: 100, y: 200 });
   });
 
-  it('should remove edge by id', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {} });
-    const n2 = graph.addNode({ type: 'fill', params: {} });
-    const edgeId = graph.addEdge(n1, 'path', n2, 'path');
+  it("should remove edge by id", () => {
+    const n1 = graph.addNode({ type: "rect", params: {} });
+    const n2 = graph.addNode({ type: "fill", params: {} });
+    const edgeId = graph.addEdge(n1, "path", n2, "path");
     expect(graph.edgeCount).toBe(1);
     graph.removeEdge(edgeId);
     expect(graph.edgeCount).toBe(0);
   });
 
-  it('should get all edges for a node', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {} });
-    const n2 = graph.addNode({ type: 'fill', params: {} });
-    const n3 = graph.addNode({ type: 'stroke', params: {} });
-    graph.addEdge(n1, 'path', n2, 'path');
-    graph.addEdge(n1, 'path', n3, 'path');
+  it("should get all edges for a node", () => {
+    const n1 = graph.addNode({ type: "rect", params: {} });
+    const n2 = graph.addNode({ type: "fill", params: {} });
+    const n3 = graph.addNode({ type: "stroke", params: {} });
+    graph.addEdge(n1, "path", n2, "path");
+    graph.addEdge(n1, "path", n3, "path");
     const edges = graph.getNodeEdges(n1);
     expect(edges).toHaveLength(2);
   });
@@ -1516,9 +1516,9 @@ Key design decisions:
  * Assumptions: graphology and graphology-dag are installed
  */
 
-import { DirectedGraph } from 'graphology';
-import { topologicalSort, hasCycle } from 'graphology-dag';
-import type { GraphNode, GraphEdge, VectorGraph } from '../types';
+import { DirectedGraph } from "graphology";
+import { topologicalSort, hasCycle } from "graphology-dag";
+import type { GraphNode, GraphEdge, VectorGraph } from "../types";
 
 export class VectorGraphModel {
   private g: DirectedGraph;
@@ -1616,44 +1616,44 @@ This is the heart of the engine.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it, beforeEach } from 'bun:test';
-import { GraphExecutor } from './executor';
-import { VectorGraphModel } from './vector-graph';
-import { NodeRegistry } from '../nodes/registry';
-import type { NodeTypeDefinition, NodeValue } from '../types';
-import { PathBuilder } from '../path/builder';
+import { describe, expect, it, beforeEach } from "bun:test";
+import { GraphExecutor } from "./executor";
+import { VectorGraphModel } from "./vector-graph";
+import { NodeRegistry } from "../nodes/registry";
+import type { NodeTypeDefinition, NodeValue } from "../types";
+import { PathBuilder } from "../path/builder";
 
 // Minimal generator node for testing
 const rectNode: NodeTypeDefinition = {
-  type: 'test-rect',
-  label: 'Rectangle',
-  category: 'generator',
+  type: "test-rect",
+  label: "Rectangle",
+  category: "generator",
   inputs: [],
-  outputs: [{ name: 'path', type: 'path' }],
+  outputs: [{ name: "path", type: "path" }],
   params: [
-    { name: 'width', type: 'number', default: 100 },
-    { name: 'height', type: 'number', default: 50 },
+    { name: "width", type: "number", default: 100 },
+    { name: "height", type: "number", default: 50 },
   ],
   execute: (_inputs, params) => {
     const w = params.width as number;
     const h = params.height as number;
     const path = new PathBuilder().moveTo(0, 0).lineTo(w, 0).lineTo(w, h).lineTo(0, h).close().build();
-    return { path: { type: 'path', value: path } };
+    return { path: { type: "path", value: path } };
   },
 };
 
 // Pass-through node (simulates a muted operation)
 const passThroughNode: NodeTypeDefinition = {
-  type: 'test-passthrough',
-  label: 'Pass Through',
-  category: 'pathOp',
-  inputs: [{ name: 'path', type: 'path' }],
-  outputs: [{ name: 'path', type: 'path' }],
+  type: "test-passthrough",
+  label: "Pass Through",
+  category: "pathOp",
+  inputs: [{ name: "path", type: "path" }],
+  outputs: [{ name: "path", type: "path" }],
   params: [],
   execute: (inputs) => ({ path: inputs.path as NodeValue }),
 };
 
-describe('GraphExecutor', () => {
+describe("GraphExecutor", () => {
   let registry: NodeRegistry;
   let graph: VectorGraphModel;
   let executor: GraphExecutor;
@@ -1662,70 +1662,70 @@ describe('GraphExecutor', () => {
     registry = new NodeRegistry();
     registry.register(rectNode);
     registry.register(passThroughNode);
-    graph = VectorGraphModel.create('test', 'Test', 800, 600);
+    graph = VectorGraphModel.create("test", "Test", 800, 600);
     executor = new GraphExecutor(registry);
   });
 
-  it('should execute a single generator node', () => {
-    const n1 = graph.addNode({ type: 'test-rect', params: { width: 200, height: 100 } });
+  it("should execute a single generator node", () => {
+    const n1 = graph.addNode({ type: "test-rect", params: { width: 200, height: 100 } });
     const result = executor.execute(graph);
     expect(result.scene.items).toHaveLength(1);
-    expect(result.nodeStatus[n1].state).toBe('ok');
+    expect(result.nodeStatus[n1].state).toBe("ok");
   });
 
-  it('should execute a chain of connected nodes', () => {
-    const n1 = graph.addNode({ type: 'test-rect', params: { width: 100, height: 50 } });
-    const n2 = graph.addNode({ type: 'test-passthrough', params: {} });
-    graph.addEdge(n1, 'path', n2, 'path');
+  it("should execute a chain of connected nodes", () => {
+    const n1 = graph.addNode({ type: "test-rect", params: { width: 100, height: 50 } });
+    const n2 = graph.addNode({ type: "test-passthrough", params: {} });
+    graph.addEdge(n1, "path", n2, "path");
     const result = executor.execute(graph);
     // Only terminal nodes (no outgoing edges) produce scene items
     expect(result.scene.items).toHaveLength(1);
   });
 
-  it('should use cache on unchanged re-execution', () => {
-    const n1 = graph.addNode({ type: 'test-rect', params: { width: 100, height: 50 } });
+  it("should use cache on unchanged re-execution", () => {
+    const n1 = graph.addNode({ type: "test-rect", params: { width: 100, height: 50 } });
     executor.execute(graph);
     const result2 = executor.execute(graph);
-    expect(result2.nodeStatus[n1].state).toBe('cached');
+    expect(result2.nodeStatus[n1].state).toBe("cached");
   });
 
-  it('should invalidate cache when param changes', () => {
-    const n1 = graph.addNode({ type: 'test-rect', params: { width: 100, height: 50 } });
+  it("should invalidate cache when param changes", () => {
+    const n1 = graph.addNode({ type: "test-rect", params: { width: 100, height: 50 } });
     executor.execute(graph);
-    graph.setParam(n1, 'width', 200);
+    graph.setParam(n1, "width", 200);
     executor.invalidate(n1);
     const result2 = executor.execute(graph);
-    expect(result2.nodeStatus[n1].state).toBe('ok');
+    expect(result2.nodeStatus[n1].state).toBe("ok");
   });
 
-  it('should skip muted nodes (passthrough)', () => {
-    const n1 = graph.addNode({ type: 'test-rect', params: { width: 100, height: 50 } });
-    const n2 = graph.addNode({ type: 'test-passthrough', params: {} });
-    graph.addEdge(n1, 'path', n2, 'path');
+  it("should skip muted nodes (passthrough)", () => {
+    const n1 = graph.addNode({ type: "test-rect", params: { width: 100, height: 50 } });
+    const n2 = graph.addNode({ type: "test-passthrough", params: {} });
+    graph.addEdge(n1, "path", n2, "path");
     graph.setMuted(n2, true);
     const result = executor.execute(graph);
-    expect(result.nodeStatus[n2].state).toBe('skipped');
+    expect(result.nodeStatus[n2].state).toBe("skipped");
     // Scene still has 1 item (from n1 passed through)
     expect(result.scene.items).toHaveLength(1);
   });
 
-  it('should handle node execution errors gracefully', () => {
+  it("should handle node execution errors gracefully", () => {
     const errorNode: NodeTypeDefinition = {
-      type: 'test-error',
-      label: 'Error',
-      category: 'generator',
+      type: "test-error",
+      label: "Error",
+      category: "generator",
       inputs: [],
-      outputs: [{ name: 'path', type: 'path' }],
+      outputs: [{ name: "path", type: "path" }],
       params: [],
       execute: () => {
-        throw new Error('intentional failure');
+        throw new Error("intentional failure");
       },
     };
     registry.register(errorNode);
-    const n1 = graph.addNode({ type: 'test-error', params: {} });
+    const n1 = graph.addNode({ type: "test-error", params: {} });
     const result = executor.execute(graph);
-    expect(result.nodeStatus[n1].state).toBe('error');
-    expect(result.nodeStatus[n1].error).toContain('intentional failure');
+    expect(result.nodeStatus[n1].state).toBe("error");
+    expect(result.nodeStatus[n1].error).toContain("intentional failure");
   });
 });
 ```
@@ -1752,10 +1752,10 @@ import type {
   StyleValue,
   TransformMatrix,
   TerminalNodeOutput,
-} from '../types';
-import { IDENTITY_TRANSFORM } from '../types';
-import type { VectorGraphModel } from './vector-graph';
-import type { NodeRegistry } from '../nodes/registry';
+} from "../types";
+import { IDENTITY_TRANSFORM } from "../types";
+import type { VectorGraphModel } from "./vector-graph";
+import type { NodeRegistry } from "../nodes/registry";
 
 interface CacheEntry {
   hash: string;
@@ -1823,21 +1823,21 @@ This is extracted from the executor for testability — the executor calls
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { buildScene } from './scene-builder';
-import { PathBuilder } from '../path/builder';
-import type { TerminalNodeOutput, TransformMatrix } from '../types';
-import { IDENTITY_TRANSFORM } from '../types';
+import { describe, expect, it } from "bun:test";
+import { buildScene } from "./scene-builder";
+import { PathBuilder } from "../path/builder";
+import type { TerminalNodeOutput, TransformMatrix } from "../types";
+import { IDENTITY_TRANSFORM } from "../types";
 
-describe('buildScene', () => {
-  it('should create scene items from terminal node results', () => {
+describe("buildScene", () => {
+  it("should create scene items from terminal node results", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
 
     const terminal: TerminalNodeOutput = {
-      id: 'n1',
-      name: 'Rectangle',
+      id: "n1",
+      name: "Rectangle",
       path,
-      style: { fill: { type: 'solid', color: '#ff0000' } },
+      style: { fill: { type: "solid", color: "#ff0000" } },
       transform: IDENTITY_TRANSFORM,
       visible: true,
     };
@@ -1848,14 +1848,14 @@ describe('buildScene', () => {
     });
 
     expect(scene.items).toHaveLength(1);
-    expect(scene.items[0]).toMatchObject({ id: 'n1', visible: true });
+    expect(scene.items[0]).toMatchObject({ id: "n1", visible: true });
     expect(scene.canvas).toEqual({ width: 800, height: 600 });
   });
 
-  it('should preserve order (back-to-front)', () => {
+  it("should preserve order (back-to-front)", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(10, 10).build();
     const base: TerminalNodeOutput = {
-      id: '',
+      id: "",
       path,
       style: {},
       transform: IDENTITY_TRANSFORM,
@@ -1863,14 +1863,14 @@ describe('buildScene', () => {
     };
     const scene = buildScene({
       terminalNodes: [
-        { ...base, id: 'back', name: 'Back' },
-        { ...base, id: 'front', name: 'Front' },
+        { ...base, id: "back", name: "Back" },
+        { ...base, id: "front", name: "Front" },
       ],
       canvas: { width: 100, height: 100 },
     });
 
-    expect(scene.items[0].id).toBe('back');
-    expect(scene.items[1].id).toBe('front');
+    expect(scene.items[0].id).toBe("back");
+    expect(scene.items[1].id).toBe("front");
   });
 });
 ```
@@ -1906,14 +1906,14 @@ git commit -m "feat(vector-engine): scene graph builder (HYP-308)"
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { rectangleNode } from './rectangle';
-import { ellipseNode } from './ellipse';
-import { decodeCommands, PathCmd } from '../../path/commands';
-import type { PathValue } from '../../types';
+import { describe, expect, it } from "bun:test";
+import { rectangleNode } from "./rectangle";
+import { ellipseNode } from "./ellipse";
+import { decodeCommands, PathCmd } from "../../path/commands";
+import type { PathValue } from "../../types";
 
-describe('Rectangle generator', () => {
-  it('should generate a rectangle path', () => {
+describe("Rectangle generator", () => {
+  it("should generate a rectangle path", () => {
     const result = rectangleNode.execute({}, { width: 100, height: 50, x: 0, y: 0 });
     const path = result.path.value as PathValue;
     expect(path.closed).toBe(true);
@@ -1926,7 +1926,7 @@ describe('Rectangle generator', () => {
     expect(cmds[3]).toEqual({ type: PathCmd.Line, x: 0, y: 50 });
   });
 
-  it('should respect x, y offset', () => {
+  it("should respect x, y offset", () => {
     const result = rectangleNode.execute({}, { width: 50, height: 30, x: 10, y: 20 });
     const path = result.path.value as PathValue;
     const cmds = decodeCommands(path.commands);
@@ -1936,13 +1936,13 @@ describe('Rectangle generator', () => {
   // See "Test Reference Sources" for edge cases from Graphite (zero-size shapes,
   // degenerate angles) and Paper.js (oversized corner radius, shape constructors)
 
-  it('should have correct params definition', () => {
-    expect(rectangleNode.params.map((p) => p.name)).toEqual(['width', 'height', 'x', 'y']);
+  it("should have correct params definition", () => {
+    expect(rectangleNode.params.map((p) => p.name)).toEqual(["width", "height", "x", "y"]);
   });
 });
 
-describe('Ellipse generator', () => {
-  it('should generate a closed ellipse path', () => {
+describe("Ellipse generator", () => {
+  it("should generate a closed ellipse path", () => {
     const result = ellipseNode.execute({}, { rx: 50, ry: 30, cx: 0, cy: 0 });
     const path = result.path.value as PathValue;
     expect(path.closed).toBe(true);
@@ -1953,7 +1953,7 @@ describe('Ellipse generator', () => {
     expect(cmds.filter((c) => c.type === PathCmd.Cubic)).toHaveLength(4);
   });
 
-  it('should center at cx, cy', () => {
+  it("should center at cx, cy", () => {
     const result = ellipseNode.execute({}, { rx: 50, ry: 30, cx: 100, cy: 200 });
     const path = result.path.value as PathValue;
     const cmds = decodeCommands(path.commands);
@@ -1972,20 +1972,20 @@ describe('Ellipse generator', () => {
  * @file Rectangle generator node
  */
 
-import type { NodeTypeDefinition } from '../../types';
-import { PathBuilder } from '../../path/builder';
+import type { NodeTypeDefinition } from "../../types";
+import { PathBuilder } from "../../path/builder";
 
 export const rectangleNode: NodeTypeDefinition = {
-  type: 'rectangle',
-  label: 'Rectangle',
-  category: 'generator',
+  type: "rectangle",
+  label: "Rectangle",
+  category: "generator",
   inputs: [],
-  outputs: [{ name: 'path', type: 'path' }],
+  outputs: [{ name: "path", type: "path" }],
   params: [
-    { name: 'width', type: 'number', default: 100, min: 0 },
-    { name: 'height', type: 'number', default: 100, min: 0 },
-    { name: 'x', type: 'number', default: 0 },
-    { name: 'y', type: 'number', default: 0 },
+    { name: "width", type: "number", default: 100, min: 0 },
+    { name: "height", type: "number", default: 100, min: 0 },
+    { name: "x", type: "number", default: 0 },
+    { name: "y", type: "number", default: 0 },
   ],
   execute(_inputs, params) {
     const { width, height, x, y } = params as { width: number; height: number; x: number; y: number };
@@ -1996,7 +1996,7 @@ export const rectangleNode: NodeTypeDefinition = {
       .lineTo(x, y + height)
       .close()
       .build();
-    return { path: { type: 'path', value: path } };
+    return { path: { type: "path", value: path } };
   },
 };
 ```
@@ -2032,8 +2032,8 @@ git commit -m "feat(vector-engine): rectangle and ellipse generator nodes (HYP-3
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe('Polygon generator', () => {
-  it('should generate a square (sides=4)', () => {
+describe("Polygon generator", () => {
+  it("should generate a square (sides=4)", () => {
     const result = polygonNode.execute({}, { sides: 4, radius: 50, cx: 0, cy: 0 });
     const path = result.path.value as PathValue;
     expect(path.closed).toBe(true);
@@ -2041,15 +2041,15 @@ describe('Polygon generator', () => {
     expect(cmds).toHaveLength(5); // M + 3L + Z
   });
 
-  it('should generate a hexagon (sides=6)', () => {
+  it("should generate a hexagon (sides=6)", () => {
     const result = polygonNode.execute({}, { sides: 6, radius: 50, cx: 0, cy: 0 });
     const cmds = decodeCommands((result.path.value as PathValue).commands);
     expect(cmds).toHaveLength(7); // M + 5L + Z
   });
 });
 
-describe('Star generator', () => {
-  it('should generate a 5-pointed star', () => {
+describe("Star generator", () => {
+  it("should generate a 5-pointed star", () => {
     const result = starNode.execute({}, { points: 5, outerRadius: 50, innerRadius: 20, cx: 0, cy: 0 });
     const path = result.path.value as PathValue;
     expect(path.closed).toBe(true);
@@ -2058,8 +2058,8 @@ describe('Star generator', () => {
   });
 });
 
-describe('Line generator', () => {
-  it('should generate an open line path', () => {
+describe("Line generator", () => {
+  it("should generate an open line path", () => {
     const result = lineNode.execute({}, { x1: 0, y1: 0, x2: 100, y2: 50 });
     const path = result.path.value as PathValue;
     expect(path.closed).toBe(false);
@@ -2070,8 +2070,8 @@ describe('Line generator', () => {
   });
 });
 
-describe('Arc generator', () => {
-  it('should generate an arc approximated with cubics', () => {
+describe("Arc generator", () => {
+  it("should generate an arc approximated with cubics", () => {
     const result = arcNode.execute({}, { radius: 50, startAngle: 0, endAngle: 180 });
     const path = result.path.value as PathValue;
     const cmds = decodeCommands(path.commands);
@@ -2080,8 +2080,8 @@ describe('Arc generator', () => {
   });
 });
 
-describe('Spiral generator', () => {
-  it('should generate an open spiral path', () => {
+describe("Spiral generator", () => {
+  it("should generate an open spiral path", () => {
     const result = spiralNode.execute({}, { turns: 3, startRadius: 10, endRadius: 50 });
     const path = result.path.value as PathValue;
     expect(path.closed).toBe(false);
@@ -2090,8 +2090,8 @@ describe('Spiral generator', () => {
   });
 });
 
-describe('Arrow generator', () => {
-  it('should generate a closed arrow shape', () => {
+describe("Arrow generator", () => {
+  it("should generate a closed arrow shape", () => {
     const result = arrowNode.execute({}, { length: 100, headWidth: 20, headLength: 15 });
     const path = result.path.value as PathValue;
     expect(path.closed).toBe(true);
@@ -2138,9 +2138,9 @@ enables unit testing without loading CanvasKit WASM.
  * Accessed via: import { PathOpsBackend } from 'vector-wasm'
  */
 
-import type { PathValue } from 'vector-engine';
+import type { PathValue } from "vector-engine";
 
-export type BooleanOp = 'union' | 'subtract' | 'intersect' | 'xor';
+export type BooleanOp = "union" | "subtract" | "intersect" | "xor";
 
 export interface PathOpsBackend {
   boolean(op: BooleanOp, a: PathValue, b: PathValue): PathValue;
@@ -2164,8 +2164,8 @@ and `flatten`. Sufficient for testing node wiring.
  * Assumptions: not geometrically correct, only tests node wiring
  */
 
-import type { PathOpsBackend, BooleanOp } from './types';
-import type { PathValue } from 'vector-engine';
+import type { PathOpsBackend, BooleanOp } from "./types";
+import type { PathValue } from "vector-engine";
 
 export class MockPathOps implements PathOpsBackend {
   boolean(_op: BooleanOp, a: PathValue, b: PathValue): PathValue {
@@ -2215,39 +2215,39 @@ git commit -m "feat(vector-wasm): PathOpsBackend interface + mock implementation
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { createBooleanNodes } from './boolean';
-import { MockPathOps } from 'vector-wasm';
-import { PathBuilder } from '../../path/builder';
+import { describe, expect, it } from "bun:test";
+import { createBooleanNodes } from "./boolean";
+import { MockPathOps } from "vector-wasm";
+import { PathBuilder } from "../../path/builder";
 
-describe('Boolean operation nodes', () => {
+describe("Boolean operation nodes", () => {
   const mockOps = new MockPathOps();
   const nodes = createBooleanNodes(mockOps);
 
   const rectPath = () => new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
 
-  it('should have union, subtract, intersect, xor nodes', () => {
-    expect(nodes.map((n) => n.type)).toEqual(['boolean-union', 'boolean-subtract', 'boolean-intersect', 'boolean-xor']);
+  it("should have union, subtract, intersect, xor nodes", () => {
+    expect(nodes.map((n) => n.type)).toEqual(["boolean-union", "boolean-subtract", "boolean-intersect", "boolean-xor"]);
   });
 
-  it('should accept 2 path inputs and produce 1 path output', () => {
+  it("should accept 2 path inputs and produce 1 path output", () => {
     for (const node of nodes) {
       expect(node.inputs).toHaveLength(2);
       expect(node.outputs).toHaveLength(1);
-      expect(node.outputs[0].type).toBe('path');
+      expect(node.outputs[0].type).toBe("path");
     }
   });
 
-  it('should execute union via backend', () => {
+  it("should execute union via backend", () => {
     const union = nodes[0];
     const result = union.execute(
       {
-        a: { type: 'path', value: rectPath() },
-        b: { type: 'path', value: rectPath() },
+        a: { type: "path", value: rectPath() },
+        b: { type: "path", value: rectPath() },
       },
       {},
     );
-    expect(result.path.type).toBe('path');
+    expect(result.path.type).toBe("path");
   });
 
   // See "Test Reference Sources" for edge cases from Paper.js (~40 boolean tests:
@@ -2296,14 +2296,14 @@ Reverse Path, Close/Open Path, Join Paths, Break Apart.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { reversePathNode, closeOpenNode, joinPathsNode, breakApartPaths } from './basic-ops';
-import { decodeCommands, PathCmd } from '../../path/commands';
-import type { PathValue } from '../../types';
+import { reversePathNode, closeOpenNode, joinPathsNode, breakApartPaths } from "./basic-ops";
+import { decodeCommands, PathCmd } from "../../path/commands";
+import type { PathValue } from "../../types";
 
-describe('Reverse Path', () => {
-  it('should reverse command order (endpoints become startpoints)', () => {
+describe("Reverse Path", () => {
+  it("should reverse command order (endpoints become startpoints)", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).close().build();
-    const result = reversePathNode.execute({ path: { type: 'path', value: path } }, {});
+    const result = reversePathNode.execute({ path: { type: "path", value: path } }, {});
     const reversed = result.path.value as PathValue;
     const cmds = decodeCommands(reversed.commands);
     // Reversed: M(100,100) → L(100,0) → L(0,0) → Z
@@ -2311,23 +2311,23 @@ describe('Reverse Path', () => {
   });
 });
 
-describe('Close/Open Path', () => {
-  it('should close an open path', () => {
+describe("Close/Open Path", () => {
+  it("should close an open path", () => {
     const open = new PathBuilder().moveTo(0, 0).lineTo(100, 100).build();
     expect(open.closed).toBe(false);
-    const result = closeOpenNode.execute({ path: { type: 'path', value: open } }, { action: 'close' });
+    const result = closeOpenNode.execute({ path: { type: "path", value: open } }, { action: "close" });
     expect((result.path.value as PathValue).closed).toBe(true);
   });
 });
 
-describe('Join Paths', () => {
-  it('should join two open paths at nearest endpoints', () => {
+describe("Join Paths", () => {
+  it("should join two open paths at nearest endpoints", () => {
     const p1 = new PathBuilder().moveTo(0, 0).lineTo(50, 0).build();
     const p2 = new PathBuilder().moveTo(50, 0).lineTo(100, 0).build();
     const result = joinPathsNode.execute(
       {
-        a: { type: 'path', value: p1 },
-        b: { type: 'path', value: p2 },
+        a: { type: "path", value: p1 },
+        b: { type: "path", value: p2 },
       },
       {},
     );
@@ -2338,8 +2338,8 @@ describe('Join Paths', () => {
   });
 });
 
-describe('breakApartPaths (utility function, not a node)', () => {
-  it('should split compound path into sub-paths at Move commands', () => {
+describe("breakApartPaths (utility function, not a node)", () => {
+  it("should split compound path into sub-paths at Move commands", () => {
     // Compound path: two separate rectangles concatenated
     const cmds1 = new PathBuilder().moveTo(0, 0).lineTo(10, 0).lineTo(10, 10).close().build().commands;
     const cmds2 = new PathBuilder().moveTo(20, 20).lineTo(30, 20).lineTo(30, 30).close().build().commands;
@@ -2435,82 +2435,82 @@ Rectangle ──path──→ Fill ──path+style──→ Stroke ──path+s
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { fillNode } from './fill';
-import { strokeNode } from './stroke';
-import { PathBuilder } from '../../path/builder';
-import type { StyleValue } from '../../types';
+import { describe, expect, it } from "bun:test";
+import { fillNode } from "./fill";
+import { strokeNode } from "./stroke";
+import { PathBuilder } from "../../path/builder";
+import type { StyleValue } from "../../types";
 
-describe('Fill node', () => {
-  it('should output a style with solid fill', () => {
+describe("Fill node", () => {
+  it("should output a style with solid fill", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(10, 10).build();
-    const result = fillNode.execute({ path: { type: 'path', value: path } }, { fillType: 'solid', color: '#ff0000' });
-    expect(result.path.type).toBe('path');
-    expect(result.style.type).toBe('style');
+    const result = fillNode.execute({ path: { type: "path", value: path } }, { fillType: "solid", color: "#ff0000" });
+    expect(result.path.type).toBe("path");
+    expect(result.style.type).toBe("style");
     const style = result.style.value as StyleValue;
-    expect(style.fill).toEqual({ type: 'solid', color: '#ff0000' });
+    expect(style.fill).toEqual({ type: "solid", color: "#ff0000" });
   });
 
-  it('should support linear gradient fill', () => {
+  it("should support linear gradient fill", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(10, 10).build();
     const result = fillNode.execute(
-      { path: { type: 'path', value: path } },
+      { path: { type: "path", value: path } },
       {
-        fillType: 'linearGradient',
+        fillType: "linearGradient",
         stops: [
-          { offset: 0, color: '#000' },
-          { offset: 1, color: '#fff' },
+          { offset: 0, color: "#000" },
+          { offset: 1, color: "#fff" },
         ],
         from: { x: 0, y: 0 },
         to: { x: 100, y: 0 },
       },
     );
     const style = result.style.value as StyleValue;
-    expect(style.fill!.type).toBe('linearGradient');
+    expect(style.fill!.type).toBe("linearGradient");
     expect(style.fill!.stops).toHaveLength(2);
   });
 
-  it('should merge with incoming style (composition chaining)', () => {
+  it("should merge with incoming style (composition chaining)", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(10, 10).build();
-    const incomingStyle: StyleValue = { stroke: { color: '#000', width: 1, cap: 'butt', join: 'miter' } };
+    const incomingStyle: StyleValue = { stroke: { color: "#000", width: 1, cap: "butt", join: "miter" } };
     const result = fillNode.execute(
       {
-        path: { type: 'path', value: path },
-        style: { type: 'style', value: incomingStyle },
+        path: { type: "path", value: path },
+        style: { type: "style", value: incomingStyle },
       },
-      { fillType: 'solid', color: '#ff0000' },
+      { fillType: "solid", color: "#ff0000" },
     );
     const style = result.style.value as StyleValue;
-    expect(style.fill).toEqual({ type: 'solid', color: '#ff0000' });
+    expect(style.fill).toEqual({ type: "solid", color: "#ff0000" });
     expect(style.stroke).toBeDefined(); // preserved from incoming
   });
 });
 
-describe('Stroke node', () => {
-  it('should output a style with stroke', () => {
+describe("Stroke node", () => {
+  it("should output a style with stroke", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(10, 10).build();
     const result = strokeNode.execute(
-      { path: { type: 'path', value: path } },
-      { color: '#000000', width: 2, cap: 'round', join: 'round' },
+      { path: { type: "path", value: path } },
+      { color: "#000000", width: 2, cap: "round", join: "round" },
     );
     const style = result.style.value as StyleValue;
-    expect(style.stroke).toMatchObject({ color: '#000000', width: 2 });
+    expect(style.stroke).toMatchObject({ color: "#000000", width: 2 });
   });
 
-  it('should merge with incoming style (fill → stroke chain)', () => {
+  it("should merge with incoming style (fill → stroke chain)", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(10, 10).build();
-    const incomingStyle: StyleValue = { fill: { type: 'solid', color: '#ff0000' } };
+    const incomingStyle: StyleValue = { fill: { type: "solid", color: "#ff0000" } };
     const result = strokeNode.execute(
       {
-        path: { type: 'path', value: path },
-        style: { type: 'style', value: incomingStyle },
+        path: { type: "path", value: path },
+        style: { type: "style", value: incomingStyle },
       },
-      { color: '#000000', width: 2, cap: 'round', join: 'round' },
+      { color: "#000000", width: 2, cap: "round", join: "round" },
     );
     const style = result.style.value as StyleValue;
     // Both fill (from upstream) and stroke (from this node) present
-    expect(style.fill).toEqual({ type: 'solid', color: '#ff0000' });
-    expect(style.stroke).toMatchObject({ color: '#000000', width: 2 });
+    expect(style.fill).toEqual({ type: "solid", color: "#ff0000" });
+    expect(style.stroke).toMatchObject({ color: "#000000", width: 2 });
   });
 });
 ```
@@ -2549,25 +2549,25 @@ git commit -m "feat(vector-engine): fill and stroke style nodes (HYP-308)"
 Add to `style.test.ts`:
 
 ```typescript
-import { opacityNode } from './opacity';
-import { blendModeNode } from './blend-mode';
+import { opacityNode } from "./opacity";
+import { blendModeNode } from "./blend-mode";
 
-describe('Opacity node', () => {
-  it('should output style with opacity value', () => {
+describe("Opacity node", () => {
+  it("should output style with opacity value", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(10, 10).build();
-    const result = opacityNode.execute({ path: { type: 'path', value: path } }, { value: 0.5 });
-    expect(result.path.type).toBe('path');
+    const result = opacityNode.execute({ path: { type: "path", value: path } }, { value: 0.5 });
+    expect(result.path.type).toBe("path");
     const style = result.style.value as StyleValue;
     expect(style.opacity).toBe(0.5);
   });
 
-  it('should merge with incoming style', () => {
+  it("should merge with incoming style", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(10, 10).build();
-    const incomingStyle: StyleValue = { fill: { type: 'solid', color: '#f00' } };
+    const incomingStyle: StyleValue = { fill: { type: "solid", color: "#f00" } };
     const result = opacityNode.execute(
       {
-        path: { type: 'path', value: path },
-        style: { type: 'style', value: incomingStyle },
+        path: { type: "path", value: path },
+        style: { type: "style", value: incomingStyle },
       },
       { value: 0.7 },
     );
@@ -2577,26 +2577,26 @@ describe('Opacity node', () => {
   });
 });
 
-describe('Blend mode node', () => {
-  it('should output style with blend mode', () => {
+describe("Blend mode node", () => {
+  it("should output style with blend mode", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(10, 10).build();
-    const result = blendModeNode.execute({ path: { type: 'path', value: path } }, { mode: 'multiply' });
+    const result = blendModeNode.execute({ path: { type: "path", value: path } }, { mode: "multiply" });
     const style = result.style.value as StyleValue;
-    expect(style.blendMode).toBe('multiply');
+    expect(style.blendMode).toBe("multiply");
   });
 
-  it('should merge with incoming style', () => {
+  it("should merge with incoming style", () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(10, 10).build();
-    const incomingStyle: StyleValue = { stroke: { color: '#000', width: 2, cap: 'round', join: 'round' } };
+    const incomingStyle: StyleValue = { stroke: { color: "#000", width: 2, cap: "round", join: "round" } };
     const result = blendModeNode.execute(
       {
-        path: { type: 'path', value: path },
-        style: { type: 'style', value: incomingStyle },
+        path: { type: "path", value: path },
+        style: { type: "style", value: incomingStyle },
       },
-      { mode: 'screen' },
+      { mode: "screen" },
     );
     const style = result.style.value as StyleValue;
-    expect(style.blendMode).toBe('screen');
+    expect(style.blendMode).toBe("screen");
     expect(style.stroke).toBeDefined();
   });
 });
@@ -2635,15 +2635,15 @@ They compose with parent transforms in the scene builder.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { translateNode } from './translate';
-import { rotateNode } from './rotate';
-import { scaleNode } from './scale';
-import { skewNode } from './skew';
-import type { TransformMatrix } from '../../types';
+import { describe, expect, it } from "bun:test";
+import { translateNode } from "./translate";
+import { rotateNode } from "./rotate";
+import { scaleNode } from "./scale";
+import { skewNode } from "./skew";
+import type { TransformMatrix } from "../../types";
 
-describe('Translate node', () => {
-  it('should output a translation matrix', () => {
+describe("Translate node", () => {
+  it("should output a translation matrix", () => {
     const result = translateNode.execute({}, { dx: 10, dy: 20 });
     const m = result.transform.value as TransformMatrix;
     // Translation matrix: [1, 0, 0, 1, dx, dy]
@@ -2651,8 +2651,8 @@ describe('Translate node', () => {
   });
 });
 
-describe('Rotate node', () => {
-  it('should output a rotation matrix (90 degrees)', () => {
+describe("Rotate node", () => {
+  it("should output a rotation matrix (90 degrees)", () => {
     const result = rotateNode.execute({}, { angle: 90, originX: 0, originY: 0 });
     const m = result.transform.value as TransformMatrix;
     // cos(90°)≈0, sin(90°)≈1 → [0, 1, -1, 0, 0, 0]
@@ -2663,16 +2663,16 @@ describe('Rotate node', () => {
   });
 });
 
-describe('Scale node', () => {
-  it('should output a scale matrix', () => {
+describe("Scale node", () => {
+  it("should output a scale matrix", () => {
     const result = scaleNode.execute({}, { sx: 2, sy: 3, originX: 0, originY: 0 });
     const m = result.transform.value as TransformMatrix;
     expect(m).toEqual([2, 0, 0, 3, 0, 0]);
   });
 });
 
-describe('Skew node', () => {
-  it('should output a skew matrix', () => {
+describe("Skew node", () => {
+  it("should output a skew matrix", () => {
     const result = skewNode.execute({}, { ax: 45, ay: 0 });
     const m = result.transform.value as TransformMatrix;
     // skewX(45°): [1, 0, tan(45°), 1, 0, 0] = [1, 0, 1, 1, 0, 0]
@@ -2727,11 +2727,11 @@ Central function that registers all built-in nodes with a registry.
 - [ ] **Step 1: Write test**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { createDefaultRegistry } from './register-all';
+import { describe, expect, it } from "bun:test";
+import { createDefaultRegistry } from "./register-all";
 
-describe('createDefaultRegistry', () => {
-  it('should register all built-in node types', () => {
+describe("createDefaultRegistry", () => {
+  it("should register all built-in node types", () => {
     const registry = createDefaultRegistry();
     const all = registry.listAll();
     // Generators: rectangle, ellipse, polygon, star, line, arc, spiral, arrow (8)
@@ -2741,9 +2741,9 @@ describe('createDefaultRegistry', () => {
     expect(all.length).toBeGreaterThanOrEqual(23);
   });
 
-  it('should have generators category', () => {
+  it("should have generators category", () => {
     const registry = createDefaultRegistry();
-    expect(registry.listByCategory('generator').length).toBeGreaterThanOrEqual(8);
+    expect(registry.listByCategory("generator").length).toBeGreaterThanOrEqual(8);
   });
 });
 ```
@@ -2755,8 +2755,8 @@ Boolean nodes need a `PathOpsBackend` — accept it as parameter with
 `MockPathOps` as default for testing.
 
 ```typescript
-import { NodeRegistry } from './registry';
-import { rectangleNode } from './generators/rectangle';
+import { NodeRegistry } from "./registry";
+import { rectangleNode } from "./generators/rectangle";
 // ... all other imports
 
 export function createDefaultRegistry(pathOps?: PathOpsBackend): NodeRegistry {
@@ -2794,43 +2794,43 @@ git commit -m "feat(vector-engine): auto-register all built-in nodes (HYP-308)"
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it, beforeEach } from 'bun:test';
-import { HistoryManager } from './history';
-import { VectorGraphModel } from './vector-graph';
+import { describe, expect, it, beforeEach } from "bun:test";
+import { HistoryManager } from "./history";
+import { VectorGraphModel } from "./vector-graph";
 
-describe('HistoryManager', () => {
+describe("HistoryManager", () => {
   let graph: VectorGraphModel;
   let history: HistoryManager;
 
   beforeEach(() => {
-    graph = VectorGraphModel.create('test', 'Test', 800, 600);
+    graph = VectorGraphModel.create("test", "Test", 800, 600);
     history = new HistoryManager(graph);
   });
 
-  it('should record param changes', () => {
-    const n1 = graph.addNode({ type: 'rect', params: { width: 100 } });
-    history.begin('Add rectangle');
+  it("should record param changes", () => {
+    const n1 = graph.addNode({ type: "rect", params: { width: 100 } });
+    history.begin("Add rectangle");
     // addNode is tracked
     history.commit();
 
-    history.begin('Change width');
-    history.recordParamChange(n1, 'width', 100, 200);
-    graph.setParam(n1, 'width', 200);
+    history.begin("Change width");
+    history.recordParamChange(n1, "width", 100, 200);
+    graph.setParam(n1, "width", 200);
     history.commit();
 
     expect(history.entryCount).toBe(2);
     expect(history.canUndo).toBe(true);
   });
 
-  it('should undo param change', () => {
-    const n1 = graph.addNode({ type: 'rect', params: { width: 100 } });
-    history.begin('Add rectangle');
+  it("should undo param change", () => {
+    const n1 = graph.addNode({ type: "rect", params: { width: 100 } });
+    history.begin("Add rectangle");
     history.recordAddNode(graph.getNode(n1)!);
     history.commit();
 
-    history.begin('Change width');
-    history.recordParamChange(n1, 'width', 100, 200);
-    graph.setParam(n1, 'width', 200);
+    history.begin("Change width");
+    history.recordParamChange(n1, "width", 100, 200);
+    graph.setParam(n1, "width", 200);
     history.commit();
 
     expect(graph.getNode(n1)!.params.width).toBe(200);
@@ -2838,15 +2838,15 @@ describe('HistoryManager', () => {
     expect(graph.getNode(n1)!.params.width).toBe(100);
   });
 
-  it('should redo undone change', () => {
-    const n1 = graph.addNode({ type: 'rect', params: { width: 100 } });
-    history.begin('Add rect');
+  it("should redo undone change", () => {
+    const n1 = graph.addNode({ type: "rect", params: { width: 100 } });
+    history.begin("Add rect");
     history.recordAddNode(graph.getNode(n1)!);
     history.commit();
 
-    history.begin('Change width');
-    history.recordParamChange(n1, 'width', 100, 200);
-    graph.setParam(n1, 'width', 200);
+    history.begin("Change width");
+    history.recordParamChange(n1, "width", 100, 200);
+    graph.setParam(n1, "width", 200);
     history.commit();
 
     history.undo(graph);
@@ -2855,9 +2855,9 @@ describe('HistoryManager', () => {
     expect(graph.getNode(n1)!.params.width).toBe(200);
   });
 
-  it('should undo node addition (removes node)', () => {
-    history.begin('Add rectangle');
-    const n1 = graph.addNode({ type: 'rect', params: {} });
+  it("should undo node addition (removes node)", () => {
+    history.begin("Add rectangle");
+    const n1 = graph.addNode({ type: "rect", params: {} });
     history.recordAddNode(graph.getNode(n1)!);
     history.commit();
 
@@ -2866,18 +2866,18 @@ describe('HistoryManager', () => {
     expect(graph.nodeCount).toBe(0);
   });
 
-  it('should undo node removal (restores node + edges)', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {} });
-    const n2 = graph.addNode({ type: 'fill', params: {} });
-    graph.addEdge(n1, 'path', n2, 'path');
-    history.begin('setup');
+  it("should undo node removal (restores node + edges)", () => {
+    const n1 = graph.addNode({ type: "rect", params: {} });
+    const n2 = graph.addNode({ type: "fill", params: {} });
+    graph.addEdge(n1, "path", n2, "path");
+    history.begin("setup");
     history.recordAddNode(graph.getNode(n1)!);
     history.recordAddNode(graph.getNode(n2)!);
     history.commit();
 
-    history.begin('Remove n1');
+    history.begin("Remove n1");
     const removedEdges = graph.removeNode(n1);
-    history.recordRemoveNode({ id: n1, type: 'rect', params: {} }, removedEdges);
+    history.recordRemoveNode({ id: n1, type: "rect", params: {} }, removedEdges);
     history.commit();
 
     expect(graph.nodeCount).toBe(1);
@@ -2886,17 +2886,17 @@ describe('HistoryManager', () => {
     expect(graph.edgeCount).toBe(1);
   });
 
-  it('should undo/redo edge addition', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {} });
-    const n2 = graph.addNode({ type: 'fill', params: {} });
-    history.begin('Setup nodes');
+  it("should undo/redo edge addition", () => {
+    const n1 = graph.addNode({ type: "rect", params: {} });
+    const n2 = graph.addNode({ type: "fill", params: {} });
+    history.begin("Setup nodes");
     history.recordAddNode(graph.getNode(n1)!);
     history.recordAddNode(graph.getNode(n2)!);
     history.commit();
 
-    history.begin('Connect');
-    const edgeId = graph.addEdge(n1, 'path', n2, 'path');
-    history.recordAddEdge({ id: edgeId, source: n1, target: n2, sourcePort: 'path', targetPort: 'path' });
+    history.begin("Connect");
+    const edgeId = graph.addEdge(n1, "path", n2, "path");
+    history.recordAddEdge({ id: edgeId, source: n1, target: n2, sourcePort: "path", targetPort: "path" });
     history.commit();
 
     expect(graph.edgeCount).toBe(1);
@@ -2906,16 +2906,16 @@ describe('HistoryManager', () => {
     expect(graph.edgeCount).toBe(1);
   });
 
-  it('should undo/redo edge removal', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {} });
-    const n2 = graph.addNode({ type: 'fill', params: {} });
-    const edgeId = graph.addEdge(n1, 'path', n2, 'path');
-    history.begin('Setup');
+  it("should undo/redo edge removal", () => {
+    const n1 = graph.addNode({ type: "rect", params: {} });
+    const n2 = graph.addNode({ type: "fill", params: {} });
+    const edgeId = graph.addEdge(n1, "path", n2, "path");
+    history.begin("Setup");
     history.commit();
 
-    history.begin('Disconnect');
+    history.begin("Disconnect");
     graph.removeEdge(edgeId);
-    history.recordRemoveEdge({ id: edgeId, source: n1, target: n2, sourcePort: 'path', targetPort: 'path' });
+    history.recordRemoveEdge({ id: edgeId, source: n1, target: n2, sourcePort: "path", targetPort: "path" });
     history.commit();
 
     expect(graph.edgeCount).toBe(0);
@@ -2923,13 +2923,13 @@ describe('HistoryManager', () => {
     expect(graph.edgeCount).toBe(1);
   });
 
-  it('should undo/redo mute toggle', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {} });
-    history.begin('Add');
+  it("should undo/redo mute toggle", () => {
+    const n1 = graph.addNode({ type: "rect", params: {} });
+    history.begin("Add");
     history.recordAddNode(graph.getNode(n1)!);
     history.commit();
 
-    history.begin('Mute');
+    history.begin("Mute");
     graph.setMuted(n1, true);
     history.recordMuteNode(n1, true);
     history.commit();
@@ -2941,9 +2941,9 @@ describe('HistoryManager', () => {
     expect(graph.isMuted(n1)).toBe(true);
   });
 
-  it('should undo/redo node position move', () => {
-    const n1 = graph.addNode({ type: 'rect', params: {}, position: { x: 0, y: 0 } });
-    history.begin('Move');
+  it("should undo/redo node position move", () => {
+    const n1 = graph.addNode({ type: "rect", params: {}, position: { x: 0, y: 0 } });
+    history.begin("Move");
     graph.setPosition(n1, { x: 100, y: 200 });
     history.recordMoveNode(n1, { x: 0, y: 0 }, { x: 100, y: 200 });
     history.commit();
@@ -2952,37 +2952,37 @@ describe('HistoryManager', () => {
     expect(graph.getNode(n1)!.position).toEqual({ x: 0, y: 0 });
   });
 
-  it('should return affected node IDs from undo', () => {
-    const n1 = graph.addNode({ type: 'rect', params: { width: 100 } });
-    history.begin('Add');
+  it("should return affected node IDs from undo", () => {
+    const n1 = graph.addNode({ type: "rect", params: { width: 100 } });
+    history.begin("Add");
     history.recordAddNode(graph.getNode(n1)!);
     history.commit();
 
-    history.begin('Change');
-    history.recordParamChange(n1, 'width', 100, 200);
-    graph.setParam(n1, 'width', 200);
+    history.begin("Change");
+    history.recordParamChange(n1, "width", 100, 200);
+    graph.setParam(n1, "width", 200);
     history.commit();
 
     const affected = history.undo(graph);
     expect(affected).toContain(n1);
   });
 
-  it('should clear redo stack on new action after undo', () => {
-    const n1 = graph.addNode({ type: 'rect', params: { width: 100 } });
-    history.begin('Add');
+  it("should clear redo stack on new action after undo", () => {
+    const n1 = graph.addNode({ type: "rect", params: { width: 100 } });
+    history.begin("Add");
     history.recordAddNode(graph.getNode(n1)!);
     history.commit();
 
-    history.begin('Change to 200');
-    history.recordParamChange(n1, 'width', 100, 200);
-    graph.setParam(n1, 'width', 200);
+    history.begin("Change to 200");
+    history.recordParamChange(n1, "width", 100, 200);
+    graph.setParam(n1, "width", 200);
     history.commit();
 
     history.undo(graph);
 
-    history.begin('Change to 300');
-    history.recordParamChange(n1, 'width', 100, 300);
-    graph.setParam(n1, 'width', 300);
+    history.begin("Change to 300");
+    history.recordParamChange(n1, "width", 100, 300);
+    graph.setParam(n1, "width", 300);
     history.commit();
 
     expect(history.canRedo).toBe(false);
@@ -3007,14 +3007,14 @@ describe('HistoryManager', () => {
  * the full GraphNode + removed edges to enable precise restoration.
  */
 
-import type { GraphDiff, HistoryEntry, GraphNode, GraphEdge, Point } from '../types';
-import type { VectorGraphModel } from './vector-graph';
+import type { GraphDiff, HistoryEntry, GraphNode, GraphEdge, Point } from "../types";
+import type { VectorGraphModel } from "./vector-graph";
 
 export class HistoryManager {
   private entries: HistoryEntry[] = [];
   private pointer = 0; // points to next undo position
   private pendingDiffs: GraphDiff[] = [];
-  private pendingDescription = '';
+  private pendingDescription = "";
 
   constructor(private graph: VectorGraphModel) {}
 
@@ -3094,59 +3094,59 @@ Used for server-side export, CLI, AI agent output.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { sceneToSvg } from './svg';
-import { PathBuilder } from '../path/builder';
-import type { SceneGraph, SceneItem, TransformMatrix } from '../types';
+import { describe, expect, it } from "bun:test";
+import { sceneToSvg } from "./svg";
+import { PathBuilder } from "../path/builder";
+import type { SceneGraph, SceneItem, TransformMatrix } from "../types";
 
 function makeItem(overrides: Partial<SceneItem> = {}): SceneItem {
   return {
-    id: 'test',
+    id: "test",
     path: new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build(),
-    style: { fill: { type: 'solid', color: '#ff0000' } },
+    style: { fill: { type: "solid", color: "#ff0000" } },
     transform: [1, 0, 0, 1, 0, 0] as TransformMatrix,
     visible: true,
     ...overrides,
   };
 }
 
-describe('sceneToSvg', () => {
-  it('should produce valid SVG with viewBox', () => {
+describe("sceneToSvg", () => {
+  it("should produce valid SVG with viewBox", () => {
     const scene: SceneGraph = {
       items: [makeItem()],
       canvas: { width: 800, height: 600 },
     };
     const svg = sceneToSvg(scene);
-    expect(svg).toContain('<svg');
+    expect(svg).toContain("<svg");
     expect(svg).toContain('viewBox="0 0 800 600"');
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
-    expect(svg).toContain('</svg>');
+    expect(svg).toContain("</svg>");
   });
 
-  it('should include path element with d attribute', () => {
+  it("should include path element with d attribute", () => {
     const scene: SceneGraph = {
       items: [makeItem()],
       canvas: { width: 100, height: 100 },
     };
     const svg = sceneToSvg(scene);
-    expect(svg).toContain('<path');
+    expect(svg).toContain("<path");
     expect(svg).toContain('d="M 0 0 L 100 0 L 100 50 L 0 50 Z"');
   });
 
-  it('should apply fill color', () => {
+  it("should apply fill color", () => {
     const svg = sceneToSvg({
-      items: [makeItem({ style: { fill: { type: 'solid', color: '#3b82f6' } } })],
+      items: [makeItem({ style: { fill: { type: "solid", color: "#3b82f6" } } })],
       canvas: { width: 100, height: 100 },
     });
     expect(svg).toContain('fill="#3b82f6"');
   });
 
-  it('should apply stroke', () => {
+  it("should apply stroke", () => {
     const svg = sceneToSvg({
       items: [
         makeItem({
           style: {
-            stroke: { color: '#000', width: 2, cap: 'round', join: 'round' },
+            stroke: { color: "#000", width: 2, cap: "round", join: "round" },
           },
         }),
       ],
@@ -3156,7 +3156,7 @@ describe('sceneToSvg', () => {
     expect(svg).toContain('stroke-width="2"');
   });
 
-  it('should apply transform matrix', () => {
+  it("should apply transform matrix", () => {
     const svg = sceneToSvg({
       items: [makeItem({ transform: [1, 0, 0, 1, 10, 20] as TransformMatrix })],
       canvas: { width: 100, height: 100 },
@@ -3164,34 +3164,34 @@ describe('sceneToSvg', () => {
     expect(svg).toContain('transform="matrix(1 0 0 1 10 20)"');
   });
 
-  it('should skip invisible items', () => {
+  it("should skip invisible items", () => {
     const svg = sceneToSvg({
       items: [makeItem({ visible: false })],
       canvas: { width: 100, height: 100 },
     });
-    expect(svg).not.toContain('<path');
+    expect(svg).not.toContain("<path");
   });
 
-  it('should render background color', () => {
+  it("should render background color", () => {
     const svg = sceneToSvg({
       items: [],
       canvas: { width: 100, height: 100 },
-      background: '#ffffff',
+      background: "#ffffff",
     });
-    expect(svg).toContain('<rect');
+    expect(svg).toContain("<rect");
     expect(svg).toContain('fill="#ffffff"');
   });
 
-  it('should handle linear gradient fills', () => {
+  it("should handle linear gradient fills", () => {
     const svg = sceneToSvg({
       items: [
         makeItem({
           style: {
             fill: {
-              type: 'linearGradient',
+              type: "linearGradient",
               stops: [
-                { offset: 0, color: '#000' },
-                { offset: 1, color: '#fff' },
+                { offset: 0, color: "#000" },
+                { offset: 1, color: "#fff" },
               ],
               from: { x: 0, y: 0 },
               to: { x: 100, y: 0 },
@@ -3201,12 +3201,12 @@ describe('sceneToSvg', () => {
       ],
       canvas: { width: 100, height: 100 },
     });
-    expect(svg).toContain('<linearGradient');
-    expect(svg).toContain('<stop');
-    expect(svg).toContain('</defs>');
+    expect(svg).toContain("<linearGradient");
+    expect(svg).toContain("<stop");
+    expect(svg).toContain("</defs>");
   });
 
-  it('should handle opacity', () => {
+  it("should handle opacity", () => {
     const svg = sceneToSvg({
       items: [makeItem({ style: { opacity: 0.5 } })],
       canvas: { width: 100, height: 100 },
@@ -3214,46 +3214,46 @@ describe('sceneToSvg', () => {
     expect(svg).toContain('opacity="0.5"');
   });
 
-  it('should apply blend mode via mix-blend-mode style', () => {
+  it("should apply blend mode via mix-blend-mode style", () => {
     const svg = sceneToSvg({
-      items: [makeItem({ style: { blendMode: 'multiply' } })],
+      items: [makeItem({ style: { blendMode: "multiply" } })],
       canvas: { width: 100, height: 100 },
     });
-    expect(svg).toContain('mix-blend-mode:multiply');
+    expect(svg).toContain("mix-blend-mode:multiply");
   });
 
-  it('should render shadow as SVG filter', () => {
+  it("should render shadow as SVG filter", () => {
     const svg = sceneToSvg({
       items: [
         makeItem({
-          style: { shadow: { color: '#000', offsetX: 2, offsetY: 2, blur: 4 } },
+          style: { shadow: { color: "#000", offsetX: 2, offsetY: 2, blur: 4 } },
         }),
       ],
       canvas: { width: 100, height: 100 },
     });
-    expect(svg).toContain('<filter');
-    expect(svg).toContain('feDropShadow');
+    expect(svg).toContain("<filter");
+    expect(svg).toContain("feDropShadow");
   });
 
-  it('should render blur as SVG filter', () => {
+  it("should render blur as SVG filter", () => {
     const svg = sceneToSvg({
       items: [makeItem({ style: { blur: 5 } })],
       canvas: { width: 100, height: 100 },
     });
-    expect(svg).toContain('<filter');
-    expect(svg).toContain('feGaussianBlur');
+    expect(svg).toContain("<filter");
+    expect(svg).toContain("feGaussianBlur");
   });
 
-  it('should handle radial gradient fill', () => {
+  it("should handle radial gradient fill", () => {
     const svg = sceneToSvg({
       items: [
         makeItem({
           style: {
             fill: {
-              type: 'radialGradient',
+              type: "radialGradient",
               stops: [
-                { offset: 0, color: '#f00' },
-                { offset: 1, color: '#00f' },
+                { offset: 0, color: "#f00" },
+                { offset: 1, color: "#00f" },
               ],
               center: { x: 50, y: 50 },
               radius: 50,
@@ -3263,20 +3263,20 @@ describe('sceneToSvg', () => {
       ],
       canvas: { width: 100, height: 100 },
     });
-    expect(svg).toContain('<radialGradient');
-    expect(svg).toContain('<stop');
+    expect(svg).toContain("<radialGradient");
+    expect(svg).toContain("<stop");
   });
 
-  it('should handle conic gradient fill (approximated)', () => {
+  it("should handle conic gradient fill (approximated)", () => {
     const svg = sceneToSvg({
       items: [
         makeItem({
           style: {
             fill: {
-              type: 'conicGradient',
+              type: "conicGradient",
               stops: [
-                { offset: 0, color: '#f00' },
-                { offset: 1, color: '#0f0' },
+                { offset: 0, color: "#f00" },
+                { offset: 1, color: "#0f0" },
               ],
               center: { x: 50, y: 50 },
             },
@@ -3286,44 +3286,44 @@ describe('sceneToSvg', () => {
       canvas: { width: 100, height: 100 },
     });
     // Conic gradient has no direct SVG equivalent — falls back or uses pattern
-    expect(svg).toContain('<path');
+    expect(svg).toContain("<path");
   });
 
-  it('should apply clipPath', () => {
+  it("should apply clipPath", () => {
     const clipPath = new PathBuilder().moveTo(10, 10).lineTo(90, 10).lineTo(90, 90).lineTo(10, 90).close().build();
     const svg = sceneToSvg({
       items: [makeItem({ clipPath })],
       canvas: { width: 100, height: 100 },
     });
-    expect(svg).toContain('<clipPath');
+    expect(svg).toContain("<clipPath");
     expect(svg).toContain('clip-path="url(');
   });
 
-  it('should render SceneGroup as <g> with children', () => {
+  it("should render SceneGroup as <g> with children", () => {
     const svg = sceneToSvg({
       items: [
         {
-          id: 'group1',
-          children: [makeItem({ id: 'child1' }), makeItem({ id: 'child2' })],
+          id: "group1",
+          children: [makeItem({ id: "child1" }), makeItem({ id: "child2" })],
           transform: [1, 0, 0, 1, 10, 20] as TransformMatrix,
           visible: true,
         },
       ],
       canvas: { width: 100, height: 100 },
     });
-    expect(svg).toContain('<g');
-    expect(svg).toContain('</g>');
+    expect(svg).toContain("<g");
+    expect(svg).toContain("</g>");
     // Group should contain two path elements
     const pathCount = (svg.match(/<path/g) || []).length;
     expect(pathCount).toBe(2);
   });
 
-  it('should apply dashArray and dashOffset on stroke', () => {
+  it("should apply dashArray and dashOffset on stroke", () => {
     const svg = sceneToSvg({
       items: [
         makeItem({
           style: {
-            stroke: { color: '#000', width: 2, cap: 'butt', join: 'miter', dashArray: [5, 3], dashOffset: 2 },
+            stroke: { color: "#000", width: 2, cap: "butt", join: "miter", dashArray: [5, 3], dashOffset: 2 },
           },
         }),
       ],
@@ -3333,12 +3333,12 @@ describe('sceneToSvg', () => {
     expect(svg).toContain('stroke-dashoffset="2"');
   });
 
-  it('should omit transform attribute for identity matrix', () => {
+  it("should omit transform attribute for identity matrix", () => {
     const svg = sceneToSvg({
       items: [makeItem({ transform: [1, 0, 0, 1, 0, 0] as TransformMatrix })],
       canvas: { width: 100, height: 100 },
     });
-    expect(svg).not.toContain('transform=');
+    expect(svg).not.toContain("transform=");
   });
 });
 ```
@@ -3357,9 +3357,9 @@ describe('sceneToSvg', () => {
  * Gradient defs are collected and emitted in a single <defs> block.
  */
 
-import type { SceneGraph, SceneEntry, SceneItem, SceneGroup, FillStyle, TransformMatrix } from '../types';
-import { commandsToSvgD } from '../path/commands';
-import { isSceneItem, isSceneGroup, IDENTITY_TRANSFORM } from '../types';
+import type { SceneGraph, SceneEntry, SceneItem, SceneGroup, FillStyle, TransformMatrix } from "../types";
+import { commandsToSvgD } from "../path/commands";
+import { isSceneItem, isSceneGroup, IDENTITY_TRANSFORM } from "../types";
 
 export function sceneToSvg(scene: SceneGraph): string {
   const defs: string[] = [];
@@ -3373,7 +3373,7 @@ export function sceneToSvg(scene: SceneGraph): string {
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${scene.canvas.width} ${scene.canvas.height}">`);
 
   if (defs.length > 0) {
-    parts.push('<defs>', ...defs, '</defs>');
+    parts.push("<defs>", ...defs, "</defs>");
   }
 
   if (scene.background) {
@@ -3381,9 +3381,9 @@ export function sceneToSvg(scene: SceneGraph): string {
   }
 
   parts.push(...body);
-  parts.push('</svg>');
+  parts.push("</svg>");
 
-  return parts.join('\n');
+  return parts.join("\n");
 }
 
 function renderEntry(entry: SceneEntry, body: string[], defs: string[]): void {
@@ -3396,7 +3396,7 @@ function renderEntry(entry: SceneEntry, body: string[], defs: string[]): void {
     for (const child of entry.children) {
       renderEntry(child, body, defs);
     }
-    body.push('</g>');
+    body.push("</g>");
   }
 }
 
@@ -3435,33 +3435,33 @@ This validates that all components work together.
 - [ ] **Step 1: Write integration test**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { VectorGraphModel } from './graph/vector-graph';
-import { GraphExecutor } from './graph/executor';
-import { HistoryManager } from './graph/history';
-import { createDefaultRegistry } from './nodes/register-all';
-import { sceneToSvg } from './export/svg';
+import { describe, expect, it } from "bun:test";
+import { VectorGraphModel } from "./graph/vector-graph";
+import { GraphExecutor } from "./graph/executor";
+import { HistoryManager } from "./graph/history";
+import { createDefaultRegistry } from "./nodes/register-all";
+import { sceneToSvg } from "./export/svg";
 
-describe('Vector Engine — end-to-end', () => {
-  it('should create a rectangle, fill it, and export SVG', () => {
+describe("Vector Engine — end-to-end", () => {
+  it("should create a rectangle, fill it, and export SVG", () => {
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create('test', 'Icon', 24, 24);
+    const graph = VectorGraphModel.create("test", "Icon", 24, 24);
     const executor = new GraphExecutor(registry);
 
     // Add rectangle
     const rect = graph.addNode({
-      type: 'rectangle',
+      type: "rectangle",
       params: { width: 20, height: 20, x: 2, y: 2 },
     });
 
     // Add fill
     const fill = graph.addNode({
-      type: 'fill',
-      params: { fillType: 'solid', color: '#3b82f6' },
+      type: "fill",
+      params: { fillType: "solid", color: "#3b82f6" },
     });
 
     // Connect rectangle → fill
-    graph.addEdge(rect, 'path', fill, 'path');
+    graph.addEdge(rect, "path", fill, "path");
 
     // Execute
     const result = executor.execute(graph);
@@ -3475,95 +3475,95 @@ describe('Vector Engine — end-to-end', () => {
     expect(svg).toContain('d="M 2 2 L 22 2 L 22 22 L 2 22 Z"');
   });
 
-  it('should undo/redo a param change', () => {
+  it("should undo/redo a param change", () => {
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create('test', 'Icon', 24, 24);
+    const graph = VectorGraphModel.create("test", "Icon", 24, 24);
     const executor = new GraphExecutor(registry);
     const history = new HistoryManager(graph);
 
-    const rect = graph.addNode({ type: 'rectangle', params: { width: 10, height: 10, x: 0, y: 0 } });
-    history.begin('Add rectangle');
+    const rect = graph.addNode({ type: "rectangle", params: { width: 10, height: 10, x: 0, y: 0 } });
+    history.begin("Add rectangle");
     history.recordAddNode(graph.getNode(rect)!);
     history.commit();
 
     // Change width
-    history.begin('Resize');
-    history.recordParamChange(rect, 'width', 10, 20);
-    graph.setParam(rect, 'width', 20);
+    history.begin("Resize");
+    history.recordParamChange(rect, "width", 10, 20);
+    graph.setParam(rect, "width", 20);
     history.commit();
 
     // Execute — should use width=20
     let result = executor.execute(graph);
     let svg = sceneToSvg(result.scene);
-    expect(svg).toContain('L 20 0');
+    expect(svg).toContain("L 20 0");
 
     // Undo — should revert to width=10
     const affected = history.undo(graph);
     for (const id of affected) executor.invalidate(id);
     result = executor.execute(graph);
     svg = sceneToSvg(result.scene);
-    expect(svg).toContain('L 10 0');
+    expect(svg).toContain("L 10 0");
 
     // Redo — back to width=20
     const reaffected = history.redo(graph);
     for (const id of reaffected) executor.invalidate(id);
     result = executor.execute(graph);
     svg = sceneToSvg(result.scene);
-    expect(svg).toContain('L 20 0');
+    expect(svg).toContain("L 20 0");
   });
 
-  it('should build a compound shape with boolean union', () => {
+  it("should build a compound shape with boolean union", () => {
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create('test', 'Union Icon', 24, 24);
+    const graph = VectorGraphModel.create("test", "Union Icon", 24, 24);
     const executor = new GraphExecutor(registry);
 
     const rect = graph.addNode({
-      type: 'rectangle',
+      type: "rectangle",
       params: { width: 16, height: 16, x: 0, y: 0 },
     });
     const ellipse = graph.addNode({
-      type: 'ellipse',
+      type: "ellipse",
       params: { rx: 8, ry: 8, cx: 16, cy: 8 },
     });
-    const union = graph.addNode({ type: 'boolean-union', params: {} });
+    const union = graph.addNode({ type: "boolean-union", params: {} });
     const fill = graph.addNode({
-      type: 'fill',
-      params: { fillType: 'solid', color: '#ef4444' },
+      type: "fill",
+      params: { fillType: "solid", color: "#ef4444" },
     });
 
-    graph.addEdge(rect, 'path', union, 'a');
-    graph.addEdge(ellipse, 'path', union, 'b');
-    graph.addEdge(union, 'path', fill, 'path');
+    graph.addEdge(rect, "path", union, "a");
+    graph.addEdge(ellipse, "path", union, "b");
+    graph.addEdge(union, "path", fill, "path");
 
     const result = executor.execute(graph);
     expect(result.scene.items).toHaveLength(1);
     // All 4 nodes should have executed successfully
-    expect(Object.values(result.nodeStatus).every((s) => s.state === 'ok')).toBe(true);
+    expect(Object.values(result.nodeStatus).every((s) => s.state === "ok")).toBe(true);
 
     const svg = sceneToSvg(result.scene);
     expect(svg).toContain('fill="#ef4444"');
   });
 
-  it('should undo edge removal and restore connection', () => {
+  it("should undo edge removal and restore connection", () => {
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create('test', 'EdgeUndo', 100, 100);
+    const graph = VectorGraphModel.create("test", "EdgeUndo", 100, 100);
     const executor = new GraphExecutor(registry);
     const history = new HistoryManager(graph);
 
-    const rect = graph.addNode({ type: 'rectangle', params: { width: 50, height: 50, x: 0, y: 0 } });
-    const fill = graph.addNode({ type: 'fill', params: { fillType: 'solid', color: '#f00' } });
-    const edgeId = graph.addEdge(rect, 'path', fill, 'path');
+    const rect = graph.addNode({ type: "rectangle", params: { width: 50, height: 50, x: 0, y: 0 } });
+    const fill = graph.addNode({ type: "fill", params: { fillType: "solid", color: "#f00" } });
+    const edgeId = graph.addEdge(rect, "path", fill, "path");
 
-    history.begin('Setup');
+    history.begin("Setup");
     history.recordAddNode(graph.getNode(rect)!);
     history.recordAddNode(graph.getNode(fill)!);
-    history.recordAddEdge({ id: edgeId, source: rect, target: fill, sourcePort: 'path', targetPort: 'path' });
+    history.recordAddEdge({ id: edgeId, source: rect, target: fill, sourcePort: "path", targetPort: "path" });
     history.commit();
 
     // Disconnect
-    history.begin('Disconnect');
+    history.begin("Disconnect");
     graph.removeEdge(edgeId);
-    history.recordRemoveEdge({ id: edgeId, source: rect, target: fill, sourcePort: 'path', targetPort: 'path' });
+    history.recordRemoveEdge({ id: edgeId, source: rect, target: fill, sourcePort: "path", targetPort: "path" });
     history.commit();
 
     // After disconnection, both nodes are terminal → 2 scene items (no fill on rect)
@@ -3578,27 +3578,27 @@ describe('Vector Engine — end-to-end', () => {
     expect(graph.edgeCount).toBe(1);
   });
 
-  it('should undo node removal and restore full subgraph', () => {
+  it("should undo node removal and restore full subgraph", () => {
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create('test', 'NodeUndo', 100, 100);
+    const graph = VectorGraphModel.create("test", "NodeUndo", 100, 100);
     const executor = new GraphExecutor(registry);
     const history = new HistoryManager(graph);
 
-    const rect = graph.addNode({ type: 'rectangle', params: { width: 40, height: 40, x: 0, y: 0 } });
-    const fill = graph.addNode({ type: 'fill', params: { fillType: 'solid', color: '#0f0' } });
-    const edgeId = graph.addEdge(rect, 'path', fill, 'path');
+    const rect = graph.addNode({ type: "rectangle", params: { width: 40, height: 40, x: 0, y: 0 } });
+    const fill = graph.addNode({ type: "fill", params: { fillType: "solid", color: "#0f0" } });
+    const edgeId = graph.addEdge(rect, "path", fill, "path");
 
-    history.begin('Setup');
+    history.begin("Setup");
     history.recordAddNode(graph.getNode(rect)!);
     history.recordAddNode(graph.getNode(fill)!);
-    history.recordAddEdge({ id: edgeId, source: rect, target: fill, sourcePort: 'path', targetPort: 'path' });
+    history.recordAddEdge({ id: edgeId, source: rect, target: fill, sourcePort: "path", targetPort: "path" });
     history.commit();
 
     // Remove the rectangle (also removes the edge)
-    history.begin('Delete rect');
+    history.begin("Delete rect");
     const removedEdges = graph.removeNode(rect);
     history.recordRemoveNode(
-      { id: rect, type: 'rectangle', params: { width: 40, height: 40, x: 0, y: 0 } },
+      { id: rect, type: "rectangle", params: { width: 40, height: 40, x: 0, y: 0 } },
       removedEdges,
     );
     history.commit();
@@ -3619,20 +3619,20 @@ describe('Vector Engine — end-to-end', () => {
     expect(svg).toContain('fill="#0f0"');
   });
 
-  it('should serialize graph, restore, and produce identical SVG', () => {
+  it("should serialize graph, restore, and produce identical SVG", () => {
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create('test', 'Roundtrip', 100, 100);
+    const graph = VectorGraphModel.create("test", "Roundtrip", 100, 100);
     const executor = new GraphExecutor(registry);
 
     const rect = graph.addNode({
-      type: 'rectangle',
+      type: "rectangle",
       params: { width: 50, height: 50, x: 25, y: 25 },
     });
     const fill = graph.addNode({
-      type: 'fill',
-      params: { fillType: 'solid', color: '#10b981' },
+      type: "fill",
+      params: { fillType: "solid", color: "#10b981" },
     });
-    graph.addEdge(rect, 'path', fill, 'path');
+    graph.addEdge(rect, "path", fill, "path");
 
     const svg1 = sceneToSvg(executor.execute(graph).scene);
 
@@ -3713,9 +3713,9 @@ export type {
   ExecutionResult,
   GraphDiff,
   HistoryEntry,
-} from './types';
+} from "./types";
 
-export { IDENTITY_TRANSFORM, isSceneGroup, isSceneItem } from './types';
+export { IDENTITY_TRANSFORM, isSceneGroup, isSceneItem } from "./types";
 
 // Path
 export {
@@ -3725,29 +3725,29 @@ export {
   decodeCommands,
   commandsToSvgD,
   svgDToCommands,
-} from './path/commands';
-export { PathBuilder } from './path/builder';
-export { computeBounds } from './path/bounds';
+} from "./path/commands";
+export { PathBuilder } from "./path/builder";
+export { computeBounds } from "./path/bounds";
 
 // Graph
-export { VectorGraphModel } from './graph/vector-graph';
-export { GraphExecutor } from './graph/executor';
-export { buildScene } from './graph/scene-builder';
-export { HistoryManager } from './graph/history';
+export { VectorGraphModel } from "./graph/vector-graph";
+export { GraphExecutor } from "./graph/executor";
+export { buildScene } from "./graph/scene-builder";
+export { HistoryManager } from "./graph/history";
 
 // Nodes
-export { NodeRegistry } from './nodes/registry';
-export { createDefaultRegistry } from './nodes/register-all';
+export { NodeRegistry } from "./nodes/registry";
+export { createDefaultRegistry } from "./nodes/register-all";
 
 // Export
-export { sceneToSvg } from './export/svg';
+export { sceneToSvg } from "./export/svg";
 ```
 
 `packages/vector-wasm/src/index.ts`:
 
 ```typescript
-export type { PathOpsBackend, BooleanOp } from './types';
-export { MockPathOps } from './mock-pathops';
+export type { PathOpsBackend, BooleanOp } from "./types";
+export { MockPathOps } from "./mock-pathops";
 // export { CanvasKitPathOps } from "./canvaskit-pathops"; // uncomment when implemented
 ```
 

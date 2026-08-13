@@ -325,6 +325,65 @@ export function detectRouterShell(sourceCode: string): boolean {
   return false;
 }
 
+/**
+ * Detect compound component siblings exported from the same file.
+ *
+ * A name qualifies when it:
+ * - starts with mainComponentName as a prefix (AlertTitle for Alert, CardHeader for Card)
+ * - is not the main component itself
+ * - is not a Sample* export
+ * - is not type-only
+ * - is locally defined (specifiers with `from '…'` are cross-file barrel re-exports and excluded)
+ *
+ * The prefix requirement prevents false positives on barrel files and files that export
+ * multiple independent PascalCase components.
+ */
+export function detectCompoundExports(sourceCode: string, mainComponentName: string): string[] {
+  const ast = parseSource(sourceCode);
+  const results: string[] = [];
+
+  const isCompound = (name: string) =>
+    name.startsWith(mainComponentName) && name !== mainComponentName && !name.startsWith('Sample');
+
+  for (const node of ast.program.body) {
+    if (node.type !== 'ExportNamedDeclaration') continue;
+
+    if (!node.declaration) {
+      if (node.exportKind === 'type') continue;
+      // Skip cross-file re-exports: `export { Foo } from './foo'` — these are barrel patterns.
+      // Local re-exports have no source: `export { Alert, AlertTitle }`.
+      if (node.source) continue;
+      for (const spec of node.specifiers) {
+        if (spec.type !== 'ExportSpecifier') continue;
+        if (spec.exportKind === 'type') continue;
+        if (spec.exported.type !== 'Identifier') continue;
+        if (isCompound(spec.exported.name)) results.push(spec.exported.name);
+      }
+      continue;
+    }
+
+    if (node.exportKind === 'type') continue;
+    const decl = node.declaration;
+    const names: string[] = [];
+
+    if (decl.type === 'FunctionDeclaration' && decl.id) {
+      names.push(decl.id.name);
+    } else if (decl.type === 'ClassDeclaration' && decl.id) {
+      names.push(decl.id.name);
+    } else if (decl.type === 'VariableDeclaration') {
+      for (const d of decl.declarations) {
+        if (d.id.type === 'Identifier') names.push(d.id.name);
+      }
+    }
+
+    for (const name of names) {
+      if (isCompound(name)) results.push(name);
+    }
+  }
+
+  return results;
+}
+
 /** Escape regex metacharacters in a string */
 export function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

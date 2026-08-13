@@ -8,7 +8,7 @@ Hyper Canvas text editing currently treats JSX expression children as raw
 expressions. For a selected node such as:
 
 ```tsx
-<p className="text-foreground/80">{t('habits.walks')}</p>
+<p className="text-foreground/80">{t("habits.walks")}</p>
 ```
 
 the inspector should recognize the i18n call, show key `habits.walks`, show the
@@ -61,8 +61,8 @@ JSX children:
 
 ```ts
 interface I18nTextBinding {
-  kind: 'i18n';
-  library: 'react-i18next' | 'i18next' | 'next-intl' | 'react-intl' | 'lingui' | 'custom';
+  kind: "i18n";
+  library: "react-i18next" | "i18next" | "next-intl" | "react-intl" | "lingui" | "custom";
   key: string;
   activeLocale: string;
   availableLocales: string[];
@@ -177,7 +177,7 @@ bun test shared/i18n-text/__tests__/detect-i18n-package.test.ts
   ```tsx
   export default function Index() {
     const { t } = useLanguage();
-    return <p className="text-foreground/80">{t('habits.walks')}</p>;
+    return <p className="text-foreground/80">{t("habits.walks")}</p>;
   }
   ```
 

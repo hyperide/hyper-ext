@@ -170,18 +170,18 @@ feat(vector-engine): Kiwi schema definition for graph file format (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { encodeGraphFile, decodeGraphFile } from './kiwi-codec';
-import type { VectorGraphFile } from './types';
+import { describe, expect, it } from "bun:test";
+import { encodeGraphFile, decodeGraphFile } from "./kiwi-codec";
+import type { VectorGraphFile } from "./types";
 
-describe('Kiwi codec', () => {
+describe("Kiwi codec", () => {
   const sampleFile: VectorGraphFile = {
     version: 1,
-    meta: { componentPath: 'src/icons/Arrow.tsx', svgElementId: 'svg-1' },
+    meta: { componentPath: "src/icons/Arrow.tsx", svgElementId: "svg-1" },
     base: {
       canvas: { width: 100, height: 100 },
       nodes: {
-        n1: { id: 'n1', type: 'rectangle', params: { width: 50, height: 50 } },
+        n1: { id: "n1", type: "rectangle", params: { width: 50, height: 50 } },
       },
       edges: [],
       muted: [],
@@ -189,15 +189,15 @@ describe('Kiwi codec', () => {
     operations: [
       {
         timestamp: Date.now(),
-        description: 'Add rectangle',
-        diffs: [{ kind: 'addNode', node: { id: 'n1', type: 'rectangle', params: { width: 50, height: 50 } } }],
+        description: "Add rectangle",
+        diffs: [{ kind: "addNode", node: { id: "n1", type: "rectangle", params: { width: 50, height: 50 } } }],
       },
     ],
     undoPointer: 1,
     viewport: { zoom: 1, panX: 0, panY: 0 },
   };
 
-  it('should encode VectorGraphFile to binary', () => {
+  it("should encode VectorGraphFile to binary", () => {
     const binary = encodeGraphFile(sampleFile);
     expect(binary).toBeInstanceOf(Uint8Array);
     expect(binary.length).toBeGreaterThan(0);
@@ -206,16 +206,16 @@ describe('Kiwi codec', () => {
     expect(binary.length).toBeLessThan(jsonSize);
   });
 
-  it('should decode binary back to VectorGraphFile', () => {
+  it("should decode binary back to VectorGraphFile", () => {
     const binary = encodeGraphFile(sampleFile);
     const decoded = decodeGraphFile(binary);
     expect(decoded.version).toBe(1);
-    expect(decoded.meta.componentPath).toBe('src/icons/Arrow.tsx');
+    expect(decoded.meta.componentPath).toBe("src/icons/Arrow.tsx");
     expect(Object.keys(decoded.base.nodes).length).toBe(1);
-    expect(decoded.base.nodes.n1.type).toBe('rectangle');
+    expect(decoded.base.nodes.n1.type).toBe("rectangle");
   });
 
-  it('should roundtrip preserve all data', () => {
+  it("should roundtrip preserve all data", () => {
     const binary = encodeGraphFile(sampleFile);
     const decoded = decodeGraphFile(binary);
     expect(decoded.version).toBe(sampleFile.version);
@@ -226,10 +226,10 @@ describe('Kiwi codec', () => {
     expect(decoded.operations.length).toBe(1);
   });
 
-  it('should handle empty graph', () => {
+  it("should handle empty graph", () => {
     const empty: VectorGraphFile = {
       version: 1,
-      meta: { componentPath: '' },
+      meta: { componentPath: "" },
       base: { canvas: { width: 0, height: 0 }, nodes: {}, edges: [], muted: [] },
       operations: [],
       undoPointer: 0,
@@ -241,18 +241,18 @@ describe('Kiwi codec', () => {
     expect(Object.keys(decoded.base.nodes).length).toBe(0);
   });
 
-  it('should handle graph with edges and muted nodes', () => {
+  it("should handle graph with edges and muted nodes", () => {
     const file: VectorGraphFile = {
       version: 1,
-      meta: { componentPath: 'test.tsx' },
+      meta: { componentPath: "test.tsx" },
       base: {
         canvas: { width: 200, height: 200 },
         nodes: {
-          n1: { id: 'n1', type: 'rectangle', params: { width: 100 } },
-          n2: { id: 'n2', type: 'fill', params: { type: 'solid', color: '#ff0000' } },
+          n1: { id: "n1", type: "rectangle", params: { width: 100 } },
+          n2: { id: "n2", type: "fill", params: { type: "solid", color: "#ff0000" } },
         },
-        edges: [{ id: 'e1', source: 'n1', target: 'n2', sourcePort: 'path', targetPort: 'path' }],
-        muted: ['n2'],
+        edges: [{ id: "e1", source: "n1", target: "n2", sourcePort: "path", targetPort: "path" }],
+        muted: ["n2"],
       },
       operations: [],
       undoPointer: 0,
@@ -261,8 +261,8 @@ describe('Kiwi codec', () => {
     const binary = encodeGraphFile(file);
     const decoded = decodeGraphFile(binary);
     expect(decoded.base.edges.length).toBe(1);
-    expect(decoded.base.edges[0].source).toBe('n1');
-    expect(decoded.base.muted).toEqual(['n2']);
+    expect(decoded.base.edges[0].source).toBe("n1");
+    expect(decoded.base.muted).toEqual(["n2"]);
     expect(decoded.viewport.zoom).toBe(2);
   });
 });
@@ -319,7 +319,7 @@ Key serialization decisions:
 Add to `serialize.ts`:
 
 ```typescript
-import { encodeGraphFile, decodeGraphFile } from './kiwi-codec';
+import { encodeGraphFile, decodeGraphFile } from "./kiwi-codec";
 
 export function serializeGraphBinary(
   model: VectorGraphModel,
@@ -363,60 +363,60 @@ by geometry hash (path data), bounding box, and style.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { computeSemanticDiff, type SemanticChange } from './semantic-diff';
-import { PathBuilder } from '../path/builder';
-import type { SceneItem } from '../types';
-import { IDENTITY_TRANSFORM } from '../types';
+import { describe, expect, it } from "bun:test";
+import { computeSemanticDiff, type SemanticChange } from "./semantic-diff";
+import { PathBuilder } from "../path/builder";
+import type { SceneItem } from "../types";
+import { IDENTITY_TRANSFORM } from "../types";
 
-const makeItem = (id: string, path: ReturnType<PathBuilder['build']>, fill?: string): SceneItem => ({
+const makeItem = (id: string, path: ReturnType<PathBuilder["build"]>, fill?: string): SceneItem => ({
   id,
   path,
-  style: fill ? { fill: { type: 'solid', color: fill } } : {},
+  style: fill ? { fill: { type: "solid", color: fill } } : {},
   transform: IDENTITY_TRANSFORM,
   visible: true,
 });
 
-describe('computeSemanticDiff', () => {
-  it('should detect no changes when scenes match', () => {
+describe("computeSemanticDiff", () => {
+  it("should detect no changes when scenes match", () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const current = [makeItem('n1', rect, '#ff0000')];
-    const incoming = [makeItem('x', rect, '#ff0000')];
+    const current = [makeItem("n1", rect, "#ff0000")];
+    const incoming = [makeItem("x", rect, "#ff0000")];
     const diff = computeSemanticDiff(current, incoming);
     expect(diff.matched.length).toBe(1);
     expect(diff.added.length).toBe(0);
     expect(diff.removed.length).toBe(0);
   });
 
-  it('should detect added shape', () => {
+  it("should detect added shape", () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const circle = new PathBuilder().moveTo(50, 0).arcTo(50, 50, 0, 1, 1, 50, 100).close().build();
-    const current = [makeItem('n1', rect)];
-    const incoming = [makeItem('x1', rect), makeItem('x2', circle)];
+    const current = [makeItem("n1", rect)];
+    const incoming = [makeItem("x1", rect), makeItem("x2", circle)];
     const diff = computeSemanticDiff(current, incoming);
     expect(diff.added.length).toBe(1);
   });
 
-  it('should detect removed shape', () => {
+  it("should detect removed shape", () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const circle = new PathBuilder().moveTo(50, 0).arcTo(50, 50, 0, 1, 1, 50, 100).close().build();
-    const current = [makeItem('n1', rect), makeItem('n2', circle)];
-    const incoming = [makeItem('x1', rect)];
+    const current = [makeItem("n1", rect), makeItem("n2", circle)];
+    const incoming = [makeItem("x1", rect)];
     const diff = computeSemanticDiff(current, incoming);
     expect(diff.removed.length).toBe(1);
-    expect(diff.removed[0].id).toBe('n2');
+    expect(diff.removed[0].id).toBe("n2");
   });
 
-  it('should detect modified style (color change)', () => {
+  it("should detect modified style (color change)", () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const current = [makeItem('n1', rect, '#ff0000')];
-    const incoming = [makeItem('x', rect, '#00ff00')]; // color changed
+    const current = [makeItem("n1", rect, "#ff0000")];
+    const incoming = [makeItem("x", rect, "#00ff00")]; // color changed
     const diff = computeSemanticDiff(current, incoming);
     expect(diff.matched.length).toBe(1);
     expect(diff.matched[0].styleChanged).toBe(true);
   });
 
-  it('should handle empty scenes', () => {
+  it("should handle empty scenes", () => {
     const diff = computeSemanticDiff([], []);
     expect(diff.matched.length).toBe(0);
     expect(diff.added.length).toBe(0);
@@ -494,22 +494,22 @@ Convert semantic diff into graph operations and apply.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { reverseSync } from './reverse-sync';
-import { VectorGraphModel } from '../graph/vector-graph';
-import { GraphExecutor } from '../graph/executor';
-import { createDefaultRegistry } from '../nodes/register-all';
-import { HistoryManager } from '../graph/history';
-import { PathBuilder } from '../path/builder';
-import { sceneToSvg } from '../export/svg';
-import { svgToGraph } from '../import/svg-import';
+import { reverseSync } from "./reverse-sync";
+import { VectorGraphModel } from "../graph/vector-graph";
+import { GraphExecutor } from "../graph/executor";
+import { createDefaultRegistry } from "../nodes/register-all";
+import { HistoryManager } from "../graph/history";
+import { PathBuilder } from "../path/builder";
+import { sceneToSvg } from "../export/svg";
+import { svgToGraph } from "../import/svg-import";
 
-describe('reverseSync', () => {
-  it('should detect color change and update graph param', () => {
+describe("reverseSync", () => {
+  it("should detect color change and update graph param", () => {
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create('test', 'RS', 100, 100);
-    const rect = graph.addNode({ type: 'rectangle', params: { width: 100, height: 100, x: 0, y: 0 } });
-    const fill = graph.addNode({ type: 'fill', params: { type: 'solid', color: '#ff0000' } });
-    graph.addEdge(rect, 'path', fill, 'path');
+    const graph = VectorGraphModel.create("test", "RS", 100, 100);
+    const rect = graph.addNode({ type: "rectangle", params: { width: 100, height: 100, x: 0, y: 0 } });
+    const fill = graph.addNode({ type: "fill", params: { type: "solid", color: "#ff0000" } });
+    graph.addEdge(rect, "path", fill, "path");
 
     const executor = new GraphExecutor(registry);
     const history = new HistoryManager();
@@ -519,7 +519,7 @@ describe('reverseSync', () => {
 
     // Simulate external edit: change color to blue
     const svg = sceneToSvg(currentResult.scene);
-    const modifiedSvg = svg.replace('#ff0000', '#0000ff');
+    const modifiedSvg = svg.replace("#ff0000", "#0000ff");
 
     const result = reverseSync(graph, executor, registry, history, modifiedSvg);
     expect(result.changesApplied).toBeGreaterThanOrEqual(0);
@@ -527,10 +527,10 @@ describe('reverseSync', () => {
     // can match the re-imported shape back to the original node
   });
 
-  it('should handle identical SVG (no changes)', () => {
+  it("should handle identical SVG (no changes)", () => {
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create('test', 'RS', 100, 100);
-    graph.addNode({ type: 'rectangle', params: { width: 50, height: 50, x: 0, y: 0 } });
+    const graph = VectorGraphModel.create("test", "RS", 100, 100);
+    graph.addNode({ type: "rectangle", params: { width: 50, height: 50, x: 0, y: 0 } });
 
     const executor = new GraphExecutor(registry);
     const history = new HistoryManager();
@@ -602,28 +602,28 @@ Decode Figma's `vectorNetworkBlob` binary format into our `VectorNetwork` type.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { decodeVectorNetworkBlob } from './fig-blob-decode';
-import type { VectorNetwork } from '../network/types';
+import { describe, expect, it } from "bun:test";
+import { decodeVectorNetworkBlob } from "./fig-blob-decode";
+import type { VectorNetwork } from "../network/types";
 
-describe('decodeVectorNetworkBlob', () => {
-  it('should export decode function', () => {
-    expect(typeof decodeVectorNetworkBlob).toBe('function');
+describe("decodeVectorNetworkBlob", () => {
+  it("should export decode function", () => {
+    expect(typeof decodeVectorNetworkBlob).toBe("function");
   });
 
-  it('should return empty network for empty data', () => {
+  it("should return empty network for empty data", () => {
     const result = decodeVectorNetworkBlob(new Uint8Array(0));
     expect(result.vertices.length).toBe(0);
     expect(result.segments.length).toBe(0);
     expect(result.regions.length).toBe(0);
   });
 
-  it('should return empty network for invalid data', () => {
+  it("should return empty network for invalid data", () => {
     const result = decodeVectorNetworkBlob(new Uint8Array([0, 1, 2, 3]));
     expect(result.vertices.length).toBe(0);
   });
 
-  it('should decode a simple triangle blob', () => {
+  it("should decode a simple triangle blob", () => {
     // Construct a minimal binary blob matching Figma's format:
     // Header: vertexCount(3), segmentCount(3), regionCount(1)
     // Vertices: 3 × (x: f32, y: f32)
@@ -718,7 +718,7 @@ function buildTriangleBlob(): Uint8Array {
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §FIG Import
  */
 
-import type { VectorNetwork, VectorVertex, VectorSegment, VectorRegion } from '../network/types';
+import type { VectorNetwork, VectorVertex, VectorSegment, VectorRegion } from "../network/types";
 
 export function decodeVectorNetworkBlob(data: Uint8Array): VectorNetwork {
   if (data.length < 4) {
@@ -775,7 +775,7 @@ export function decodeVectorNetworkBlob(data: Uint8Array): VectorNetwork {
     for (let i = 0; i < regionCount && offset < data.length; i++) {
       const windingByte = view.getUint8(offset);
       offset += 1;
-      const windingRule = windingByte === 0 ? ('evenOdd' as const) : ('nonZero' as const);
+      const windingRule = windingByte === 0 ? ("evenOdd" as const) : ("nonZero" as const);
       if (offset + 4 > data.length) break;
       const loopCount = view.getUint32(offset, true);
       offset += 4;
@@ -820,14 +820,14 @@ feat(vector-engine): FIG vectorNetworkBlob binary decoder (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe('FIG mapper with vectorNetworkBlob', () => {
-  it('should decode VECTOR node with binary blob', () => {
+describe("FIG mapper with vectorNetworkBlob", () => {
+  it("should decode VECTOR node with binary blob", () => {
     const blob = buildTriangleBlob(); // reuse from blob test
     const figNodes: FigNode[] = [
       {
-        type: 'VECTOR',
-        name: 'Triangle',
-        id: 'v1',
+        type: "VECTOR",
+        name: "Triangle",
+        id: "v1",
         children: [],
         properties: {
           vectorNetworkBlob: Array.from(blob), // Uint8Array as number[]
@@ -835,24 +835,24 @@ describe('FIG mapper with vectorNetworkBlob', () => {
       },
     ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
-    const pathNode = result.nodes.find((n) => n.type === 'svgPath');
+    const pathNode = result.nodes.find((n) => n.type === "svgPath");
     expect(pathNode).toBeDefined();
     // Should have a valid d attribute from the decoded network
     expect((pathNode!.params.d as string).length).toBeGreaterThan(0);
   });
 
-  it('should fallback to fillGeometry when no blob', () => {
+  it("should fallback to fillGeometry when no blob", () => {
     const figNodes: FigNode[] = [
       {
-        type: 'VECTOR',
-        name: 'Path',
-        id: 'v2',
+        type: "VECTOR",
+        name: "Path",
+        id: "v2",
         children: [],
-        properties: { fillGeometry: 'M 0 0 L 100 0 Z' },
+        properties: { fillGeometry: "M 0 0 L 100 0 Z" },
       },
     ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
-    expect(result.nodes.find((n) => n.type === 'svgPath')).toBeDefined();
+    expect(result.nodes.find((n) => n.type === "svgPath")).toBeDefined();
   });
 });
 ```
@@ -911,29 +911,29 @@ feat(vector-engine): integrate vectorNetworkBlob decoder in FIG import (HYP-308)
 
 ```typescript
 // Kiwi codec
-export { encodeGraphFile, decodeGraphFile } from './persistence/kiwi-codec';
-export { serializeGraphBinary, deserializeGraphBinary } from './persistence/serialize';
+export { encodeGraphFile, decodeGraphFile } from "./persistence/kiwi-codec";
+export { serializeGraphBinary, deserializeGraphBinary } from "./persistence/serialize";
 // Reverse sync
-export { computeSemanticDiff, type SemanticDiff, type SemanticMatch } from './sync/semantic-diff';
-export { reverseSync, type ReverseSyncResult } from './sync/reverse-sync';
+export { computeSemanticDiff, type SemanticDiff, type SemanticMatch } from "./sync/semantic-diff";
+export { reverseSync, type ReverseSyncResult } from "./sync/reverse-sync";
 // FIG blob decode
-export { decodeVectorNetworkBlob } from './import/fig-blob-decode';
+export { decodeVectorNetworkBlob } from "./import/fig-blob-decode";
 ```
 
 - [ ] **Step 2: Add integration tests**
 
 ```typescript
-describe('deferred SDK features', () => {
-  it('should roundtrip graph through Kiwi binary', () => {
-    const model = VectorGraphModel.create('test', 'Kiwi', 100, 100);
-    model.addNode({ type: 'rectangle', params: { width: 50, height: 50 } });
-    const binary = serializeGraphBinary(model, { componentPath: 'test.tsx' });
+describe("deferred SDK features", () => {
+  it("should roundtrip graph through Kiwi binary", () => {
+    const model = VectorGraphModel.create("test", "Kiwi", 100, 100);
+    model.addNode({ type: "rectangle", params: { width: 50, height: 50 } });
+    const binary = serializeGraphBinary(model, { componentPath: "test.tsx" });
     expect(binary).toBeInstanceOf(Uint8Array);
     const { model: loaded } = deserializeGraphBinary(binary);
     expect(loaded.nodeCount).toBe(1);
   });
 
-  it('should decode FIG vector blob to path', () => {
+  it("should decode FIG vector blob to path", () => {
     const blob = new Uint8Array(0); // Empty blob → empty network
     const network = decodeVectorNetworkBlob(blob);
     expect(network.vertices.length).toBe(0);

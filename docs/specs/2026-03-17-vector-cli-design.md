@@ -63,8 +63,8 @@ line(x1, y1, x2, y2); // line segment
 arc(radius, startAngle, endAngle);
 spiral(spirals, radius);
 arrow(length, width);
-path('M 0 0 L 100 0 Z'); // raw SVG path
-text('Hello', fontSize); // text to path (requires font)
+path("M 0 0 L 100 0 Z"); // raw SVG path
+text("Hello", fontSize); // text to path (requires font)
 mesh(rows, cols); // gradient mesh grid
 mesh(rows, cols, w, h); // sized gradient mesh
 meshFrom(node, rows, cols); // fit mesh to path bounds
@@ -307,8 +307,8 @@ class ChainableNode {
   ) {}
 
   fill(color: string): ChainableNode {
-    const fillId = this.ctx.graph.addNode({ type: 'fill', params: { type: 'solid', color } });
-    this.ctx.graph.addEdge(this.nodeId, 'path', fillId, 'path');
+    const fillId = this.ctx.graph.addNode({ type: "fill", params: { type: "solid", color } });
+    this.ctx.graph.addEdge(this.nodeId, "path", fillId, "path");
     return new ChainableNode(this.ctx, fillId);
   }
 
@@ -435,7 +435,7 @@ vecli --preview preview.svg       # enable live preview on start
 
 ```js
 // In REPL
-preview('preview.svg'); // start live preview to file
+preview("preview.svg"); // start live preview to file
 preview(false); // stop preview
 preview(); // show current preview path
 ```
@@ -459,9 +459,9 @@ script completes.
 ```js
 // icon.js
 canvas(24, 24);
-const bg = rect(24, 24).fill('#4A90D9').roundCorners(4);
-const arrow = path('M 7 12 L 12 7 L 17 12 M 12 7 L 12 17').stroke('#fff', 2, 'round', 'round');
-group(bg, arrow).export('svg', 'up-arrow.svg');
+const bg = rect(24, 24).fill("#4A90D9").roundCorners(4);
+const arrow = path("M 7 12 L 12 7 L 17 12 M 12 7 L 12 17").stroke("#fff", 2, "round", "round");
+group(bg, arrow).export("svg", "up-arrow.svg");
 ```
 
 ```bash

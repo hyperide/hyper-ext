@@ -358,20 +358,20 @@ Create or update an ext-test debug script. It must follow
 **Required harness shape:**
 
 ```ts
-import { createDiagnosticsSession } from './e2e/helpers/diagnostics';
-import { setupPreviewWithDevServer } from './e2e/helpers/setup-preview';
-import { closeVSCode, launchVSCode } from './e2e/setup/electron-app';
+import { createDiagnosticsSession } from "./e2e/helpers/diagnostics";
+import { setupPreviewWithDevServer } from "./e2e/helpers/setup-preview";
+import { closeVSCode, launchVSCode } from "./e2e/setup/electron-app";
 
-const PROJECT = '/Users/ultra/work/ext-test-projects/bulka-the-dog';
+const PROJECT = "/Users/ultra/work/ext-test-projects/bulka-the-dog";
 
 const instance = await launchVSCode({ projectPath: PROJECT, workerIndex: 99 });
 const diagnostics = await createDiagnosticsSession({
   page: instance.window,
-  label: 'bulka-preview-followups',
+  label: "bulka-preview-followups",
 });
 
 try {
-  await setupPreviewWithDevServer(instance.window, 'client/components/BulkaDay.tsx', instance.app);
+  await setupPreviewWithDevServer(instance.window, "client/components/BulkaDay.tsx", instance.app);
   // Then switch to FAQ, menubar, and sheet through the actual UI.
 } finally {
   await diagnostics.close();

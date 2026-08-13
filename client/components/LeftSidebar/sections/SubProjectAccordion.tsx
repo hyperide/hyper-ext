@@ -1,22 +1,22 @@
-import { TID } from '@shared/data-testid-map';
-import { IconChevronDown, IconPackage } from '@tabler/icons-react';
-import cn from 'clsx';
-import { useState } from 'react';
-import type { ComponentListItem, SubProject } from '../../../../lib/component-scanner/types';
-import { ComponentGroupList } from '../../ComponentGroupList';
+import { TID } from "@shared/data-testid-map";
+import { IconChevronDown, IconPackage } from "@tabler/icons-react";
+import cn from "clsx";
+import { useState } from "react";
+import type { ComponentListItem, SubProject } from "../../../../lib/component-scanner/types";
+import { ComponentGroupList } from "../../ComponentGroupList";
 
 const SUB_PROJECT_COLORS = [
-  { badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/30', dot: 'bg-blue-400' },
-  { badge: 'bg-green-500/20 text-green-400 border border-green-500/30', dot: 'bg-green-400' },
-  { badge: 'bg-purple-500/20 text-purple-400 border border-purple-500/30', dot: 'bg-purple-400' },
-  { badge: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', dot: 'bg-orange-400' },
-  { badge: 'bg-pink-500/20 text-pink-400 border border-pink-500/30', dot: 'bg-pink-400' },
-  { badge: 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30', dot: 'bg-cyan-400' },
+  { badge: "bg-blue-500/20 text-blue-400 border border-blue-500/30", dot: "bg-blue-400" },
+  { badge: "bg-green-500/20 text-green-400 border border-green-500/30", dot: "bg-green-400" },
+  { badge: "bg-purple-500/20 text-purple-400 border border-purple-500/30", dot: "bg-purple-400" },
+  { badge: "bg-orange-500/20 text-orange-400 border border-orange-500/30", dot: "bg-orange-400" },
+  { badge: "bg-pink-500/20 text-pink-400 border border-pink-500/30", dot: "bg-pink-400" },
+  { badge: "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30", dot: "bg-cyan-400" },
 ];
 
 const UNSUPPORTED_COLOR = {
-  badge: 'bg-muted text-muted-foreground border border-border',
-  dot: 'bg-muted-foreground',
+  badge: "bg-muted text-muted-foreground border border-border",
+  dot: "bg-muted-foreground",
 };
 
 interface SubProjectAccordionProps {
@@ -47,7 +47,7 @@ export function SubProjectAccordion({
     setCollapsed((prev) => ({ ...prev, [projectPath]: !prev[projectPath] }));
   };
 
-  const filterGroups = (groups: (typeof subProjects)[0]['atomGroups']) => {
+  const filterGroups = (groups: (typeof subProjects)[0]["atomGroups"]) => {
     if (!searchQuery) return groups;
     return groups
       .map((g) => ({
@@ -72,7 +72,7 @@ export function SubProjectAccordion({
         const hasComponents = filteredAtoms.length > 0 || filteredComposites.length > 0 || filteredPages.length > 0;
 
         return (
-          <div key={sp.path} className={cn('rounded-md overflow-hidden', idx > 0 && 'mt-1')}>
+          <div key={sp.path} className={cn("rounded-md overflow-hidden", idx > 0 && "mt-1")}>
             {/* Sub-project header */}
             <button
               type="button"
@@ -83,13 +83,13 @@ export function SubProjectAccordion({
               className="w-full flex items-center gap-1.5 px-1.5 py-1 hover:bg-muted/50 rounded-t-md transition-colors"
             >
               <IconChevronDown
-                className={cn('w-3 h-3 transition-transform duration-150 shrink-0', {
-                  'rotate-[-90deg]': isCollapsed,
+                className={cn("w-3 h-3 transition-transform duration-150 shrink-0", {
+                  "rotate-[-90deg]": isCollapsed,
                 })}
                 stroke={1.5}
               />
-              <div className={cn('flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium', color.badge)}>
-                <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', color.dot)} />
+              <div className={cn("flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium", color.badge)}>
+                <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", color.dot)} />
                 <IconPackage className="w-2.5 h-2.5 shrink-0" stroke={1.5} />
                 <span className="truncate max-w-[120px]">{sp.name}</span>
               </div>

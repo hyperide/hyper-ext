@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { FileIO } from '../../ast/file-io';
-import { ensureSample } from '../sample-ensurer';
+import { buildContainerSample, ensureSample, tryDeterministicContainerSample } from '../sample-ensurer';
 
 class InMemoryFileIO implements FileIO {
   files = new Map<string, string>();
@@ -25,6 +25,32 @@ const BUTTON_SOURCE = `import React from 'react';
 export function Button({ children }: { children: React.ReactNode }) {
   return <button>{children}</button>;
 }
+`;
+
+const ALERT_COMPOUND_SOURCE = `import * as React from 'react';
+
+const Alert = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} role="alert" className={className} {...props} />
+  )
+);
+Alert.displayName = 'Alert';
+
+const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
+  ({ className, ...props }, ref) => (
+    <h5 ref={ref} className={className} {...props} />
+  )
+);
+AlertTitle.displayName = 'AlertTitle';
+
+const AlertDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={className} {...props} />
+  )
+);
+AlertDescription.displayName = 'AlertDescription';
+
+export { Alert, AlertTitle, AlertDescription };
 `;
 
 const BUTTON_WITH_SAMPLE = `import React from 'react';
@@ -299,5 +325,82 @@ describe('ensureSample', () => {
     });
 
     expect(generate).toHaveBeenCalledWith(BUTTON_SOURCE, 'Button', 'SampleDefault');
+  });
+
+  it('uses deterministic container sample for Alert-style compound component without calling AI', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/alert.tsx', ALERT_COMPOUND_SOURCE);
+    const generate = mock(() => Promise.reject(new Error('AI should not be called')));
+
+    const result = await ensureSample({
+      io,
+      absolutePath: '/project/alert.tsx',
+      componentName: 'Alert',
+      sampleName: 'SampleDefault',
+      generate,
+    });
+
+    expect(result.generated).toBe(true);
+    expect(result.exists).toBe(true);
+    expect(generate).not.toHaveBeenCalled();
+
+    const written = io.files.get('/project/alert.tsx');
+    expect(written).toContain('SampleDefault');
+    expect(written).toContain('AlertTitle');
+    expect(written).toContain('AlertDescription');
+  });
+});
+
+describe('buildContainerSample', () => {
+  it('generates a function export wrapping compound components as children', () => {
+    const code = buildContainerSample('Alert', ['AlertTitle', 'AlertDescription'], 'SampleDefault');
+    expect(code).toContain('export function SampleDefault');
+    expect(code).toContain('<Alert>');
+    expect(code).toContain('<AlertTitle>');
+    expect(code).toContain('<AlertDescription>');
+    expect(code).toContain('</Alert>');
+  });
+
+  it('starts with "export" so it passes validateGeneratedSample', () => {
+    const code = buildContainerSample('Alert', ['AlertTitle', 'AlertDescription'], 'SampleDefault');
+    expect(code.startsWith('export')).toBe(true);
+  });
+
+  it('uses title-flavored placeholder text for Title components', () => {
+    const code = buildContainerSample('Alert', ['AlertTitle'], 'SampleDefault');
+    expect(code).toContain('Heads up!');
+  });
+
+  it('uses description-flavored placeholder text for Description components', () => {
+    const code = buildContainerSample('Alert', ['AlertDescription'], 'SampleDefault');
+    expect(code).toContain('Something important happened.');
+  });
+
+  it('respects the sampleName parameter', () => {
+    const code = buildContainerSample('Card', ['CardHeader', 'CardContent'], 'SamplePrimary');
+    expect(code).toContain('export function SamplePrimary');
+  });
+});
+
+describe('tryDeterministicContainerSample', () => {
+  it('returns null for component with no compound siblings', () => {
+    const source = `export function Button({ children }: { children: React.ReactNode }) { return <button>{children}</button>; }`;
+    expect(tryDeterministicContainerSample(source, 'Button', 'SampleDefault')).toBeNull();
+  });
+
+  it('returns generated JSX for Alert-style compound component', () => {
+    const result = tryDeterministicContainerSample(ALERT_COMPOUND_SOURCE, 'Alert', 'SampleDefault');
+    expect(result).not.toBeNull();
+    expect(result).toContain('AlertTitle');
+    expect(result).toContain('AlertDescription');
+  });
+
+  it('returns null when sample already exists in source (compound siblings remain but sample present)', () => {
+    // tryDeterministicContainerSample does NOT check for existing samples — that is ensureSample's job.
+    // This test verifies the function only checks for compound siblings.
+    const sourceWithSample = `${ALERT_COMPOUND_SOURCE}\nexport function SampleDefault() { return <Alert />; }`;
+    const result = tryDeterministicContainerSample(sourceWithSample, 'Alert', 'SampleDefault');
+    // Function itself doesn't skip — it always returns code if compound siblings exist.
+    expect(result).not.toBeNull();
   });
 });

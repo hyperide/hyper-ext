@@ -218,6 +218,8 @@ export function PropsForm({
   }, [fields, onChange]);
   const generateAllAvailability = useMemo(() => getGenerateAllAvailability(fields), [fields]);
 
+  const generateDisabled = !canGenerateSomeValue(fields);
+
   // Compute unfilled required fields recursively
   const unfilledRequired = useMemo(() => {
     const result: Array<{ path: string; label: string }> = [];
@@ -401,6 +403,31 @@ const PLACEHOLDER_IMAGE =
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/** Returns true when at least one field can produce a non-undefined generated value */
+export function canGenerateSomeValue(fields: Array<{ name: string; typeInfo: PropTypeInfo }>): boolean {
+  return fields.some(({ name, typeInfo }) => {
+    switch (typeInfo.type) {
+      case 'boolean':
+      case 'number':
+      case 'array':
+        return true;
+      case 'enum':
+        return (typeInfo.enumValues?.length ?? 0) > 0;
+      case 'string':
+      case 'unknown':
+        return getStringFieldGenerator(name) !== null;
+      case 'object':
+        if (typeInfo.objectSchema) {
+          const nested = Object.entries(typeInfo.objectSchema).map(([n, ti]) => ({ name: n, typeInfo: ti }));
+          return canGenerateSomeValue(nested);
+        }
+        return false;
+      default:
+        return false;
+    }
+  });
 }
 
 /** Recursively generate values for a list of fields (handles nested objects) */
@@ -975,7 +1002,6 @@ const generateAllButtonDisabledStyle: CSSProperties = {
 const generateAllTooltipWrapperStyle: CSSProperties = {
   display: 'inline-flex',
 };
-
 const fieldRowStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',

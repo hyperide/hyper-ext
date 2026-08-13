@@ -5,8 +5,8 @@
  * hit the same endpoint. This utility ensures concurrent calls share
  * one in-flight request and supports cancellation on project switch.
  */
-import type { ComponentGroup, SubProject } from '../../lib/component-scanner/types';
-import { authFetch } from './authFetch';
+import type { ComponentGroup, SubProject } from "../../lib/component-scanner/types";
+import { authFetch } from "./authFetch";
 
 export interface ComponentsAPIResponse {
   success: boolean;
@@ -34,7 +34,7 @@ export function fetchComponentsJSON(): Promise<ComponentsAPIResponse> {
   if (inflightPromise) return inflightPromise;
 
   abortController = new AbortController();
-  const thisPromise = authFetch('/api/get-components', { signal: abortController.signal })
+  const thisPromise = authFetch("/api/get-components", { signal: abortController.signal })
     .then((res) => {
       if (!res.ok) {
         const status = res.statusText ? `HTTP ${res.status} ${res.statusText}` : `HTTP ${res.status}`;
@@ -49,7 +49,7 @@ export function fetchComponentsJSON(): Promise<ComponentsAPIResponse> {
           }
           return json;
         })
-        .catch(() => ({ success: false, error: 'Failed to parse components response as JSON' }));
+        .catch(() => ({ success: false, error: "Failed to parse components response as JSON" }));
     })
     // Network errors (DNS, timeout, etc.) propagate to callers — all consumers
     // (see JSDoc) catch AbortError separately and handle other errors. No catch here.

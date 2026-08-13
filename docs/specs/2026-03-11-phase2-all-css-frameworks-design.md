@@ -75,7 +75,7 @@ Phase 2 unifies them into a single interface in `lib/style-adapters/types.ts`:
 ```typescript
 interface StyleAdapter {
   readonly framework: FrameworkId;
-  readonly writeMode: 'className' | 'props' | 'style-prop' | 'styled' | 'css-file';
+  readonly writeMode: "className" | "props" | "style-prop" | "styled" | "css-file";
 
   /** Read styles from AST node / DOM element */
   read(node: ASTNode, domElement?: HTMLElement): ParsedStyles;
@@ -97,14 +97,14 @@ interface StyleAdapter {
 }
 
 type FrameworkId =
-  | 'tailwind-v3'
-  | 'tailwind-v4'
-  | 'tamagui'
-  | 'emotion'
-  | 'styled-components'
-  | 'css-modules'
-  | 'plain-css'
-  | 'inline-style';
+  | "tailwind-v3"
+  | "tailwind-v4"
+  | "tamagui"
+  | "emotion"
+  | "styled-components"
+  | "css-modules"
+  | "plain-css"
+  | "inline-style";
 ```
 
 **writeMode routing in `useStyleSync`:**
@@ -169,7 +169,7 @@ Extensions `.css`, `.scss`, `.less`, `.sass`, `.styl` all supported for both.
 Universal for all frameworks — no framework-aware logic needed:
 
 ```typescript
-element.style.setProperty(cssProp, value, 'important');
+element.style.setProperty(cssProp, value, "important");
 ```
 
 Inline `!important` overrides any cascade (CSS-in-JS runtime styles, CSS Modules, etc.).
@@ -227,8 +227,8 @@ function getAvailableAdapters(projectFrameworks: FrameworkId[]): StyleAdapter[];
 
 ```typescript
 class InlineStyleAdapter implements StyleAdapter {
-  framework = 'inline-style' as const;
-  writeMode = 'style-prop' as const;
+  framework = "inline-style" as const;
+  writeMode = "style-prop" as const;
 
   read(node: ASTNode): ParsedStyles {
     // Parse style={{ backgroundColor: 'red', padding: '16px' }}
@@ -290,7 +290,7 @@ const Button = styled.button`
   padding: 16px;
 `;
 // Object syntax
-const Button = styled.button({ backgroundColor: 'blue', padding: 16 });
+const Button = styled.button({ backgroundColor: "blue", padding: 16 });
 ```
 
 **b) `css` prop (JSX Pragma):**
@@ -303,15 +303,15 @@ const Button = styled.button({ backgroundColor: 'blue', padding: 16 });
 **c) `sx` prop (MUI):**
 
 ```tsx
-<Box sx={{ bgcolor: 'primary.main', p: 2, borderRadius: 1 }} />
+<Box sx={{ bgcolor: "primary.main", p: 2, borderRadius: 1 }} />
 ```
 
 ### EmotionAdapter
 
 ```typescript
 class EmotionAdapter implements StyleAdapter {
-  framework = 'emotion' as const;
-  writeMode = 'styled' as const;
+  framework = "emotion" as const;
+  writeMode = "styled" as const;
 
   read(node: ASTNode): ParsedStyles {
     // 1. styled() — parse template literal (PostCSS) or object
@@ -349,8 +349,8 @@ EmotionAdapter.
 
 ```typescript
 class StyledComponentsAdapter implements StyleAdapter {
-  framework = 'styled-components' as const;
-  writeMode = 'styled' as const;
+  framework = "styled-components" as const;
+  writeMode = "styled" as const;
 
   read(node: ASTNode): ParsedStyles {
     // Detect: template literal or object syntax
@@ -452,7 +452,7 @@ Styles live in **separate CSS files**, not in JSX. Requires:
 **Reading:**
 
 ```tsx
-import styles from './Component.module.css';
+import styles from "./Component.module.css";
 <div className={styles.card} />;
 ```
 
@@ -483,8 +483,8 @@ import styles from './Component.module.css';
 
 ```typescript
 class CSSModulesAdapter implements StyleAdapter {
-  framework = 'css-modules' as const;
-  writeMode = 'css-file' as const;
+  framework = "css-modules" as const;
+  writeMode = "css-file" as const;
 
   read(node: ASTNode): ParsedStyles {
     // 1. Find className={styles.X} in JSX
@@ -505,7 +505,7 @@ class CSSModulesAdapter implements StyleAdapter {
 **Reading:**
 
 ```tsx
-import './styles.css';
+import "./styles.css";
 <div className="card hero-card" />;
 ```
 
@@ -535,8 +535,8 @@ import './styles.css';
 
 ```typescript
 class PlainCSSAdapter implements StyleAdapter {
-  framework = 'plain-css' as const;
-  writeMode = 'css-file' as const;
+  framework = "plain-css" as const;
+  writeMode = "css-file" as const;
 
   read(node: ASTNode, domElement?: HTMLElement): ParsedStyles {
     // 1. className="card" -> find side-effect CSS imports
@@ -617,7 +617,7 @@ if (deps.tailwindcss) {
   // package.json values can be ranges (^3.4.0, ~4.0.0) — coerce to clean semver first
   const coerced = semver.coerce(deps.tailwindcss);
   const major = coerced ? semver.major(coerced) : 3;
-  frameworks.push(major >= 4 ? 'tailwind-v4' : 'tailwind-v3');
+  frameworks.push(major >= 4 ? "tailwind-v4" : "tailwind-v3");
 }
 ```
 

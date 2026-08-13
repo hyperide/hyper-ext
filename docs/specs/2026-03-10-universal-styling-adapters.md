@@ -43,13 +43,13 @@ Replace `server.tool()` with `server.registerTool()` for `hyper_get_element_styl
 
 ```typescript
 server.registerTool(
-  'hyper_get_element_styles',
+  "hyper_get_element_styles",
   {
     description:
-      'Parse element styles into CSS properties.\n' +
+      "Parse element styles into CSS properties.\n" +
       '- Tailwind projects: pass className (e.g. "flex gap-4 bg-blue-500")\n' +
       '- Tamagui projects: pass styleProps (e.g. {backgroundColor: "$blue9"})\n' +
-      'Use hyper_get_state to check the active framework.',
+      "Use hyper_get_state to check the active framework.",
     inputSchema: z.union([
       z.object({ className: z.string() }).strict(),
       z.object({ styleProps: z.record(z.string(), z.string()) }).strict(),
@@ -120,7 +120,7 @@ Replace hardcoded regex in `normalizeStylesInput` with:
 ```typescript
 const TW_KEY_PREFIXES = Object.keys(TW_PREFIX_TO_CSS)
   .sort((a, b) => b.length - a.length)
-  .join('|');
+  .join("|");
 const TW_KEY_PREFIX_RE = new RegExp(`^(${TW_KEY_PREFIXES})-(.+)$`);
 ```
 

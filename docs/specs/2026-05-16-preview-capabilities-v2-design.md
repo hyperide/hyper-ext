@@ -37,8 +37,8 @@ Extend the message:
 ```typescript
 // extension → webview
 type DevServerStatusMessage = {
-  type: 'devserver:statusChanged';
-  status: 'stopped' | 'starting' | 'running' | 'error';
+  type: "devserver:statusChanged";
+  status: "stopped" | "starting" | "running" | "error";
   url?: string;
   error?: string;
 };
@@ -71,16 +71,16 @@ The style-writing mechanism. Only CSS systems for which the extension can read a
 
 ```typescript
 type CssFramework =
-  | 'tailwind'
-  | 'cssmodules'
-  | 'styled-components'
-  | 'emotion'
-  | 'sass'
-  | 'vanilla-extract'
-  | 'pandacss'
-  | 'unocss'
-  | 'stylex'
-  | 'unknown';
+  | "tailwind"
+  | "cssmodules"
+  | "styled-components"
+  | "emotion"
+  | "sass"
+  | "vanilla-extract"
+  | "pandacss"
+  | "unocss"
+  | "stylex"
+  | "unknown";
 ```
 
 **Support map:**
@@ -99,16 +99,16 @@ The component layer on top of CSS. Detected separately from the CSS mechanism.
 
 ```typescript
 type DesignSystem =
-  | 'shadcn'
-  | 'daisyui'
-  | 'nextui'
-  | 'tamagui'
-  | 'mui'
-  | 'antd'
-  | 'chakra'
-  | 'mantine'
-  | 'fluent'
-  | 'none';
+  | "shadcn"
+  | "daisyui"
+  | "nextui"
+  | "tamagui"
+  | "mui"
+  | "antd"
+  | "chakra"
+  | "mantine"
+  | "fluent"
+  | "none";
 ```
 
 **Support map:**
@@ -124,16 +124,16 @@ type DesignSystem =
 
 ```typescript
 function detectDesignSystem(deps: Record<string, string>): DesignSystem {
-  if (Object.keys(deps).some((k) => k.startsWith('@radix-ui/'))) return 'shadcn';
-  if ('daisyui' in deps) return 'daisyui';
-  if ('@nextui-org/react' in deps) return 'nextui';
-  if ('tamagui' in deps || '@tamagui/core' in deps) return 'tamagui';
-  if ('@mui/material' in deps) return 'mui';
-  if ('antd' in deps) return 'antd';
-  if ('@chakra-ui/react' in deps) return 'chakra';
-  if ('@mantine/core' in deps) return 'mantine';
-  if ('@fluentui/react-components' in deps || '@fluentui/react' in deps) return 'fluent';
-  return 'none';
+  if (Object.keys(deps).some((k) => k.startsWith("@radix-ui/"))) return "shadcn";
+  if ("daisyui" in deps) return "daisyui";
+  if ("@nextui-org/react" in deps) return "nextui";
+  if ("tamagui" in deps || "@tamagui/core" in deps) return "tamagui";
+  if ("@mui/material" in deps) return "mui";
+  if ("antd" in deps) return "antd";
+  if ("@chakra-ui/react" in deps) return "chakra";
+  if ("@mantine/core" in deps) return "mantine";
+  if ("@fluentui/react-components" in deps || "@fluentui/react" in deps) return "fluent";
+  return "none";
 }
 ```
 
@@ -141,14 +141,14 @@ function detectDesignSystem(deps: Record<string, string>): DesignSystem {
 
 ```typescript
 type JsFramework =
-  | 'react-vanilla' // React, no meta-framework
-  | 'react-nextjs' // Next.js
-  | 'react-remix' // Remix
-  | 'react-unknown' // React + unrecognized meta-framework
-  | 'vue'
-  | 'svelte'
-  | 'solidjs'
-  | 'unknown';
+  | "react-vanilla" // React, no meta-framework
+  | "react-nextjs" // Next.js
+  | "react-remix" // Remix
+  | "react-unknown" // React + unrecognized meta-framework
+  | "vue"
+  | "svelte"
+  | "solidjs"
+  | "unknown";
 ```
 
 **Support map:**
@@ -162,13 +162,13 @@ Detection:
 
 ```typescript
 function detectJsFramework(deps): JsFramework {
-  if ('next' in deps) return 'react-nextjs';
-  if ('@remix-run/react' in deps) return 'react-remix';
-  if ('react' in deps) return 'react-vanilla';
-  if ('vue' in deps) return 'vue';
-  if ('svelte' in deps) return 'svelte';
-  if ('solid-js' in deps) return 'solidjs';
-  return 'unknown';
+  if ("next" in deps) return "react-nextjs";
+  if ("@remix-run/react" in deps) return "react-remix";
+  if ("react" in deps) return "react-vanilla";
+  if ("vue" in deps) return "vue";
+  if ("svelte" in deps) return "svelte";
+  if ("solid-js" in deps) return "solidjs";
+  return "unknown";
 }
 ```
 
@@ -178,13 +178,13 @@ Derived from `FrameworkType` (already detected in `framework-routing.ts`). Expos
 
 ```typescript
 type RouterType =
-  | 'nextjs-app' // Next.js App Router
-  | 'nextjs-pages' // Next.js Pages Router
-  | 'remix' // Remix
-  | 'react-router-jsx' // BrowserRouter / createBrowserRouter in JSX
-  | 'react-router-file' // file-based React Router v6+
-  | 'none' // no router
-  | 'unknown';
+  | "nextjs-app" // Next.js App Router
+  | "nextjs-pages" // Next.js Pages Router
+  | "remix" // Remix
+  | "react-router-jsx" // BrowserRouter / createBrowserRouter in JSX
+  | "react-router-file" // file-based React Router v6+
+  | "none" // no router
+  | "unknown";
 ```
 
 Mapping from `FrameworkType`:
@@ -204,7 +204,7 @@ Router does not independently gate editing — it is informational and used by `
 ### 2e. Bundler
 
 ```typescript
-type Bundler = 'vite' | 'webpack' | 'cra' | 'bun' | 'parcel' | 'unknown';
+type Bundler = "vite" | "webpack" | "cra" | "bun" | "parcel" | "unknown";
 ```
 
 **Support map:**
@@ -245,7 +245,7 @@ Derived from `detectFramework()` result (already reliable for preview pipeline) 
 Informational only — does not gate editing.
 
 ```typescript
-type PackageManager = 'bun' | 'npm' | 'pnpm' | 'yarn' | 'yarn2';
+type PackageManager = "bun" | "npm" | "pnpm" | "yarn" | "yarn2";
 ```
 
 Detection: existing `detectPackageManager()` via lock files (`bun.lockb`/`bun.lock` → `bun`, `yarn.lock` → `yarn` or `yarn2` by content, `pnpm-lock.yaml` → `pnpm`, else `npm`).
@@ -255,7 +255,7 @@ Detection: existing `detectPackageManager()` via lock files (`bun.lockb`/`bun.lo
 ## 3. Updated ProjectCapabilities
 
 ```typescript
-type SupportLevel = 'full' | 'readonly' | 'unsupported';
+type SupportLevel = "full" | "readonly" | "unsupported";
 
 interface ProjectCapabilities {
   // Detected stack
@@ -268,7 +268,7 @@ interface ProjectCapabilities {
 
   // Per-dimension support
   cssSupport: SupportLevel;
-  dsSupport: SupportLevel | 'n/a';
+  dsSupport: SupportLevel | "n/a";
   jsSupport: SupportLevel;
   bundlerSupport: SupportLevel;
 

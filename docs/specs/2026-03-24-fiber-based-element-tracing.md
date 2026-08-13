@@ -270,7 +270,7 @@ for forwardRef → `fiber.type.render`.
 
 ```typescript
 class ReactAdapter implements FrameworkAdapter {
-  readonly name = 'react';
+  readonly name = "react";
 
   detect(doc: Document): boolean {
     const root = this.findReactRoot(doc);
@@ -279,7 +279,7 @@ class ReactAdapter implements FrameworkAdapter {
     const fiber = this.getFiberFromDOM(root);
     const source = this.findNearestDebugSource(fiber);
     if (!source) return false;
-    return typeof source.fileName === 'string' && typeof source.lineNumber === 'number';
+    return typeof source.fileName === "string" && typeof source.lineNumber === "number";
   }
 
   getSourceLocation(element: HTMLElement): SourceLocation | null {
@@ -355,7 +355,7 @@ class ReactAdapter implements FrameworkAdapter {
   }
 
   private getFiberFromDOM(el: HTMLElement): Fiber | null {
-    const key = Object.keys(el).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+    const key = Object.keys(el).find((k) => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$"));
     return key ? (el as any)[key] : null;
   }
 }
@@ -415,7 +415,7 @@ All messages use the types below regardless of transport.
 ```typescript
 /** Pushed after every file parse (initial load, mutation, external edit) */
 interface NodeMapUpdate {
-  type: 'node-map-update';
+  type: "node-map-update";
   filePath: string;
   fileHash: string; // detect stale maps
   version: number; // monotonic counter per file, for ordering
@@ -428,7 +428,7 @@ interface NodeMapUpdate {
 
 /** Pushed when a file is deleted or renamed */
 interface NodeMapInvalidate {
-  type: 'node-map-invalidate';
+  type: "node-map-invalidate";
   filePath: string;
 }
 ```
@@ -438,7 +438,7 @@ interface NodeMapInvalidate {
 ```typescript
 /** Client resolves a DOM click to a source location, asks server for nodeRef */
 interface ResolveElement {
-  type: 'resolve-element';
+  type: "resolve-element";
   requestId: string;
   source: SourceLocation;
   itemIndex: number;
@@ -446,7 +446,7 @@ interface ResolveElement {
 
 /** Server responds with the matched nodeRef */
 interface ResolveElementResponse {
-  type: 'resolve-element-response';
+  type: "resolve-element-response";
   requestId: string;
   nodeRef: string | null;
   entry: NodeMapEntry | null;

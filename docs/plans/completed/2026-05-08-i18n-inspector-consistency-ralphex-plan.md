@@ -108,7 +108,7 @@ removed in `3bff90dd`, restore it from `git show d8874e13 -- '*StyleReadService.
 
 ```ts
 if (!resolved || resolved.resolvedText === null) {
-  return { kind: 'unsupported', reason: 'missing-source-location' };
+  return { kind: "unsupported", reason: "missing-source-location" };
 }
 ```
 
@@ -116,7 +116,7 @@ Replace with:
 
 ```ts
 if (!resolved) {
-  return { kind: 'unsupported', reason: 'missing-source-location' };
+  return { kind: "unsupported", reason: "missing-source-location" };
 }
 // resolved.resolvedText may be null (locale missing the key, or fresh key not yet
 // committed to the dictionary). The inspector handles null by showing an empty input;

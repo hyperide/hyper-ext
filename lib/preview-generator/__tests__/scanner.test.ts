@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  detectCompoundExports,
   detectExportStyle,
   detectRouterShell,
   detectSSRHooks,
@@ -438,6 +439,106 @@ describe('detectRouterShell', () => {
       export function HomeScreen(_props: Props) { return <div />; }
     `;
     expect(detectRouterShell(source)).toBe(false);
+  });
+});
+
+describe('detectCompoundExports', () => {
+  it('returns compound components from Alert-style re-export pattern', () => {
+    const source = `
+      import * as React from 'react';
+      const Alert = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+        ({ className, ...props }, ref) => <div ref={ref} role="alert" className={className} {...props} />
+      );
+      Alert.displayName = 'Alert';
+      const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
+        ({ className, ...props }, ref) => <h5 ref={ref} className={className} {...props} />
+      );
+      AlertTitle.displayName = 'AlertTitle';
+      const AlertDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
+        ({ className, ...props }, ref) => <div ref={ref} className={className} {...props} />
+      );
+      AlertDescription.displayName = 'AlertDescription';
+      export { Alert, AlertTitle, AlertDescription };
+    `;
+    expect(detectCompoundExports(source, 'Alert')).toEqual(['AlertTitle', 'AlertDescription']);
+  });
+
+  it('excludes the main component from results', () => {
+    const source = `
+      export function Card() { return <div />; }
+      export function CardHeader() { return <div />; }
+      export function CardContent() { return <div />; }
+    `;
+    expect(detectCompoundExports(source, 'Card')).toEqual(['CardHeader', 'CardContent']);
+  });
+
+  it('returns empty array when only the main component is exported', () => {
+    const source = `export function Button({ children }: { children: React.ReactNode }) { return <button>{children}</button>; }`;
+    expect(detectCompoundExports(source, 'Button')).toEqual([]);
+  });
+
+  it('excludes Sample* exports', () => {
+    const source = `
+      export function Alert() { return <div />; }
+      export function AlertTitle() { return <p />; }
+      export const SampleDefault = () => <Alert><AlertTitle>Hi</AlertTitle></Alert>;
+    `;
+    expect(detectCompoundExports(source, 'Alert')).toEqual(['AlertTitle']);
+  });
+
+  it('excludes type-only export specifiers', () => {
+    const source = `
+      export type AlertVariants = 'default' | 'destructive';
+      const Alert = () => <div />;
+      const AlertTitle = () => <p />;
+      export { Alert, AlertTitle };
+      export type { AlertVariants };
+    `;
+    expect(detectCompoundExports(source, 'Alert')).toEqual(['AlertTitle']);
+  });
+
+  it('excludes inline type specifiers in mixed export', () => {
+    const source = `
+      type AlertProps = {};
+      const Alert = () => <div />;
+      const AlertTitle = () => <p />;
+      export { Alert, AlertTitle, type AlertProps };
+    `;
+    expect(detectCompoundExports(source, 'Alert')).toEqual(['AlertTitle']);
+  });
+
+  it('returns empty for non-compound components with only lowercase exports', () => {
+    const source = `
+      export function Alert() { return <div />; }
+      export function alertHelper() { return null; }
+    `;
+    expect(detectCompoundExports(source, 'Alert')).toEqual([]);
+  });
+
+  it('includes inline named declarations as compound siblings', () => {
+    const source = `
+      export function Dialog() { return <div />; }
+      export function DialogHeader() { return <header />; }
+      export function DialogFooter() { return <footer />; }
+      export function DialogTitle() { return <h2 />; }
+    `;
+    expect(detectCompoundExports(source, 'Dialog')).toEqual(['DialogHeader', 'DialogFooter', 'DialogTitle']);
+  });
+
+  it('returns empty for barrel file with cross-file re-exports', () => {
+    const source = `
+      export { Alert, AlertTitle, AlertDescription } from './alert';
+    `;
+    expect(detectCompoundExports(source, 'Alert')).toEqual([]);
+  });
+
+  it('returns empty for independent PascalCase components without shared prefix', () => {
+    const source = `
+      export function PrimaryButton() { return <button />; }
+      export function SecondaryButton() { return <button />; }
+      export function GhostButton() { return <button />; }
+    `;
+    expect(detectCompoundExports(source, 'PrimaryButton')).toEqual([]);
   });
 });
 

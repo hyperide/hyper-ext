@@ -6,29 +6,29 @@
  * Communicates with parent webview via postMessage.
  */
 
-import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
-import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
-import { isHorizontalLayout as _isHorizontalLayoutShared } from '@shared/canvas-interaction/drop-indicator-orientation';
-import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
+import { attachClickHandler } from "@shared/canvas-interaction/click-handler";
+import { resolveDragSource } from "@shared/canvas-interaction/drag-source-resolver";
+import { isHorizontalLayout as _isHorizontalLayoutShared } from "@shared/canvas-interaction/drop-indicator-orientation";
+import { isContainerEmpty } from "@shared/canvas-interaction/empty-container-placeholders";
 import {
   findTraceableParent as findTraceableParentIndexAware,
   type TraceableParentStep,
-} from '@shared/canvas-interaction/find-traceable-parent';
-import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
+} from "@shared/canvas-interaction/find-traceable-parent";
+import { createDesignKeydownHandler } from "@shared/canvas-interaction/keyboard-handler";
 import {
   computeOrderWritePlan,
   type OrderWritePlan,
   type SiblingInfo,
-} from '@shared/canvas-interaction/order-drag-detect';
-import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
-import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
+} from "@shared/canvas-interaction/order-drag-detect";
+import { computeOverlayRects } from "@shared/canvas-interaction/overlay-rects";
+import { resolveCallSiteSource, resolveCallSiteTarget } from "@shared/canvas-interaction/resolve-source";
 import {
   computeEffectiveRef,
   toggleItemIndex,
   toggleNodeRefInSelection,
-} from '@shared/canvas-interaction/selection-utils';
-import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
-import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
+} from "@shared/canvas-interaction/selection-utils";
+import { buildDesignStylesCSS } from "@shared/canvas-interaction/style-injector";
+import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from "@shared/canvas-interaction/types";
 import {
   type Fiber,
   FiberTag,
@@ -36,11 +36,11 @@ import {
   getFiberFromDOM,
   getItemIndexFromFiber,
   stripNodePodPrefix,
-} from '@shared/element-tracing/fiber-internals';
-import { FiberSourceIndex, getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-index';
-import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
-import type { SourceLocation } from '@shared/element-tracing/types';
-import html2canvas from 'html2canvas';
+} from "@shared/element-tracing/fiber-internals";
+import { FiberSourceIndex, getOwnFiberSourceLocation } from "@shared/element-tracing/fiber-source-index";
+import { resolveInSourceMap, type SourceMapV3 } from "@shared/element-tracing/source-map-resolver";
+import type { SourceLocation } from "@shared/element-tracing/types";
+import html2canvas from "html2canvas";
 import {
   applySelectionGraceCache,
   clearGraceCacheForElement,
@@ -48,7 +48,7 @@ import {
   invalidateSelectionGraceCacheForFile,
   makeSelectionGraceCacheState,
   serializeSelectionGraceCache,
-} from './selection-grace-cache';
+} from "./selection-grace-cache";
 
 // ============================================
 // Composition helpers (combine shared fiber primitives for IIFE-specific use)
@@ -181,13 +181,13 @@ const iframeResolver: TracingResolver = {
       nodeRef: syntheticRef,
       entry: {
         nodeRef: syntheticRef,
-        tag: '',
+        tag: "",
         loc: source,
         endLoc: source,
         parentRef: null,
         children: [],
         isComponent: false,
-        fingerprint: '',
+        fingerprint: "",
       },
       source,
       itemIndex,
@@ -211,7 +211,7 @@ function invalidateSourceCache(): void {
 }
 
 function findReactRootElement(): HTMLElement | null {
-  const selectors = ['#root', '#__next', '#app', '[data-reactroot]'];
+  const selectors = ["#root", "#__next", "#app", "[data-reactroot]"];
   for (const selector of selectors) {
     const el = document.querySelector(selector);
     if (!el || el.nodeType !== 1) continue;
@@ -344,13 +344,13 @@ devtoolsHook.onCommitFiberRoot = (...args: unknown[]) => {
 // here, just remember to refresh maps. vite:afterUpdate fires once HMR finishes
 // applying the new module, which is when the new fibers exist — invalidate then.
 type ViteHmrApi = {
-  on(event: 'vite:beforeUpdate' | 'vite:afterUpdate', cb: () => void): void;
+  on(event: "vite:beforeUpdate" | "vite:afterUpdate", cb: () => void): void;
 };
 type WindowWithHmr = typeof window & { __vite_hot__?: ViteHmrApi };
 function tryRegisterViteHmrHooks(): boolean {
   const api = (window as WindowWithHmr).__vite_hot__;
-  if (!api || typeof api.on !== 'function') return false;
-  api.on('vite:afterUpdate', () => {
+  if (!api || typeof api.on !== "function") return false;
+  api.on("vite:afterUpdate", () => {
     invalidateSourceCache();
     void warmClientSourceMaps();
     requestServerSourceMaps();
@@ -409,22 +409,22 @@ const PENDING_CLICK_TTL_MS = 5000;
  *  Supports Next.js (_next/static/chunks/) AND Vite (/src/ source files). */
 function extractClientChunkFrames(err: Error): Array<{ url: string; line: number; col: number }> {
   const frames: Array<{ url: string; line: number; col: number }> = [];
-  for (const ln of (err.stack ?? '').split('\n')) {
+  for (const ln of (err.stack ?? "").split("\n")) {
     const m = ln.match(/^\s+at\s+(?:[^(]+\s+\()?(.+):(\d+):(\d+)\)?$/);
     if (!m) continue;
     const url = m[1];
     // Next.js static chunk URLs
-    if (url.includes('_next/static/chunks/')) {
+    if (url.includes("_next/static/chunks/")) {
       frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
       continue;
     }
     // Bun hot dev server bundled chunks — source map needed to resolve to src file
-    if (url.includes('/_bun/client/') || url.includes('/_bun/')) {
+    if (url.includes("/_bun/client/") || url.includes("/_bun/")) {
       frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
       continue;
     }
     // Vite source files (React 19: _debugStack has compiled positions that need source map)
-    if (url.startsWith('http') && url.includes('/src/') && !url.includes('node_modules')) {
+    if (url.startsWith("http") && url.includes("/src/") && !url.includes("node_modules")) {
       frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
     }
   }
@@ -440,11 +440,11 @@ function extractClientChunkFrames(err: Error): Array<{ url: string; line: number
 function buildMapUrl(url: string): string {
   try {
     const parsed = new URL(url);
-    parsed.pathname += '.map';
+    parsed.pathname += ".map";
     return parsed.href;
   } catch {
     // Not a full URL (relative path) — split on ? manually
-    const qIdx = url.indexOf('?');
+    const qIdx = url.indexOf("?");
     if (qIdx === -1) return `${url}.map`;
     return `${url.substring(0, qIdx)}.map${url.substring(qIdx)}`;
   }
@@ -453,9 +453,9 @@ function buildMapUrl(url: string): string {
 function isViteSourceUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.pathname.includes('/src/') && !parsed.pathname.includes('/node_modules/');
+    return parsed.pathname.includes("/src/") && !parsed.pathname.includes("/node_modules/");
   } catch {
-    return url.includes('/src/') && !url.includes('/node_modules/');
+    return url.includes("/src/") && !url.includes("/node_modules/");
   }
 }
 
@@ -473,12 +473,12 @@ async function loadInlineSourceMap(url: string): Promise<SourceMapV3 | null> {
 }
 
 async function loadExternalSourceMap(url: string): Promise<SourceMapV3 | null> {
-  const mapUrl = url.endsWith('.map') ? url : buildMapUrl(url);
+  const mapUrl = url.endsWith(".map") ? url : buildMapUrl(url);
   const mapRes = await fetch(mapUrl);
   if (!mapRes.ok) return null;
   if (mapRes.status === 204) return null;
-  const contentType = mapRes.headers.get('content-type') ?? '';
-  if (contentType.includes('text/html')) return null;
+  const contentType = mapRes.headers.get("content-type") ?? "";
+  if (contentType.includes("text/html")) return null;
   return (await mapRes.json()) as SourceMapV3;
 }
 
@@ -514,11 +514,11 @@ async function warmClientChunk(url: string, line: number, col: number): Promise<
     let loc = resolveInSourceMap(sm, line, col);
     // Vite inline source maps have relative `sources: ["TweetComposer.tsx"]` without path.
     // Reconstruct full path from the original URL: "/src/components/TweetComposer.tsx"
-    if (loc && !loc.fileName.includes('/')) {
+    if (loc && !loc.fileName.includes("/")) {
       try {
         const parsed = new URL(url);
-        const dir = parsed.pathname.replace(/\/[^/]+$/, ''); // strip filename
-        loc = { ...loc, fileName: `${dir}/${loc.fileName}`.replace(/^\//, '') };
+        const dir = parsed.pathname.replace(/\/[^/]+$/, ""); // strip filename
+        loc = { ...loc, fileName: `${dir}/${loc.fileName}`.replace(/^\//, "") };
       } catch {
         // Not a valid URL — keep as-is
       }
@@ -644,14 +644,14 @@ function retryPendingClick(): void {
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
-      type: 'hypercanvas:elementClick',
+      type: "hypercanvas:elementClick",
       elementId: syntheticRef,
       itemIndex,
       source,
       computedStyle: extractComputedStyle(element),
       computedStyleSeq: ++elementClickSeq,
     },
-    '*',
+    "*",
   );
 }
 
@@ -676,21 +676,21 @@ const pendingServerRequests = new Set<string>();
  */
 function extractServerChunkFrames(err: Error): Array<{ filePath: string; line: number; col: number }> {
   const frames: Array<{ filePath: string; line: number; col: number }> = [];
-  for (const ln of (err.stack ?? '').split('\n')) {
+  for (const ln of (err.stack ?? "").split("\n")) {
     const m = ln.match(/^\s+at\s+(?:[^(]+\s+\()?(.+):(\d+):(\d+)\)?$/);
     if (!m) continue;
     const raw = m[1];
     // Find file:/// anywhere in the URL (handles about://React/Server/file:/// prefix)
-    const fileIdx = raw.indexOf('file:///');
+    const fileIdx = raw.indexOf("file:///");
     if (fileIdx === -1) continue;
     const fileUrl = raw.slice(fileIdx);
     // Only Next.js server chunks
-    if (!fileUrl.includes('.next/')) continue;
+    if (!fileUrl.includes(".next/")) continue;
     let filePath: string;
     try {
       filePath = decodeURIComponent(new URL(fileUrl).pathname);
     } catch {
-      filePath = decodeURIComponent(fileUrl.replace(/^file:\/\//, ''));
+      filePath = decodeURIComponent(fileUrl.replace(/^file:\/\//, ""));
     }
     frames.push({ filePath, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
   }
@@ -707,7 +707,7 @@ function requestServerSourceMap(filePath: string, line: number, col: number): vo
   if (serverSourceMapCache.has(key) || pendingServerRequests.has(key)) return;
   pendingServerRequests.add(key);
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-  window.parent.postMessage({ type: 'hypercanvas:resolveServerSourceMap', filePath, line, col }, '*');
+  window.parent.postMessage({ type: "hypercanvas:resolveServerSourceMap", filePath, line, col }, "*");
 }
 
 /**
@@ -882,10 +882,10 @@ const iframeElementResolver: OverlayElementResolver = {
  */
 function scrollIntoViewCenterSmooth(el: Element): void {
   try {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
   } catch {
     try {
-      el.scrollIntoView({ block: 'center' });
+      el.scrollIntoView({ block: "center" });
     } catch {
       el.scrollIntoView();
     }
@@ -897,18 +897,18 @@ function scrollIntoViewCenterSmooth(el: Element): void {
 // ============================================
 
 const COMPUTED_STYLE_PROPS = [
-  'backgroundColor',
-  'backgroundImage',
-  'color',
-  'borderColor',
-  'borderTopColor',
-  'borderWidth',
-  'borderStyle',
-  'borderRadius',
-  'opacity',
-  'fontSize',
-  'width',
-  'height',
+  "backgroundColor",
+  "backgroundImage",
+  "color",
+  "borderColor",
+  "borderTopColor",
+  "borderWidth",
+  "borderStyle",
+  "borderRadius",
+  "opacity",
+  "fontSize",
+  "width",
+  "height",
 ] as const;
 
 /** Monotonic counter so the webview can discard stale snapshots on rapid clicks. */
@@ -931,7 +931,7 @@ function extractComputedStyle(el: HTMLElement): Record<string, string> {
 let renderedComponentPath: string | null = (() => {
   try {
     const params = new URLSearchParams(window.location.search);
-    return params.get('component') ?? null;
+    return params.get("component") ?? null;
   } catch {
     return null;
   }
@@ -943,7 +943,7 @@ const state = {
   hoveredId: null as string | null,
   hoveredItemIndex: null as number | null,
   selectedItemIndices: {} as Record<string, number | null>,
-  engineMode: 'design' as string,
+  engineMode: "design" as string,
 };
 // Expose for E2E test tooling (waitForFunction polling)
 (window as unknown as Record<string, unknown>).__hyperCanvasState = state;
@@ -954,23 +954,23 @@ const state = {
 // (a) selectedIds[0] reset to empty/different value, or
 // (b) DOM lookup miss for an unchanged ID (cache wiped by HMR).
 // Filter logs in DevTools console with `[selsurv]`.
-const SELSURV_TAG = '[selsurv]';
+const SELSURV_TAG = "[selsurv]";
 function logSelsurvSelectedIdsAssign(reason: string, prev: string[], next: string[]): void {
   if (prev.length === next.length && prev.every((v, i) => v === next[i])) return;
-  console.debug(SELSURV_TAG, 'selectedIds change', {
+  console.debug(SELSURV_TAG, "selectedIds change", {
     t: Math.round(performance.now()),
     reason,
     prev,
     next,
   });
 }
-let lastOverlayLogKey = '';
+let lastOverlayLogKey = "";
 function logSelsurvOverlayPaint(selectedId: string | null, domElementFound: boolean, rectVisible: boolean): void {
   // Coalesce identical consecutive paints so the console isn't flooded.
-  const key = `${selectedId ?? ''}|${domElementFound}|${rectVisible}`;
+  const key = `${selectedId ?? ""}|${domElementFound}|${rectVisible}`;
   if (key === lastOverlayLogKey) return;
   lastOverlayLogKey = key;
-  console.debug(SELSURV_TAG, 'overlay paint', {
+  console.debug(SELSURV_TAG, "overlay paint", {
     t: Math.round(performance.now()),
     selectedId,
     domElementFound,
@@ -981,8 +981,8 @@ function logSelsurvOverlayPaint(selectedId: string | null, domElementFound: bool
 // can tell whether the overlay disappears because the deadline expired (HMR
 // took longer than SELECTION_GRACE_PERIOD_MS) or because selectedIds dropped
 // the entry.
-function logSelsurvCachePrune(elementId: string, reason: 'deselected' | 'expired'): void {
-  console.debug(SELSURV_TAG, 'grace-cache prune', {
+function logSelsurvCachePrune(elementId: string, reason: "deselected" | "expired"): void {
+  console.debug(SELSURV_TAG, "grace-cache prune", {
     t: Math.round(performance.now()),
     elementId,
     reason,
@@ -993,30 +993,30 @@ function logSelsurvCachePrune(elementId: string, reason: 'deselected' | 'expired
 // events on the Window via a custom EventEmitter; we additionally listen to
 // `beforeunload`/`load` to detect a true full reload (hypothesis B).
 function logSelsurvLifecycle(event: string, extra?: Record<string, unknown>): void {
-  console.debug(SELSURV_TAG, 'lifecycle', {
+  console.debug(SELSURV_TAG, "lifecycle", {
     t: Math.round(performance.now()),
     event,
-    readyState: typeof document !== 'undefined' ? document.readyState : 'n/a',
+    readyState: typeof document !== "undefined" ? document.readyState : "n/a",
     ...(extra ?? {}),
   });
 }
-let lastFindMissLogKey = '';
+let lastFindMissLogKey = "";
 function logSelsurvFindMiss(selectedId: string, itemIndex: number | null): void {
-  const key = `${selectedId}|${itemIndex ?? ''}`;
+  const key = `${selectedId}|${itemIndex ?? ""}`;
   if (key === lastFindMissLogKey) return;
   lastFindMissLogKey = key;
-  console.debug(SELSURV_TAG, 'findElements miss', {
+  console.debug(SELSURV_TAG, "findElements miss", {
     t: Math.round(performance.now()),
     selectedId,
     itemIndex,
   });
 }
-let lastClosestSourceLogKey = '';
+let lastClosestSourceLogKey = "";
 function logSelsurvClosestSourceFallback(requestedRef: string, matchedKey: string, count: number): void {
   const key = `${requestedRef}->${matchedKey}|${count}`;
   if (key === lastClosestSourceLogKey) return;
   lastClosestSourceLogKey = key;
-  console.debug(SELSURV_TAG, 'closest-source fallback', {
+  console.debug(SELSURV_TAG, "closest-source fallback", {
     t: Math.round(performance.now()),
     requested: requestedRef,
     matched: matchedKey,
@@ -1030,7 +1030,7 @@ const activeInstanceId: string | null = null;
 // Suppress the synthetic click that fires after a drag ends.
 // Must be registered BEFORE attachClickHandler so it fires first on the same node
 // and stopImmediatePropagation() can prevent handleClick from running.
-document.addEventListener('click', _dragClickSuppressor, true);
+document.addEventListener("click", _dragClickSuppressor, true);
 
 // === Shared click handler (fiber-based via iframeResolver) ===
 attachClickHandler(
@@ -1042,7 +1042,7 @@ attachClickHandler(
       if (additive) {
         const nextIds = toggleNodeRefInSelection(state.selectedIds, nodeRef);
         const nextIndices = toggleItemIndex(state.selectedItemIndices, nodeRef, nextIds, itemIndex);
-        logSelsurvSelectedIdsAssign('click:additive', state.selectedIds, nextIds);
+        logSelsurvSelectedIdsAssign("click:additive", state.selectedIds, nextIds);
         state.selectedIds = nextIds;
         state.selectedItemIndices = nextIndices;
       } else {
@@ -1052,7 +1052,7 @@ attachClickHandler(
         // state.selectedIds is populated — matches sourceToElementId() in the extension host.
         const effectiveRef = source ? computeEffectiveRef(nodeRef, source) : nodeRef;
         if (effectiveRef) {
-          logSelsurvSelectedIdsAssign('click:single', state.selectedIds, [effectiveRef]);
+          logSelsurvSelectedIdsAssign("click:single", state.selectedIds, [effectiveRef]);
           state.selectedIds = [effectiveRef];
           if (itemIndex != null) state.selectedItemIndices = { [effectiveRef]: itemIndex };
           // Drag-end regression fix (docs/plans/2026-05-08-drag-selection-rect-regressions-ralphex-plan.md):
@@ -1073,7 +1073,7 @@ attachClickHandler(
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
-          type: 'hypercanvas:elementClick',
+          type: "hypercanvas:elementClick",
           elementId: nodeRef,
           // Send already-computed selection so parent doesn't need local state tracking.
           selectedIds: state.selectedIds,
@@ -1085,19 +1085,19 @@ attachClickHandler(
           computedStyleSeq: ++elementClickSeq,
           domTextContent: el.innerText?.trim() || undefined,
         },
-        '*',
+        "*",
       );
     },
     onElementHover: (nodeRef, _el, itemIndex, source) => {
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
-          type: 'hypercanvas:elementHover',
+          type: "hypercanvas:elementHover",
           elementId: nodeRef,
           itemIndex,
           source,
         },
-        '*',
+        "*",
       );
     },
     onEmptyClick: (emptyClickEvent) => {
@@ -1107,9 +1107,9 @@ attachClickHandler(
       // Cmd/Ctrl+click on empty space: keep existing selection (Figma behavior).
       if (emptyClickEvent.metaKey || emptyClickEvent.ctrlKey) return;
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-      window.parent.postMessage({ type: 'hypercanvas:emptyClick' }, '*');
+      window.parent.postMessage({ type: "hypercanvas:emptyClick" }, "*");
     },
-    getMode: () => state.engineMode as 'design' | 'interact',
+    getMode: () => state.engineMode as "design" | "interact",
   },
   iframeResolver,
 );
@@ -1140,14 +1140,14 @@ function getSourceKey(el: HTMLElement): string | null {
 // is malformed/missing, (b) parentRef is well-formed but FiberSourceIndex was
 // indexed under a deduplicated key, or (c) the OUTERMOST host fiber whose key
 // equals parentRef has been unmounted by HMR mid-walk.
-const SHIFTPARENT_TAG = '[shiftparent]';
+const SHIFTPARENT_TAG = "[shiftparent]";
 function logShiftParentWalk(
   selectedId: string,
   steps: TraceableParentStep[],
   parent: { tag: string; ref: string } | null,
-  parentLookupStatus: 'indexed' | null,
+  parentLookupStatus: "indexed" | null,
 ): void {
-  console.debug(SHIFTPARENT_TAG, 'parent-walk', {
+  console.debug(SHIFTPARENT_TAG, "parent-walk", {
     t: Math.round(performance.now()),
     selectedId,
     renderedComponentPath,
@@ -1211,7 +1211,7 @@ function findTraceableChildren(el: HTMLElement): string[] {
   return refs;
 }
 
-const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').NodeMapLookup = {
+const domNodeMapLookup: import("@shared/canvas-interaction/keyboard-handler").NodeMapLookup = {
   getEntry(nodeRef: string) {
     const source = parseSourceRef(nodeRef);
     if (source === null) return null;
@@ -1257,7 +1257,7 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
       // Diagnostic: parent-walk asked about a nodeRef the rect path also can't
       // resolve. Emitting from the keyboard-side too lets us cross-reference
       // against the [selsurv] `findElements miss` log timestamp.
-      console.debug(SHIFTPARENT_TAG, 'getEntry missing-base', {
+      console.debug(SHIFTPARENT_TAG, "getEntry missing-base", {
         t: Math.round(performance.now()),
         nodeRef,
         renderedComponentPath,
@@ -1276,7 +1276,7 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
       nodeRef,
       trace,
       parent ? { tag: parent.element.tagName.toLowerCase(), ref: parent.ref } : null,
-      parent ? 'indexed' : null,
+      parent ? "indexed" : null,
     );
     const children = findTraceableChildren(el);
 
@@ -1288,7 +1288,7 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
       parentRef: parent?.ref ?? null,
       children,
       isComponent: false,
-      fingerprint: '',
+      fingerprint: "",
     };
   },
   findDOMElement(source, itemIndex) {
@@ -1310,7 +1310,7 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
   getDocument: () => document,
   callbacks: {
     onSelectElement: (id, itemIndex) => {
-      console.debug(SHIFTPARENT_TAG, 'keyboard:onSelectElement', {
+      console.debug(SHIFTPARENT_TAG, "keyboard:onSelectElement", {
         t: Math.round(performance.now()),
         id,
         itemIndex,
@@ -1320,45 +1320,45 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
-          type: 'hypercanvas:elementClick',
+          type: "hypercanvas:elementClick",
           elementId: id,
           itemIndex: itemIndex ?? null,
         },
-        '*',
+        "*",
       );
     },
     onSelectMultiple: (ids) =>
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
-          type: 'hypercanvas:selectMultiple',
+          type: "hypercanvas:selectMultiple",
           elementIds: ids,
         },
-        '*',
+        "*",
       ),
     onClearSelection: () =>
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-      window.parent.postMessage({ type: 'hypercanvas:emptyClick' }, '*'),
+      window.parent.postMessage({ type: "hypercanvas:emptyClick" }, "*"),
     onDeleteElements: (ids) =>
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
-          type: 'hypercanvas:deleteElements',
+          type: "hypercanvas:deleteElements",
           elementIds: ids,
         },
-        '*',
+        "*",
       ),
     onDuplicateElement: (id) =>
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
-          type: 'keyboard:duplicate',
+          type: "keyboard:duplicate",
           elementId: id,
         },
-        '*',
+        "*",
       ),
   },
-  isDesignMode: () => state.engineMode === 'design',
+  isDesignMode: () => state.engineMode === "design",
   // DOM-based lookup — builds parent/children from live DOM + fiber source resolution.
   nodeMapLookup: domNodeMapLookup,
 });
@@ -1372,7 +1372,7 @@ function keydownForwardingHandler(e: KeyboardEvent): void {
 
   // In interact mode, keep all events inside the iframe — the user
   // is interacting with the app (forms, inputs, app-level shortcuts).
-  if (state.engineMode !== 'design') return;
+  if (state.engineMode !== "design") return;
 
   // Only forward modifier combos — plain keystrokes stay in the iframe
   if (!e.metaKey && !e.ctrlKey && !e.altKey) return;
@@ -1380,7 +1380,7 @@ function keydownForwardingHandler(e: KeyboardEvent): void {
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
-      type: 'hypercanvas:keydown',
+      type: "hypercanvas:keydown",
       key: e.key,
       code: e.code,
       keyCode: e.keyCode,
@@ -1390,14 +1390,14 @@ function keydownForwardingHandler(e: KeyboardEvent): void {
       metaKey: e.metaKey,
       repeat: e.repeat,
     },
-    '*',
+    "*",
   );
 }
-document.addEventListener('keydown', keydownForwardingHandler, true);
+document.addEventListener("keydown", keydownForwardingHandler, true);
 
 // === Context menu handler ===
 const contextMenuHandler = (e: MouseEvent) => {
-  if (state.engineMode !== 'design') return;
+  if (state.engineMode !== "design") return;
   e.preventDefault();
   e.stopPropagation();
 
@@ -1412,7 +1412,7 @@ const contextMenuHandler = (e: MouseEvent) => {
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
-      type: 'hypercanvas:contextMenu',
+      type: "hypercanvas:contextMenu",
       elementId,
       itemIndex,
       source,
@@ -1421,10 +1421,10 @@ const contextMenuHandler = (e: MouseEvent) => {
       computedStyle: elementId ? extractComputedStyle(target) : undefined,
       computedStyleSeq: elementId ? ++elementClickSeq : undefined,
     },
-    '*',
+    "*",
   );
 };
-document.addEventListener('contextmenu', contextMenuHandler, true);
+document.addEventListener("contextmenu", contextMenuHandler, true);
 
 // === Resize live-preview state ===
 // Maps elementId → original inline width/height so cancel can restore.
@@ -1448,7 +1448,7 @@ function _isHorizontalLayout(el: HTMLElement): boolean {
   return _isHorizontalLayoutShared(el);
 }
 
-let _dragState: 'idle' | 'pending' | 'dragging' = 'idle';
+let _dragState: "idle" | "pending" | "dragging" = "idle";
 let _dragSourceId: string | null = null;
 let _dragSourceFilePath: string | null = null;
 let _dragStartX = 0;
@@ -1476,11 +1476,11 @@ let _dragPrevBodyWebkitUserSelect: string | null = null;
 let _dragEscapeHandler: ((e: KeyboardEvent) => void) | null = null;
 
 function _dragPointerDown(e: PointerEvent): void {
-  if (state.engineMode !== 'design' || e.button !== 0) return;
+  if (state.engineMode !== "design" || e.button !== 0) return;
   // Reentry guard: a second pointerdown without an intervening pointerup
   // (multi-touch, missed pointercancel, etc) would otherwise overwrite
   // _dragPrevBodyUserSelect with 'none' and leak user-select forever.
-  if (_dragState !== 'idle') return;
+  if (_dragState !== "idle") return;
   const target = e.target as HTMLElement;
   // resolveDragSource: walks up for decorative children (emoji, aria-hidden),
   // then falls back to _debugSource when source maps are cold (React 18 Vite/Babel).
@@ -1516,7 +1516,7 @@ function _dragPointerDown(e: PointerEvent): void {
   _dragSourceFilePath = dragSrc.fileName;
   _dragStartX = e.clientX;
   _dragStartY = e.clientY;
-  _dragState = 'pending';
+  _dragState = "pending";
   _dragSourceEl = dragEl;
 
   // Suppress native text-selection that otherwise consumes pointermove on
@@ -1529,9 +1529,9 @@ function _dragPointerDown(e: PointerEvent): void {
   e.preventDefault();
   _dragPrevBodyUserSelect = document.body.style.userSelect;
   _dragPrevBodyWebkitUserSelect =
-    (document.body.style as unknown as { webkitUserSelect?: string }).webkitUserSelect ?? '';
-  document.body.style.userSelect = 'none';
-  (document.body.style as unknown as { webkitUserSelect?: string }).webkitUserSelect = 'none';
+    (document.body.style as unknown as { webkitUserSelect?: string }).webkitUserSelect ?? "";
+  document.body.style.userSelect = "none";
+  (document.body.style as unknown as { webkitUserSelect?: string }).webkitUserSelect = "none";
 
   // Capture the pointer on the resolved dragEl (not the raw event target) so
   // capture survives when the user grabs a decorative inner element (emoji
@@ -1545,7 +1545,7 @@ function _dragPointerDown(e: PointerEvent): void {
   // cleanup path doesn't call releasePointerCapture on a target that never
   // captured.
   _dragCapturedPointerId = e.pointerId;
-  if (typeof dragEl.setPointerCapture === 'function') {
+  if (typeof dragEl.setPointerCapture === "function") {
     try {
       dragEl.setPointerCapture(e.pointerId);
       _dragCapturedTarget = dragEl;
@@ -1561,31 +1561,31 @@ function _dragPointerMove(e: PointerEvent): void {
   // the first one's start coords, dx/dy explode past DRAG_THRESHOLD_PX, and
   // the ghost jumps to (and follows) the wrong cursor.
   if (_dragCapturedPointerId !== null && e.pointerId !== _dragCapturedPointerId) return;
-  if (_dragState === 'pending') {
+  if (_dragState === "pending") {
     const dx = e.clientX - _dragStartX;
     const dy = e.clientY - _dragStartY;
     if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD_PX) {
-      _dragState = 'dragging';
+      _dragState = "dragging";
       _dragEscapeHandler = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
+        if (e.key === "Escape") {
           e.preventDefault();
           _dragCleanup();
         }
       };
-      document.addEventListener('keydown', _dragEscapeHandler);
+      document.addEventListener("keydown", _dragEscapeHandler);
       if (_dragSourceEl) {
         const rect = _dragSourceEl.getBoundingClientRect();
         _dragOffsetX = _dragStartX - rect.left;
         _dragOffsetY = _dragStartY - rect.top;
 
         // Fade the source element in place — shows "where it came from"
-        _dragSourceEl.style.opacity = '0.35';
-        _dragSourceEl.style.pointerEvents = 'none';
+        _dragSourceEl.style.opacity = "0.35";
+        _dragSourceEl.style.pointerEvents = "none";
 
         // Create ghost clone that follows the cursor
         const ghost = _dragSourceEl.cloneNode(true) as HTMLElement;
-        ghost.className = 'hyper-drag-ghost';
-        ghost.removeAttribute('data-uniq-id');
+        ghost.className = "hyper-drag-ghost";
+        ghost.removeAttribute("data-uniq-id");
         ghost.style.width = `${rect.width}px`;
         ghost.style.height = `${rect.height}px`;
         ghost.style.left = `${_dragStartX - _dragOffsetX}px`;
@@ -1597,18 +1597,18 @@ function _dragPointerMove(e: PointerEvent): void {
         // Walk up ancestors until a non-transparent background is found.
         const srcEl = _dragSourceEl;
         let ghostBg = getComputedStyle(srcEl).backgroundColor;
-        if (ghostBg === 'rgba(0, 0, 0, 0)' || ghostBg === 'transparent') {
+        if (ghostBg === "rgba(0, 0, 0, 0)" || ghostBg === "transparent") {
           let ancestor: HTMLElement | null = srcEl.parentElement;
           while (ancestor && ancestor !== document.documentElement) {
             const bg = getComputedStyle(ancestor).backgroundColor;
-            if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+            if (bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
               ghostBg = bg;
               break;
             }
             ancestor = ancestor.parentElement;
           }
         }
-        if (ghostBg !== 'rgba(0, 0, 0, 0)' && ghostBg !== 'transparent') {
+        if (ghostBg !== "rgba(0, 0, 0, 0)" && ghostBg !== "transparent") {
           ghost.style.backgroundColor = ghostBg;
         }
         const srcStyle = getComputedStyle(srcEl);
@@ -1616,20 +1616,20 @@ function _dragPointerMove(e: PointerEvent): void {
         ghost.style.fontFamily = srcStyle.fontFamily;
         ghost.style.fontSize = srcStyle.fontSize;
 
-        const indicator = document.createElement('div');
-        indicator.className = 'hyper-drop-indicator';
-        indicator.style.display = 'none';
+        const indicator = document.createElement("div");
+        indicator.className = "hyper-drop-indicator";
+        indicator.style.display = "none";
         document.body.appendChild(indicator);
         _dragIndicatorEl = indicator;
 
         // Multi-select badge: show count when multiple elements are selected
         if (state.selectedIds.length > 1) {
-          const badge = document.createElement('div');
+          const badge = document.createElement("div");
           badge.style.cssText =
-            'position:absolute;top:-8px;right:-8px;background:#3b82f6;color:white;' +
-            'border-radius:50%;width:20px;height:20px;display:flex;align-items:center;' +
-            'justify-content:center;font-size:11px;font-weight:bold;pointer-events:none;' +
-            'z-index:2147483647;';
+            "position:absolute;top:-8px;right:-8px;background:#3b82f6;color:white;" +
+            "border-radius:50%;width:20px;height:20px;display:flex;align-items:center;" +
+            "justify-content:center;font-size:11px;font-weight:bold;pointer-events:none;" +
+            "z-index:2147483647;";
           badge.textContent = String(state.selectedIds.length);
           _dragSourceEl.appendChild(badge);
           _dragBadgeEl = badge;
@@ -1639,7 +1639,7 @@ function _dragPointerMove(e: PointerEvent): void {
     return;
   }
 
-  if (_dragState !== 'dragging') return;
+  if (_dragState !== "dragging") return;
 
   needsOverlayUpdate = true;
   scheduleOverlayLoopIfNeeded();
@@ -1660,7 +1660,7 @@ function _dragPointerMove(e: PointerEvent): void {
     let dropEl: HTMLElement | null = rawDropEl;
     let dropSrc = dropEl ? iframeResolver.getSourceLocation(dropEl) : null;
     if (!dropSrc && rawDropEl) {
-      const bodyEl = typeof document !== 'undefined' ? document.body : null;
+      const bodyEl = typeof document !== "undefined" ? document.body : null;
       let cur = rawDropEl.parentElement;
       while (cur && cur !== bodyEl) {
         const ancestorSrc = iframeResolver.getSourceLocation(cur);
@@ -1676,23 +1676,23 @@ function _dragPointerMove(e: PointerEvent): void {
       const r = dropEl.getBoundingClientRect();
       const ind = _dragIndicatorEl;
       if (_isHorizontalLayout(rawDropEl ?? dropEl)) {
-        ind.dataset.dir = 'v';
+        ind.dataset.dir = "v";
         const lineX = (e.clientX < r.left + r.width / 2 ? r.left : r.right) - 1;
         ind.style.left = `${lineX}px`;
         ind.style.top = `${r.top}px`;
         ind.style.height = `${r.height}px`;
-        ind.style.width = '';
+        ind.style.width = "";
       } else {
-        ind.dataset.dir = 'h';
+        ind.dataset.dir = "h";
         const lineY = (e.clientY < r.top + r.height / 2 ? r.top : r.bottom) - 1;
         ind.style.top = `${lineY}px`;
         ind.style.left = `${r.left}px`;
         ind.style.width = `${r.width}px`;
-        ind.style.height = '';
+        ind.style.height = "";
       }
-      ind.style.display = 'block';
+      ind.style.display = "block";
     } else {
-      _dragIndicatorEl.style.display = 'none';
+      _dragIndicatorEl.style.display = "none";
     }
   }
 }
@@ -1702,11 +1702,11 @@ function _dragPointerMove(e: PointerEvent): void {
 // ghost/indicator/badge, clears source-el styles. Idempotent — safe to call
 // multiple times in a row (every branch nulls its target ref).
 function _dragCleanup(): void {
-  _dragState = 'idle';
+  _dragState = "idle";
   _dragSourceId = null;
   _dragSourceFilePath = null;
   if (_dragEscapeHandler !== null) {
-    document.removeEventListener('keydown', _dragEscapeHandler);
+    document.removeEventListener("keydown", _dragEscapeHandler);
     _dragEscapeHandler = null;
   }
 
@@ -1723,8 +1723,8 @@ function _dragCleanup(): void {
     _dragIndicatorEl = null;
   }
   if (_dragSourceEl) {
-    _dragSourceEl.style.opacity = '';
-    _dragSourceEl.style.pointerEvents = '';
+    _dragSourceEl.style.opacity = "";
+    _dragSourceEl.style.pointerEvents = "";
     _dragSourceEl = null;
   }
   _dragOffsetX = 0;
@@ -1745,7 +1745,7 @@ function _dragCleanup(): void {
   if (
     _dragCapturedTarget &&
     _dragCapturedPointerId !== null &&
-    typeof _dragCapturedTarget.releasePointerCapture === 'function'
+    typeof _dragCapturedTarget.releasePointerCapture === "function"
   ) {
     try {
       _dragCapturedTarget.releasePointerCapture(_dragCapturedPointerId);
@@ -1761,7 +1761,7 @@ function _dragPointerUp(e: PointerEvent): void {
   // Multi-touch guard: only the captured pointer's release ends the drag.
   // A different pointerId lifting first must not consume the captured drag.
   if (_dragCapturedPointerId !== null && e.pointerId !== _dragCapturedPointerId) return;
-  const wasDragging = _dragState === 'dragging';
+  const wasDragging = _dragState === "dragging";
   const sourceId = _dragSourceId;
   const sourceFilePath = _dragSourceFilePath;
   // Capture the live source element BEFORE cleanup nulls it out — the
@@ -1803,7 +1803,7 @@ function _dragPointerUp(e: PointerEvent): void {
   let dropEl: HTMLElement | null = rawDropEl;
   let dropSrc = iframeResolver.getSourceLocation(dropEl);
   if (!dropSrc) {
-    const bodyEl = typeof document !== 'undefined' ? document.body : null;
+    const bodyEl = typeof document !== "undefined" ? document.body : null;
     let cur = rawDropEl.parentElement;
     while (cur && cur !== bodyEl) {
       const ancestorSrc = iframeResolver.getSourceLocation(cur);
@@ -1820,13 +1820,13 @@ function _dragPointerUp(e: PointerEvent): void {
   if (targetId === sourceId) return;
 
   const rect = dropEl.getBoundingClientRect();
-  const position: 'before' | 'after' = _isHorizontalLayout(dropEl)
+  const position: "before" | "after" = _isHorizontalLayout(dropEl)
     ? e.clientX < rect.left + rect.width / 2
-      ? 'before'
-      : 'after'
+      ? "before"
+      : "after"
     : e.clientY < rect.top + rect.height / 2
-      ? 'before'
-      : 'after';
+      ? "before"
+      : "after";
 
   // === Order-driven parent fast path (Tailwind `order-N`) ===
   // When the source and drop resolve to siblings under a parent that already
@@ -1840,12 +1840,12 @@ function _dragPointerUp(e: PointerEvent): void {
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
-          type: 'hypercanvas:writeOrders',
+          type: "hypercanvas:writeOrders",
           sourceId,
           breakpoint: orderPlan.breakpoint,
           entries: orderPlan.entries,
         },
-        '*',
+        "*",
       );
       return;
     }
@@ -1854,13 +1854,13 @@ function _dragPointerUp(e: PointerEvent): void {
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
-      type: 'hypercanvas:moveElement',
+      type: "hypercanvas:moveElement",
       sourceId,
       targetId,
       filePath: sourceFilePath,
       position,
     },
-    '*',
+    "*",
   );
 
   // Drag-end regression fix (docs/plans/2026-05-08-drag-selection-rect-regressions-ralphex-plan.md):
@@ -1948,13 +1948,13 @@ function _resolveOrderWritePlan(
   // dropSibling and dropEl may live in containers with different orientation
   // (an inner flex-row inside an outer grid). Re-evaluate against dropSibling.
   const dropSiblingRect = dropSibling.getBoundingClientRect();
-  const position: 'before' | 'after' = _isHorizontalLayout(dropSibling)
+  const position: "before" | "after" = _isHorizontalLayout(dropSibling)
     ? clientX < dropSiblingRect.left + dropSiblingRect.width / 2
-      ? 'before'
-      : 'after'
+      ? "before"
+      : "after"
     : clientY < dropSiblingRect.top + dropSiblingRect.height / 2
-      ? 'before'
-      : 'after';
+      ? "before"
+      : "after";
 
   // Collect source-bearing children only — skip whitespace text, comments, and
   // wrapper artefacts that have no React fiber / source location.
@@ -1969,7 +1969,7 @@ function _resolveOrderWritePlan(
     siblings.push({
       elementId: `${loc.fileName}:${loc.line}:${loc.column}`,
       filePath: loc.fileName,
-      className: child.getAttribute('class') ?? '',
+      className: child.getAttribute("class") ?? "",
       domIndex: domIndex++,
     });
   }
@@ -2024,10 +2024,10 @@ function _dragClickSuppressor(e: MouseEvent): void {
 // that slipped past (1) and (2) — e.g. user code calling el.draggable=true
 // after our walk.
 const _nativeDragSuppressor = (e: DragEvent): void => {
-  if (state.engineMode !== 'design') return;
+  if (state.engineMode !== "design") return;
   e.preventDefault();
 };
-document.addEventListener('dragstart', _nativeDragSuppressor, true);
+document.addEventListener("dragstart", _nativeDragSuppressor, true);
 
 function _disableNativeDraggableIn(root: ParentNode): void {
   // Disable native drag on every element that can default to draggable=true.
@@ -2039,14 +2039,14 @@ function _disableNativeDraggableIn(root: ParentNode): void {
     if (el instanceof HTMLElement) el.draggable = false;
   }
   // The root itself may match if it was just inserted as a single img/a node.
-  if (root instanceof HTMLElement && (root.tagName === 'IMG' || root.tagName === 'A')) {
+  if (root instanceof HTMLElement && (root.tagName === "IMG" || root.tagName === "A")) {
     root.draggable = false;
   }
 }
 
-document.addEventListener('pointerdown', _dragPointerDown, true);
-document.addEventListener('pointermove', _dragPointerMove, true);
-document.addEventListener('pointerup', _dragPointerUp, true);
+document.addEventListener("pointerdown", _dragPointerDown, true);
+document.addEventListener("pointermove", _dragPointerMove, true);
+document.addEventListener("pointerup", _dragPointerUp, true);
 // pointercancel fires on touch interruption, OS-level focus loss, browser
 // gesture takeover. lostpointercapture fires when the captured pointer is
 // hijacked. Without these, userSelect:'none' / opacity / capture leak forever
@@ -2058,26 +2058,26 @@ function _dragCleanupForPointerEvent(e: PointerEvent): void {
   if (_dragCapturedPointerId !== null && e.pointerId !== _dragCapturedPointerId) return;
   _dragCleanup();
 }
-document.addEventListener('pointercancel', _dragCleanupForPointerEvent, true);
-document.addEventListener('lostpointercapture', _dragCleanupForPointerEvent, true);
+document.addEventListener("pointercancel", _dragCleanupForPointerEvent, true);
+document.addEventListener("lostpointercapture", _dragCleanupForPointerEvent, true);
 
 // === Focus prevention in design mode (mousedown, not focusin) ===
 const mousedownHandler = (e: MouseEvent) => {
-  if (state.engineMode !== 'design') return;
+  if (state.engineMode !== "design") return;
   const target = e.target as HTMLElement;
   if (
-    target.tagName === 'INPUT' ||
-    target.tagName === 'TEXTAREA' ||
-    target.tagName === 'SELECT' ||
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
     target.isContentEditable
   ) {
     e.preventDefault(); // Actually prevents focus on mousedown
   }
 };
-document.addEventListener('mousedown', mousedownHandler, true);
+document.addEventListener("mousedown", mousedownHandler, true);
 
 // === Overlay rects with dirty-flag optimization ===
-let prevRectsJSON = '';
+let prevRectsJSON = "";
 let needsOverlayUpdate = true;
 let overlayRafScheduled = false;
 
@@ -2097,7 +2097,7 @@ let overlayRafScheduled = false;
 const SELECTION_GRACE_PERIOD_MS = 2500;
 const SELECTION_GRACE_RETRY_MS = 50;
 /** sessionStorage key under which the cache snapshot is persisted across reloads. */
-const SELECTION_GRACE_PERSIST_KEY = '__hypercanvas_selsurv_grace_cache__';
+const SELECTION_GRACE_PERSIST_KEY = "__hypercanvas_selsurv_grace_cache__";
 /** Snapshots older than this are discarded (e.g. user closed and reopened the tab). */
 const SELECTION_GRACE_PERSIST_MAX_AGE_MS = 10_000;
 const selectionGraceCache = makeSelectionGraceCacheState();
@@ -2129,7 +2129,7 @@ let lastPersistAtMs = 0;
 
 function persistSelectionGraceCache(force = false): void {
   try {
-    if (typeof sessionStorage === 'undefined') return;
+    if (typeof sessionStorage === "undefined") return;
     // Cache emptied (e.g. user deselected). Always wipe sessionStorage immediately —
     // never throttle this branch. Otherwise a fast reload within the throttle window
     // would hydrate stale rects and ghost the deselected element.
@@ -2156,7 +2156,7 @@ function persistSelectionGraceCache(force = false): void {
 
 function tryHydrateSelectionGraceCache(): void {
   try {
-    if (typeof sessionStorage === 'undefined') return;
+    if (typeof sessionStorage === "undefined") return;
     const raw = sessionStorage.getItem(SELECTION_GRACE_PERSIST_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw) as unknown;
@@ -2171,7 +2171,7 @@ function tryHydrateSelectionGraceCache(): void {
     if (hydratedIds.length > 0) {
       pendingHydratedSelectedIds = hydratedIds;
       pendingHydratedItemIndices = hydratedItemIndices;
-      logSelsurvLifecycle('graceCache:hydrated', { count: hydratedIds.length });
+      logSelsurvLifecycle("graceCache:hydrated", { count: hydratedIds.length });
     } else {
       sessionStorage.removeItem(SELECTION_GRACE_PERSIST_KEY);
     }
@@ -2276,7 +2276,7 @@ function sendOverlayRects(): void {
       const itemIdx = effectiveSelectedItemIndices[sel0] ?? null;
       const elements = iframeElementResolver.findElements(sel0, itemIdx);
       const domElementFound = elements.length > 0;
-      const selectionRect = result.overlayRects.find((r) => r.type === 'selection' && r.elementId === sel0);
+      const selectionRect = result.overlayRects.find((r) => r.type === "selection" && r.elementId === sel0);
       const rectVisible = !!selectionRect && selectionRect.width > 0 && selectionRect.height > 0;
       logSelsurvOverlayPaint(sel0, domElementFound, rectVisible);
       // Task 1 of selection-flicker-some-elements: explicitly surface findElements
@@ -2299,8 +2299,8 @@ function sendOverlayRects(): void {
     // compensation — see hypercanvas:overlayScroll handling in useCanvasInteraction.ts.
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
     window.parent.postMessage(
-      { type: 'hypercanvas:overlayRects', rects, placeholderRects, scrollY: window.scrollY },
-      '*',
+      { type: "hypercanvas:overlayRects", rects, placeholderRects, scrollY: window.scrollY },
+      "*",
     );
   }
 
@@ -2326,14 +2326,14 @@ function scheduleThrottledOverlayUpdate(): void {
 
 // Mark overlays dirty when DOM/layout changes
 const overlayMutationObserver =
-  typeof MutationObserver !== 'undefined'
+  typeof MutationObserver !== "undefined"
     ? new MutationObserver((mutations) => {
         invalidateSourceCache();
         scheduleThrottledOverlayUpdate();
         // Disable native drag on freshly-added img/a nodes. Bounded scan: only
         // walks the subtrees that just changed, not the whole document.
         for (const m of mutations) {
-          if (m.type !== 'childList') continue;
+          if (m.type !== "childList") continue;
           for (const node of m.addedNodes) {
             if (node instanceof HTMLElement) _disableNativeDraggableIn(node);
           }
@@ -2361,7 +2361,7 @@ function setupBodyObservers(): void {
 }
 
 const overlayResizeObserver =
-  typeof ResizeObserver !== 'undefined'
+  typeof ResizeObserver !== "undefined"
     ? new ResizeObserver(() => {
         scheduleThrottledOverlayUpdate();
       })
@@ -2372,7 +2372,7 @@ const overlayResizeObserver =
 if (document.body) {
   setupBodyObservers();
 } else {
-  document.addEventListener('DOMContentLoaded', setupBodyObservers, { once: true });
+  document.addEventListener("DOMContentLoaded", setupBodyObservers, { once: true });
 }
 
 // Scroll must update overlays on every frame — skip the throttle to avoid 50 ms lag.
@@ -2383,15 +2383,15 @@ if (document.body) {
 // Nested-container scrollTop lives in a different space and must not be mixed in.
 const overlayScrollHandler = () => {
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-  window.parent.postMessage({ type: 'hypercanvas:overlayScroll', scrollY: window.scrollY }, '*');
+  window.parent.postMessage({ type: "hypercanvas:overlayScroll", scrollY: window.scrollY }, "*");
   needsOverlayUpdate = true;
   scheduleOverlayLoopIfNeeded();
 };
 const overlayResizeHandler = () => {
   scheduleThrottledOverlayUpdate();
 };
-window.addEventListener('scroll', overlayScrollHandler, true);
-window.addEventListener('resize', overlayResizeHandler);
+window.addEventListener("scroll", overlayScrollHandler, true);
+window.addEventListener("resize", overlayResizeHandler);
 
 // Task 1 of selection-flicker-some-elements: surface HMR + full-reload timing.
 // `vite:beforeUpdate` / `vite:afterUpdate` are emitted on `window` by Vite's
@@ -2399,12 +2399,12 @@ window.addEventListener('resize', overlayResizeHandler);
 // `beforeunload` + readystatechange let us tell a fast-refresh apart from a
 // full-document reload (hypothesis B).
 const VITE_LIFECYCLE_EVENTS = [
-  'vite:beforeUpdate',
-  'vite:afterUpdate',
-  'vite:beforeFullReload',
-  'vite:beforePrune',
-  'vite:invalidate',
-  'vite:error',
+  "vite:beforeUpdate",
+  "vite:afterUpdate",
+  "vite:beforeFullReload",
+  "vite:beforePrune",
+  "vite:invalidate",
+  "vite:error",
 ];
 for (const evt of VITE_LIFECYCLE_EVENTS) {
   window.addEventListener(evt, () => {
@@ -2414,7 +2414,7 @@ for (const evt of VITE_LIFECYCLE_EVENTS) {
     // beforePrune fires per-pruned-module on every HMR partial update, where the
     // document is NOT reloaded and the in-memory cache is preserved — flushing
     // there would just hammer sessionStorage with redundant sync writes.
-    if (evt === 'vite:beforeFullReload') {
+    if (evt === "vite:beforeFullReload") {
       persistSelectionGraceCache(true);
     }
     // After every HMR apply (vite:afterUpdate), force IMMEDIATE overlay repaint
@@ -2426,7 +2426,7 @@ for (const evt of VITE_LIFECYCLE_EVENTS) {
     // outline "stuck on old position" for ~50 ms. requestAnimationFrame is
     // the right cadence: we want to paint after the same frame that React
     // committed the text update.
-    if (evt === 'vite:afterUpdate') {
+    if (evt === "vite:afterUpdate") {
       invalidateSourceCache();
       requestAnimationFrame(() => {
         needsOverlayUpdate = true;
@@ -2435,12 +2435,12 @@ for (const evt of VITE_LIFECYCLE_EVENTS) {
     }
   });
 }
-window.addEventListener('beforeunload', () => {
-  logSelsurvLifecycle('beforeunload');
+window.addEventListener("beforeunload", () => {
+  logSelsurvLifecycle("beforeunload");
   persistSelectionGraceCache(true);
 });
-document.addEventListener('readystatechange', () => {
-  logSelsurvLifecycle('readystatechange');
+document.addEventListener("readystatechange", () => {
+  logSelsurvLifecycle("readystatechange");
 });
 
 // Restore the grace cache from sessionStorage. Must run before the first paint so
@@ -2451,45 +2451,45 @@ tryHydrateSelectionGraceCache();
 scheduleOverlayLoopIfNeeded();
 
 // Clean up observers and listeners when the iframe is unloaded
-window.addEventListener('unload', () => {
+window.addEventListener("unload", () => {
   if (overlayUpdateTimeoutId !== null) clearTimeout(overlayUpdateTimeoutId);
   if (overlayMutationObserver) overlayMutationObserver.disconnect();
   if (overlayResizeObserver) overlayResizeObserver.disconnect();
-  window.removeEventListener('scroll', overlayScrollHandler, true);
-  window.removeEventListener('resize', overlayResizeHandler);
-  document.removeEventListener('keydown', keydownForwardingHandler, true);
-  document.removeEventListener('contextmenu', contextMenuHandler, true);
-  document.removeEventListener('mousedown', mousedownHandler, true);
-  document.removeEventListener('dragstart', _nativeDragSuppressor, true);
-  document.removeEventListener('pointerdown', _dragPointerDown, true);
-  document.removeEventListener('pointermove', _dragPointerMove, true);
-  document.removeEventListener('pointerup', _dragPointerUp, true);
-  document.removeEventListener('pointercancel', _dragCleanupForPointerEvent, true);
-  document.removeEventListener('lostpointercapture', _dragCleanupForPointerEvent, true);
-  document.removeEventListener('click', _dragClickSuppressor, true);
+  window.removeEventListener("scroll", overlayScrollHandler, true);
+  window.removeEventListener("resize", overlayResizeHandler);
+  document.removeEventListener("keydown", keydownForwardingHandler, true);
+  document.removeEventListener("contextmenu", contextMenuHandler, true);
+  document.removeEventListener("mousedown", mousedownHandler, true);
+  document.removeEventListener("dragstart", _nativeDragSuppressor, true);
+  document.removeEventListener("pointerdown", _dragPointerDown, true);
+  document.removeEventListener("pointermove", _dragPointerMove, true);
+  document.removeEventListener("pointerup", _dragPointerUp, true);
+  document.removeEventListener("pointercancel", _dragCleanupForPointerEvent, true);
+  document.removeEventListener("lostpointercapture", _dragCleanupForPointerEvent, true);
+  document.removeEventListener("click", _dragClickSuppressor, true);
 });
 
 // === Design mode CSS (shared) ===
 function updateDesignStyles(mode: string): void {
-  const styleId = 'hyper-canvas-dynamic-styles';
+  const styleId = "hyper-canvas-dynamic-styles";
   let style = document.getElementById(styleId) as HTMLStyleElement | null;
   if (!style) {
-    style = document.createElement('style');
+    style = document.createElement("style");
     style.id = styleId;
     document.head.appendChild(style);
   }
 
   style.textContent = buildDesignStylesCSS({
-    mode: mode === 'interact' ? 'interact' : 'design',
+    mode: mode === "interact" ? "interact" : "design",
   });
 
-  if (mode !== 'interact') {
-    document.documentElement.classList.add('design-mode');
+  if (mode !== "interact") {
+    document.documentElement.classList.add("design-mode");
     // Mode flip → re-sweep. The CSS rule covers most cases; the JS sweep
     // handles elements where the browser ignores `-webkit-user-drag`.
     if (document.body) _disableNativeDraggableIn(document.body);
   } else {
-    document.documentElement.classList.remove('design-mode');
+    document.documentElement.classList.remove("design-mode");
   }
 }
 
@@ -2499,33 +2499,33 @@ function handleScreenshotRequest(requestId: string, elementId: string | null): v
 
   if (!target) {
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-    window.parent.postMessage({ type: 'hypercanvas:screenshotResult', requestId, dataUrl: null }, '*');
+    window.parent.postMessage({ type: "hypercanvas:screenshotResult", requestId, dataUrl: null }, "*");
     return;
   }
 
   html2canvas(target, { useCORS: true, allowTaint: true, backgroundColor: null, scale: 1 })
     .then((canvas) => {
-      const dataUrl = canvas.toDataURL('image/png');
+      const dataUrl = canvas.toDataURL("image/png");
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-      window.parent.postMessage({ type: 'hypercanvas:screenshotResult', requestId, dataUrl }, '*');
+      window.parent.postMessage({ type: "hypercanvas:screenshotResult", requestId, dataUrl }, "*");
     })
     .catch((err) => {
-      console.error('[HyperCanvas] Screenshot failed:', err);
+      console.error("[HyperCanvas] Screenshot failed:", err);
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-      window.parent.postMessage({ type: 'hypercanvas:screenshotResult', requestId, dataUrl: null }, '*');
+      window.parent.postMessage({ type: "hypercanvas:screenshotResult", requestId, dataUrl: null }, "*");
     });
 }
 
 // === Receive messages from parent webview ===
 // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview iframe, origin not applicable
-window.addEventListener('message', (event: MessageEvent) => {
+window.addEventListener("message", (event: MessageEvent) => {
   const msg = event.data;
   if (!msg || !msg.type) return;
 
   // Component switch: update renderedComponentPath so resolveCallSiteSource uses
   // the correct file path after explorer-driven component switches.
-  if (msg.type === 'hypercanvas:setComponent') {
-    if (typeof msg.component === 'string') {
+  if (msg.type === "hypercanvas:setComponent") {
+    if (typeof msg.component === "string") {
       renderedComponentPath = msg.component;
       // Invalidate fiber source cache — DOM elements now belong to a different component tree.
       invalidateSourceCache();
@@ -2535,8 +2535,8 @@ window.addEventListener('message', (event: MessageEvent) => {
 
   // Keyboard command from VS Code keybinding — bypass isDesignMode check
   // (command already has when clause, no need to double-check mode)
-  if (msg.type === 'hypercanvas:syntheticKeydown') {
-    const syntheticEvent = new KeyboardEvent('keydown', {
+  if (msg.type === "hypercanvas:syntheticKeydown") {
+    const syntheticEvent = new KeyboardEvent("keydown", {
       key: msg.key,
       shiftKey: !!msg.shiftKey,
       bubbles: true,
@@ -2546,14 +2546,14 @@ window.addEventListener('message', (event: MessageEvent) => {
     // but VS Code keybinding already has the when clause.
     // Force design mode flag temporarily for the synthetic event.
     const prevMode = state.engineMode;
-    state.engineMode = 'design';
+    state.engineMode = "design";
     keydownHandler(syntheticEvent);
     state.engineMode = prevMode;
     return;
   }
 
-  if (msg.type === 'hypercanvas:clearGraceCache') {
-    const elementId = typeof msg.elementId === 'string' ? msg.elementId : null;
+  if (msg.type === "hypercanvas:clearGraceCache") {
+    const elementId = typeof msg.elementId === "string" ? msg.elementId : null;
     if (elementId) {
       clearGraceCacheForElement(selectionGraceCache, elementId);
     } else {
@@ -2565,9 +2565,9 @@ window.addEventListener('message', (event: MessageEvent) => {
     return;
   }
 
-  if (msg.type === 'hypercanvas:stateUpdate') {
+  if (msg.type === "hypercanvas:stateUpdate") {
     if (msg.selectedIds !== undefined) {
-      logSelsurvSelectedIdsAssign('msg:stateUpdate', state.selectedIds, msg.selectedIds);
+      logSelsurvSelectedIdsAssign("msg:stateUpdate", state.selectedIds, msg.selectedIds);
       state.selectedIds = msg.selectedIds;
       // Parent has authoritative selection now — drop the post-reload stand-in
       // so subsequent paints follow normal pruning rules.
@@ -2577,7 +2577,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     if (msg.hoveredId !== undefined) state.hoveredId = msg.hoveredId;
     if (msg.hoveredItemIndex !== undefined) state.hoveredItemIndex = msg.hoveredItemIndex;
     if (msg.selectedItemIndices !== undefined) {
-      console.debug(SHIFTPARENT_TAG, 'stateUpdate:selectedItemIndices', {
+      console.debug(SHIFTPARENT_TAG, "stateUpdate:selectedItemIndices", {
         t: Math.round(performance.now()),
         incoming: msg.selectedItemIndices,
         prev: state.selectedItemIndices,
@@ -2598,8 +2598,8 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
 
   // Go to Visual: select element, scroll, and send computed style snapshot
-  if (msg.type === 'hypercanvas:goToVisual') {
-    logSelsurvSelectedIdsAssign('msg:goToVisual', state.selectedIds, [msg.elementId]);
+  if (msg.type === "hypercanvas:goToVisual") {
+    logSelsurvSelectedIdsAssign("msg:goToVisual", state.selectedIds, [msg.elementId]);
     state.selectedIds = [msg.elementId];
     state.selectedItemIndices = {};
     const el = findElementsByRef(msg.elementId, 0)[0];
@@ -2608,13 +2608,13 @@ window.addEventListener('message', (event: MessageEvent) => {
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
-          type: 'hypercanvas:computedStyleResult',
+          type: "hypercanvas:computedStyleResult",
           elementId: msg.elementId,
           itemIndex: null,
           computedStyle: extractComputedStyle(el),
           computedStyleSeq: ++elementClickSeq,
         },
-        '*',
+        "*",
       );
     }
     needsOverlayUpdate = true;
@@ -2623,7 +2623,7 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
 
   // Computed style request — for keyboard navigation and non-click selections
-  if (msg.type === 'hypercanvas:requestComputedStyle') {
+  if (msg.type === "hypercanvas:requestComputedStyle") {
     const elementId = msg.elementId as string;
     const itemIndex = (msg.itemIndex as number | null | undefined) ?? null;
     const el = findElementsByRef(elementId, itemIndex)[0] ?? null;
@@ -2631,71 +2631,71 @@ window.addEventListener('message', (event: MessageEvent) => {
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
-          type: 'hypercanvas:computedStyleResult',
+          type: "hypercanvas:computedStyleResult",
           elementId,
           itemIndex,
           computedStyle: extractComputedStyle(el),
           computedStyleSeq: ++elementClickSeq,
         },
-        '*',
+        "*",
       );
     }
     return;
   }
 
   // Scroll to element without changing selection (tree row click → canvas scroll)
-  if (msg.type === 'hypercanvas:scrollToElement') {
+  if (msg.type === "hypercanvas:scrollToElement") {
     const el = findElementsByRef(msg.elementId, 0)[0];
     if (el) scrollIntoViewCenterSmooth(el);
     return;
   }
 
   // Content extraction requests from extension (Copy Text / Copy as HTML)
-  if (msg.type === 'hypercanvas:getElementText') {
+  if (msg.type === "hypercanvas:getElementText") {
     const el = findElementsByRef(msg.elementId, 0)[0] ?? null;
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
     window.parent.postMessage(
       {
-        type: 'hypercanvas:elementContentResult',
+        type: "hypercanvas:elementContentResult",
         requestId: msg.requestId,
         text: el ? el.innerText : null,
         html: null,
       },
-      '*',
+      "*",
     );
     return;
   }
-  if (msg.type === 'hypercanvas:getElementHTML') {
+  if (msg.type === "hypercanvas:getElementHTML") {
     const el = findElementsByRef(msg.elementId, 0)[0] ?? null;
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
     window.parent.postMessage(
       {
-        type: 'hypercanvas:elementContentResult',
+        type: "hypercanvas:elementContentResult",
         requestId: msg.requestId,
         text: null,
         html: el ? el.outerHTML : null,
       },
-      '*',
+      "*",
     );
     return;
   }
 
   // Live resize preview — apply inline size to element so user sees instant feedback
-  if (msg.type === 'hypercanvas:previewResize') {
+  if (msg.type === "hypercanvas:previewResize") {
     const id = msg.elementId as string;
     const el = findElementsByRef(id, 0)[0] ?? null;
     if (el) {
       if (!_previewResizeOrig.has(id)) {
         _previewResizeOrig.set(id, { width: el.style.width, height: el.style.height });
       }
-      if (typeof msg.width === 'number') el.style.width = `${msg.width}px`;
-      if (typeof msg.height === 'number') el.style.height = `${msg.height}px`;
+      if (typeof msg.width === "number") el.style.width = `${msg.width}px`;
+      if (typeof msg.height === "number") el.style.height = `${msg.height}px`;
     }
     return;
   }
 
   // Restore inline size on cancel (no AST write)
-  if (msg.type === 'hypercanvas:clearPreviewResize') {
+  if (msg.type === "hypercanvas:clearPreviewResize") {
     const id = msg.elementId as string;
     const el = findElementsByRef(id, 0)[0] ?? null;
     const orig = _previewResizeOrig.get(id);
@@ -2708,13 +2708,13 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
 
   // Screenshot request from MCP tool
-  if (msg.type === 'hypercanvas:takeScreenshot') {
+  if (msg.type === "hypercanvas:takeScreenshot") {
     handleScreenshotRequest(msg.requestId as string, msg.elementId as string | null);
     return;
   }
 
   // Approach B: extension host resolved a server-side (RSC) source map
-  if (msg.type === 'hypercanvas:serverSourceMapResult') {
+  if (msg.type === "hypercanvas:serverSourceMapResult") {
     const { filePath, line, col, result } = msg as {
       filePath: string;
       line: number;

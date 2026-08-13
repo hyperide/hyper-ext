@@ -57,7 +57,7 @@ Drag-and-drop реorder работает, но без визуального ф�
 }
 .hyper-drop-indicator::before,
 .hyper-drop-indicator::after {
-  content: '' !important;
+  content: "" !important;
   position: absolute !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
@@ -136,13 +136,13 @@ if (_dragIndicatorEl) {
       const r = dropEl!.getBoundingClientRect();
       const isBefore = e.clientY < r.top + r.height / 2;
       const lineY = isBefore ? r.top : r.bottom;
-      _dragIndicatorEl.style.display = 'block';
+      _dragIndicatorEl.style.display = "block";
       _dragIndicatorEl.style.top = `${lineY - 1}px`;
     } else {
-      _dragIndicatorEl.style.display = 'none';
+      _dragIndicatorEl.style.display = "none";
     }
   } else {
-    _dragIndicatorEl.style.display = 'none';
+    _dragIndicatorEl.style.display = "none";
   }
 }
 ```
@@ -160,7 +160,7 @@ if (_dragIndicatorEl) {
   _dragIndicatorEl = null;
 }
 if (_dragSourceEl) {
-  _dragSourceEl.style.opacity = '';
+  _dragSourceEl.style.opacity = "";
   _dragSourceEl = null;
 }
 ```
@@ -168,7 +168,7 @@ if (_dragSourceEl) {
 **Важный нюанс**: ghost клонирует DOM включая dataset. Нужно убрать `data-uniq-id` у клона чтобы `elementFromPoint` не путал его с оригиналом:
 
 ```ts
-ghost.removeAttribute('data-uniq-id');
+ghost.removeAttribute("data-uniq-id");
 ```
 
 **Ещё нюанс**: в `_dragPointerDown` нужно сохранить ссылку на source element для offset-вычислений. Сохранить в `_dragSourceEl` до перехода в 'dragging'.

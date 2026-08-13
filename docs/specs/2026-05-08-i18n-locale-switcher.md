@@ -100,7 +100,7 @@ DOM-discovered locale is the active one.
 
 ```ts
 if (!resolved || resolved.resolvedText === null) {
-  return { kind: 'unsupported', reason: 'missing-source-location' };
+  return { kind: "unsupported", reason: "missing-source-location" };
 }
 ```
 

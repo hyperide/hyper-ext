@@ -75,7 +75,7 @@ Add targeted console.log to identify which hypothesis is correct:
    ```typescript
    const poll = setInterval(async () => {
      const ids = await appFrame.evaluate(() => (window as any).__hyperCanvasState?.selectedIds);
-     console.log('[round-trip-diag]', ids);
+     console.log("[round-trip-diag]", ids);
    }, 1000);
    ```
 3. Run targeted test:

@@ -3,16 +3,16 @@
  * Defines messages, project types, and shared interfaces
  */
 
-import type { I18nLibrary } from '../../../shared/i18n-text/types';
+import type { I18nLibrary } from "../../../shared/i18n-text/types";
 
 // ============================================
 // Project Detection
 // ============================================
 
-export type ProjectType = 'vite' | 'nextjs' | 'cra' | 'remix' | 'webpack' | 'bun' | 'unknown';
+export type ProjectType = "vite" | "nextjs" | "cra" | "remix" | "webpack" | "bun" | "unknown";
 
 /** Monorepo topology of the workspace */
-export type RepoType = 'simple' | 'mono-nx' | 'mono-turbo' | 'mono-pnpm' | 'mono-lerna' | 'mono-generic';
+export type RepoType = "simple" | "mono-nx" | "mono-turbo" | "mono-pnpm" | "mono-lerna" | "mono-generic";
 
 export interface ProjectInfo {
   type: ProjectType;
@@ -28,7 +28,7 @@ export interface ProjectInfo {
 /** Describes an unsupported project type that can't render in browser without intervention. */
 export interface UnsupportedProjectError {
   /** Discriminant for the unsupported project category */
-  type: 'react-native';
+  type: "react-native";
   /** Human-readable explanation shown in the error screen */
   message: string;
   /** Button label for the fix action (e.g. "Fix: Add react-native-web") */
@@ -41,36 +41,36 @@ export interface UnsupportedProjectError {
 
 /** Detected CSS system in the project */
 export type CssSystem =
-  | 'tailwind'
-  | 'cssmodules'
-  | 'styled-components'
-  | 'emotion'
-  | 'tamagui'
-  | 'vanilla-extract'
-  | 'pandacss'
-  | 'unocss'
-  | 'stylex'
-  | 'mui'
-  | 'antd'
-  | 'chakra'
-  | 'mantine'
-  | 'fluentui'
-  | 'nextui'
-  | 'daisyui'
-  | 'shadcn'
-  | 'sass'
-  | 'unknown';
+  | "tailwind"
+  | "cssmodules"
+  | "styled-components"
+  | "emotion"
+  | "tamagui"
+  | "vanilla-extract"
+  | "pandacss"
+  | "unocss"
+  | "stylex"
+  | "mui"
+  | "antd"
+  | "chakra"
+  | "mantine"
+  | "fluentui"
+  | "nextui"
+  | "daisyui"
+  | "shadcn"
+  | "sass"
+  | "unknown";
 
 /** CSS systems where the extension can read AND write styles via AST */
 export const WRITABLE_CSS_SYSTEMS: CssSystem[] = [
-  'tailwind',
-  'cssmodules',
-  'styled-components',
-  'emotion',
-  'tamagui',
-  'shadcn', // built on Tailwind
-  'daisyui', // built on Tailwind
-  'sass', // className-based, same as plain CSS
+  "tailwind",
+  "cssmodules",
+  "styled-components",
+  "emotion",
+  "tamagui",
+  "shadcn", // built on Tailwind
+  "daisyui", // built on Tailwind
+  "sass", // className-based, same as plain CSS
 ];
 
 /** What the extension can do with this project */
@@ -78,7 +78,7 @@ export interface ProjectCapabilities {
   /** Detected CSS framework */
   cssSystem: CssSystem;
   /** Detected UI kit ('tailwind' | 'tamagui' | 'none') — backward compat */
-  uiKit: 'tailwind' | 'tamagui' | 'none';
+  uiKit: "tailwind" | "tamagui" | "none";
   /** Detected project/bundler type */
   projectType?: ProjectType;
   /** Monorepo topology of the workspace */
@@ -95,7 +95,7 @@ export interface ProjectCapabilities {
 // Dev Server
 // ============================================
 
-export type DevServerStatus = 'stopped' | 'starting' | 'running' | 'error';
+export type DevServerStatus = "stopped" | "starting" | "running" | "error";
 
 export interface DevServerState {
   status: DevServerStatus;
@@ -110,14 +110,14 @@ export interface DevServerState {
 
 // Editor operations (already exist in EditorBridge.ts)
 export type EditorMessage =
-  | { type: 'editor:openFile'; path: string; line?: number; column?: number }
-  | { type: 'editor:goToCode'; path: string; line: number; column: number }
-  | { type: 'editor:getActiveFile'; requestId: string };
+  | { type: "editor:openFile"; path: string; line?: number; column?: number }
+  | { type: "editor:goToCode"; path: string; line: number; column: number }
+  | { type: "editor:getActiveFile"; requestId: string };
 
 // AST operations (local)
 export type AstMessage =
   | {
-      type: 'ast:updateStyles';
+      type: "ast:updateStyles";
       requestId: string;
       filePath: string;
       elementId: string;
@@ -126,14 +126,14 @@ export type AstMessage =
       selectedSourceTabId?: string;
     }
   | {
-      type: 'ast:updateProps';
+      type: "ast:updateProps";
       requestId: string;
       filePath: string;
       elementId: string;
       props: Record<string, unknown>;
     }
   | {
-      type: 'ast:insertElement';
+      type: "ast:insertElement";
       requestId: string;
       filePath: string;
       parentId: string | null;
@@ -144,26 +144,26 @@ export type AstMessage =
       componentFilePath?: string;
     }
   | {
-      type: 'ast:deleteElements';
+      type: "ast:deleteElements";
       requestId: string;
       filePath: string;
       elementIds: string[];
     }
   | {
-      type: 'ast:duplicateElement';
+      type: "ast:duplicateElement";
       requestId: string;
       filePath: string;
       elementId: string;
     }
   | {
-      type: 'ast:updateText';
+      type: "ast:updateText";
       requestId: string;
       filePath: string;
       elementId: string;
       text: string;
     }
   | {
-      type: 'ast:wrapElement';
+      type: "ast:wrapElement";
       requestId: string;
       filePath: string;
       elementId: string;
@@ -177,7 +177,7 @@ export type AstMessage =
        * cross-component, or leaf-target moves are all supported.
        * See `AstService.moveElement` / `MoveResult` for the contract.
        */
-      type: 'ast:moveElement';
+      type: "ast:moveElement";
       requestId: string;
       /** Hint for resolving sourceId — typically the source's file. */
       filePath: string;
@@ -185,11 +185,11 @@ export type AstMessage =
       sourceId: string;
       /** nodeRef of element to move relative to (may live in a different file) */
       targetId: string;
-      position: 'before' | 'after';
+      position: "before" | "after";
     }
   | {
       /** Write a translated value for a given i18n key in the active locale resource file. */
-      type: 'ast:writeI18nResource';
+      type: "ast:writeI18nResource";
       requestId: string;
       /** Ignored — extension uses its own workspace root */
       projectRoot?: string;
@@ -214,7 +214,7 @@ export type AstMessage =
 
 // AST response
 export interface AstResponse {
-  type: 'ast:response';
+  type: "ast:response";
   requestId: string;
   success: boolean;
   data?: unknown;
@@ -223,14 +223,14 @@ export interface AstResponse {
 
 // Component operations (local)
 export type ComponentMessage =
-  | { type: 'component:list'; requestId: string }
-  | { type: 'component:listGroups'; requestId: string }
-  | { type: 'component:tests'; requestId: string; componentPath: string }
-  | { type: 'component:parse'; requestId: string; componentPath: string }
-  | { type: 'component:getDefinitions'; requestId: string; componentPath: string };
+  | { type: "component:list"; requestId: string }
+  | { type: "component:listGroups"; requestId: string }
+  | { type: "component:tests"; requestId: string; componentPath: string }
+  | { type: "component:parse"; requestId: string; componentPath: string }
+  | { type: "component:getDefinitions"; requestId: string; componentPath: string };
 
 export interface ComponentResponse {
-  type: 'component:response';
+  type: "component:response";
   requestId: string;
   success: boolean;
   data?: unknown;
@@ -239,12 +239,12 @@ export interface ComponentResponse {
 
 // File operations (local)
 export type FileMessage =
-  | { type: 'file:read'; requestId: string; filePath: string }
-  | { type: 'file:write'; requestId: string; filePath: string; content: string }
-  | { type: 'file:getTree'; requestId: string; directory?: string };
+  | { type: "file:read"; requestId: string; filePath: string }
+  | { type: "file:write"; requestId: string; filePath: string; content: string }
+  | { type: "file:getTree"; requestId: string; directory?: string };
 
 export interface FileResponse {
-  type: 'file:response';
+  type: "file:response";
   requestId: string;
   success: boolean;
   data?: unknown;
@@ -253,17 +253,17 @@ export interface FileResponse {
 
 // VS Code command execution (webview -> extension)
 export type CommandMessage =
-  | { type: 'command:execute'; command: string; args?: string[] }
-  | { type: 'command:fixUnsupportedProject' };
+  | { type: "command:execute"; command: string; args?: string[] }
+  | { type: "command:fixUnsupportedProject" };
 
 // Dev server operations
 export type DevServerMessage =
-  | { type: 'devServer:start'; requestId: string }
-  | { type: 'devServer:stop'; requestId: string }
-  | { type: 'devServer:status'; requestId: string };
+  | { type: "devServer:start"; requestId: string }
+  | { type: "devServer:stop"; requestId: string }
+  | { type: "devServer:status"; requestId: string };
 
 export interface DevServerResponse {
-  type: 'devServer:response';
+  type: "devServer:response";
   requestId: string;
   success: boolean;
   status?: DevServerStatus;
@@ -275,18 +275,18 @@ export interface DevServerResponse {
 // AI operations (local with user's API key)
 export type AIMessage =
   | {
-      type: 'ai:chat';
+      type: "ai:chat";
       requestId: string;
-      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+      messages: Array<{ role: "user" | "assistant"; content: string }>;
       chatId?: string;
     }
-  | { type: 'ai:abort'; requestId: string }
-  | { type: 'ai:listChats'; requestId: string }
-  | { type: 'ai:getChat'; requestId: string; chatId: string }
-  | { type: 'ai:deleteChat'; requestId: string; chatId: string };
+  | { type: "ai:abort"; requestId: string }
+  | { type: "ai:listChats"; requestId: string }
+  | { type: "ai:getChat"; requestId: string; chatId: string }
+  | { type: "ai:deleteChat"; requestId: string; chatId: string };
 
 export interface AIResponse {
-  type: 'ai:response';
+  type: "ai:response";
   requestId: string;
   success: boolean;
   data?: unknown;
@@ -294,20 +294,20 @@ export interface AIResponse {
 }
 
 export interface AIDelta {
-  type: 'ai:delta';
+  type: "ai:delta";
   requestId: string;
   text: string;
 }
 
 export interface AIToolUse {
-  type: 'ai:toolUse';
+  type: "ai:toolUse";
   requestId: string;
   toolName: string;
   input: unknown;
 }
 
 export interface AIToolResult {
-  type: 'ai:toolResult';
+  type: "ai:toolResult";
   requestId: string;
   toolName: string;
   result: unknown;
@@ -315,17 +315,17 @@ export interface AIToolResult {
 
 // Canvas Composition (local storage)
 export type CompositionMessage =
-  | { type: 'composition:get'; requestId: string; componentPath: string }
+  | { type: "composition:get"; requestId: string; componentPath: string }
   | {
-      type: 'composition:save';
+      type: "composition:save";
       requestId: string;
       componentPath: string;
       data: CanvasComposition;
     }
-  | { type: 'composition:list'; requestId: string };
+  | { type: "composition:list"; requestId: string };
 
 export interface CompositionResponse {
-  type: 'composition:response';
+  type: "composition:response";
   requestId: string;
   success: boolean;
   data?: unknown;
@@ -334,13 +334,13 @@ export interface CompositionResponse {
 
 // Dev server logs (Logs & AI panel webview <-> extension)
 export type DevServerLogsMessage =
-  | { type: 'devserver:requestLogs' }
-  | { type: 'devserver:clearLogs' }
-  | { type: 'runtime:error'; error: DevServerRuntimeError | null };
+  | { type: "devserver:requestLogs" }
+  | { type: "devserver:clearLogs" }
+  | { type: "runtime:error"; error: DevServerRuntimeError | null };
 
 // Runtime error detected from iframe preview (via PreviewProxy script injection)
 export interface DevServerRuntimeError {
-  framework: 'nextjs' | 'vite' | 'bun' | 'unknown';
+  framework: "nextjs" | "vite" | "bun" | "unknown";
   type: string;
   message: string;
   file?: string;
@@ -351,18 +351,18 @@ export interface DevServerRuntimeError {
 
 // Runtime error pushed from extension to Logs & AI panel webview
 export interface DevServerRuntimeErrorEvent {
-  type: 'devserver:runtimeError';
+  type: "devserver:runtimeError";
   error: DevServerRuntimeError | null;
 }
 
 export interface DevServerLogsResponse {
-  type: 'devserver:logs';
+  type: "devserver:logs";
   logs: Array<{ line: string; timestamp: number; isError: boolean }>;
   hasErrors: boolean;
 }
 
 export interface DevServerLogAppend {
-  type: 'devserver:logAppend';
+  type: "devserver:logAppend";
   entries: Array<{ line: string; timestamp: number; isError: boolean }>;
   hasErrors: boolean;
 }
@@ -370,21 +370,21 @@ export interface DevServerLogAppend {
 // AI chat (Logs & AI panel webview -> extension)
 export type AIChatMessage =
   | {
-      type: 'ai:chat';
+      type: "ai:chat";
       requestId: string;
-      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+      messages: Array<{ role: "user" | "assistant"; content: string }>;
     }
-  | { type: 'ai:abort'; requestId: string };
+  | { type: "ai:abort"; requestId: string };
 
 // AI stream events (extension -> Logs & AI panel webview)
 export interface AIChatDelta {
-  type: 'ai:delta';
+  type: "ai:delta";
   requestId: string;
   text: string;
 }
 
 export interface AIChatToolUse {
-  type: 'ai:toolUse';
+  type: "ai:toolUse";
   requestId: string;
   toolUseId: string;
   toolName: string;
@@ -392,26 +392,26 @@ export interface AIChatToolUse {
 }
 
 export interface AIChatToolResult {
-  type: 'ai:toolResult';
+  type: "ai:toolResult";
   requestId: string;
   toolUseId: string;
   result: { success: boolean; output?: string; error?: string };
 }
 
 export interface AIChatDone {
-  type: 'ai:done';
+  type: "ai:done";
   requestId: string;
 }
 
 export interface AIChatError {
-  type: 'ai:error';
+  type: "ai:error";
   requestId: string;
   error: string;
 }
 
 // Style reading operations (right panel inspector)
 export type StylesMessage = {
-  type: 'styles:readClassName';
+  type: "styles:readClassName";
   requestId: string;
   elementId: string;
   componentPath: string;
@@ -421,16 +421,16 @@ export type StylesMessage = {
 };
 
 export interface StylesResponse {
-  type: 'styles:response';
+  type: "styles:response";
   requestId: string;
   success: boolean;
   className?: string;
-  childrenType?: 'text' | 'expression' | 'expression-complex' | 'jsx';
+  childrenType?: "text" | "expression" | "expression-complex" | "jsx";
   textContent?: string;
   tagType?: string;
   childrenLocation?: { line: number; column: number };
-  styleReadResult?: import('@lib/style-read/types').StyleReadResult;
-  i18nText?: import('@shared/i18n-text/types').I18nBindingResult;
+  styleReadResult?: import("@lib/style-read/types").StyleReadResult;
+  i18nText?: import("@shared/i18n-text/types").I18nBindingResult;
   error?: string;
 }
 
@@ -470,7 +470,7 @@ export interface CanvasComposition {
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: string;
   toolCalls?: Array<{
@@ -499,6 +499,6 @@ export type {
   ParseOptions,
   PrintOptions,
   SharedEditorState,
-} from '@lib/types';
+} from "@lib/types";
 
-export type { I18nBindingResult } from '@shared/i18n-text/types';
+export type { I18nBindingResult } from "@shared/i18n-text/types";

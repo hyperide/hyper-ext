@@ -123,7 +123,7 @@ In `client/components/RightSidebar/sections/I18nTextInspector.tsx`:
 2. Change `currentKey` derivation:
 
    ```ts
-   const currentKey = optimisticKey ?? (i18nBinding.kind === 'i18n' ? i18nBinding.key : '');
+   const currentKey = optimisticKey ?? (i18nBinding.kind === "i18n" ? i18nBinding.key : "");
    ```
 
 3. In `commitKey`, set the optimistic key before calling `onKeyChange`:
@@ -132,20 +132,20 @@ In `client/components/RightSidebar/sections/I18nTextInspector.tsx`:
    const commitKey = (key: string) => {
      if (!key) {
        setShowKeyDropdown(false);
-       setKeySearch('');
+       setKeySearch("");
        return;
      }
      setOptimisticKey(key); // ← optimistic display
      onKeyChange?.(key);
      setShowKeyDropdown(false);
-     setKeySearch('');
+     setKeySearch("");
    };
    ```
 
 4. Add an effect that clears the optimistic key once the prop catches up:
 
    ```ts
-   const realKey = i18nBinding.kind === 'i18n' ? i18nBinding.key : '';
+   const realKey = i18nBinding.kind === "i18n" ? i18nBinding.key : "";
    useEffect(() => {
      if (optimisticKey !== null && realKey === optimisticKey) {
        setOptimisticKey(null);

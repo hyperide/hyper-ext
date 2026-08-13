@@ -71,7 +71,7 @@ export interface TestInfo {
 }
 
 export interface TestGroup {
-  type: 'unit' | 'e2e' | 'variants';
+  type: "unit" | "e2e" | "variants";
   path: string;
   relativePath: string;
   tests: TestInfo[];

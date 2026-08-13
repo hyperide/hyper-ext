@@ -6,20 +6,20 @@
  * Pattern follows StateHub: register panels, broadcast updates.
  */
 
-import { appendFileSync } from 'node:fs';
-import type * as vscode from 'vscode';
-import type { DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
-import { DIAGNOSTIC_LOG_LIMIT } from '../../../shared/diagnostic-types';
-import type { RuntimeError } from '../../../shared/runtime-error';
-import type { LogEntry } from './services/DevServerManager';
-import { DiagnosticPersistenceService } from './services/DiagnosticPersistenceService';
+import { appendFileSync } from "node:fs";
+import type * as vscode from "vscode";
+import type { DiagnosticLogEntry, DiagnosticState } from "../../../shared/diagnostic-types";
+import { DIAGNOSTIC_LOG_LIMIT } from "../../../shared/diagnostic-types";
+import type { RuntimeError } from "../../../shared/runtime-error";
+import type { LogEntry } from "./services/DevServerManager";
+import { DiagnosticPersistenceService } from "./services/DiagnosticPersistenceService";
 
 // No module-level ERROR_SINK_PATH — read at call time so startDiagnosticCapture
 // can set the env var after module load and reach this path.
 
 const ANSI_STRIP = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[A-Z\\[\]^_@]/g;
 function stripAnsi(s: string): string {
-  return s.replace(ANSI_STRIP, '');
+  return s.replace(ANSI_STRIP, "");
 }
 
 /** Max server log entries included in AI diagnostic context */
@@ -31,7 +31,7 @@ export class DiagnosticHub {
   private _panels = new Map<string, vscode.Webview>();
   private _logs: DiagnosticLogEntry[] = [];
   private _runtimeError: RuntimeError | null = null;
-  private _buildStatus: DiagnosticState['buildStatus'] = 'idle';
+  private _buildStatus: DiagnosticState["buildStatus"] = "idle";
   private _isConnected = false;
   private _persistence: DiagnosticPersistenceService | null = null;
 
@@ -80,7 +80,7 @@ export class DiagnosticHub {
   sendState(panelId: string): void {
     const webview = this._panels.get(panelId);
     if (webview) {
-      webview.postMessage({ type: 'diagnostic:state', state: this.state });
+      webview.postMessage({ type: "diagnostic:state", state: this.state });
     }
   }
 
@@ -91,22 +91,22 @@ export class DiagnosticHub {
     const entries: DiagnosticLogEntry[] = logs.map((l) => ({
       line: l.line,
       timestamp: l.timestamp,
-      source: 'server' as const,
+      source: "server" as const,
       isError: l.isError,
     }));
     this._isConnected = true;
     this._appendLogs(entries);
     // Broadcast to all registered webview panels (logs panel, preview panel, etc.)
-    this._broadcast({ type: 'diagnostic:log', entries });
+    this._broadcast({ type: "diagnostic:log", entries });
   }
 
   /**
    * Update build status from DevServerManager state changes.
    */
-  setBuildStatus(status: DiagnosticState['buildStatus']): void {
+  setBuildStatus(status: DiagnosticState["buildStatus"]): void {
     this._buildStatus = status;
-    this._isConnected = status === 'ready' || status === 'building';
-    this._broadcast({ type: 'diagnostic:buildStatus', status: this._buildStatus });
+    this._isConnected = status === "ready" || status === "building";
+    this._broadcast({ type: "diagnostic:buildStatus", status: this._buildStatus });
   }
 
   /**
@@ -114,15 +114,15 @@ export class DiagnosticHub {
    */
   handleConsoleCapture(entries: Array<{ level: string; args: string[]; timestamp: number }>): void {
     const logEntries: DiagnosticLogEntry[] = entries.map((e) => ({
-      line: e.args.join(' '),
+      line: e.args.join(" "),
       timestamp: e.timestamp,
-      source: 'console' as const,
-      isError: e.level === 'error',
-      level: e.level as DiagnosticLogEntry['level'],
+      source: "console" as const,
+      isError: e.level === "error",
+      level: e.level as DiagnosticLogEntry["level"],
     }));
 
     this._appendLogs(logEntries);
-    this._broadcast({ type: 'diagnostic:log', entries: logEntries });
+    this._broadcast({ type: "diagnostic:log", entries: logEntries });
   }
 
   /**
@@ -135,13 +135,13 @@ export class DiagnosticHub {
         {
           line: `Runtime Error (${error.framework}): ${error.type}: ${error.message}`,
           timestamp: Date.now(),
-          source: 'console',
+          source: "console",
           isError: true,
-          level: 'error',
+          level: "error",
         },
       ]);
     }
-    this._broadcast({ type: 'diagnostic:runtimeError', error });
+    this._broadcast({ type: "diagnostic:runtimeError", error });
   }
 
   /**
@@ -151,7 +151,7 @@ export class DiagnosticHub {
     this._logs = [];
     this._runtimeError = null;
     this._persistence?.clear();
-    this._broadcast({ type: 'diagnostic:clear' });
+    this._broadcast({ type: "diagnostic:clear" });
   }
 
   /**
@@ -160,7 +160,7 @@ export class DiagnosticHub {
   getAIContext(): string {
     const parts: string[] = [];
 
-    if (this._buildStatus !== 'ready' && this._buildStatus !== 'idle') {
+    if (this._buildStatus !== "ready" && this._buildStatus !== "idle") {
       parts.push(`Build status: ${this._buildStatus}`);
     }
 
@@ -168,26 +168,26 @@ export class DiagnosticHub {
       const e = this._runtimeError;
       parts.push(
         `Runtime Error (${e.framework}): ${e.type}: ${e.message}` +
-          (e.file ? `\nFile: ${e.file}${e.line ? `:${e.line}` : ''}` : '') +
-          (e.codeframe ? `\n\`\`\`\n${e.codeframe}\n\`\`\`` : ''),
+          (e.file ? `\nFile: ${e.file}${e.line ? `:${e.line}` : ""}` : "") +
+          (e.codeframe ? `\n\`\`\`\n${e.codeframe}\n\`\`\`` : ""),
       );
     }
 
-    const serverLogs = this._logs.filter((l) => l.source === 'server').slice(-SERVER_LOG_AI_CONTEXT_LIMIT);
+    const serverLogs = this._logs.filter((l) => l.source === "server").slice(-SERVER_LOG_AI_CONTEXT_LIMIT);
     if (serverLogs.length > 0) {
       parts.push(
-        `Server logs (last ${serverLogs.length}):\n\`\`\`\n${serverLogs.map((l) => stripAnsi(l.line)).join('\n')}\n\`\`\``,
+        `Server logs (last ${serverLogs.length}):\n\`\`\`\n${serverLogs.map((l) => stripAnsi(l.line)).join("\n")}\n\`\`\``,
       );
     }
 
-    const consoleLogs = this._logs.filter((l) => l.source === 'console').slice(-CONSOLE_LOG_AI_CONTEXT_LIMIT);
+    const consoleLogs = this._logs.filter((l) => l.source === "console").slice(-CONSOLE_LOG_AI_CONTEXT_LIMIT);
     if (consoleLogs.length > 0) {
       parts.push(
-        `Console output (last ${consoleLogs.length}):\n\`\`\`\n${consoleLogs.map((l) => `[${l.level ?? 'log'}] ${stripAnsi(l.line)}`).join('\n')}\n\`\`\``,
+        `Console output (last ${consoleLogs.length}):\n\`\`\`\n${consoleLogs.map((l) => `[${l.level ?? "log"}] ${stripAnsi(l.line)}`).join("\n")}\n\`\`\``,
       );
     }
 
-    return parts.join('\n\n');
+    return parts.join("\n\n");
   }
 
   dispose(): void {
@@ -209,18 +209,18 @@ export class DiagnosticHub {
     // Read the env var at call time so startDiagnosticCapture (set after module load) works.
     const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
     if (sinkPath) {
-      const errorEntries = entries.filter((e) => e.isError || e.level === 'error');
+      const errorEntries = entries.filter((e) => e.isError || e.level === "error");
       if (errorEntries.length > 0) {
         const ndjson = errorEntries
           .map((e) =>
             JSON.stringify({
               ts: e.timestamp,
-              kind: 'diagnosticEntry',
-              source: e.source ?? '',
-              line: stripAnsi(e.line ?? '').replace(/\n/g, ' '),
+              kind: "diagnosticEntry",
+              source: e.source ?? "",
+              line: stripAnsi(e.line ?? "").replace(/\n/g, " "),
             }),
           )
-          .join('\n');
+          .join("\n");
         try {
           appendFileSync(sinkPath, `${ndjson}\n`);
         } catch {

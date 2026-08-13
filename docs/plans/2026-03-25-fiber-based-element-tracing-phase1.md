@@ -110,7 +110,7 @@ export interface NodeMapEntry {
 
 /** Server → Client: pushed after every file parse */
 export interface NodeMapUpdate {
-  type: 'node-map-update';
+  type: "node-map-update";
   filePath: string;
   fileHash: string;
   version: number;
@@ -121,13 +121,13 @@ export interface NodeMapUpdate {
 
 /** Server → Client: pushed when a file is deleted or renamed */
 export interface NodeMapInvalidate {
-  type: 'node-map-invalidate';
+  type: "node-map-invalidate";
   filePath: string;
 }
 
 /** Client → Server: resolve DOM click to nodeRef */
 export interface ResolveElement {
-  type: 'resolve-element';
+  type: "resolve-element";
   requestId: string;
   source: SourceLocation;
   itemIndex: number;
@@ -135,7 +135,7 @@ export interface ResolveElement {
 
 /** Server → Client: response to resolve-element */
 export interface ResolveElementResponse {
-  type: 'resolve-element-response';
+  type: "resolve-element-response";
   requestId: string;
   nodeRef: NodeRef | null;
   entry: NodeMapEntry | null;
@@ -195,7 +195,7 @@ export interface MutationResponse {
 
 /* ─── Sync state ─────────────────────────────────────────────────── */
 
-export type SyncState = 'synced' | 'awaiting-both' | 'awaiting-hmr' | 'awaiting-map';
+export type SyncState = "synced" | "awaiting-both" | "awaiting-hmr" | "awaiting-map";
 ```
 
 - [ ] **Step 2: Verify file compiles**
@@ -230,52 +230,52 @@ Pure function: Babel AST → `NodeMapEntry[]`. No I/O, no state.
  * @file Tests for NodeMap builder — AST to NodeMapEntry[] conversion
  */
 
-import { describe, expect, it } from 'bun:test';
-import { parse } from '@babel/parser';
-import type * as t from '@babel/types';
-import { buildNodeMap } from './node-map-builder';
+import { describe, expect, it } from "bun:test";
+import { parse } from "@babel/parser";
+import type * as t from "@babel/types";
+import { buildNodeMap } from "./node-map-builder";
 
 function parseJSX(code: string): t.File {
   return parse(code, {
-    sourceType: 'module',
-    plugins: ['typescript', 'jsx'],
+    sourceType: "module",
+    plugins: ["typescript", "jsx"],
   });
 }
 
-describe('buildNodeMap', () => {
-  it('should build entries for simple JSX', () => {
+describe("buildNodeMap", () => {
+  it("should build entries for simple JSX", () => {
     const ast = parseJSX(`const App = () => <div><span>hello</span></div>;`);
-    const entries = buildNodeMap(ast, 'src/App.tsx');
+    const entries = buildNodeMap(ast, "src/App.tsx");
 
     expect(entries.length).toBe(2); // div + span
-    expect(entries[0].tag).toBe('div');
-    expect(entries[0].loc.fileName).toBe('src/App.tsx');
+    expect(entries[0].tag).toBe("div");
+    expect(entries[0].loc.fileName).toBe("src/App.tsx");
     expect(entries[0].loc.line).toBeGreaterThan(0);
     expect(entries[0].isComponent).toBe(false);
     expect(entries[0].children.length).toBe(1);
     expect(entries[0].parentRef).toBeNull(); // top-level JSX
 
-    expect(entries[1].tag).toBe('span');
+    expect(entries[1].tag).toBe("span");
     expect(entries[1].parentRef).toBe(entries[0].nodeRef);
     expect(entries[1].children.length).toBe(0); // text child is not JSX
   });
 
-  it('should detect component elements (uppercase tag)', () => {
+  it("should detect component elements (uppercase tag)", () => {
     const ast = parseJSX(`const Page = () => <div><Card title="x" /><Button /></div>;`);
-    const entries = buildNodeMap(ast, 'src/Page.tsx');
+    const entries = buildNodeMap(ast, "src/Page.tsx");
 
-    const card = entries.find((e) => e.tag === 'Card');
-    const button = entries.find((e) => e.tag === 'Button');
+    const card = entries.find((e) => e.tag === "Card");
+    const button = entries.find((e) => e.tag === "Button");
 
     expect(card).toBeDefined();
     expect(card!.isComponent).toBe(true);
-    expect(card!.componentName).toBe('Card');
+    expect(card!.componentName).toBe("Card");
 
     expect(button).toBeDefined();
     expect(button!.isComponent).toBe(true);
   });
 
-  it('should handle nested components', () => {
+  it("should handle nested components", () => {
     const ast = parseJSX(`
       const App = () => (
         <Layout>
@@ -286,10 +286,10 @@ describe('buildNodeMap', () => {
         </Layout>
       );
     `);
-    const entries = buildNodeMap(ast, 'src/App.tsx');
+    const entries = buildNodeMap(ast, "src/App.tsx");
 
-    const layout = entries.find((e) => e.tag === 'Layout');
-    const main = entries.find((e) => e.tag === 'main');
+    const layout = entries.find((e) => e.tag === "Layout");
+    const main = entries.find((e) => e.tag === "main");
 
     expect(layout).toBeDefined();
     expect(layout!.children.length).toBe(2); // Header + main
@@ -299,57 +299,57 @@ describe('buildNodeMap', () => {
     expect(main!.children.length).toBe(1); // Card
   });
 
-  it('should generate stable nodeRef format', () => {
+  it("should generate stable nodeRef format", () => {
     const ast = parseJSX(`const A = () => <div><span /></div>;`);
-    const entries = buildNodeMap(ast, 'src/A.tsx');
+    const entries = buildNodeMap(ast, "src/A.tsx");
 
     for (const entry of entries) {
       expect(entry.nodeRef).toMatch(/^src\/A\.tsx:\d+$/);
     }
   });
 
-  it('should set endLoc correctly', () => {
+  it("should set endLoc correctly", () => {
     const ast = parseJSX(`const A = () => <div>text</div>;`);
-    const entries = buildNodeMap(ast, 'src/A.tsx');
+    const entries = buildNodeMap(ast, "src/A.tsx");
 
     expect(entries[0].endLoc.line).toBeGreaterThanOrEqual(entries[0].loc.line);
   });
 
-  it('should handle JSX member expressions (Dialog.Portal)', () => {
+  it("should handle JSX member expressions (Dialog.Portal)", () => {
     const ast = parseJSX(`const A = () => <Dialog.Portal><div /></Dialog.Portal>;`);
-    const entries = buildNodeMap(ast, 'src/A.tsx');
+    const entries = buildNodeMap(ast, "src/A.tsx");
 
-    expect(entries[0].tag).toBe('Dialog.Portal');
+    expect(entries[0].tag).toBe("Dialog.Portal");
     expect(entries[0].isComponent).toBe(true);
-    expect(entries[0].componentName).toBe('Dialog.Portal');
+    expect(entries[0].componentName).toBe("Dialog.Portal");
   });
 
-  it('should handle fragments', () => {
+  it("should handle fragments", () => {
     const ast = parseJSX(`const A = () => <><div /><span /></>;`);
-    const entries = buildNodeMap(ast, 'src/A.tsx');
+    const entries = buildNodeMap(ast, "src/A.tsx");
 
-    const fragment = entries.find((e) => e.tag === 'Fragment');
+    const fragment = entries.find((e) => e.tag === "Fragment");
     expect(fragment).toBeDefined();
     expect(fragment!.children.length).toBe(2);
   });
 
-  it('should handle empty file (no JSX)', () => {
+  it("should handle empty file (no JSX)", () => {
     const ast = parseJSX(`const x = 42;`);
-    const entries = buildNodeMap(ast, 'src/utils.ts');
+    const entries = buildNodeMap(ast, "src/utils.ts");
 
     expect(entries.length).toBe(0);
   });
 
-  it('should handle conditional JSX (ternary)', () => {
+  it("should handle conditional JSX (ternary)", () => {
     const ast = parseJSX(`const A = () => condition ? <div /> : <span />;`);
-    const entries = buildNodeMap(ast, 'src/A.tsx');
+    const entries = buildNodeMap(ast, "src/A.tsx");
 
     // Both branches should be in the map
-    expect(entries.find((e) => e.tag === 'div')).toBeDefined();
-    expect(entries.find((e) => e.tag === 'span')).toBeDefined();
+    expect(entries.find((e) => e.tag === "div")).toBeDefined();
+    expect(entries.find((e) => e.tag === "span")).toBeDefined();
   });
 
-  it('should handle .map() JSX', () => {
+  it("should handle .map() JSX", () => {
     const ast = parseJSX(`
       const A = () => (
         <ul>
@@ -357,10 +357,10 @@ describe('buildNodeMap', () => {
         </ul>
       );
     `);
-    const entries = buildNodeMap(ast, 'src/A.tsx');
+    const entries = buildNodeMap(ast, "src/A.tsx");
 
-    const ul = entries.find((e) => e.tag === 'ul');
-    const li = entries.find((e) => e.tag === 'li');
+    const ul = entries.find((e) => e.tag === "ul");
+    const li = entries.find((e) => e.tag === "li");
 
     expect(ul).toBeDefined();
     expect(li).toBeDefined();
@@ -385,9 +385,9 @@ Expected: FAIL — `Cannot find module './node-map-builder'`
  * Assumptions: AST has source locations (parsed with { tokens: true } or standard config)
  */
 
-import _traverse, { type NodePath } from '@babel/traverse';
-import * as t from '@babel/types';
-import type { NodeMapEntry, NodeRef, SourceLocation } from '../../shared/element-tracing/types';
+import _traverse, { type NodePath } from "@babel/traverse";
+import * as t from "@babel/types";
+import type { NodeMapEntry, NodeRef, SourceLocation } from "../../shared/element-tracing/types";
 
 const traverse = (_traverse as { default?: typeof _traverse }).default ?? _traverse;
 
@@ -398,15 +398,15 @@ function buildTagName(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNames
     return `${buildTagName(name.object)}.${buildTagName(name.property)}`;
   }
   if (t.isJSXNamespacedName(name)) return `${name.namespace.name}:${name.name.name}`;
-  return 'Unknown';
+  return "Unknown";
 }
 
 /** Check if a tag name represents a user component (starts with uppercase or contains dot) */
 function isComponentTag(tag: string): boolean {
-  return /^[A-Z]/.test(tag) || tag.includes('.');
+  return /^[A-Z]/.test(tag) || tag.includes(".");
 }
 
-function toSourceLocation(loc: t.SourceLocation['start'], fileName: string): SourceLocation {
+function toSourceLocation(loc: t.SourceLocation["start"], fileName: string): SourceLocation {
   return { fileName, line: loc.line, column: loc.column };
 }
 
@@ -430,8 +430,8 @@ export function buildNodeMap(ast: t.File, filePath: string): NodeMapEntry[] {
       if (!node.loc) return;
 
       const tag =
-        node.openingElement.name.type === 'JSXFragment'
-          ? 'Fragment'
+        node.openingElement.name.type === "JSXFragment"
+          ? "Fragment"
           : buildTagName(node.openingElement.name as t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName);
 
       const nodeRef: NodeRef = `${filePath}:${traversalIndex}`;
@@ -485,7 +485,7 @@ export function buildNodeMap(ast: t.File, filePath: string): NodeMapEntry[] {
 
       entries.push({
         nodeRef,
-        tag: 'Fragment',
+        tag: "Fragment",
         loc: toSourceLocation(node.loc.start, filePath),
         endLoc: toSourceLocation(node.loc.end, filePath),
         parentRef,
@@ -548,14 +548,14 @@ Composite key matching to map old nodeRefs to new nodeRefs after re-parse.
  * @file Tests for nodeRef stability algorithm — old→new mapping across re-parses
  */
 
-import { describe, expect, it } from 'bun:test';
-import type { NodeMapEntry } from '../../shared/element-tracing/types';
-import { buildCompositeKey, mapNodeRefs } from './stability';
+import { describe, expect, it } from "bun:test";
+import type { NodeMapEntry } from "../../shared/element-tracing/types";
+import { buildCompositeKey, mapNodeRefs } from "./stability";
 
-function entry(overrides: Partial<NodeMapEntry> & Pick<NodeMapEntry, 'nodeRef' | 'tag'>): NodeMapEntry {
+function entry(overrides: Partial<NodeMapEntry> & Pick<NodeMapEntry, "nodeRef" | "tag">): NodeMapEntry {
   return {
-    loc: { fileName: 'f.tsx', line: 1, column: 0 },
-    endLoc: { fileName: 'f.tsx', line: 1, column: 10 },
+    loc: { fileName: "f.tsx", line: 1, column: 0 },
+    endLoc: { fileName: "f.tsx", line: 1, column: 10 },
     parentRef: null,
     children: [],
     isComponent: false,
@@ -563,14 +563,14 @@ function entry(overrides: Partial<NodeMapEntry> & Pick<NodeMapEntry, 'nodeRef' |
   };
 }
 
-describe('buildCompositeKey', () => {
-  it('should generate key from tag, depth, parentTag, siblingIndex', () => {
+describe("buildCompositeKey", () => {
+  it("should generate key from tag, depth, parentTag, siblingIndex", () => {
     const entries: NodeMapEntry[] = [
-      entry({ nodeRef: 'f:0', tag: 'div', parentRef: null }),
-      entry({ nodeRef: 'f:1', tag: 'span', parentRef: 'f:0' }),
-      entry({ nodeRef: 'f:2', tag: 'span', parentRef: 'f:0' }),
+      entry({ nodeRef: "f:0", tag: "div", parentRef: null }),
+      entry({ nodeRef: "f:1", tag: "span", parentRef: "f:0" }),
+      entry({ nodeRef: "f:2", tag: "span", parentRef: "f:0" }),
     ];
-    entries[0].children = ['f:1', 'f:2'];
+    entries[0].children = ["f:1", "f:2"];
 
     const refToEntry = new Map(entries.map((e) => [e.nodeRef, e]));
 
@@ -578,79 +578,79 @@ describe('buildCompositeKey', () => {
     const key1 = buildCompositeKey(entries[1], refToEntry);
     const key2 = buildCompositeKey(entries[2], refToEntry);
 
-    expect(key0).toBe('div|0|ROOT|0');
-    expect(key1).toBe('span|1|div|0'); // first span under div
-    expect(key2).toBe('span|1|div|1'); // second span under div
+    expect(key0).toBe("div|0|ROOT|0");
+    expect(key1).toBe("span|1|div|0"); // first span under div
+    expect(key2).toBe("span|1|div|1"); // second span under div
   });
 });
 
-describe('mapNodeRefs', () => {
-  it('should map identical structures 1:1', () => {
+describe("mapNodeRefs", () => {
+  it("should map identical structures 1:1", () => {
     const oldEntries: NodeMapEntry[] = [
-      entry({ nodeRef: 'f:0', tag: 'div' }),
-      entry({ nodeRef: 'f:1', tag: 'span', parentRef: 'f:0' }),
+      entry({ nodeRef: "f:0", tag: "div" }),
+      entry({ nodeRef: "f:1", tag: "span", parentRef: "f:0" }),
     ];
-    oldEntries[0].children = ['f:1'];
+    oldEntries[0].children = ["f:1"];
 
     const newEntries: NodeMapEntry[] = [
-      entry({ nodeRef: 'f:0', tag: 'div' }),
-      entry({ nodeRef: 'f:1', tag: 'span', parentRef: 'f:0' }),
+      entry({ nodeRef: "f:0", tag: "div" }),
+      entry({ nodeRef: "f:1", tag: "span", parentRef: "f:0" }),
     ];
-    newEntries[0].children = ['f:1'];
+    newEntries[0].children = ["f:1"];
 
     const mapping = mapNodeRefs(oldEntries, newEntries);
-    expect(mapping).toEqual({ 'f:0': 'f:0', 'f:1': 'f:1' });
+    expect(mapping).toEqual({ "f:0": "f:0", "f:1": "f:1" });
   });
 
-  it('should handle sibling insertion (shift)', () => {
+  it("should handle sibling insertion (shift)", () => {
     // Before: div > [span]
     const oldEntries: NodeMapEntry[] = [
-      entry({ nodeRef: 'f:0', tag: 'div' }),
-      entry({ nodeRef: 'f:1', tag: 'span', parentRef: 'f:0' }),
+      entry({ nodeRef: "f:0", tag: "div" }),
+      entry({ nodeRef: "f:1", tag: "span", parentRef: "f:0" }),
     ];
-    oldEntries[0].children = ['f:1'];
+    oldEntries[0].children = ["f:1"];
 
     // After: div > [p, span] — p inserted before span, traversal indices shift
     const newEntries: NodeMapEntry[] = [
-      entry({ nodeRef: 'f:0', tag: 'div' }),
-      entry({ nodeRef: 'f:1', tag: 'p', parentRef: 'f:0' }),
-      entry({ nodeRef: 'f:2', tag: 'span', parentRef: 'f:0' }),
+      entry({ nodeRef: "f:0", tag: "div" }),
+      entry({ nodeRef: "f:1", tag: "p", parentRef: "f:0" }),
+      entry({ nodeRef: "f:2", tag: "span", parentRef: "f:0" }),
     ];
-    newEntries[0].children = ['f:1', 'f:2'];
+    newEntries[0].children = ["f:1", "f:2"];
 
     const mapping = mapNodeRefs(oldEntries, newEntries);
     // div maps to div (same key), span maps to new index
-    expect(mapping['f:0']).toBe('f:0');
-    expect(mapping['f:1']).toBe('f:2'); // old span → new span
+    expect(mapping["f:0"]).toBe("f:0");
+    expect(mapping["f:1"]).toBe("f:2"); // old span → new span
   });
 
-  it('should handle element deletion', () => {
+  it("should handle element deletion", () => {
     const oldEntries: NodeMapEntry[] = [
-      entry({ nodeRef: 'f:0', tag: 'div' }),
-      entry({ nodeRef: 'f:1', tag: 'span', parentRef: 'f:0' }),
-      entry({ nodeRef: 'f:2', tag: 'p', parentRef: 'f:0' }),
+      entry({ nodeRef: "f:0", tag: "div" }),
+      entry({ nodeRef: "f:1", tag: "span", parentRef: "f:0" }),
+      entry({ nodeRef: "f:2", tag: "p", parentRef: "f:0" }),
     ];
-    oldEntries[0].children = ['f:1', 'f:2'];
+    oldEntries[0].children = ["f:1", "f:2"];
 
     // span deleted
     const newEntries: NodeMapEntry[] = [
-      entry({ nodeRef: 'f:0', tag: 'div' }),
-      entry({ nodeRef: 'f:1', tag: 'p', parentRef: 'f:0' }),
+      entry({ nodeRef: "f:0", tag: "div" }),
+      entry({ nodeRef: "f:1", tag: "p", parentRef: "f:0" }),
     ];
-    newEntries[0].children = ['f:1'];
+    newEntries[0].children = ["f:1"];
 
     const mapping = mapNodeRefs(oldEntries, newEntries);
-    expect(mapping['f:0']).toBe('f:0');
-    expect(mapping['f:2']).toBe('f:1'); // old p → new p
-    expect(mapping['f:1']).toBeUndefined(); // old span → gone
+    expect(mapping["f:0"]).toBe("f:0");
+    expect(mapping["f:2"]).toBe("f:1"); // old p → new p
+    expect(mapping["f:1"]).toBeUndefined(); // old span → gone
   });
 
-  it('should return empty mapping for completely different structures', () => {
-    const oldEntries: NodeMapEntry[] = [entry({ nodeRef: 'f:0', tag: 'div' })];
-    const newEntries: NodeMapEntry[] = [entry({ nodeRef: 'f:0', tag: 'section' })];
+  it("should return empty mapping for completely different structures", () => {
+    const oldEntries: NodeMapEntry[] = [entry({ nodeRef: "f:0", tag: "div" })];
+    const newEntries: NodeMapEntry[] = [entry({ nodeRef: "f:0", tag: "section" })];
 
     const mapping = mapNodeRefs(oldEntries, newEntries);
-    expect(mapping['f:0']).toBeUndefined();
+    expect(mapping["f:0"]).toBeUndefined();
   });
 });
 ```
@@ -670,7 +670,7 @@ Expected: FAIL — `Cannot find module './stability'`
  * Assumptions: NodeMapEntry arrays are built by buildNodeMap() with consistent traversal order
  */
 
-import type { NodeMapEntry, NodeRef } from '../../shared/element-tracing/types';
+import type { NodeMapEntry, NodeRef } from "../../shared/element-tracing/types";
 
 /**
  * Build a composite key for structural identity of a node.
@@ -681,7 +681,7 @@ import type { NodeMapEntry, NodeRef } from '../../shared/element-tracing/types';
  */
 export function buildCompositeKey(entry: NodeMapEntry, refToEntry: Map<NodeRef, NodeMapEntry>): string {
   const parentEntry = entry.parentRef ? refToEntry.get(entry.parentRef) : null;
-  const parentTag = parentEntry ? parentEntry.tag : 'ROOT';
+  const parentTag = parentEntry ? parentEntry.tag : "ROOT";
 
   // Calculate depth
   let depth = 0;
@@ -780,11 +780,11 @@ Orchestrator that parses files, builds NodeMap, tracks nodeRef stability across 
  * @file Tests for NodeMapService — parse, build, track, emit
  */
 
-import { describe, expect, it, beforeEach, mock } from 'bun:test';
-import type { NodeMapEntry, NodeMapUpdate, SourceLocation } from '../../shared/element-tracing/types';
-import { NodeMapService } from './node-map-service';
+import { describe, expect, it, beforeEach, mock } from "bun:test";
+import type { NodeMapEntry, NodeMapUpdate, SourceLocation } from "../../shared/element-tracing/types";
+import { NodeMapService } from "./node-map-service";
 
-describe('NodeMapService', () => {
+describe("NodeMapService", () => {
   let service: NodeMapService;
 
   beforeEach(() => {
@@ -793,24 +793,24 @@ describe('NodeMapService', () => {
 
   const simpleJSX = `const App = () => <div><span>hello</span></div>;`;
 
-  it('should parse file and build node map', () => {
-    const entries = service.parseAndBuild(simpleJSX, 'src/App.tsx');
+  it("should parse file and build node map", () => {
+    const entries = service.parseAndBuild(simpleJSX, "src/App.tsx");
 
     expect(entries.length).toBe(2);
-    expect(entries[0].tag).toBe('div');
-    expect(entries[1].tag).toBe('span');
+    expect(entries[0].tag).toBe("div");
+    expect(entries[1].tag).toBe("span");
   });
 
-  it('should store parsed map and return it by filePath', () => {
-    service.parseAndBuild(simpleJSX, 'src/App.tsx');
+  it("should store parsed map and return it by filePath", () => {
+    service.parseAndBuild(simpleJSX, "src/App.tsx");
 
-    const map = service.getNodeMap('src/App.tsx');
+    const map = service.getNodeMap("src/App.tsx");
     expect(map).toBeDefined();
     expect(map!.length).toBe(2);
   });
 
-  it('should resolve source location to nodeRef', () => {
-    const entries = service.parseAndBuild(simpleJSX, 'src/App.tsx');
+  it("should resolve source location to nodeRef", () => {
+    const entries = service.parseAndBuild(simpleJSX, "src/App.tsx");
     const divEntry = entries[0];
 
     const resolved = service.resolveSourceLocation(divEntry.loc);
@@ -818,37 +818,37 @@ describe('NodeMapService', () => {
     expect(resolved!.nodeRef).toBe(divEntry.nodeRef);
   });
 
-  it('should return refMapping on re-parse', () => {
-    service.parseAndBuild(simpleJSX, 'src/App.tsx');
-    const oldEntries = service.getNodeMap('src/App.tsx')!;
+  it("should return refMapping on re-parse", () => {
+    service.parseAndBuild(simpleJSX, "src/App.tsx");
+    const oldEntries = service.getNodeMap("src/App.tsx")!;
     const oldDivRef = oldEntries[0].nodeRef;
 
     // Re-parse with modified content (inserted element)
     const modifiedJSX = `const App = () => <div><p>new</p><span>hello</span></div>;`;
-    const result = service.reparseAndUpdate(modifiedJSX, 'src/App.tsx');
+    const result = service.reparseAndUpdate(modifiedJSX, "src/App.tsx");
 
     expect(result.refMapping).toBeDefined();
     expect(result.refMapping![oldDivRef]).toBeDefined(); // div still exists
     expect(result.version).toBe(2);
   });
 
-  it('should increment version on each re-parse', () => {
-    service.parseAndBuild(simpleJSX, 'src/App.tsx');
-    const r1 = service.reparseAndUpdate(simpleJSX, 'src/App.tsx');
-    const r2 = service.reparseAndUpdate(simpleJSX, 'src/App.tsx');
+  it("should increment version on each re-parse", () => {
+    service.parseAndBuild(simpleJSX, "src/App.tsx");
+    const r1 = service.reparseAndUpdate(simpleJSX, "src/App.tsx");
+    const r2 = service.reparseAndUpdate(simpleJSX, "src/App.tsx");
 
     expect(r1.version).toBe(2);
     expect(r2.version).toBe(3);
   });
 
-  it('should normalize container paths', () => {
-    service.setPathMapping('/app/', '/Users/dev/project/');
+  it("should normalize container paths", () => {
+    service.setPathMapping("/app/", "/Users/dev/project/");
 
-    const entries = service.parseAndBuild(simpleJSX, 'src/App.tsx');
+    const entries = service.parseAndBuild(simpleJSX, "src/App.tsx");
 
     // Resolve with container path
     const containerLoc: SourceLocation = {
-      fileName: '/app/src/App.tsx',
+      fileName: "/app/src/App.tsx",
       line: entries[0].loc.line,
       column: entries[0].loc.column,
     };
@@ -857,27 +857,27 @@ describe('NodeMapService', () => {
     expect(resolved).not.toBeNull();
   });
 
-  it('should invalidate file on remove', () => {
-    service.parseAndBuild(simpleJSX, 'src/App.tsx');
-    service.removeFile('src/App.tsx');
+  it("should invalidate file on remove", () => {
+    service.parseAndBuild(simpleJSX, "src/App.tsx");
+    service.removeFile("src/App.tsx");
 
-    expect(service.getNodeMap('src/App.tsx')).toBeNull();
+    expect(service.getNodeMap("src/App.tsx")).toBeNull();
   });
 
-  it('should resolve nodeRef to entry', () => {
-    const entries = service.parseAndBuild(simpleJSX, 'src/App.tsx');
+  it("should resolve nodeRef to entry", () => {
+    const entries = service.parseAndBuild(simpleJSX, "src/App.tsx");
     const resolved = service.resolveNodeRef(entries[0].nodeRef);
 
     expect(resolved).not.toBeNull();
-    expect(resolved!.tag).toBe('div');
+    expect(resolved!.tag).toBe("div");
   });
 
-  it('should compute file hash', () => {
-    service.parseAndBuild(simpleJSX, 'src/App.tsx');
-    const hash = service.getFileHash('src/App.tsx');
+  it("should compute file hash", () => {
+    service.parseAndBuild(simpleJSX, "src/App.tsx");
+    const hash = service.getFileHash("src/App.tsx");
 
     expect(hash).toBeDefined();
-    expect(typeof hash).toBe('string');
+    expect(typeof hash).toBe("string");
     expect(hash!.length).toBeGreaterThan(0);
   });
 });
@@ -898,12 +898,12 @@ Expected: FAIL — `Cannot find module './node-map-service'`
  * Assumptions: Files are valid JSX/TSX parseable by Babel
  */
 
-import { createHash } from 'node:crypto';
-import { parse } from '@babel/parser';
-import type * as t from '@babel/types';
-import type { NodeMapEntry, NodeMapUpdate, NodeRef, SourceLocation } from '../../shared/element-tracing/types';
-import { buildNodeMap } from './node-map-builder';
-import { mapNodeRefs } from './stability';
+import { createHash } from "node:crypto";
+import { parse } from "@babel/parser";
+import type * as t from "@babel/types";
+import type { NodeMapEntry, NodeMapUpdate, NodeRef, SourceLocation } from "../../shared/element-tracing/types";
+import { buildNodeMap } from "./node-map-builder";
+import { mapNodeRefs } from "./stability";
 
 interface FileState {
   entries: NodeMapEntry[];
@@ -920,7 +920,7 @@ function locKey(loc: SourceLocation): string {
 }
 
 function hashContent(content: string): string {
-  return createHash('sha256').update(content).digest('hex').slice(0, 16);
+  return createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
 export class NodeMapService {
@@ -954,8 +954,8 @@ export class NodeMapService {
    */
   parseAndBuild(sourceCode: string, filePath: string): NodeMapEntry[] {
     const ast = parse(sourceCode, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
     });
 
     const entries = buildNodeMap(ast, filePath);
@@ -987,8 +987,8 @@ export class NodeMapService {
     const oldEntries = oldState?.entries ?? [];
 
     const ast = parse(sourceCode, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
     });
 
     const newEntries = buildNodeMap(ast, filePath);
@@ -1013,7 +1013,7 @@ export class NodeMapService {
     });
 
     return {
-      type: 'node-map-update',
+      type: "node-map-update",
       filePath,
       fileHash: hash,
       version,
@@ -1082,7 +1082,7 @@ export class NodeMapService {
     if (!state) return null;
 
     return {
-      type: 'node-map-update',
+      type: "node-map-update",
       filePath,
       fileHash: state.hash,
       version: state.version,
@@ -1124,7 +1124,7 @@ Tests use mock fiber objects (no real React DOM needed):
  * @file Tests for fiber utilities — mock fiber objects, no real React DOM
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from "bun:test";
 import {
   getFiberFromDOM,
   findNearestDebugSource,
@@ -1133,13 +1133,13 @@ import {
   findHostFiber,
   type Fiber,
   type DebugSource,
-} from './fiber-utils';
+} from "./fiber-utils";
 
 /** Helper to create mock fiber */
 function mockFiber(overrides: Partial<Fiber> = {}): Fiber {
   return {
     tag: 5, // HostComponent
-    type: 'div',
+    type: "div",
     stateNode: null,
     return: null,
     child: null,
@@ -1153,15 +1153,15 @@ function mockFiber(overrides: Partial<Fiber> = {}): Fiber {
 
 function mockDebugSource(overrides: Partial<DebugSource> = {}): DebugSource {
   return {
-    fileName: '/app/src/App.tsx',
+    fileName: "/app/src/App.tsx",
     lineNumber: 10,
     columnNumber: 4,
     ...overrides,
   };
 }
 
-describe('getFiberFromDOM', () => {
-  it('should extract fiber from __reactFiber$ property', () => {
+describe("getFiberFromDOM", () => {
+  it("should extract fiber from __reactFiber$ property", () => {
     const fiber = mockFiber();
     const el = { __reactFiber$abc123: fiber } as unknown as HTMLElement;
     // Need to make Object.keys work
@@ -1169,48 +1169,48 @@ describe('getFiberFromDOM', () => {
     expect(result).toBe(fiber);
   });
 
-  it('should extract fiber from __reactInternalInstance$ (older React)', () => {
+  it("should extract fiber from __reactInternalInstance$ (older React)", () => {
     const fiber = mockFiber();
     const el = { __reactInternalInstance$xyz: fiber } as unknown as HTMLElement;
     const result = getFiberFromDOM(el);
     expect(result).toBe(fiber);
   });
 
-  it('should return null for non-React element', () => {
+  it("should return null for non-React element", () => {
     const el = {} as HTMLElement;
     const result = getFiberFromDOM(el);
     expect(result).toBeNull();
   });
 });
 
-describe('findNearestDebugSource', () => {
-  it('should return _debugSource from the fiber itself', () => {
+describe("findNearestDebugSource", () => {
+  it("should return _debugSource from the fiber itself", () => {
     const source = mockDebugSource();
     const fiber = mockFiber({ _debugSource: source });
     expect(findNearestDebugSource(fiber)).toBe(source);
   });
 
-  it('should walk up to find _debugSource on parent', () => {
+  it("should walk up to find _debugSource on parent", () => {
     const source = mockDebugSource();
     const parent = mockFiber({ _debugSource: source });
     const child = mockFiber({ return: parent });
     expect(findNearestDebugSource(child)).toBe(source);
   });
 
-  it('should return null if no fiber has _debugSource', () => {
+  it("should return null if no fiber has _debugSource", () => {
     const parent = mockFiber();
     const child = mockFiber({ return: parent });
     expect(findNearestDebugSource(child)).toBeNull();
   });
 
-  it('should unwrap React.memo wrapper (tag 14)', () => {
+  it("should unwrap React.memo wrapper (tag 14)", () => {
     const source = mockDebugSource();
     const wrappedType = { type: { _debugSource: source } };
     const memoFiber = mockFiber({ tag: 14, type: wrappedType as unknown });
     expect(findNearestDebugSource(memoFiber)).toBe(source);
   });
 
-  it('should unwrap React.forwardRef wrapper (tag 11)', () => {
+  it("should unwrap React.forwardRef wrapper (tag 11)", () => {
     const source = mockDebugSource();
     const wrappedType = { render: { _debugSource: source } };
     const forwardRefFiber = mockFiber({ tag: 11, type: wrappedType as unknown });
@@ -1222,11 +1222,11 @@ describe('findNearestDebugSource', () => {
   });
 });
 
-describe('traceToRoot', () => {
-  it('should collect all fibers from target to root', () => {
-    const root = mockFiber({ type: 'div' });
-    const mid = mockFiber({ type: 'App', return: root });
-    const leaf = mockFiber({ type: 'span', return: mid });
+describe("traceToRoot", () => {
+  it("should collect all fibers from target to root", () => {
+    const root = mockFiber({ type: "div" });
+    const mid = mockFiber({ type: "App", return: root });
+    const leaf = mockFiber({ type: "span", return: mid });
 
     const chain = traceToRoot(leaf);
     expect(chain.length).toBe(3);
@@ -1234,44 +1234,44 @@ describe('traceToRoot', () => {
     expect(chain[2]).toBe(root);
   });
 
-  it('should handle single fiber (root)', () => {
+  it("should handle single fiber (root)", () => {
     const root = mockFiber();
     const chain = traceToRoot(root);
     expect(chain.length).toBe(1);
   });
 });
 
-describe('isUserComponent', () => {
-  it('should return true for function component (tag 0)', () => {
+describe("isUserComponent", () => {
+  it("should return true for function component (tag 0)", () => {
     expect(isUserComponent(mockFiber({ tag: 0 }))).toBe(true);
   });
 
-  it('should return true for class component (tag 1)', () => {
+  it("should return true for class component (tag 1)", () => {
     expect(isUserComponent(mockFiber({ tag: 1 }))).toBe(true);
   });
 
-  it('should return false for host component (tag 5)', () => {
+  it("should return false for host component (tag 5)", () => {
     expect(isUserComponent(mockFiber({ tag: 5 }))).toBe(false);
   });
 
-  it('should return false for host root (tag 3)', () => {
+  it("should return false for host root (tag 3)", () => {
     expect(isUserComponent(mockFiber({ tag: 3 }))).toBe(false);
   });
 });
 
-describe('findHostFiber', () => {
-  it('should return same fiber if already a host component', () => {
+describe("findHostFiber", () => {
+  it("should return same fiber if already a host component", () => {
     const fiber = mockFiber({ tag: 5, stateNode: {} as HTMLElement });
     expect(findHostFiber(fiber)).toBe(fiber);
   });
 
-  it('should walk down to find first host child', () => {
+  it("should walk down to find first host child", () => {
     const hostChild = mockFiber({ tag: 5, stateNode: {} as HTMLElement });
     const component = mockFiber({ tag: 0, child: hostChild });
     expect(findHostFiber(component)).toBe(hostChild);
   });
 
-  it('should return null if no host fiber found', () => {
+  it("should return null if no host fiber found", () => {
     const component = mockFiber({ tag: 0 });
     expect(findHostFiber(component)).toBeNull();
   });
@@ -1331,7 +1331,7 @@ export const FiberTag = {
 
 /** Extract React fiber from a DOM element */
 export function getFiberFromDOM(el: HTMLElement): Fiber | null {
-  const key = Object.keys(el).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+  const key = Object.keys(el).find((k) => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$"));
   return key ? (el as Record<string, Fiber>)[key] : null;
 }
 
@@ -1349,14 +1349,14 @@ export function findNearestDebugSource(fiber: Fiber | null): DebugSource | null 
     if (
       (current.tag === FiberTag.MemoComponent || current.tag === FiberTag.SimpleMemoComponent) &&
       current.type &&
-      typeof current.type === 'object'
+      typeof current.type === "object"
     ) {
       const wrapped = (current.type as { type?: { _debugSource?: DebugSource } }).type;
       if (wrapped?._debugSource) return wrapped._debugSource;
     }
 
     // Unwrap React.forwardRef (tag 11): source may be on fiber.type.render
-    if (current.tag === FiberTag.ForwardRef && current.type && typeof current.type === 'object') {
+    if (current.tag === FiberTag.ForwardRef && current.type && typeof current.type === "object") {
       const render = (current.type as { render?: { _debugSource?: DebugSource } }).render;
       if (render?._debugSource) return render._debugSource;
     }
@@ -1430,23 +1430,23 @@ export function walkFibers(root: Fiber | null, visitor: (fiber: Fiber) => void):
  */
 export function getFiberDisplayName(fiber: Fiber): string {
   const { type } = fiber;
-  if (typeof type === 'string') return type;
-  if (typeof type === 'function')
+  if (typeof type === "string") return type;
+  if (typeof type === "function")
     return (
-      (type as { displayName?: string; name?: string }).displayName || (type as { name?: string }).name || 'Anonymous'
+      (type as { displayName?: string; name?: string }).displayName || (type as { name?: string }).name || "Anonymous"
     );
-  if (typeof type === 'object' && type !== null) {
+  if (typeof type === "object" && type !== null) {
     // memo/forwardRef wrapper
     const inner = (type as { type?: unknown; render?: unknown }).type ?? (type as { render?: unknown }).render;
-    if (typeof inner === 'function') {
+    if (typeof inner === "function") {
       return (
         (inner as { displayName?: string; name?: string }).displayName ||
         (inner as { name?: string }).name ||
-        'Anonymous'
+        "Anonymous"
       );
     }
   }
-  return 'Unknown';
+  return "Unknown";
 }
 ```
 
@@ -1480,10 +1480,10 @@ Implements `FrameworkAdapter` interface using fiber utilities.
  * @file Tests for ReactAdapter — uses mock fiber trees, no real React
  */
 
-import { describe, expect, it, beforeEach } from 'bun:test';
-import { ReactAdapter } from './react-adapter';
-import type { Fiber, DebugSource } from './fiber-utils';
-import type { SourceLocation } from '../../../shared/element-tracing/types';
+import { describe, expect, it, beforeEach } from "bun:test";
+import { ReactAdapter } from "./react-adapter";
+import type { Fiber, DebugSource } from "./fiber-utils";
+import type { SourceLocation } from "../../../shared/element-tracing/types";
 
 /** Build a minimal mock DOM tree with fiber references */
 function createMockDOM(): {
@@ -1498,24 +1498,24 @@ function createMockDOM(): {
   const spanEl = Object.create(HTMLElement.prototype) as HTMLElement & Record<string, unknown>;
   const root = Object.create(HTMLElement.prototype) as HTMLElement & Record<string, unknown>;
 
-  const appSource: DebugSource = { fileName: '/app/src/App.tsx', lineNumber: 5, columnNumber: 4 };
-  const spanSource: DebugSource = { fileName: '/app/src/App.tsx', lineNumber: 6, columnNumber: 6 };
+  const appSource: DebugSource = { fileName: "/app/src/App.tsx", lineNumber: 5, columnNumber: 4 };
+  const spanSource: DebugSource = { fileName: "/app/src/App.tsx", lineNumber: 6, columnNumber: 6 };
 
   const spanFiber: Fiber = {
     tag: 5,
-    type: 'span',
+    type: "span",
     stateNode: spanEl as HTMLElement,
     return: null, // set below
     child: null,
     sibling: null,
-    memoizedProps: { className: 'text' },
+    memoizedProps: { className: "text" },
     _debugSource: spanSource,
     _debugOwner: null,
   };
 
   const divFiber: Fiber = {
     tag: 5,
-    type: 'div',
+    type: "div",
     stateNode: divEl as HTMLElement,
     return: null, // set below
     child: spanFiber,
@@ -1535,7 +1535,7 @@ function createMockDOM(): {
     child: divFiber,
     sibling: null,
     memoizedProps: {},
-    _debugSource: { fileName: '/app/src/index.tsx', lineNumber: 8, columnNumber: 2 },
+    _debugSource: { fileName: "/app/src/index.tsx", lineNumber: 8, columnNumber: 2 },
     _debugOwner: null,
   };
   divFiber.return = appFiber;
@@ -1555,9 +1555,9 @@ function createMockDOM(): {
   appFiber.return = rootFiber;
 
   // Attach fibers to DOM elements
-  (divEl as Record<string, unknown>)['__reactFiber$test'] = divFiber;
-  (spanEl as Record<string, unknown>)['__reactFiber$test'] = spanFiber;
-  (root as Record<string, unknown>)['__reactFiber$test'] = rootFiber;
+  (divEl as Record<string, unknown>)["__reactFiber$test"] = divFiber;
+  (spanEl as Record<string, unknown>)["__reactFiber$test"] = spanFiber;
+  (root as Record<string, unknown>)["__reactFiber$test"] = rootFiber;
 
   return {
     root: root as HTMLElement,
@@ -1569,54 +1569,54 @@ function createMockDOM(): {
   };
 }
 
-describe('ReactAdapter', () => {
+describe("ReactAdapter", () => {
   let adapter: ReactAdapter;
 
   beforeEach(() => {
     adapter = new ReactAdapter();
   });
 
-  describe('getSourceLocation', () => {
-    it('should extract source location from element with fiber', () => {
+  describe("getSourceLocation", () => {
+    it("should extract source location from element with fiber", () => {
       const { divEl } = createMockDOM();
       const loc = adapter.getSourceLocation(divEl);
 
       expect(loc).not.toBeNull();
-      expect(loc!.fileName).toBe('/app/src/App.tsx');
+      expect(loc!.fileName).toBe("/app/src/App.tsx");
       expect(loc!.line).toBe(5);
       expect(loc!.column).toBe(4);
     });
 
-    it('should return null for element without fiber', () => {
+    it("should return null for element without fiber", () => {
       const el = Object.create(HTMLElement.prototype) as HTMLElement;
       expect(adapter.getSourceLocation(el)).toBeNull();
     });
   });
 
-  describe('getComponentChain', () => {
-    it('should return component ancestry', () => {
+  describe("getComponentChain", () => {
+    it("should return component ancestry", () => {
       const { spanEl } = createMockDOM();
       const chain = adapter.getComponentChain(spanEl);
 
       // Should include App (function component) but not host elements
-      const appInfo = chain.find((c) => c.name === 'App');
+      const appInfo = chain.find((c) => c.name === "App");
       expect(appInfo).toBeDefined();
       expect(appInfo!.source).not.toBeNull();
     });
   });
 
-  describe('getItemIndex', () => {
-    it('should return 0 for single element', () => {
+  describe("getItemIndex", () => {
+    it("should return 0 for single element", () => {
       const { spanEl } = createMockDOM();
       expect(adapter.getItemIndex(spanEl)).toBe(0);
     });
 
-    it('should count siblings with same source location', () => {
+    it("should count siblings with same source location", () => {
       // Build fiber tree with 3 siblings sharing same _debugSource (like .map())
-      const source: DebugSource = { fileName: 'f.tsx', lineNumber: 10, columnNumber: 8 };
+      const source: DebugSource = { fileName: "f.tsx", lineNumber: 10, columnNumber: 8 };
       const parentFiber: Fiber = {
         tag: 5,
-        type: 'ul',
+        type: "ul",
         stateNode: null,
         return: null,
         child: null,
@@ -1628,7 +1628,7 @@ describe('ReactAdapter', () => {
 
       const li1: Fiber = {
         tag: 5,
-        type: 'li',
+        type: "li",
         stateNode: Object.create(HTMLElement.prototype),
         return: parentFiber,
         child: null,
@@ -1640,7 +1640,7 @@ describe('ReactAdapter', () => {
 
       const li2: Fiber = {
         tag: 5,
-        type: 'li',
+        type: "li",
         stateNode: Object.create(HTMLElement.prototype),
         return: parentFiber,
         child: null,
@@ -1652,7 +1652,7 @@ describe('ReactAdapter', () => {
 
       const li3: Fiber = {
         tag: 5,
-        type: 'li',
+        type: "li",
         stateNode: Object.create(HTMLElement.prototype),
         return: parentFiber,
         child: null,
@@ -1666,7 +1666,7 @@ describe('ReactAdapter', () => {
       li1.sibling = li2;
       li2.sibling = li3;
 
-      (li2.stateNode as Record<string, unknown>)['__reactFiber$test'] = li2;
+      (li2.stateNode as Record<string, unknown>)["__reactFiber$test"] = li2;
 
       expect(adapter.getItemIndex(li2.stateNode as HTMLElement)).toBe(1);
     });
@@ -1695,7 +1695,7 @@ import type {
   ComponentTreeNode,
   FrameworkAdapter,
   SourceLocation,
-} from '../../../shared/element-tracing/types';
+} from "../../../shared/element-tracing/types";
 import {
   type DebugSource,
   type Fiber,
@@ -1708,7 +1708,7 @@ import {
   sameDebugSource,
   traceToRoot,
   walkFibers,
-} from './fiber-utils';
+} from "./fiber-utils";
 
 function debugSourceToLocation(ds: DebugSource): SourceLocation {
   return {
@@ -1722,21 +1722,21 @@ function fiberToComponentInfo(fiber: Fiber): ComponentInfo {
   const name = getFiberDisplayName(fiber);
   const source = fiber._debugSource ? debugSourceToLocation(fiber._debugSource) : null;
   const isLibrary =
-    typeof fiber.type === 'function' && (fiber._debugSource?.fileName?.includes('node_modules') ?? false);
+    typeof fiber.type === "function" && (fiber._debugSource?.fileName?.includes("node_modules") ?? false);
 
   // Serialize props (truncate values for transport)
   const props: Record<string, string> = {};
-  if (fiber.memoizedProps && typeof fiber.memoizedProps === 'object') {
+  if (fiber.memoizedProps && typeof fiber.memoizedProps === "object") {
     for (const [key, val] of Object.entries(fiber.memoizedProps)) {
-      if (key === 'children') continue;
+      if (key === "children") continue;
       const str =
-        typeof val === 'string'
+        typeof val === "string"
           ? val
-          : typeof val === 'number' || typeof val === 'boolean'
+          : typeof val === "number" || typeof val === "boolean"
             ? String(val)
-            : typeof val === 'function'
-              ? '[fn]'
-              : '[object]';
+            : typeof val === "function"
+              ? "[fn]"
+              : "[object]";
       props[key] = str.length > 50 ? `${str.slice(0, 47)}...` : str;
     }
   }
@@ -1745,7 +1745,7 @@ function fiberToComponentInfo(fiber: Fiber): ComponentInfo {
 }
 
 export class ReactAdapter implements FrameworkAdapter {
-  readonly name = 'react';
+  readonly name = "react";
 
   detect(doc: Document): boolean {
     const root = this.findReactRoot(doc);
@@ -1758,7 +1758,7 @@ export class ReactAdapter implements FrameworkAdapter {
     const source = findNearestDebugSource(fiber);
     if (!source) return false;
 
-    return typeof source.fileName === 'string' && typeof source.lineNumber === 'number';
+    return typeof source.fileName === "string" && typeof source.lineNumber === "number";
   }
 
   getSourceLocation(element: HTMLElement): SourceLocation | null {
@@ -1806,7 +1806,7 @@ export class ReactAdapter implements FrameworkAdapter {
   }
 
   findDOMElement(source: SourceLocation, itemIndex: number): HTMLElement | null {
-    const root = this.findReactRoot(typeof document !== 'undefined' ? document : null!);
+    const root = this.findReactRoot(typeof document !== "undefined" ? document : null!);
     if (!root) return null;
 
     const rootFiber = getFiberFromDOM(root);
@@ -1837,10 +1837,10 @@ export class ReactAdapter implements FrameworkAdapter {
 
     // Common React root selectors
     const candidates = [
-      doc.getElementById('root'),
-      doc.getElementById('__next'),
-      doc.getElementById('app'),
-      doc.querySelector('[data-reactroot]'),
+      doc.getElementById("root"),
+      doc.getElementById("__next"),
+      doc.getElementById("app"),
+      doc.querySelector("[data-reactroot]"),
     ];
 
     for (const el of candidates) {
@@ -1920,11 +1920,11 @@ Client-side state machine that handles the race between HMR reload and NodeMap u
  * @file Tests for TracingSyncStateMachine
  */
 
-import { describe, expect, it, beforeEach, mock } from 'bun:test';
-import { TracingSyncStateMachine } from './sync-state-machine';
-import type { SyncState } from '../../../shared/element-tracing/types';
+import { describe, expect, it, beforeEach, mock } from "bun:test";
+import { TracingSyncStateMachine } from "./sync-state-machine";
+import type { SyncState } from "../../../shared/element-tracing/types";
 
-describe('TracingSyncStateMachine', () => {
+describe("TracingSyncStateMachine", () => {
   let machine: TracingSyncStateMachine;
   let stateChanges: SyncState[];
 
@@ -1936,46 +1936,46 @@ describe('TracingSyncStateMachine', () => {
     });
   });
 
-  it('should start in synced state', () => {
-    expect(machine.state).toBe('synced');
+  it("should start in synced state", () => {
+    expect(machine.state).toBe("synced");
   });
 
-  it('should transition to awaiting-both on fileChanged', () => {
+  it("should transition to awaiting-both on fileChanged", () => {
     machine.fileChanged();
-    expect(machine.state).toBe('awaiting-both');
+    expect(machine.state).toBe("awaiting-both");
   });
 
-  it('should transition through awaiting-hmr when map arrives first', () => {
-    machine.fileChanged();
-    machine.mapReceived();
-    expect(machine.state).toBe('awaiting-hmr');
-  });
-
-  it('should transition through awaiting-map when HMR arrives first', () => {
-    machine.fileChanged();
-    machine.hmrCompleted();
-    expect(machine.state).toBe('awaiting-map');
-  });
-
-  it('should return to synced when both arrive (map first)', () => {
+  it("should transition through awaiting-hmr when map arrives first", () => {
     machine.fileChanged();
     machine.mapReceived();
-    machine.hmrCompleted();
-    expect(machine.state).toBe('synced');
+    expect(machine.state).toBe("awaiting-hmr");
   });
 
-  it('should return to synced when both arrive (HMR first)', () => {
+  it("should transition through awaiting-map when HMR arrives first", () => {
+    machine.fileChanged();
+    machine.hmrCompleted();
+    expect(machine.state).toBe("awaiting-map");
+  });
+
+  it("should return to synced when both arrive (map first)", () => {
+    machine.fileChanged();
+    machine.mapReceived();
+    machine.hmrCompleted();
+    expect(machine.state).toBe("synced");
+  });
+
+  it("should return to synced when both arrive (HMR first)", () => {
     machine.fileChanged();
     machine.hmrCompleted();
     machine.mapReceived();
-    expect(machine.state).toBe('synced');
+    expect(machine.state).toBe("synced");
   });
 
-  it('should queue clicks while not synced', () => {
+  it("should queue clicks while not synced", () => {
     const clickHandler = mock(() => {});
     machine.fileChanged();
 
-    machine.queueClick({ handler: clickHandler, args: ['arg1'] });
+    machine.queueClick({ handler: clickHandler, args: ["arg1"] });
     expect(clickHandler).not.toHaveBeenCalled();
 
     machine.mapReceived();
@@ -1983,46 +1983,46 @@ describe('TracingSyncStateMachine', () => {
 
     // Queued click should replay
     expect(clickHandler).toHaveBeenCalledTimes(1);
-    expect(clickHandler).toHaveBeenCalledWith('arg1');
+    expect(clickHandler).toHaveBeenCalledWith("arg1");
   });
 
-  it('should not queue clicks when synced', () => {
+  it("should not queue clicks when synced", () => {
     const clickHandler = mock(() => {});
-    const queued = machine.queueClick({ handler: clickHandler, args: ['arg1'] });
+    const queued = machine.queueClick({ handler: clickHandler, args: ["arg1"] });
 
     // In synced state, click should NOT be queued — return false
     expect(queued).toBe(false);
   });
 
-  it('should notify on state changes', () => {
+  it("should notify on state changes", () => {
     machine.fileChanged();
     machine.mapReceived();
     machine.hmrCompleted();
 
-    expect(stateChanges).toEqual(['awaiting-both', 'awaiting-hmr', 'synced']);
+    expect(stateChanges).toEqual(["awaiting-both", "awaiting-hmr", "synced"]);
   });
 
-  it('should force-sync after timeout', async () => {
+  it("should force-sync after timeout", async () => {
     machine.fileChanged();
-    expect(machine.state).toBe('awaiting-both');
+    expect(machine.state).toBe("awaiting-both");
 
     // Wait for timeout
     await new Promise((resolve) => setTimeout(resolve, 150));
 
-    expect(machine.state).toBe('synced');
+    expect(machine.state).toBe("synced");
   });
 
-  it('should handle rapid fileChanged calls (reset to awaiting-both)', () => {
+  it("should handle rapid fileChanged calls (reset to awaiting-both)", () => {
     machine.fileChanged();
     machine.mapReceived();
-    expect(machine.state).toBe('awaiting-hmr');
+    expect(machine.state).toBe("awaiting-hmr");
 
     // Another file change while waiting for HMR
     machine.fileChanged();
-    expect(machine.state).toBe('awaiting-both');
+    expect(machine.state).toBe("awaiting-both");
   });
 
-  it('should clear queue on dispose', () => {
+  it("should clear queue on dispose", () => {
     const clickHandler = mock(() => {});
     machine.fileChanged();
     machine.queueClick({ handler: clickHandler, args: [] });
@@ -2049,7 +2049,7 @@ Expected: FAIL — `Cannot find module './sync-state-machine'`
  * Assumptions: Both HMR completion and map update arrive within timeoutMs (3000 default)
  */
 
-import type { SyncState } from '../../../shared/element-tracing/types';
+import type { SyncState } from "../../../shared/element-tracing/types";
 
 interface QueuedClick {
   handler: (...args: unknown[]) => void;
@@ -2063,7 +2063,7 @@ interface TracingSyncOptions {
 }
 
 export class TracingSyncStateMachine {
-  private _state: SyncState = 'synced';
+  private _state: SyncState = "synced";
   private _queue: QueuedClick[] = [];
   private _timer: ReturnType<typeof setTimeout> | null = null;
   private _options: Required<TracingSyncOptions>;
@@ -2082,15 +2082,15 @@ export class TracingSyncStateMachine {
   /** A file was changed (mutation or external edit) — expect both map update and HMR */
   fileChanged(): void {
     this.clearTimer();
-    this.setState('awaiting-both');
+    this.setState("awaiting-both");
     this.startTimer();
   }
 
   /** NodeMap update received from server */
   mapReceived(): void {
-    if (this._state === 'awaiting-both') {
-      this.setState('awaiting-hmr');
-    } else if (this._state === 'awaiting-map') {
+    if (this._state === "awaiting-both") {
+      this.setState("awaiting-hmr");
+    } else if (this._state === "awaiting-map") {
       this.syncCompleted();
     }
     // Ignore if already synced or awaiting-hmr
@@ -2098,9 +2098,9 @@ export class TracingSyncStateMachine {
 
   /** HMR reload completed (DOM updated) */
   hmrCompleted(): void {
-    if (this._state === 'awaiting-both') {
-      this.setState('awaiting-map');
-    } else if (this._state === 'awaiting-hmr') {
+    if (this._state === "awaiting-both") {
+      this.setState("awaiting-map");
+    } else if (this._state === "awaiting-hmr") {
       this.syncCompleted();
     }
     // Ignore if already synced or awaiting-map
@@ -2111,7 +2111,7 @@ export class TracingSyncStateMachine {
    * @returns true if click was queued, false if not needed (already synced)
    */
   queueClick(click: QueuedClick): boolean {
-    if (this._state === 'synced') return false;
+    if (this._state === "synced") return false;
     this._queue.push(click);
     return true;
   }
@@ -2130,7 +2130,7 @@ export class TracingSyncStateMachine {
 
   private syncCompleted(): void {
     this.clearTimer();
-    this.setState('synced');
+    this.setState("synced");
     this.replayQueue();
   }
 
@@ -2188,9 +2188,9 @@ Transport interface is in shared types. `WSTracingTransport` is a WebSocket-base
  * @file Tests for WSTracingTransport — uses mock WebSocket
  */
 
-import { describe, expect, it, beforeEach, mock } from 'bun:test';
-import { WSTracingTransport } from './ws-tracing-transport';
-import type { TracingServerMessage, ResolveElement } from '../../../shared/element-tracing/types';
+import { describe, expect, it, beforeEach, mock } from "bun:test";
+import { WSTracingTransport } from "./ws-tracing-transport";
+import type { TracingServerMessage, ResolveElement } from "../../../shared/element-tracing/types";
 
 /** Minimal mock WebSocket */
 class MockWebSocket {
@@ -2229,27 +2229,27 @@ class MockWebSocket {
   }
 }
 
-describe('WSTracingTransport', () => {
+describe("WSTracingTransport", () => {
   let transport: WSTracingTransport;
   let mockWs: MockWebSocket;
 
   beforeEach(async () => {
-    mockWs = new MockWebSocket('ws://test/element-tracing'); // nosemgrep: detect-insecure-websocket -- test mock
+    mockWs = new MockWebSocket("ws://test/element-tracing"); // nosemgrep: detect-insecure-websocket -- test mock
     transport = new WSTracingTransport(() => mockWs as unknown as WebSocket);
 
     // Wait for connection
     await new Promise((resolve) => setTimeout(resolve, 10));
   });
 
-  it('should report connected after WebSocket opens', () => {
+  it("should report connected after WebSocket opens", () => {
     expect(transport.connected).toBe(true);
   });
 
-  it('should send messages as JSON', () => {
+  it("should send messages as JSON", () => {
     const msg: ResolveElement = {
-      type: 'resolve-element',
-      requestId: 'req-1',
-      source: { fileName: 'App.tsx', line: 10, column: 4 },
+      type: "resolve-element",
+      requestId: "req-1",
+      source: { fileName: "App.tsx", line: 10, column: 4 },
       itemIndex: 0,
     };
 
@@ -2259,14 +2259,14 @@ describe('WSTracingTransport', () => {
     expect(JSON.parse(mockWs.sentMessages[0])).toEqual(msg);
   });
 
-  it('should dispatch received messages to handlers', () => {
+  it("should dispatch received messages to handlers", () => {
     const handler = mock(() => {});
     transport.onMessage(handler);
 
     const serverMsg: TracingServerMessage = {
-      type: 'node-map-update',
-      filePath: 'src/App.tsx',
-      fileHash: 'abc123',
+      type: "node-map-update",
+      filePath: "src/App.tsx",
+      fileHash: "abc123",
       version: 1,
       nodes: [],
     };
@@ -2277,20 +2277,20 @@ describe('WSTracingTransport', () => {
     expect(handler).toHaveBeenCalledWith(serverMsg);
   });
 
-  it('should support unsubscribe from onMessage', () => {
+  it("should support unsubscribe from onMessage", () => {
     const handler = mock(() => {});
     const unsub = transport.onMessage(handler);
     unsub();
 
     mockWs.simulateMessage({
-      type: 'node-map-invalidate',
-      filePath: 'src/App.tsx',
+      type: "node-map-invalidate",
+      filePath: "src/App.tsx",
     });
 
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it('should notify on connection change', () => {
+  it("should notify on connection change", () => {
     const handler = mock(() => {});
     transport.onConnectionChange(handler);
 
@@ -2299,7 +2299,7 @@ describe('WSTracingTransport', () => {
     expect(handler).toHaveBeenCalledWith(false);
   });
 
-  it('should report disconnected after close', () => {
+  it("should report disconnected after close", () => {
     mockWs.close();
     expect(transport.connected).toBe(false);
   });
@@ -2325,7 +2325,7 @@ import type {
   TracingClientMessage,
   TracingServerMessage,
   TracingTransport,
-} from '../../../shared/element-tracing/types';
+} from "../../../shared/element-tracing/types";
 
 type MessageHandler = (msg: TracingServerMessage) => void;
 type ConnectionHandler = (connected: boolean) => void;
@@ -2434,8 +2434,8 @@ Client orchestrator that wires adapter, transport, and sync state machine togeth
  * @file Tests for ElementTracer — client orchestrator
  */
 
-import { describe, expect, it, beforeEach, mock } from 'bun:test';
-import { ElementTracer } from './element-tracer';
+import { describe, expect, it, beforeEach, mock } from "bun:test";
+import { ElementTracer } from "./element-tracer";
 import type {
   FrameworkAdapter,
   SourceLocation,
@@ -2445,14 +2445,14 @@ import type {
   ComponentInfo,
   ComponentTreeNode,
   NodeMapUpdate,
-} from '../../../shared/element-tracing/types';
+} from "../../../shared/element-tracing/types";
 
 /** Mock adapter */
 function mockAdapter(overrides: Partial<FrameworkAdapter> = {}): FrameworkAdapter {
   return {
-    name: 'react',
+    name: "react",
     detect: () => true,
-    getSourceLocation: () => ({ fileName: 'App.tsx', line: 10, column: 4 }),
+    getSourceLocation: () => ({ fileName: "App.tsx", line: 10, column: 4 }),
     getComponentChain: () => [],
     getItemIndex: () => 0,
     walkComponentTree: () => [],
@@ -2494,7 +2494,7 @@ function mockTransport(): TracingTransport & {
   };
 }
 
-describe('ElementTracer', () => {
+describe("ElementTracer", () => {
   let tracer: ElementTracer;
   let adapter: FrameworkAdapter;
   let transport: ReturnType<typeof mockTransport>;
@@ -2505,25 +2505,25 @@ describe('ElementTracer', () => {
     tracer = new ElementTracer(adapter, transport);
   });
 
-  it('should resolve click to source location via adapter', () => {
+  it("should resolve click to source location via adapter", () => {
     const el = {} as HTMLElement;
     const result = tracer.resolveClick(el);
 
     expect(result).not.toBeNull();
-    expect(result!.source.fileName).toBe('App.tsx');
+    expect(result!.source.fileName).toBe("App.tsx");
     expect(result!.source.line).toBe(10);
     expect(result!.itemIndex).toBe(0);
   });
 
-  it('should send resolve-element to transport on click', () => {
+  it("should send resolve-element to transport on click", () => {
     const el = {} as HTMLElement;
     tracer.resolveClick(el);
 
     expect(transport.sent.length).toBe(1);
-    expect(transport.sent[0].type).toBe('resolve-element');
+    expect(transport.sent[0].type).toBe("resolve-element");
   });
 
-  it('should return null when adapter returns no source', () => {
+  it("should return null when adapter returns no source", () => {
     adapter = mockAdapter({ getSourceLocation: () => null });
     tracer = new ElementTracer(adapter, transport);
 
@@ -2531,18 +2531,18 @@ describe('ElementTracer', () => {
     expect(result).toBeNull();
   });
 
-  it('should store received node maps', () => {
+  it("should store received node maps", () => {
     const update: NodeMapUpdate = {
-      type: 'node-map-update',
-      filePath: 'src/App.tsx',
-      fileHash: 'abc',
+      type: "node-map-update",
+      filePath: "src/App.tsx",
+      fileHash: "abc",
       version: 1,
       nodes: [
         {
-          nodeRef: 'src/App.tsx:0',
-          tag: 'div',
-          loc: { fileName: 'src/App.tsx', line: 5, column: 4 },
-          endLoc: { fileName: 'src/App.tsx', line: 10, column: 10 },
+          nodeRef: "src/App.tsx:0",
+          tag: "div",
+          loc: { fileName: "src/App.tsx", line: 5, column: 4 },
+          endLoc: { fileName: "src/App.tsx", line: 10, column: 10 },
           parentRef: null,
           children: [],
           isComponent: false,
@@ -2551,40 +2551,40 @@ describe('ElementTracer', () => {
     };
 
     transport.simulateMessage(update);
-    expect(tracer.getNodeMap('src/App.tsx')).not.toBeNull();
-    expect(tracer.getNodeMap('src/App.tsx')!.length).toBe(1);
+    expect(tracer.getNodeMap("src/App.tsx")).not.toBeNull();
+    expect(tracer.getNodeMap("src/App.tsx")!.length).toBe(1);
   });
 
-  it('should clear node map on invalidate', () => {
+  it("should clear node map on invalidate", () => {
     transport.simulateMessage({
-      type: 'node-map-update',
-      filePath: 'src/App.tsx',
-      fileHash: 'abc',
+      type: "node-map-update",
+      filePath: "src/App.tsx",
+      fileHash: "abc",
       version: 1,
       nodes: [],
     });
 
     transport.simulateMessage({
-      type: 'node-map-invalidate',
-      filePath: 'src/App.tsx',
+      type: "node-map-invalidate",
+      filePath: "src/App.tsx",
     });
 
-    expect(tracer.getNodeMap('src/App.tsx')).toBeNull();
+    expect(tracer.getNodeMap("src/App.tsx")).toBeNull();
   });
 
-  it('should update selection on resolve-element-response', () => {
+  it("should update selection on resolve-element-response", () => {
     const onSelect = mock(() => {});
     tracer.onSelectionResolved(onSelect);
 
     transport.simulateMessage({
-      type: 'resolve-element-response',
-      requestId: 'req-1',
-      nodeRef: 'src/App.tsx:0',
+      type: "resolve-element-response",
+      requestId: "req-1",
+      nodeRef: "src/App.tsx:0",
       entry: {
-        nodeRef: 'src/App.tsx:0',
-        tag: 'div',
-        loc: { fileName: 'src/App.tsx', line: 5, column: 4 },
-        endLoc: { fileName: 'src/App.tsx', line: 5, column: 30 },
+        nodeRef: "src/App.tsx:0",
+        tag: "div",
+        loc: { fileName: "src/App.tsx", line: 5, column: 4 },
+        endLoc: { fileName: "src/App.tsx", line: 5, column: 30 },
         parentRef: null,
         children: [],
         isComponent: false,
@@ -2594,7 +2594,7 @@ describe('ElementTracer', () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it('should dispose cleanly', () => {
+  it("should dispose cleanly", () => {
     tracer.dispose();
     // No errors expected
   });
@@ -2625,7 +2625,7 @@ import type {
   SourceLocation,
   TracingServerMessage,
   TracingTransport,
-} from '../../../shared/element-tracing/types';
+} from "../../../shared/element-tracing/types";
 
 interface ClickResult {
   source: SourceLocation;
@@ -2658,7 +2658,7 @@ export class ElementTracer {
     const requestId = `et-${++requestCounter}`;
 
     const msg: ResolveElement = {
-      type: 'resolve-element',
+      type: "resolve-element",
       requestId,
       source,
       itemIndex,
@@ -2693,15 +2693,15 @@ export class ElementTracer {
 
   private handleMessage = (msg: TracingServerMessage): void => {
     switch (msg.type) {
-      case 'node-map-update':
+      case "node-map-update":
         this._nodeMaps.set(msg.filePath, msg.nodes);
         break;
 
-      case 'node-map-invalidate':
+      case "node-map-invalidate":
         this._nodeMaps.delete(msg.filePath);
         break;
 
-      case 'resolve-element-response':
+      case "resolve-element-response":
         for (const handler of this._selectionHandlers) {
           handler(msg);
         }
@@ -2718,11 +2718,11 @@ export class ElementTracer {
  * @file Public API for element tracing client module
  */
 
-export { ElementTracer } from './element-tracer';
-export { ReactAdapter } from './react-adapter';
-export { WSTracingTransport } from './ws-tracing-transport';
-export { TracingSyncStateMachine } from './sync-state-machine';
-export * from './fiber-utils';
+export { ElementTracer } from "./element-tracer";
+export { ReactAdapter } from "./react-adapter";
+export { WSTracingTransport } from "./ws-tracing-transport";
+export { TracingSyncStateMachine } from "./sync-state-machine";
+export * from "./fiber-utils";
 ```
 
 - [ ] **Step 5: Run tests — verify they pass**
@@ -2759,16 +2759,16 @@ Server-side WebSocket handler for `element-tracing` channel. Integrates with Bun
  * Assumptions: WSData.isElementTracing is set by the upgrade handler in main.ts
  */
 
-import type { Server, ServerWebSocket } from 'bun';
+import type { Server, ServerWebSocket } from "bun";
 import type {
   NodeMapUpdate,
   NodeMapInvalidate,
   ResolveElement,
   ResolveElementResponse,
   TracingServerMessage,
-} from '../../shared/element-tracing/types';
-import type { WSData } from '../proxy/shared';
-import { NodeMapService } from '../../lib/element-tracing/node-map-service';
+} from "../../shared/element-tracing/types";
+import type { WSData } from "../proxy/shared";
+import { NodeMapService } from "../../lib/element-tracing/node-map-service";
 
 /** Per-project tracing state */
 interface ProjectTracingState {
@@ -2822,7 +2822,7 @@ export function onTracingClientDisconnect(ws: ServerWebSocket<WSData>): void {
 export function onTracingClientMessage(ws: ServerWebSocket<WSData>, data: string): void {
   try {
     const msg = JSON.parse(data);
-    if (msg.type === 'resolve-element') {
+    if (msg.type === "resolve-element") {
       handleResolveElement(ws, msg as ResolveElement);
     }
   } catch {
@@ -2835,7 +2835,7 @@ function handleResolveElement(ws: ServerWebSocket<WSData>, msg: ResolveElement):
   const state = projectStates.get(projectId);
   if (!state) {
     sendResponse(ws, {
-      type: 'resolve-element-response',
+      type: "resolve-element-response",
       requestId: msg.requestId,
       nodeRef: null,
       entry: null,
@@ -2845,7 +2845,7 @@ function handleResolveElement(ws: ServerWebSocket<WSData>, msg: ResolveElement):
 
   const entry = state.nodeMapService.resolveSourceLocation(msg.source);
   sendResponse(ws, {
-    type: 'resolve-element-response',
+    type: "resolve-element-response",
     requestId: msg.requestId,
     nodeRef: entry?.nodeRef ?? null,
     entry: entry ?? null,
@@ -2892,22 +2892,22 @@ In `server/main.ts`, inside the `fetch` handler before the 404 catch-all, add:
 
 ```typescript
 // Element tracing WebSocket upgrade
-if (pathname.startsWith('/api/element-tracing/') && req.headers.get('upgrade') === 'websocket') {
+if (pathname.startsWith("/api/element-tracing/") && req.headers.get("upgrade") === "websocket") {
   const projectIdMatch = pathname.match(/^\/api\/element-tracing\/([a-f0-9-]+)/);
   if (!projectIdMatch) {
-    return new Response('Invalid project path', { status: 400 });
+    return new Response("Invalid project path", { status: 400 });
   }
   const upgraded = server.upgrade(req, {
     data: {
       projectId: projectIdMatch[1],
-      targetHost: '',
+      targetHost: "",
       path: pathname,
       backendWs: null,
       isElementTracing: true,
     } satisfies WSData,
   });
   if (upgraded) return;
-  return new Response('WebSocket upgrade failed', { status: 500 });
+  return new Response("WebSocket upgrade failed", { status: 500 });
 }
 ```
 
@@ -2990,12 +2990,12 @@ import type {
   TracingClientMessage,
   TracingServerMessage,
   TracingTransport,
-} from '../../../../../shared/element-tracing/types';
+} from "../../../../../shared/element-tracing/types";
 
 type MessageHandler = (msg: TracingServerMessage) => void;
 type ConnectionHandler = (connected: boolean) => void;
 
-const TRACING_PREFIX = 'element-tracing:';
+const TRACING_PREFIX = "element-tracing:";
 
 /**
  * PostMessage transport for iframe ↔ extension host communication.
@@ -3012,11 +3012,11 @@ export class PostMessageTracingTransport implements TracingTransport {
   /**
    * @param mode 'iframe' for client-side (sends to parent), 'host' for extension host
    */
-  constructor(private readonly mode: 'iframe' | 'host') {
-    if (mode === 'iframe' && typeof window !== 'undefined') {
+  constructor(private readonly mode: "iframe" | "host") {
+    if (mode === "iframe" && typeof window !== "undefined") {
       this._listener = (event: MessageEvent) => {
         const data = event.data;
-        if (data && typeof data === 'object' && typeof data.type === 'string' && data.type.startsWith(TRACING_PREFIX)) {
+        if (data && typeof data === "object" && typeof data.type === "string" && data.type.startsWith(TRACING_PREFIX)) {
           const innerType = data.type.slice(TRACING_PREFIX.length);
           const msg = { ...data.payload, type: innerType } as TracingServerMessage;
           for (const handler of this._messageHandlers) {
@@ -3024,7 +3024,7 @@ export class PostMessageTracingTransport implements TracingTransport {
           }
         }
       };
-      window.addEventListener('message', this._listener);
+      window.addEventListener("message", this._listener);
     }
   }
 
@@ -3033,13 +3033,13 @@ export class PostMessageTracingTransport implements TracingTransport {
   }
 
   send(msg: TracingClientMessage): void {
-    if (this.mode === 'iframe' && typeof window !== 'undefined') {
+    if (this.mode === "iframe" && typeof window !== "undefined") {
       window.parent.postMessage(
         {
           type: `${TRACING_PREFIX}${msg.type}`,
           payload: msg,
         },
-        '*',
+        "*",
       );
     }
     // Host mode: handled externally via onWebviewMessage
@@ -3089,8 +3089,8 @@ export class PostMessageTracingTransport implements TracingTransport {
   }
 
   dispose(): void {
-    if (this._listener && typeof window !== 'undefined') {
-      window.removeEventListener('message', this._listener);
+    if (this._listener && typeof window !== "undefined") {
+      window.removeEventListener("message", this._listener);
     }
     this._messageHandlers.clear();
     this._connectionHandlers.clear();
@@ -3130,12 +3130,12 @@ End-to-end test: parse file → build node map → mock fiber with matching sour
  * resolve via NodeMapService → verify match.
  */
 
-import { describe, expect, it } from 'bun:test';
-import { parse } from '@babel/parser';
-import { NodeMapService } from './node-map-service';
-import { buildNodeMap } from './node-map-builder';
-import { mapNodeRefs, buildCompositeKey } from './stability';
-import type { SourceLocation } from '../../shared/element-tracing/types';
+import { describe, expect, it } from "bun:test";
+import { parse } from "@babel/parser";
+import { NodeMapService } from "./node-map-service";
+import { buildNodeMap } from "./node-map-builder";
+import { mapNodeRefs, buildCompositeKey } from "./stability";
+import type { SourceLocation } from "../../shared/element-tracing/types";
 
 const FIXTURE = `
 import { Card } from './Card';
@@ -3155,26 +3155,26 @@ export const Page = () => (
 );
 `;
 
-describe('element-tracing integration', () => {
-  it('should parse fixture and build valid node map', () => {
+describe("element-tracing integration", () => {
+  it("should parse fixture and build valid node map", () => {
     const service = new NodeMapService();
-    const entries = service.parseAndBuild(FIXTURE, 'src/Page.tsx');
+    const entries = service.parseAndBuild(FIXTURE, "src/Page.tsx");
 
     // Should find: div, h1, Card, p, ul, li (6 elements, no Fragment)
     expect(entries.length).toBeGreaterThanOrEqual(5);
 
-    const div = entries.find((e) => e.tag === 'div');
-    const h1 = entries.find((e) => e.tag === 'h1');
-    const card = entries.find((e) => e.tag === 'Card');
-    const p = entries.find((e) => e.tag === 'p');
-    const ul = entries.find((e) => e.tag === 'ul');
-    const li = entries.find((e) => e.tag === 'li');
+    const div = entries.find((e) => e.tag === "div");
+    const h1 = entries.find((e) => e.tag === "h1");
+    const card = entries.find((e) => e.tag === "Card");
+    const p = entries.find((e) => e.tag === "p");
+    const ul = entries.find((e) => e.tag === "ul");
+    const li = entries.find((e) => e.tag === "li");
 
     expect(div).toBeDefined();
     expect(h1).toBeDefined();
     expect(card).toBeDefined();
     expect(card!.isComponent).toBe(true);
-    expect(card!.componentName).toBe('Card');
+    expect(card!.componentName).toBe("Card");
     expect(p).toBeDefined();
     expect(ul).toBeDefined();
     expect(li).toBeDefined();
@@ -3191,30 +3191,30 @@ describe('element-tracing integration', () => {
     expect(div!.children).toContain(ul!.nodeRef);
   });
 
-  it('should resolve source location to correct nodeRef', () => {
+  it("should resolve source location to correct nodeRef", () => {
     const service = new NodeMapService();
-    const entries = service.parseAndBuild(FIXTURE, 'src/Page.tsx');
+    const entries = service.parseAndBuild(FIXTURE, "src/Page.tsx");
 
     // Simulate _debugSource pointing at <Card> element
-    const card = entries.find((e) => e.tag === 'Card')!;
+    const card = entries.find((e) => e.tag === "Card")!;
     const resolved = service.resolveSourceLocation(card.loc);
 
     expect(resolved).not.toBeNull();
     expect(resolved!.nodeRef).toBe(card.nodeRef);
-    expect(resolved!.tag).toBe('Card');
+    expect(resolved!.tag).toBe("Card");
   });
 
-  it('should maintain nodeRef stability after sibling insertion', () => {
+  it("should maintain nodeRef stability after sibling insertion", () => {
     const service = new NodeMapService();
-    service.parseAndBuild(FIXTURE, 'src/Page.tsx');
+    service.parseAndBuild(FIXTURE, "src/Page.tsx");
 
-    const oldEntries = service.getNodeMap('src/Page.tsx')!;
-    const oldCard = oldEntries.find((e) => e.tag === 'Card')!;
+    const oldEntries = service.getNodeMap("src/Page.tsx")!;
+    const oldCard = oldEntries.find((e) => e.tag === "Card")!;
 
     // Simulate adding a <nav> element before Card
     const modifiedFixture = FIXTURE.replace('<Card title="Hello">', '<nav>Nav</nav>\n    <Card title="Hello">');
 
-    const result = service.reparseAndUpdate(modifiedFixture, 'src/Page.tsx');
+    const result = service.reparseAndUpdate(modifiedFixture, "src/Page.tsx");
     expect(result.refMapping).toBeDefined();
 
     // Card should be mapped to its new nodeRef
@@ -3223,22 +3223,22 @@ describe('element-tracing integration', () => {
 
     const newCard = result.nodes.find((e) => e.nodeRef === newCardRef);
     expect(newCard).toBeDefined();
-    expect(newCard!.tag).toBe('Card');
+    expect(newCard!.tag).toBe("Card");
   });
 
-  it('should handle container path normalization', () => {
+  it("should handle container path normalization", () => {
     const service = new NodeMapService();
     // Container paths: _debugSource reports /app/src/Page.tsx, entries use src/Page.tsx
     // Mapping: /app/ → '' (strip container prefix to get project-relative path)
-    service.setPathMapping('/app/', '');
-    service.parseAndBuild(FIXTURE, 'src/Page.tsx');
+    service.setPathMapping("/app/", "");
+    service.parseAndBuild(FIXTURE, "src/Page.tsx");
 
-    const entries = service.getNodeMap('src/Page.tsx')!;
-    const div = entries.find((e) => e.tag === 'div')!;
+    const entries = service.getNodeMap("src/Page.tsx")!;
+    const div = entries.find((e) => e.tag === "div")!;
 
     // Simulate _debugSource with container path
     const containerLoc: SourceLocation = {
-      fileName: '/app/src/Page.tsx',
+      fileName: "/app/src/Page.tsx",
       line: div.loc.line,
       column: div.loc.column,
     };
@@ -3249,37 +3249,37 @@ describe('element-tracing integration', () => {
     expect(resolved!.nodeRef).toBe(div.nodeRef);
   });
 
-  it('should handle re-parse with element deletion', () => {
+  it("should handle re-parse with element deletion", () => {
     const service = new NodeMapService();
-    service.parseAndBuild(FIXTURE, 'src/Page.tsx');
-    const oldEntries = service.getNodeMap('src/Page.tsx')!;
+    service.parseAndBuild(FIXTURE, "src/Page.tsx");
+    const oldEntries = service.getNodeMap("src/Page.tsx")!;
 
     // Remove the <ul> block
-    const withoutUl = FIXTURE.replace(/\s*<ul>[\s\S]*?<\/ul>/, '');
+    const withoutUl = FIXTURE.replace(/\s*<ul>[\s\S]*?<\/ul>/, "");
 
-    const result = service.reparseAndUpdate(withoutUl, 'src/Page.tsx');
+    const result = service.reparseAndUpdate(withoutUl, "src/Page.tsx");
 
-    const oldUl = oldEntries.find((e) => e.tag === 'ul')!;
+    const oldUl = oldEntries.find((e) => e.tag === "ul")!;
     // ul should NOT be in the mapping (deleted)
     expect(result.refMapping?.[oldUl.nodeRef]).toBeUndefined();
 
     // But div and Card should still be mapped
-    const oldDiv = oldEntries.find((e) => e.tag === 'div')!;
-    const oldCard = oldEntries.find((e) => e.tag === 'Card')!;
+    const oldDiv = oldEntries.find((e) => e.tag === "div")!;
+    const oldCard = oldEntries.find((e) => e.tag === "Card")!;
     expect(result.refMapping?.[oldDiv.nodeRef]).toBeDefined();
     expect(result.refMapping?.[oldCard.nodeRef]).toBeDefined();
   });
 
-  describe('_debugSource column format', () => {
-    it('should match Babel AST column numbers (0-based)', () => {
+  describe("_debugSource column format", () => {
+    it("should match Babel AST column numbers (0-based)", () => {
       // Parse with standard Babel config (same as our parser)
       const ast = parse(FIXTURE, {
-        sourceType: 'module',
-        plugins: ['typescript', 'jsx'],
+        sourceType: "module",
+        plugins: ["typescript", "jsx"],
       });
 
-      const entries = buildNodeMap(ast, 'src/Page.tsx');
-      const div = entries.find((e) => e.tag === 'div')!;
+      const entries = buildNodeMap(ast, "src/Page.tsx");
+      const div = entries.find((e) => e.tag === "div")!;
 
       // Babel columns are 0-based — this should match _debugSource.columnNumber
       expect(div.loc.column).toBeGreaterThanOrEqual(0);

@@ -11,24 +11,24 @@
  * - message bridging between iframe and extension
  */
 
-import * as crypto from 'node:crypto';
-import * as path from 'node:path';
-import * as vscode from 'vscode';
-import { ensureSample, buildSampleScaffold, normalizeSampleComponentName } from '@lib/preview-generator';
-import { escapeRegex, extractComponentName } from '../../../lib/preview-generator/scanner';
-import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
-import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
-import { VSCodeFileIO } from './vscode-file-io';
-import type { PanelRouter } from './PanelRouter';
-import type { StateHub } from './StateHub';
-import { SyncPositionService } from './services/SyncPositionService';
-import type { DevServerRuntimeError, UnsupportedProjectError } from './types';
+import * as crypto from "node:crypto";
+import * as path from "node:path";
+import * as vscode from "vscode";
+import { ensureSample, buildSampleScaffold, normalizeSampleComponentName } from "@lib/preview-generator";
+import { escapeRegex, extractComponentName } from "../../../lib/preview-generator/scanner";
+import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from "./EditorBridge";
+import { createExtensionSampleGenerator } from "./services/SampleAIGenerator";
+import { VSCodeFileIO } from "./vscode-file-io";
+import type { PanelRouter } from "./PanelRouter";
+import type { StateHub } from "./StateHub";
+import { SyncPositionService } from "./services/SyncPositionService";
+import type { DevServerRuntimeError, UnsupportedProjectError } from "./types";
 
 export { normalizeSampleComponentName };
 
 export class PreviewPanel {
-  public static readonly viewType = 'hypercanvas.previewPanel';
-  private static readonly PANEL_ID = 'preview';
+  public static readonly viewType = "hypercanvas.previewPanel";
+  private static readonly PANEL_ID = "preview";
 
   private _panel?: vscode.WebviewPanel;
   private _currentComponent?: string;
@@ -40,7 +40,7 @@ export class PreviewPanel {
   // Runtime error callback
   private _onRuntimeErrorCallback: ((error: DevServerRuntimeError | null) => void) | null = null;
 
-  // Sample creation callback (extension host regenerates __canvas_preview__.tsx)
+  // Sample-created callback (triggers preview file regen + activation in extension host)
   private _onSampleCreatedCallback: ((componentPath: string) => Promise<void> | void) | null = null;
 
   // Component-missing callback (triggers self-healing ensureComponent in extension host)
@@ -58,7 +58,7 @@ export class PreviewPanel {
   private _pendingScreenshotRequests = new Map<string, (result: { dataUrl: string | null }) => void>();
 
   // Preview URL (set dynamically when dev server starts)
-  private _previewBaseUrl = 'http://localhost:3000';
+  private _previewBaseUrl = "http://localhost:3000";
 
   // Whether dev server is actually running
   private _devServerRunning = false;
@@ -67,7 +67,7 @@ export class PreviewPanel {
   private _projectError: UnsupportedProjectError | null = null;
 
   // Project capabilities (readonly mode, CSS system) — cached so _pushFullStateToWebview can replay
-  private _capabilities: import('./types').ProjectCapabilities | null = null;
+  private _capabilities: import("./types").ProjectCapabilities | null = null;
 
   // Bidirectional code/preview position sync
   private _syncService?: SyncPositionService;
@@ -80,7 +80,7 @@ export class PreviewPanel {
   // style writes from queuing redundant re-emissions
   private _reEmitTimer: ReturnType<typeof setTimeout> | null = null;
 
-  private _onScopeChange?: (scope: 'full-app' | 'component-only') => Promise<void>;
+  private _onScopeChange?: (scope: "full-app" | "component-only") => Promise<void>;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -103,12 +103,12 @@ export class PreviewPanel {
     this._requiresPreviewRegeneration = false;
     this._defaultComponent = undefined;
     this._devServerRunning = false;
-    this._previewBaseUrl = 'http://localhost:3000';
+    this._previewBaseUrl = "http://localhost:3000";
     // Clear shared StateHub state so _initializeComponent() re-derives from the
     // active editor instead of picking up the previous workspace's component.
     this._capabilities = null;
     this._stateHub.applyUpdate({ currentComponent: null });
-    this._panel?.webview.postMessage({ type: 'projectCapabilities', capabilities: null });
+    this._panel?.webview.postMessage({ type: "projectCapabilities", capabilities: null });
     this.notifyUnsupportedProject(null);
     this.notifyDevServerStopped();
     this._sampleWatcher?.dispose();
@@ -128,12 +128,12 @@ export class PreviewPanel {
   }
 
   /** Register a callback invoked when the user toggles preview scope via the toolbar. */
-  setScopeChangeHandler(fn: (scope: 'full-app' | 'component-only') => Promise<void>): void {
+  setScopeChangeHandler(fn: (scope: "full-app" | "component-only") => Promise<void>): void {
     this._onScopeChange = fn;
   }
 
   /** Push current scope state into the webview (called from extension when mode changes). */
-  setPreviewScope(scope: 'full-app' | 'component-only'): void {
+  setPreviewScope(scope: "full-app" | "component-only"): void {
     // Persist to StateHub so newly created panels receive the correct scope on state:init
     this._stateHub.applyUpdate({ previewScope: scope });
   }
@@ -155,12 +155,12 @@ export class PreviewPanel {
 
     const panel = vscode.window.createWebviewPanel(
       PreviewPanel.viewType,
-      'Hyper Canvas',
+      "Hyper Canvas",
       column || vscode.ViewColumn.Two,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'out')],
+        localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, "out")],
       },
     );
 
@@ -179,7 +179,7 @@ export class PreviewPanel {
     if (this._isAlreadyPinned()) return;
     // reveal() makes the panel active; pinEditor pins the active editor
     this._panel.reveal(undefined, false);
-    await vscode.commands.executeCommand('workbench.action.pinEditor');
+    await vscode.commands.executeCommand("workbench.action.pinEditor");
   }
 
   private _isAlreadyPinned(): boolean {
@@ -222,12 +222,12 @@ export class PreviewPanel {
       this._panel?.reveal(vscode.ViewColumn.Two, true);
     });
 
-    panel.iconPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'icon.png');
+    panel.iconPath = vscode.Uri.joinPath(this._extensionUri, "media", "icon.png");
 
     // Ensure scripts are enabled (matters for deserialized panels)
     panel.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'out')],
+      localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, "out")],
     };
 
     // Register with StateHub and PanelRouter
@@ -270,7 +270,7 @@ export class PreviewPanel {
         if (component && this._currentComponent !== component.path) {
           this._currentComponent = component.path;
           this._navigableComponent = undefined;
-          console.log('[HyperIDE] Component changed via state:', component.path);
+          console.log("[HyperIDE] Component changed via state:", component.path);
         }
       }
     });
@@ -322,10 +322,10 @@ export class PreviewPanel {
 
     if (!msg.type) return;
 
-    console.log('[HyperIDE] Message from webview:', msg.type);
+    console.log("[HyperIDE] Message from webview:", msg.type);
 
     // === Webview lifecycle ===
-    if (msg.type === 'webview:ready') {
+    if (msg.type === "webview:ready") {
       // Send initial state
       this._stateHub.sendInit(PreviewPanel.PANEL_ID);
       // Push consolidated extension-side state (devserver, project error, URL,
@@ -336,47 +336,47 @@ export class PreviewPanel {
     }
 
     // === Preview-specific lifecycle messages (not routed) ===
-    if (msg.type === 'previewLoaded') {
-      console.log('[HyperIDE] Preview iframe loaded');
+    if (msg.type === "previewLoaded") {
+      console.log("[HyperIDE] Preview iframe loaded");
       return;
     }
-    if (msg.type === 'chrome-detected') {
-      const shown = this._context.workspaceState.get<boolean>('chromeDetectedShown', false);
+    if (msg.type === "chrome-detected") {
+      const shown = this._context.workspaceState.get<boolean>("chromeDetectedShown", false);
       if (!shown) {
-        void this._context.workspaceState.update('chromeDetectedShown', true);
+        void this._context.workspaceState.update("chromeDetectedShown", true);
         void vscode.window
           .showInformationMessage(
-            'HyperCanvas: Preview includes app layout (nav/header/sidebar). Switch to Isolated mode to isolate components.',
-            'Generate wrapper',
-            'Dismiss',
+            "HyperCanvas: Preview includes app layout (nav/header/sidebar). Switch to Isolated mode to isolate components.",
+            "Generate wrapper",
+            "Dismiss",
           )
           .then((choice) => {
-            if (choice === 'Generate wrapper') {
-              void this._onScopeChange?.('component-only');
+            if (choice === "Generate wrapper") {
+              void this._onScopeChange?.("component-only");
             }
           });
       }
       return;
     }
-    if (msg.type === 'preview:setScope') {
+    if (msg.type === "preview:setScope") {
       const scope = msg.scope;
-      if (scope !== 'full-app' && scope !== 'component-only') return;
+      if (scope !== "full-app" && scope !== "component-only") return;
       void this._onScopeChange?.(scope);
       return;
     }
-    if (msg.type === 'runtime:error') {
+    if (msg.type === "runtime:error") {
       const error = (msg as { error?: DevServerRuntimeError | null }).error ?? null;
       this._onRuntimeErrorCallback?.(error);
       return;
     }
-    if (msg.type === 'hypercanvas:componentMissing') {
+    if (msg.type === "hypercanvas:componentMissing") {
       const componentPath = (msg as { componentPath?: string }).componentPath;
       if (componentPath) {
         this._onComponentMissingCallback?.(componentPath);
       }
       return;
     }
-    if (msg.type === 'diagnostic:console') {
+    if (msg.type === "diagnostic:console") {
       const entries = (
         msg as {
           entries?: Array<{ level: string; args: string[]; timestamp: number }>;
@@ -387,35 +387,36 @@ export class PreviewPanel {
       }
       return;
     }
-    if (msg.type === 'command:startDevServer') {
-      vscode.commands.executeCommand('hypercanvas.startDevServer');
+    if (msg.type === "command:startDevServer") {
+      vscode.commands.executeCommand("hypercanvas.startDevServer");
       return;
     }
-    if (msg.type === 'command:fixUnsupportedProject') {
-      vscode.commands.executeCommand('hypercanvas.fixUnsupportedProject');
+    if (msg.type === "command:fixUnsupportedProject") {
+      vscode.commands.executeCommand("hypercanvas.fixUnsupportedProject");
       return;
     }
 
     // === ErrorBoundary actions (from iframe error UI) ===
-    if (msg.type === 'errorBoundary:createSample') {
+    if (msg.type === "errorBoundary:createSample") {
+      const componentPath = msg.componentPath as string | undefined;
       await this._handleCreateSampleFromError(
-        msg.componentPath as string | undefined,
+        componentPath,
         msg.propValues as Record<string, unknown> | undefined,
         msg.sampleName as string | undefined,
         { suggestAIKey: true },
       );
       return;
     }
-    if (msg.type === 'errorBoundary:configureAIKey') {
-      vscode.commands.executeCommand('hypercanvas.configureAIKey');
+    if (msg.type === "errorBoundary:configureAIKey") {
+      vscode.commands.executeCommand("hypercanvas.configureAIKey");
       return;
     }
-    if (msg.type === 'errorBoundary:getPropsSchema') {
+    if (msg.type === "errorBoundary:getPropsSchema") {
       const componentPath = msg.componentPath as string | undefined;
       if (componentPath) {
         const props = await this._panelRouter.componentService.getComponentDefinitions(componentPath);
         webview.postMessage({
-          type: 'errorBoundary:propsSchema',
+          type: "errorBoundary:propsSchema",
           componentPath,
           propsSchema: props,
         });
@@ -423,25 +424,25 @@ export class PreviewPanel {
       return;
     }
 
-    if (msg.type === 'previewError') {
-      console.error('[HyperIDE] Preview error:', (msg as { error?: string }).error);
+    if (msg.type === "previewError") {
+      console.error("[HyperIDE] Preview error:", (msg as { error?: string }).error);
       return;
     }
 
     // === Canvas undo/redo (from iframe Cmd+Z / Shift+Cmd+Z) ===
     // Delegates to the same undo()/redo() methods used by keybinding commands,
     // ensuring consistent behavior between keyboard shortcuts and webview messages.
-    if (msg.type === 'canvas:undo') {
+    if (msg.type === "canvas:undo") {
       await this.undo();
       return;
     }
-    if (msg.type === 'canvas:redo') {
+    if (msg.type === "canvas:redo") {
       await this.redo();
       return;
     }
 
     // === Keyboard-driven delete (from iframe keyboard handler) ===
-    if (msg.type === 'keyboard:delete') {
+    if (msg.type === "keyboard:delete") {
       const elementIds = msg.elementIds as string[] | undefined;
       const componentPath = this._currentComponent;
       if (!componentPath || !elementIds?.length) return;
@@ -457,7 +458,7 @@ export class PreviewPanel {
     }
 
     // === Keyboard-driven duplicate (from iframe keyboard handler) ===
-    if (msg.type === 'keyboard:duplicate') {
+    if (msg.type === "keyboard:duplicate") {
       const elementId = msg.elementId as string | undefined;
       const componentPath = this._currentComponent;
       if (!componentPath || !elementId) return;
@@ -469,55 +470,55 @@ export class PreviewPanel {
     }
 
     // === Context menu actions ===
-    if (msg.type === 'contextMenu:goToCode') {
+    if (msg.type === "contextMenu:goToCode") {
       await this._handleContextMenuGoToCode(msg, webview);
       return;
     }
-    if (msg.type === 'contextMenu:duplicate') {
+    if (msg.type === "contextMenu:duplicate") {
       await this._handleContextMenuDuplicate(msg);
       return;
     }
-    if (msg.type === 'contextMenu:delete') {
+    if (msg.type === "contextMenu:delete") {
       await this._handleContextMenuDelete(msg);
       return;
     }
-    if (msg.type === 'contextMenu:wrapInDiv') {
+    if (msg.type === "contextMenu:wrapInDiv") {
       await this._handleContextMenuWrapInDiv(msg);
       return;
     }
-    if (msg.type === 'contextMenu:copy') {
+    if (msg.type === "contextMenu:copy") {
       await this._handleContextMenuCopy(msg);
       return;
     }
-    if (msg.type === 'contextMenu:paste') {
+    if (msg.type === "contextMenu:paste") {
       await this._handleContextMenuPaste(msg);
       return;
     }
-    if (msg.type === 'contextMenu:cut') {
+    if (msg.type === "contextMenu:cut") {
       await this._handleContextMenuCut(msg);
       return;
     }
-    if (msg.type === 'contextMenu:selectParent') {
+    if (msg.type === "contextMenu:selectParent") {
       await this._handleContextMenuSelectParent(msg);
       return;
     }
-    if (msg.type === 'contextMenu:selectChild') {
+    if (msg.type === "contextMenu:selectChild") {
       await this._handleContextMenuSelectChild(msg);
       return;
     }
-    if (msg.type === 'contextMenu:copyText') {
-      this._handleContextMenuCopyContent(msg, webview, 'text');
+    if (msg.type === "contextMenu:copyText") {
+      this._handleContextMenuCopyContent(msg, webview, "text");
       return;
     }
-    if (msg.type === 'contextMenu:copyAsHTML') {
-      this._handleContextMenuCopyContent(msg, webview, 'html');
+    if (msg.type === "contextMenu:copyAsHTML") {
+      this._handleContextMenuCopyContent(msg, webview, "html");
       return;
     }
-    if (msg.type === 'elementContentResult') {
+    if (msg.type === "elementContentResult") {
       this._handleElementContentResult(msg);
       return;
     }
-    if (msg.type === 'screenshotResult') {
+    if (msg.type === "screenshotResult") {
       this._handleScreenshotResult(msg);
       return;
     }
@@ -525,7 +526,7 @@ export class PreviewPanel {
     // AST mutations (ast:updateStyles, ast:updateProps, ast:insertElement, etc.)
     // trigger HMR — re-emit selection so the preview re-highlights the element
     // after the fiber tree is rebuilt.
-    if (msg.type?.startsWith('ast:')) {
+    if (msg.type?.startsWith("ast:")) {
       await this._panelRouter.routeMessage(msg, webview);
       this._bumpStyleVersion();
       this._reEmitSelectionAfterHmr();
@@ -537,12 +538,12 @@ export class PreviewPanel {
     // so keyboard events (Tab, Delete, etc.) go to the canvas instead of a sidebar.
     // reveal(false) activates the tab but steals focus from the iframe, so we
     // immediately post a message to refocus the iframe afterwards.
-    if (msg.type === 'state:update') {
+    if (msg.type === "state:update") {
       const patch = (msg as { patch?: Record<string, unknown> }).patch;
-      if (patch && 'selectedIds' in patch) {
+      if (patch && "selectedIds" in patch) {
         this._panel?.reveal(undefined, false);
         // Refocus the iframe after reveal stole focus
-        webview.postMessage({ type: 'canvas:refocusIframe' });
+        webview.postMessage({ type: "canvas:refocusIframe" });
       }
     }
 
@@ -550,7 +551,7 @@ export class PreviewPanel {
     const handled = await this._panelRouter.routeMessage(msg, webview);
 
     if (!handled) {
-      console.log('[HyperIDE] Unknown message type:', msg.type);
+      console.log("[HyperIDE] Unknown message type:", msg.type);
     }
   }
 
@@ -574,7 +575,7 @@ export class PreviewPanel {
     if (!componentPath) return false;
 
     const absPath = path.isAbsolute(componentPath) ? componentPath : path.join(this._workspaceRoot, componentPath);
-    const exportName = sampleName || 'SampleDefault';
+    const exportName = sampleName || "SampleDefault";
     const revealInEditor = options?.revealInEditor ?? true;
     const notifySampleCreated = options?.notifySampleCreated ?? true;
 
@@ -583,7 +584,7 @@ export class PreviewPanel {
     try {
       const fileUri = vscode.Uri.file(absPath);
       const bytes = await vscode.workspace.fs.readFile(fileUri);
-      sourceCode = Buffer.from(bytes).toString('utf-8');
+      sourceCode = Buffer.from(bytes).toString("utf-8");
     } catch {
       void vscode.window.showErrorMessage(`Could not read component file: ${componentPath}`);
       return false;
@@ -614,7 +615,7 @@ export class PreviewPanel {
 
       try {
         const fileUri = vscode.Uri.file(absPath);
-        await vscode.workspace.fs.writeFile(fileUri, Buffer.from(sourceCode, 'utf-8'));
+        await vscode.workspace.fs.writeFile(fileUri, Buffer.from(sourceCode, "utf-8"));
       } catch {
         void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
         return false;
@@ -628,7 +629,7 @@ export class PreviewPanel {
         return true;
       }
 
-      const lineNumber = sourceCode.substring(0, sourceCode.indexOf(exportName)).split('\n').length;
+      const lineNumber = sourceCode.substring(0, sourceCode.indexOf(exportName)).split("\n").length;
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
       await vscode.window.showTextDocument(doc, {
         viewColumn: vscode.ViewColumn.One,
@@ -656,7 +657,7 @@ export class PreviewPanel {
       const hasRequiredProps = propDefs?.some((p) => p.required) ?? false;
 
       if (hasRequiredProps) {
-        const apiKey = await this._context.secrets.get('hypercanvas.ai.apiKey');
+        const apiKey = await this._context.secrets.get("hypercanvas.ai.apiKey");
         if (apiKey) {
           const aiGenerated = await ensureSample({
             io: new VSCodeFileIO(),
@@ -676,10 +677,10 @@ export class PreviewPanel {
           if (options?.suggestAIKey) {
             const action = await vscode.window.showInformationMessage(
               `"${componentName}" has required props. Configure an AI key to auto-fill them.`,
-              'Configure AI Key',
+              "Configure AI Key",
             );
-            if (action === 'Configure AI Key') {
-              void vscode.commands.executeCommand('hypercanvas.configureAIKey');
+            if (action === "Configure AI Key") {
+              void vscode.commands.executeCommand("hypercanvas.configureAIKey");
             }
           }
           // No key — writing a propless scaffold would permanently block the AI path on
@@ -698,7 +699,7 @@ export class PreviewPanel {
       updatedCode = `${sourceCode}\n${scaffold}\n`;
       try {
         const fileUri = vscode.Uri.file(absPath);
-        await vscode.workspace.fs.writeFile(fileUri, Buffer.from(updatedCode, 'utf-8'));
+        await vscode.workspace.fs.writeFile(fileUri, Buffer.from(updatedCode, "utf-8"));
       } catch {
         void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
         return false;
@@ -709,9 +710,9 @@ export class PreviewPanel {
     if (revealInEditor) {
       // For AI-written samples re-read the file; for scaffold use the content just written
       const codeToSearch =
-        updatedCode ?? Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.file(absPath))).toString('utf-8');
-      const lines = codeToSearch.split('\n');
-      const todoIdx = lines.findIndex((line) => line.includes('// TODO: Add required props'));
+        updatedCode ?? Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.file(absPath))).toString("utf-8");
+      const lines = codeToSearch.split("\n");
+      const todoIdx = lines.findIndex((line) => line.includes("// TODO: Add required props"));
       const sampleIdx = lines.findIndex((line) => line.includes(exportName));
       const targetLine = todoIdx >= 0 ? todoIdx : Math.max(sampleIdx, 0);
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
@@ -738,7 +739,7 @@ export class PreviewPanel {
    * Used as a silent fallback when AI sample generation is unavailable.
    */
   public async ensureDefaultSampleForNoProps(componentPath: string, componentName: string): Promise<boolean> {
-    return this._handleCreateSampleFromError(componentPath, undefined, 'SampleDefault', {
+    return this._handleCreateSampleFromError(componentPath, undefined, "SampleDefault", {
       componentName,
       notifySampleCreated: false,
       revealInEditor: false,
@@ -752,21 +753,21 @@ export class PreviewPanel {
     this._sampleWatcher?.dispose();
 
     const fileUri = vscode.Uri.file(absPath);
-    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(fileUri, ''));
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(fileUri, ""));
 
     const checkSample = async () => {
       try {
         const bytes = await vscode.workspace.fs.readFile(fileUri);
-        const content = Buffer.from(bytes).toString('utf-8');
+        const content = Buffer.from(bytes).toString("utf-8");
         const exists = content.includes(`export const ${exportName}`);
         if (!exists) {
-          webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
+          webview.postMessage({ type: "errorOverlay:sampleDeleted", sampleName: exportName });
           this._sampleWatcher?.dispose();
           this._sampleWatcher = undefined;
         }
       } catch {
         // File deleted entirely
-        webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
+        webview.postMessage({ type: "errorOverlay:sampleDeleted", sampleName: exportName });
         this._sampleWatcher?.dispose();
         this._sampleWatcher = undefined;
       }
@@ -774,7 +775,7 @@ export class PreviewPanel {
 
     watcher.onDidChange(checkSample);
     watcher.onDidDelete(() => {
-      webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
+      webview.postMessage({ type: "errorOverlay:sampleDeleted", sampleName: exportName });
       this._sampleWatcher?.dispose();
       this._sampleWatcher = undefined;
     });
@@ -786,7 +787,7 @@ export class PreviewPanel {
     return propValues
       ? Object.entries(propValues).filter(([, v]) => {
           if (v == null) return false;
-          if (typeof v === 'string') return v.trim() !== '';
+          if (typeof v === "string") return v.trim() !== "";
           return true;
         })
       : [];
@@ -796,7 +797,7 @@ export class PreviewPanel {
     componentName: string,
     exportName: string,
     propEntries: Array<[string, unknown]>,
-    sourceCode = '',
+    sourceCode = "",
   ): string {
     return buildSampleScaffold({ sourceCode, componentName, exportName, propEntries });
   }
@@ -813,7 +814,7 @@ export class PreviewPanel {
     if (loc) {
       await handleEditorMessage(
         {
-          type: 'editor:goToCode',
+          type: "editor:goToCode",
           path: componentPath,
           line: loc.line,
           column: loc.column + 1,
@@ -836,7 +837,7 @@ export class PreviewPanel {
         selectedIds: [result.newId],
       });
     } else if (!result.success) {
-      void vscode.window.showErrorMessage(`HyperCanvas: Could not duplicate element. ${result.error ?? ''}`);
+      void vscode.window.showErrorMessage(`HyperCanvas: Could not duplicate element. ${result.error ?? ""}`);
     }
   }
 
@@ -860,7 +861,7 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const result = await this._panelRouter.astBridge.wrapElement(componentPath, elementId, 'div');
+    const result = await this._panelRouter.astBridge.wrapElement(componentPath, elementId, "div");
 
     if (result.success && result.wrapperId) {
       // Select the wrapper
@@ -882,7 +883,7 @@ export class PreviewPanel {
     }
 
     if (codes.length > 0) {
-      await vscode.env.clipboard.writeText(codes.join('\n'));
+      await vscode.env.clipboard.writeText(codes.join("\n"));
     }
   }
 
@@ -956,21 +957,21 @@ export class PreviewPanel {
   private _handleContextMenuCopyContent(
     msg: { [key: string]: unknown },
     webview: vscode.Webview,
-    mode: 'text' | 'html',
+    mode: "text" | "html",
   ): void {
     const elementId = msg.elementId as string | undefined;
     if (!elementId) return;
 
     const requestId = `content-${Date.now()}-${this._generateRandomId(6)}`;
     this._pendingContentRequests.set(requestId, (result) => {
-      const value = mode === 'text' ? result.text : result.html;
+      const value = mode === "text" ? result.text : result.html;
       if (value) {
         vscode.env.clipboard.writeText(value);
       }
     });
 
     webview.postMessage({
-      type: mode === 'text' ? 'getElementText' : 'getElementHTML',
+      type: mode === "text" ? "getElementText" : "getElementHTML",
       elementId,
       requestId,
     });
@@ -1019,7 +1020,7 @@ export class PreviewPanel {
       });
 
       webview.postMessage({
-        type: 'takeScreenshot',
+        type: "takeScreenshot",
         elementId: elementId ?? null,
         requestId,
       });
@@ -1102,23 +1103,23 @@ export class PreviewPanel {
     if (!webview) return;
 
     webview.postMessage({
-      type: 'devserver:statusChanged',
+      type: "devserver:statusChanged",
       running: this._devServerRunning,
       url: this._devServerRunning ? this._previewBaseUrl : null,
     });
 
-    const autoStart = vscode.workspace.getConfiguration('hypercanvas.devServer').get<boolean>('autoStart', false);
-    webview.postMessage({ type: 'devserver:settings', autoStart });
+    const autoStart = vscode.workspace.getConfiguration("hypercanvas.devServer").get<boolean>("autoStart", false);
+    webview.postMessage({ type: "devserver:settings", autoStart });
 
-    webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
+    webview.postMessage({ type: "projectCapabilities", capabilities: this._capabilities ?? null });
 
     if (this._projectError) {
-      webview.postMessage({ type: 'projectError', error: this._projectError });
+      webview.postMessage({ type: "projectError", error: this._projectError });
     }
 
     const canNavigateCurrentComponent = !this._currentComponent || this._navigableComponent === this._currentComponent;
     if (this._currentComponent && canNavigateCurrentComponent) {
-      webview.postMessage({ type: 'setComponent', component: this._currentComponent });
+      webview.postMessage({ type: "setComponent", component: this._currentComponent });
     }
 
     if (this._devServerRunning) {
@@ -1188,7 +1189,7 @@ export class PreviewPanel {
       component &&
       (this._currentComponent !== component || this._stateHub.state.currentComponent?.path !== component)
     ) {
-      console.log('[HyperIDE] Component from editor:', component);
+      console.log("[HyperIDE] Component from editor:", component);
       this._setCurrentComponent(component);
     }
   }
@@ -1198,7 +1199,7 @@ export class PreviewPanel {
       this._navigableComponent = undefined;
     }
     this._currentComponent = component;
-    const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
+    const name = component.replace(/^.*\//, "").replace(/\.\w+$/, "");
     const current = this._stateHub.state.currentComponent;
 
     if (current?.path === component && current.name === name) {
@@ -1224,8 +1225,8 @@ export class PreviewPanel {
 
     // No component selected — show hint instead of loading bare URL
     if (!component) {
-      console.log('[HyperIDE] No component selected, showing hint');
-      this._panel?.webview.postMessage({ type: 'showNoComponentHint' });
+      console.log("[HyperIDE] No component selected, showing hint");
+      this._panel?.webview.postMessage({ type: "showNoComponentHint" });
       return;
     }
 
@@ -1236,9 +1237,9 @@ export class PreviewPanel {
     const baseUrl = `${this._previewBaseUrl}/test-preview`;
     const url = `${baseUrl}?component=${encodeURIComponent(component)}`;
 
-    console.log('[HyperIDE] Updating URL:', url);
+    console.log("[HyperIDE] Updating URL:", url);
 
-    this._panel?.webview.postMessage({ type: 'updateUrl', url });
+    this._panel?.webview.postMessage({ type: "updateUrl", url });
   }
 
   /**
@@ -1250,7 +1251,7 @@ export class PreviewPanel {
 
     // Notify React webview of devserver status change
     this._panel?.webview.postMessage({
-      type: 'devserver:statusChanged',
+      type: "devserver:statusChanged",
       running: true,
       url,
     });
@@ -1264,7 +1265,7 @@ export class PreviewPanel {
   public notifyDevServerStopped(): void {
     this._devServerRunning = false;
     this._panel?.webview.postMessage({
-      type: 'devserver:statusChanged',
+      type: "devserver:statusChanged",
       running: false,
       url: null,
     });
@@ -1276,16 +1277,16 @@ export class PreviewPanel {
    */
   public notifyUnsupportedProject(error: UnsupportedProjectError | null): void {
     this._projectError = error;
-    this._panel?.webview.postMessage({ type: 'projectError', error });
+    this._panel?.webview.postMessage({ type: "projectError", error });
   }
 
   /**
    * Notify the webview about project capabilities (readonly mode, CSS system).
    * Sent after CSS system detection completes during activation.
    */
-  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities): void {
+  public notifyCapabilities(capabilities: import("./types").ProjectCapabilities): void {
     this._capabilities = capabilities;
-    this._panel?.webview.postMessage({ type: 'projectCapabilities', capabilities });
+    this._panel?.webview.postMessage({ type: "projectCapabilities", capabilities });
   }
 
   /**
@@ -1300,7 +1301,7 @@ export class PreviewPanel {
     if (this._currentComponent && this._navigableComponent !== this._currentComponent) {
       return;
     }
-    this._panel.webview.postMessage({ type: 'refresh' });
+    this._panel.webview.postMessage({ type: "refresh" });
   }
 
   /**
@@ -1337,7 +1338,7 @@ export class PreviewPanel {
     }
 
     this._panel.webview.postMessage({
-      type: 'setComponent',
+      type: "setComponent",
       component: componentPath,
     });
   }
@@ -1398,7 +1399,7 @@ export class PreviewPanel {
     if (result.success && result.newId) {
       this._stateHub.applyUpdate({ selectedIds: [result.newId] });
     } else if (!result.success) {
-      void vscode.window.showErrorMessage(`HyperCanvas: Could not duplicate element. ${result.error ?? ''}`);
+      void vscode.window.showErrorMessage(`HyperCanvas: Could not duplicate element. ${result.error ?? ""}`);
     }
   }
 
@@ -1416,7 +1417,7 @@ export class PreviewPanel {
     const loc = await this._panelRouter.astBridge.astService.getElementLocation(componentPath, selectedIds[0]);
     if (loc) {
       await handleEditorMessage(
-        { type: 'editor:goToCode', path: componentPath, line: loc.line, column: loc.column + 1 },
+        { type: "editor:goToCode", path: componentPath, line: loc.line, column: loc.column + 1 },
         panel.webview,
       );
     }
@@ -1430,7 +1431,7 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !selectedIds?.length) return;
 
-    const result = await this._panelRouter.astBridge.wrapElement(componentPath, selectedIds[0], 'div');
+    const result = await this._panelRouter.astBridge.wrapElement(componentPath, selectedIds[0], "div");
     if (result.success && result.wrapperId) {
       this._stateHub.applyUpdate({ selectedIds: [result.wrapperId] });
     }
@@ -1460,7 +1461,7 @@ export class PreviewPanel {
       }
     }
 
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Enter', shiftKey: false });
+    this._panel?.webview.postMessage({ type: "canvas:keyboard", key: "Enter", shiftKey: false });
   }
 
   /**
@@ -1487,7 +1488,7 @@ export class PreviewPanel {
       }
     }
 
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Enter', shiftKey: true });
+    this._panel?.webview.postMessage({ type: "canvas:keyboard", key: "Enter", shiftKey: true });
   }
 
   /**
@@ -1496,14 +1497,14 @@ export class PreviewPanel {
   public selectNextSibling(): void {
     // Forward to iframe where DOM-based keyboard handler resolves siblings via fiber tree.
     // AST-based NodeMapService doesn't reliably track elements inside conditional JSX expressions.
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: false });
+    this._panel?.webview.postMessage({ type: "canvas:keyboard", key: "Tab", shiftKey: false });
   }
 
   /**
    * Select previous sibling of selected element (called from VS Code keybinding command).
    */
   public selectPrevSibling(): void {
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: true });
+    this._panel?.webview.postMessage({ type: "canvas:keyboard", key: "Tab", shiftKey: true });
   }
 
   /**
@@ -1537,18 +1538,18 @@ export class PreviewPanel {
    * Falls back to VS Code native undo when canvas stack is empty.
    */
   public async undo(): Promise<void> {
-    console.log('[PreviewPanel] undo() called (keybinding command)');
+    console.log("[PreviewPanel] undo() called (keybinding command)");
     const panel = this._panel;
     if (!panel) {
-      console.log('[PreviewPanel] undo: no panel, falling back to native undo');
-      await vscode.commands.executeCommand('undo');
+      console.log("[PreviewPanel] undo: no panel, falling back to native undo");
+      await vscode.commands.executeCommand("undo");
       return;
     }
     const handled = await this._panelRouter.astBridge.undo(panel);
     console.log(`[PreviewPanel] undo: astBridge.undo returned ${handled}`);
     if (!handled) {
-      console.log('[PreviewPanel] undo: falling back to native VS Code undo');
-      await vscode.commands.executeCommand('undo');
+      console.log("[PreviewPanel] undo: falling back to native VS Code undo");
+      await vscode.commands.executeCommand("undo");
       const editor = vscode.window.activeTextEditor;
       if (editor?.document.isDirty) {
         await editor.document.save();
@@ -1566,11 +1567,11 @@ export class PreviewPanel {
    * Falls back to VS Code native redo when canvas stack is empty.
    */
   public async redo(): Promise<void> {
-    console.log('[PreviewPanel] redo() called (keybinding command)');
+    console.log("[PreviewPanel] redo() called (keybinding command)");
     const panel = this._panel;
     if (!panel) {
-      console.log('[PreviewPanel] redo: no panel, falling back to native redo');
-      await vscode.commands.executeCommand('redo');
+      console.log("[PreviewPanel] redo: no panel, falling back to native redo");
+      await vscode.commands.executeCommand("redo");
       return;
     }
     const handled = await this._panelRouter.astBridge.redo(panel);
@@ -1624,7 +1625,7 @@ export class PreviewPanel {
       const currentIds = this._stateHub.state.selectedIds;
       if (!currentIds?.length) return;
 
-      console.log('[PreviewPanel] Re-emitting selection after HMR:', currentIds);
+      console.log("[PreviewPanel] Re-emitting selection after HMR:", currentIds);
       this._stateHub.applyUpdate({ selectedIds: currentIds });
     }, 2000);
   }
@@ -1668,7 +1669,7 @@ export class PreviewPanel {
     if (this._panel) {
       console.log(`[HyperIDE] Sending goToVisual: ${elementId}`);
       this._panel.webview.postMessage({
-        type: 'goToVisual',
+        type: "goToVisual",
         elementId,
       });
       // Update StateHub so inspector (right panel) and explorer (left panel) receive selection.
@@ -1688,12 +1689,12 @@ export class PreviewPanel {
     const webview = this._panel?.webview;
     if (!webview) {
       // Fallback HTML if the webview panel is not available
-      return '<!DOCTYPE html><html><body><p>Preview is not available.</p></body></html>';
+      return "<!DOCTYPE html><html><body><p>Preview is not available.</p></body></html>";
     }
     const nonce = this._getNonce();
 
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview-preview-panel.js'));
-    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview.css'));
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "out", "webview-preview-panel.js"));
+    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "out", "webview.css"));
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -1724,7 +1725,7 @@ export class PreviewPanel {
    * using cryptographically secure randomness.
    */
   private _generateRandomId(length: number): string {
-    return crypto.randomBytes(length).toString('base64url').slice(0, length);
+    return crypto.randomBytes(length).toString("base64url").slice(0, length);
   }
 
   /**

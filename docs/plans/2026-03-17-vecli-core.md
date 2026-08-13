@@ -113,8 +113,8 @@ In root `package.json`, workspaces already has `"packages/*"` so no change neede
  * Accessed via: All CLI commands — holds graph, executor, history, registry
  */
 
-import { VectorGraphModel, GraphExecutor, createDefaultRegistry, HistoryManager, sceneToSvg } from 'vector-engine';
-import type { NodeRegistry } from 'vector-engine';
+import { VectorGraphModel, GraphExecutor, createDefaultRegistry, HistoryManager, sceneToSvg } from "vector-engine";
+import type { NodeRegistry } from "vector-engine";
 
 export interface EvalContext {
   graph: VectorGraphModel;
@@ -129,7 +129,7 @@ export interface EvalContext {
 
 export function createContext(width = 100, height = 100): EvalContext {
   const registry = createDefaultRegistry();
-  const graph = VectorGraphModel.create(crypto.randomUUID(), 'untitled', width, height);
+  const graph = VectorGraphModel.create(crypto.randomUUID(), "untitled", width, height);
   return {
     graph,
     registry,
@@ -148,26 +148,26 @@ export function executeAndRender(ctx: EvalContext): string {
 
 ```typescript
 // test/context.test.ts
-import { describe, expect, it } from 'bun:test';
-import { createContext, executeAndRender } from '../src/context';
+import { describe, expect, it } from "bun:test";
+import { createContext, executeAndRender } from "../src/context";
 
-describe('EvalContext', () => {
-  it('should create context with default canvas', () => {
+describe("EvalContext", () => {
+  it("should create context with default canvas", () => {
     const ctx = createContext();
     expect(ctx.graph.nodeCount).toBe(0);
     expect(ctx.canvasWidth).toBe(100);
   });
 
-  it('should create context with custom canvas', () => {
+  it("should create context with custom canvas", () => {
     const ctx = createContext(200, 300);
     expect(ctx.canvasWidth).toBe(200);
     expect(ctx.canvasHeight).toBe(300);
   });
 
-  it('should execute empty graph to SVG', () => {
+  it("should execute empty graph to SVG", () => {
     const ctx = createContext();
     const svg = executeAndRender(ctx);
-    expect(svg).toContain('<svg');
+    expect(svg).toContain("<svg");
     expect(svg).toContain('viewBox="0 0 100 100"');
   });
 });
@@ -201,64 +201,64 @@ connects edges, returns a new ChainableNode.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { ChainableNode } from '../src/chainable';
-import { createContext } from '../src/context';
+import { describe, expect, it } from "bun:test";
+import { ChainableNode } from "../src/chainable";
+import { createContext } from "../src/context";
 
-describe('ChainableNode', () => {
-  it('should create a rectangle node', () => {
+describe("ChainableNode", () => {
+  it("should create a rectangle node", () => {
     const ctx = createContext();
-    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 });
+    const node = ChainableNode.generator(ctx, "rectangle", { width: 100, height: 50 });
     expect(ctx.graph.nodeCount).toBe(1);
     expect(node.nodeId).toBeTruthy();
   });
 
-  it('should chain fill after generator', () => {
+  it("should chain fill after generator", () => {
     const ctx = createContext();
-    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 }).fill('#ff0000');
+    const node = ChainableNode.generator(ctx, "rectangle", { width: 100, height: 50 }).fill("#ff0000");
     expect(ctx.graph.nodeCount).toBe(2);
     expect(ctx.graph.edgeCount).toBe(1);
   });
 
-  it('should chain multiple operations', () => {
+  it("should chain multiple operations", () => {
     const ctx = createContext();
-    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 })
-      .fill('#ff0000')
-      .stroke('#000000', 2)
+    const node = ChainableNode.generator(ctx, "rectangle", { width: 100, height: 50 })
+      .fill("#ff0000")
+      .stroke("#000000", 2)
       .translate(10, 20);
     expect(ctx.graph.nodeCount).toBe(4);
     expect(ctx.graph.edgeCount).toBe(3);
   });
 
-  it('should export SVG', () => {
+  it("should export SVG", () => {
     const ctx = createContext();
-    const svg = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 }).fill('#ff0000').export('svg');
-    expect(svg).toContain('<svg');
+    const svg = ChainableNode.generator(ctx, "rectangle", { width: 100, height: 50 }).fill("#ff0000").export("svg");
+    expect(svg).toContain("<svg");
     expect(svg).toContain('fill="#ff0000"');
   });
 
-  it('should compute bounds', () => {
+  it("should compute bounds", () => {
     const ctx = createContext();
-    const bounds = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50, x: 10, y: 20 }).bounds();
+    const bounds = ChainableNode.generator(ctx, "rectangle", { width: 100, height: 50, x: 10, y: 20 }).bounds();
     expect(bounds.width).toBeCloseTo(100, 0);
     expect(bounds.height).toBeCloseTo(50, 0);
   });
 
-  it('should compute length', () => {
+  it("should compute length", () => {
     const ctx = createContext();
-    const len = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 100, x: 0, y: 0 }).length();
+    const len = ChainableNode.generator(ctx, "rectangle", { width: 100, height: 100, x: 0, y: 0 }).length();
     expect(len).toBeCloseTo(400, 0);
   });
 
-  it('should chain deformation', () => {
+  it("should chain deformation", () => {
     const ctx = createContext();
-    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 }).roughen(10, 5);
+    const node = ChainableNode.generator(ctx, "rectangle", { width: 100, height: 50 }).roughen(10, 5);
     expect(ctx.graph.nodeCount).toBe(2);
   });
 
-  it('should chain roundCorners', () => {
+  it("should chain roundCorners", () => {
     const ctx = createContext();
-    const node = ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 }).roundCorners(10);
+    const node = ChainableNode.generator(ctx, "rectangle", { width: 100, height: 50 }).roundCorners(10);
     expect(ctx.graph.nodeCount).toBe(2);
   });
 });
@@ -285,9 +285,9 @@ import {
   type PathValue,
   type NodeValue,
   type PointAtOffsetResult,
-} from 'vector-engine';
-import type { EvalContext } from './context';
-import { writeFileSync } from 'node:fs';
+} from "vector-engine";
+import type { EvalContext } from "./context";
+import { writeFileSync } from "node:fs";
 
 export class ChainableNode {
   constructor(
@@ -304,115 +304,115 @@ export class ChainableNode {
   /** Add a downstream node connected via path port */
   private chain(type: string, params: Record<string, unknown>): ChainableNode {
     const id = this.ctx.graph.addNode({ type, params });
-    this.ctx.graph.addEdge(this.nodeId, 'path', id, 'path');
+    this.ctx.graph.addEdge(this.nodeId, "path", id, "path");
     return new ChainableNode(this.ctx, id);
   }
 
   // -- Style --
   fill(color: string): ChainableNode {
-    return this.chain('fill', { type: 'solid', color });
+    return this.chain("fill", { type: "solid", color });
   }
-  stroke(color: string, width = 1, cap = 'round', join = 'round'): ChainableNode {
-    return this.chain('stroke', { color, width, cap, join });
+  stroke(color: string, width = 1, cap = "round", join = "round"): ChainableNode {
+    return this.chain("stroke", { color, width, cap, join });
   }
   opacity(value: number): ChainableNode {
-    return this.chain('opacity', { opacity: value });
+    return this.chain("opacity", { opacity: value });
   }
   blend(mode: string): ChainableNode {
-    return this.chain('blendMode', { mode });
+    return this.chain("blendMode", { mode });
   }
   shadow(color: string, dx: number, dy: number, blur: number): ChainableNode {
-    return this.chain('shadow', { color, offsetX: dx, offsetY: dy, blur });
+    return this.chain("shadow", { color, offsetX: dx, offsetY: dy, blur });
   }
   blur(radius: number): ChainableNode {
-    return this.chain('blur', { radius });
+    return this.chain("blur", { radius });
   }
 
   // -- Transform --
   translate(dx: number, dy: number): ChainableNode {
-    return this.chain('translate', { dx, dy });
+    return this.chain("translate", { dx, dy });
   }
   rotate(angle: number, cx?: number, cy?: number): ChainableNode {
-    return this.chain('rotate', { angle, cx: cx ?? 0, cy: cy ?? 0 });
+    return this.chain("rotate", { angle, cx: cx ?? 0, cy: cy ?? 0 });
   }
   scale(sx: number, sy?: number): ChainableNode {
-    return this.chain('scale', { sx, sy: sy ?? sx });
+    return this.chain("scale", { sx, sy: sy ?? sx });
   }
   skew(sx: number, sy: number): ChainableNode {
-    return this.chain('skew', { skewX: sx, skewY: sy });
+    return this.chain("skew", { skewX: sx, skewY: sy });
   }
 
   // -- Path operations --
   roundCorners(radius: number): ChainableNode {
-    return this.chain('roundCorners', { radius });
+    return this.chain("roundCorners", { radius });
   }
   chamfer(distance: number): ChainableNode {
-    return this.chain('chamfer', { distance });
+    return this.chain("chamfer", { distance });
   }
   smooth(smoothness = 0.5): ChainableNode {
-    return this.chain('smooth', { smoothness });
+    return this.chain("smooth", { smoothness });
   }
   offset(distance: number): ChainableNode {
-    return this.chain('offset', { distance });
+    return this.chain("offset", { distance });
   }
   trim(start: number, end: number): ChainableNode {
-    return this.chain('trimPath', { start, end });
+    return this.chain("trimPath", { start, end });
   }
   reverse(): ChainableNode {
-    return this.chain('reversePath', {});
+    return this.chain("reversePath", {});
   }
   close(): ChainableNode {
-    return this.chain('closeOpen', {});
+    return this.chain("closeOpen", {});
   }
   dash(on: number, off: number): ChainableNode {
-    return this.chain('dashPath', { dashArray: JSON.stringify([on, off]), dashOffset: 0 });
+    return this.chain("dashPath", { dashArray: JSON.stringify([on, off]), dashOffset: 0 });
   }
   strokeToPath(): ChainableNode {
-    return this.chain('strokeToPath', { width: 1, cap: 'round', join: 'round' });
+    return this.chain("strokeToPath", { width: 1, cap: "round", join: "round" });
   }
   roughen(size: number, detail = 5): ChainableNode {
-    return this.chain('roughen', { size, detail, type: 'corner', seed: 42 });
+    return this.chain("roughen", { size, detail, type: "corner", seed: 42 });
   }
   zigzag(size: number, ridges = 5): ChainableNode {
-    return this.chain('zigzag', { size, ridgesPerSegment: ridges, type: 'corner' });
+    return this.chain("zigzag", { size, ridgesPerSegment: ridges, type: "corner" });
   }
   puckerBloat(amount: number): ChainableNode {
-    return this.chain('puckerBloat', { amount });
+    return this.chain("puckerBloat", { amount });
   }
   twist(angle: number): ChainableNode {
-    return this.chain('twist', { angle });
+    return this.chain("twist", { angle });
   }
   warp(type: string, bend: number): ChainableNode {
-    return this.chain('warp', { warpType: type, bend });
+    return this.chain("warp", { warpType: type, bend });
   }
   variableStroke(profile: Array<{ offset: number; width: number }>): ChainableNode {
-    return this.chain('variableStroke', { profile: JSON.stringify(profile), cap: 'round' });
+    return this.chain("variableStroke", { profile: JSON.stringify(profile), cap: "round" });
   }
   subdivide(segIndex: number, t = 0.5): ChainableNode {
-    return this.chain('subdivide', { segmentIndex: segIndex, t });
+    return this.chain("subdivide", { segmentIndex: segIndex, t });
   }
   addPoint(segIndex: number, t = 0.5): ChainableNode {
-    return this.chain('addPoint', { segmentIndex: segIndex, t });
+    return this.chain("addPoint", { segmentIndex: segIndex, t });
   }
   removePoint(index: number): ChainableNode {
-    return this.chain('removePoint', { pointIndex: index });
+    return this.chain("removePoint", { pointIndex: index });
   }
   convertPoint(index: number, type: string): ChainableNode {
-    return this.chain('convertPoint', { pointIndex: index, pointType: type });
+    return this.chain("convertPoint", { pointIndex: index, pointType: type });
   }
   enforceWinding(dir: string): ChainableNode {
-    return this.chain('enforceWinding', { direction: dir });
+    return this.chain("enforceWinding", { direction: dir });
   }
 
   // -- Terminal operations (return values, not ChainableNode) --
   export(format: string, filename?: string): string {
     const result = this.ctx.executor.execute(this.ctx.graph);
     const svg = sceneToSvg(result.scene);
-    if (format === 'svg') {
+    if (format === "svg") {
       if (filename) writeFileSync(filename, svg);
       return svg;
     }
-    if (format === 'json') {
+    if (format === "json") {
       const json = JSON.stringify(this.ctx.graph.toJSON(), null, 2);
       if (filename) writeFileSync(filename, json);
       return json;
@@ -421,14 +421,14 @@ export class ChainableNode {
   }
 
   svg(): string {
-    return this.export('svg');
+    return this.export("svg");
   }
 
   bounds(): BoundingBox {
     const result = this.ctx.executor.execute(this.ctx.graph);
     const items = result.scene.items;
     for (const item of items) {
-      if ('path' in item) return computeBounds(item.path.commands);
+      if ("path" in item) return computeBounds(item.path.commands);
     }
     return { x: 0, y: 0, width: 0, height: 0 };
   }
@@ -436,7 +436,7 @@ export class ChainableNode {
   length(): number {
     const result = this.ctx.executor.execute(this.ctx.graph);
     for (const item of result.scene.items) {
-      if ('path' in item) return pathLength(item.path.commands);
+      if ("path" in item) return pathLength(item.path.commands);
     }
     return 0;
   }
@@ -444,7 +444,7 @@ export class ChainableNode {
   area(): number {
     const result = this.ctx.executor.execute(this.ctx.graph);
     for (const item of result.scene.items) {
-      if ('path' in item) return Math.abs(pathArea(item.path.commands));
+      if ("path" in item) return Math.abs(pathArea(item.path.commands));
     }
     return 0;
   }
@@ -475,26 +475,26 @@ Map user-facing function names to ChainableNode constructors + multi-node ops.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { createGlobals } from '../src/globals';
-import { createContext } from '../src/context';
+import { describe, expect, it } from "bun:test";
+import { createGlobals } from "../src/globals";
+import { createContext } from "../src/context";
 
-describe('global functions', () => {
-  it('should create rect', () => {
+describe("global functions", () => {
+  it("should create rect", () => {
     const ctx = createContext();
     const globals = createGlobals(ctx);
     const node = globals.rect(100, 50);
     expect(ctx.graph.nodeCount).toBe(1);
   });
 
-  it('should create circle (shorthand for ellipse)', () => {
+  it("should create circle (shorthand for ellipse)", () => {
     const ctx = createContext();
     const globals = createGlobals(ctx);
     const node = globals.circle(30);
     expect(ctx.graph.nodeCount).toBe(1);
   });
 
-  it('should do boolean union', () => {
+  it("should do boolean union", () => {
     const ctx = createContext();
     const g = createGlobals(ctx);
     const a = g.rect(100, 100);
@@ -504,7 +504,7 @@ describe('global functions', () => {
     expect(ctx.graph.edgeCount).toBe(2);
   });
 
-  it('should create group', () => {
+  it("should create group", () => {
     const ctx = createContext();
     const g = createGlobals(ctx);
     const a = g.rect(100, 50);
@@ -513,7 +513,7 @@ describe('global functions', () => {
     expect(ctx.graph.nodeCount).toBe(3);
   });
 
-  it('should set canvas size', () => {
+  it("should set canvas size", () => {
     const ctx = createContext();
     const g = createGlobals(ctx);
     g.canvas(200, 300);
@@ -521,7 +521,7 @@ describe('global functions', () => {
     expect(ctx.canvasHeight).toBe(300);
   });
 
-  it('should undo/redo', () => {
+  it("should undo/redo", () => {
     const ctx = createContext();
     const g = createGlobals(ctx);
     g.rect(100, 50);
@@ -543,54 +543,54 @@ describe('global functions', () => {
  * Accessed via: Every CLI expression — rect(100,50), union(a,b), undo(), etc.
  */
 
-import { ChainableNode } from './chainable';
-import type { EvalContext } from './context';
-import { executeAndRender } from './context';
+import { ChainableNode } from "./chainable";
+import type { EvalContext } from "./context";
+import { executeAndRender } from "./context";
 
 export function createGlobals(ctx: EvalContext): Record<string, Function> {
   return {
     // Generators
     rect: (w: number, h: number, x = 0, y = 0) =>
-      ChainableNode.generator(ctx, 'rectangle', { width: w, height: h, x, y }),
-    ellipse: (rx: number, ry: number, cx = 0, cy = 0) => ChainableNode.generator(ctx, 'ellipse', { rx, ry, cx, cy }),
-    circle: (r: number, cx = 0, cy = 0) => ChainableNode.generator(ctx, 'ellipse', { rx: r, ry: r, cx, cy }),
+      ChainableNode.generator(ctx, "rectangle", { width: w, height: h, x, y }),
+    ellipse: (rx: number, ry: number, cx = 0, cy = 0) => ChainableNode.generator(ctx, "ellipse", { rx, ry, cx, cy }),
+    circle: (r: number, cx = 0, cy = 0) => ChainableNode.generator(ctx, "ellipse", { rx: r, ry: r, cx, cy }),
     polygon: (sides: number, radius: number, cx = 0, cy = 0) =>
-      ChainableNode.generator(ctx, 'polygon', { sides, radius, cx, cy }),
+      ChainableNode.generator(ctx, "polygon", { sides, radius, cx, cy }),
     star: (points: number, outer: number, inner: number, cx = 0, cy = 0) =>
-      ChainableNode.generator(ctx, 'star', { points, outerRadius: outer, innerRadius: inner, cx, cy }),
-    line: (x1: number, y1: number, x2: number, y2: number) => ChainableNode.generator(ctx, 'line', { x1, y1, x2, y2 }),
+      ChainableNode.generator(ctx, "star", { points, outerRadius: outer, innerRadius: inner, cx, cy }),
+    line: (x1: number, y1: number, x2: number, y2: number) => ChainableNode.generator(ctx, "line", { x1, y1, x2, y2 }),
     arc: (radius: number, startAngle: number, endAngle: number, cx = 0, cy = 0) =>
-      ChainableNode.generator(ctx, 'arc', { radius, startAngle, endAngle, cx, cy }),
+      ChainableNode.generator(ctx, "arc", { radius, startAngle, endAngle, cx, cy }),
     spiral: (spirals: number, radius: number, cx = 0, cy = 0) =>
-      ChainableNode.generator(ctx, 'spiral', { spirals, radius, cx, cy }),
-    arrow: (length: number, width: number) => ChainableNode.generator(ctx, 'arrow', { length, width }),
-    path: (d: string) => ChainableNode.generator(ctx, 'svgPath', { d }),
-    text: (text: string, fontSize = 48) => ChainableNode.generator(ctx, 'textToPath', { text, fontSize, fontUrl: '' }),
+      ChainableNode.generator(ctx, "spiral", { spirals, radius, cx, cy }),
+    arrow: (length: number, width: number) => ChainableNode.generator(ctx, "arrow", { length, width }),
+    path: (d: string) => ChainableNode.generator(ctx, "svgPath", { d }),
+    text: (text: string, fontSize = 48) => ChainableNode.generator(ctx, "textToPath", { text, fontSize, fontUrl: "" }),
     mesh: (rows: number, cols: number, w = 100, h = 100) =>
-      ChainableNode.generator(ctx, 'gradientMesh', { rows, cols, width: w, height: h, x: 0, y: 0, color: '#ffffff' }),
+      ChainableNode.generator(ctx, "gradientMesh", { rows, cols, width: w, height: h, x: 0, y: 0, color: "#ffffff" }),
 
     // Boolean / multi-node
-    union: (a: ChainableNode, b: ChainableNode) => boolOp(ctx, 'booleanUnion', a, b),
-    subtract: (a: ChainableNode, b: ChainableNode) => boolOp(ctx, 'booleanSubtract', a, b),
-    intersect: (a: ChainableNode, b: ChainableNode) => boolOp(ctx, 'booleanIntersect', a, b),
-    xor: (a: ChainableNode, b: ChainableNode) => boolOp(ctx, 'booleanXor', a, b),
+    union: (a: ChainableNode, b: ChainableNode) => boolOp(ctx, "booleanUnion", a, b),
+    subtract: (a: ChainableNode, b: ChainableNode) => boolOp(ctx, "booleanSubtract", a, b),
+    intersect: (a: ChainableNode, b: ChainableNode) => boolOp(ctx, "booleanIntersect", a, b),
+    xor: (a: ChainableNode, b: ChainableNode) => boolOp(ctx, "booleanXor", a, b),
     clip: (content: ChainableNode, mask: ChainableNode) => {
-      const id = ctx.graph.addNode({ type: 'clip', params: {} });
-      ctx.graph.addEdge(content.nodeId, 'path', id, 'path');
-      ctx.graph.addEdge(mask.nodeId, 'path', id, 'clipPath');
+      const id = ctx.graph.addNode({ type: "clip", params: {} });
+      ctx.graph.addEdge(content.nodeId, "path", id, "path");
+      ctx.graph.addEdge(mask.nodeId, "path", id, "clipPath");
       return new ChainableNode(ctx, id);
     },
     group: (...nodes: ChainableNode[]) => {
-      const id = ctx.graph.addNode({ type: 'group', params: { opacity: 1 } });
+      const id = ctx.graph.addNode({ type: "group", params: { opacity: 1 } });
       for (const n of nodes) {
-        ctx.graph.addEdge(n.nodeId, 'path', id, 'children');
+        ctx.graph.addEdge(n.nodeId, "path", id, "children");
       }
       return new ChainableNode(ctx, id);
     },
     join: (a: ChainableNode, b: ChainableNode) => {
-      const id = ctx.graph.addNode({ type: 'joinPaths', params: {} });
-      ctx.graph.addEdge(a.nodeId, 'path', id, 'paths');
-      ctx.graph.addEdge(b.nodeId, 'path', id, 'paths');
+      const id = ctx.graph.addNode({ type: "joinPaths", params: {} });
+      ctx.graph.addEdge(a.nodeId, "path", id, "paths");
+      ctx.graph.addEdge(b.nodeId, "path", id, "paths");
       return new ChainableNode(ctx, id);
     },
 
@@ -627,7 +627,7 @@ export function createGlobals(ctx: EvalContext): Record<string, Function> {
     // DAG manipulation
     remove: (node: ChainableNode) => ctx.graph.removeNode(node.nodeId),
     set: (node: ChainableNode | string, param: string, value: unknown) => {
-      const id = typeof node === 'string' ? node : node.nodeId;
+      const id = typeof node === "string" ? node : node.nodeId;
       ctx.graph.setParam(id, param, value);
     },
 
@@ -646,7 +646,7 @@ export function createGlobals(ctx: EvalContext): Record<string, Function> {
     },
     edges: () => ctx.graph.getEdges(),
     info: (node: ChainableNode | string) => {
-      const id = typeof node === 'string' ? node : node.nodeId;
+      const id = typeof node === "string" ? node : node.nodeId;
       return ctx.graph.getNode(id);
     },
 
@@ -658,8 +658,8 @@ export function createGlobals(ctx: EvalContext): Record<string, Function> {
 
 function boolOp(ctx: EvalContext, type: string, a: ChainableNode, b: ChainableNode): ChainableNode {
   const id = ctx.graph.addNode({ type, params: {} });
-  ctx.graph.addEdge(a.nodeId, 'path', id, 'a');
-  ctx.graph.addEdge(b.nodeId, 'path', id, 'b');
+  ctx.graph.addEdge(a.nodeId, "path", id, "a");
+  ctx.graph.addEdge(b.nodeId, "path", id, "b");
   return new ChainableNode(ctx, id);
 }
 ```
@@ -684,24 +684,24 @@ feat(vector-cli): global function bindings for sandbox (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { runInSandbox } from '../src/sandbox';
-import { createContext } from '../src/context';
+import { describe, expect, it } from "bun:test";
+import { runInSandbox } from "../src/sandbox";
+import { createContext } from "../src/context";
 
-describe('sandbox', () => {
-  it('should execute simple expression', () => {
+describe("sandbox", () => {
+  it("should execute simple expression", () => {
     const ctx = createContext();
-    const result = runInSandbox(ctx, 'rect(100, 50)');
+    const result = runInSandbox(ctx, "rect(100, 50)");
     expect(ctx.graph.nodeCount).toBe(1);
   });
 
-  it('should execute chained expression', () => {
+  it("should execute chained expression", () => {
     const ctx = createContext();
     runInSandbox(ctx, 'rect(100, 50).fill("#ff0000").stroke("#000", 2)');
     expect(ctx.graph.nodeCount).toBe(3);
   });
 
-  it('should support variables', () => {
+  it("should support variables", () => {
     const ctx = createContext();
     runInSandbox(
       ctx,
@@ -714,7 +714,7 @@ describe('sandbox', () => {
     expect(ctx.graph.nodeCount).toBe(4); // rect + circle + union + fill
   });
 
-  it('should support loops', () => {
+  it("should support loops", () => {
     const ctx = createContext();
     runInSandbox(
       ctx,
@@ -727,21 +727,21 @@ describe('sandbox', () => {
     expect(ctx.graph.nodeCount).toBe(6); // 3 circles + 3 translates
   });
 
-  it('should not expose process/require/import', () => {
+  it("should not expose process/require/import", () => {
     const ctx = createContext();
-    expect(() => runInSandbox(ctx, 'process.exit()')).toThrow();
+    expect(() => runInSandbox(ctx, "process.exit()")).toThrow();
     expect(() => runInSandbox(ctx, 'require("fs")')).toThrow();
   });
 
-  it('should return last expression result', () => {
+  it("should return last expression result", () => {
     const ctx = createContext();
     const result = runInSandbox(ctx, 'rect(100, 50).fill("#f00").svg()');
-    expect(result).toContain('<svg');
+    expect(result).toContain("<svg");
   });
 
-  it('should handle syntax errors gracefully', () => {
+  it("should handle syntax errors gracefully", () => {
     const ctx = createContext();
-    expect(() => runInSandbox(ctx, 'rect(100, }')).toThrow();
+    expect(() => runInSandbox(ctx, "rect(100, }")).toThrow();
   });
 });
 ```
@@ -757,8 +757,8 @@ describe('sandbox', () => {
  *   No access to process, require, import, globalThis, Bun, fetch.
  */
 
-import { createGlobals } from './globals';
-import type { EvalContext } from './context';
+import { createGlobals } from "./globals";
+import type { EvalContext } from "./context";
 
 export function runInSandbox(ctx: EvalContext, code: string): unknown {
   const globals = createGlobals(ctx);
@@ -802,35 +802,35 @@ feat(vector-cli): sandboxed eval for CLI expressions (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { runBatch } from '../src/batch';
+import { describe, expect, it } from "bun:test";
+import { runBatch } from "../src/batch";
 
-describe('batch mode', () => {
-  it('should execute inline expression and return SVG', () => {
+describe("batch mode", () => {
+  it("should execute inline expression and return SVG", () => {
     const output = runBatch({ expression: 'rect(100,50).fill("#f00").svg()' });
-    expect(output).toContain('<svg');
+    expect(output).toContain("<svg");
   });
 
-  it('should execute multi-line script', () => {
+  it("should execute multi-line script", () => {
     const script = `
       const r = rect(100, 50);
       r.fill("#ff0000").export("svg");
     `;
     const output = runBatch({ script });
-    expect(output).toContain('<svg');
+    expect(output).toContain("<svg");
   });
 
-  it('should respect canvas size', () => {
+  it("should respect canvas size", () => {
     const output = runBatch({
-      expression: 'rect(50,50).svg()',
+      expression: "rect(50,50).svg()",
       canvasWidth: 200,
       canvasHeight: 150,
     });
     expect(output).toContain('viewBox="0 0 200 150"');
   });
 
-  it('should handle errors gracefully', () => {
-    expect(() => runBatch({ expression: 'nonexistent()' })).toThrow();
+  it("should handle errors gracefully", () => {
+    expect(() => runBatch({ expression: "nonexistent()" })).toThrow();
   });
 });
 ```
@@ -844,8 +844,8 @@ describe('batch mode', () => {
  * Accessed via: vecli 'expression', vecli -e file.js, pipe
  */
 
-import { createContext } from './context';
-import { runInSandbox } from './sandbox';
+import { createContext } from "./context";
+import { runInSandbox } from "./sandbox";
 
 export interface BatchOptions {
   expression?: string;
@@ -856,15 +856,15 @@ export interface BatchOptions {
 
 export function runBatch(opts: BatchOptions): string {
   const ctx = createContext(opts.canvasWidth, opts.canvasHeight);
-  const code = opts.expression ?? opts.script ?? '';
+  const code = opts.expression ?? opts.script ?? "";
   const result = runInSandbox(ctx, code);
-  if (typeof result === 'string') return result;
+  if (typeof result === "string") return result;
   // If no explicit export, execute and return SVG of whatever is in the graph
   if (ctx.graph.nodeCount > 0) {
     const execResult = ctx.executor.execute(ctx.graph);
     return sceneToSvg(execResult.scene);
   }
-  return '';
+  return "";
 }
 ```
 
@@ -892,8 +892,8 @@ feat(vector-cli): batch mode runner (HYP-308)
  * Accessed via: `vecli` command in terminal
  */
 
-import { readFileSync } from 'node:fs';
-import { runBatch } from '../src/batch';
+import { readFileSync } from "node:fs";
+import { runBatch } from "../src/batch";
 
 const args = process.argv.slice(2);
 
@@ -907,23 +907,23 @@ let expression: string | undefined;
 
 for (let i = 0; i < args.length; i++) {
   switch (args[i]) {
-    case '-e':
+    case "-e":
       execFile = args[++i];
       break;
-    case '-o':
+    case "-o":
       outputFile = args[++i];
       break;
-    case '-i':
+    case "-i":
       inputFile = args[++i];
       break;
-    case '--canvas': {
-      const [w, h] = args[++i].split('x').map(Number);
+    case "--canvas": {
+      const [w, h] = args[++i].split("x").map(Number);
       canvasWidth = w;
       canvasHeight = h;
       break;
     }
     default:
-      if (!args[i].startsWith('-') && !expression) {
+      if (!args[i].startsWith("-") && !expression) {
         expression = args[i];
       }
   }
@@ -935,13 +935,13 @@ const hasBatchArgs = expression || execFile;
 
 if (hasBatchArgs || !isTTY) {
   // Batch mode
-  let code = expression ?? '';
-  if (execFile) code = readFileSync(execFile, 'utf-8');
+  let code = expression ?? "";
+  if (execFile) code = readFileSync(execFile, "utf-8");
   if (!code && !isTTY) {
     // Read from stdin pipe
     const chunks: Buffer[] = [];
     for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-    code = Buffer.concat(chunks).toString('utf-8');
+    code = Buffer.concat(chunks).toString("utf-8");
   }
 
   try {
@@ -957,9 +957,9 @@ if (hasBatchArgs || !isTTY) {
   }
 } else {
   // TUI mode (placeholder — implemented in Plan 2)
-  console.log('vecli interactive mode — TUI coming in next phase');
+  console.log("vecli interactive mode — TUI coming in next phase");
   console.log("Use: vecli 'expression' for batch mode");
-  console.log('Use: vecli -e script.js to execute a file');
+  console.log("Use: vecli -e script.js to execute a file");
 }
 ```
 
@@ -1000,19 +1000,19 @@ feat(vector-cli): entry point with mode detection (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { openFile, saveFile } from '../src/commands/file';
-import { createContext } from '../src/context';
-import { runInSandbox } from '../src/sandbox';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { readFileSync, unlinkSync } from 'node:fs';
+import { describe, expect, it } from "bun:test";
+import { openFile, saveFile } from "../src/commands/file";
+import { createContext } from "../src/context";
+import { runInSandbox } from "../src/sandbox";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { readFileSync, unlinkSync } from "node:fs";
 
-describe('file commands', () => {
-  it('should save and open .graph.json', () => {
+describe("file commands", () => {
+  it("should save and open .graph.json", () => {
     const ctx = createContext();
     runInSandbox(ctx, 'rect(100, 50).fill("#ff0000")');
-    const tmpFile = join(tmpdir(), 'test-vecli.graph.json');
+    const tmpFile = join(tmpdir(), "test-vecli.graph.json");
     saveFile(ctx, tmpFile);
     // Open in new context
     const ctx2 = createContext();
@@ -1021,10 +1021,10 @@ describe('file commands', () => {
     unlinkSync(tmpFile);
   });
 
-  it('should save and open .graph (binary)', () => {
+  it("should save and open .graph (binary)", () => {
     const ctx = createContext();
-    runInSandbox(ctx, 'rect(100, 50)');
-    const tmpFile = join(tmpdir(), 'test-vecli.graph');
+    runInSandbox(ctx, "rect(100, 50)");
+    const tmpFile = join(tmpdir(), "test-vecli.graph");
     saveFile(ctx, tmpFile);
     const ctx2 = createContext();
     openFile(ctx2, tmpFile);
@@ -1032,11 +1032,11 @@ describe('file commands', () => {
     unlinkSync(tmpFile);
   });
 
-  it('should import SVG', () => {
+  it("should import SVG", () => {
     const ctx = createContext();
-    const tmpFile = join(tmpdir(), 'test-vecli.svg');
+    const tmpFile = join(tmpdir(), "test-vecli.svg");
     const svgContent = '<svg viewBox="0 0 100 100"><rect width="50" height="50" fill="#f00"/></svg>';
-    require('node:fs').writeFileSync(tmpFile, svgContent);
+    require("node:fs").writeFileSync(tmpFile, svgContent);
     openFile(ctx, tmpFile);
     expect(ctx.graph.nodeCount).toBeGreaterThanOrEqual(1);
     unlinkSync(tmpFile);
@@ -1053,7 +1053,7 @@ describe('file commands', () => {
  * Accessed via: open("file.graph"), save("file.graph"), etc.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from "node:fs";
 import {
   serializeGraph,
   deserializeGraph,
@@ -1064,26 +1064,26 @@ import {
   mapFigToGraph,
   VectorGraphModel,
   sceneToSvg,
-} from 'vector-engine';
-import type { EvalContext } from '../context';
+} from "vector-engine";
+import type { EvalContext } from "../context";
 
 export function openFile(ctx: EvalContext, filepath: string): void {
-  const ext = filepath.split('.').pop()?.toLowerCase();
-  if (ext === 'json' || filepath.endsWith('.graph.json')) {
-    const json = JSON.parse(readFileSync(filepath, 'utf-8'));
+  const ext = filepath.split(".").pop()?.toLowerCase();
+  if (ext === "json" || filepath.endsWith(".graph.json")) {
+    const json = JSON.parse(readFileSync(filepath, "utf-8"));
     const { model, meta, history } = deserializeGraph(json);
     Object.assign(ctx, { graph: model, history, currentFile: filepath });
-  } else if (ext === 'graph') {
+  } else if (ext === "graph") {
     const data = readFileSync(filepath);
     const { model, meta, history } = deserializeGraphBinary(new Uint8Array(data));
     Object.assign(ctx, { graph: model, history, currentFile: filepath });
-  } else if (ext === 'svg') {
-    const svg = readFileSync(filepath, 'utf-8');
+  } else if (ext === "svg") {
+    const svg = readFileSync(filepath, "utf-8");
     const imported = svgToGraph(svg);
     // Build graph from imported nodes
     // ... (similar to what reverseSync does)
     ctx.currentFile = filepath;
-  } else if (ext === 'fig') {
+  } else if (ext === "fig") {
     const data = readFileSync(filepath);
     const parsed = parseFigFile(data.buffer);
     const imported = mapFigToGraph(parsed.nodes, parsed.canvas);
@@ -1094,12 +1094,12 @@ export function openFile(ctx: EvalContext, filepath: string): void {
 export function saveFile(ctx: EvalContext, filepath?: string): void {
   const target = filepath ?? ctx.currentFile;
   if (!target) throw new Error('No file path specified. Use save("filename")');
-  const ext = target.split('.').pop()?.toLowerCase();
-  if (ext === 'json' || target.endsWith('.graph.json')) {
-    const file = serializeGraph(ctx.graph, { componentPath: '' }, ctx.history);
+  const ext = target.split(".").pop()?.toLowerCase();
+  if (ext === "json" || target.endsWith(".graph.json")) {
+    const file = serializeGraph(ctx.graph, { componentPath: "" }, ctx.history);
     writeFileSync(target, JSON.stringify(file, null, 2));
-  } else if (ext === 'graph') {
-    const binary = serializeGraphBinary(ctx.graph, { componentPath: '' }, ctx.history);
+  } else if (ext === "graph") {
+    const binary = serializeGraphBinary(ctx.graph, { componentPath: "" }, ctx.history);
     writeFileSync(target, binary);
   }
   ctx.currentFile = target;
@@ -1135,28 +1135,28 @@ feat(vector-cli): file commands — open/save for .graph, .svg, .fig (HYP-308)
 - [ ] **Step 1: Write tests**
 
 ```typescript
-import { PreviewManager } from '../src/preview';
+import { PreviewManager } from "../src/preview";
 
-describe('live preview', () => {
-  it('should write SVG on update', () => {
-    const tmpFile = join(tmpdir(), 'test-preview.svg');
+describe("live preview", () => {
+  it("should write SVG on update", () => {
+    const tmpFile = join(tmpdir(), "test-preview.svg");
     const preview = new PreviewManager(tmpFile);
-    preview.update('<svg><rect/></svg>');
-    const content = readFileSync(tmpFile, 'utf-8');
-    expect(content).toContain('<svg>');
+    preview.update("<svg><rect/></svg>");
+    const content = readFileSync(tmpFile, "utf-8");
+    expect(content).toContain("<svg>");
     preview.dispose();
     unlinkSync(tmpFile);
   });
 
-  it('should debounce rapid updates', async () => {
-    const tmpFile = join(tmpdir(), 'test-preview-debounce.svg');
+  it("should debounce rapid updates", async () => {
+    const tmpFile = join(tmpdir(), "test-preview-debounce.svg");
     const preview = new PreviewManager(tmpFile, 50);
-    preview.update('<svg>1</svg>');
-    preview.update('<svg>2</svg>');
-    preview.update('<svg>3</svg>');
+    preview.update("<svg>1</svg>");
+    preview.update("<svg>2</svg>");
+    preview.update("<svg>3</svg>");
     await new Promise((r) => setTimeout(r, 100));
-    const content = readFileSync(tmpFile, 'utf-8');
-    expect(content).toContain('<svg>3</svg>'); // Only last write
+    const content = readFileSync(tmpFile, "utf-8");
+    expect(content).toContain("<svg>3</svg>"); // Only last write
     preview.dispose();
     unlinkSync(tmpFile);
   });
@@ -1172,7 +1172,7 @@ describe('live preview', () => {
  * Accessed via: preview("file.svg") in REPL or --preview flag
  */
 
-import { writeFileSync } from 'node:fs';
+import { writeFileSync } from "node:fs";
 
 export class PreviewManager {
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -1239,34 +1239,34 @@ feat(vector-cli): live SVG preview with debounced file write (HYP-308)
 - [ ] **Step 1: Write tests**
 
 ```typescript
-import { describe, expect, it } from 'bun:test';
-import { formatNodesTable } from '../src/formatters/table';
-import { formatDAGTree } from '../src/formatters/tree';
-import { createContext } from '../src/context';
-import { runInSandbox } from '../src/sandbox';
+import { describe, expect, it } from "bun:test";
+import { formatNodesTable } from "../src/formatters/table";
+import { formatDAGTree } from "../src/formatters/tree";
+import { createContext } from "../src/context";
+import { runInSandbox } from "../src/sandbox";
 
-describe('formatters', () => {
-  it('should format nodes as table', () => {
+describe("formatters", () => {
+  it("should format nodes as table", () => {
     const ctx = createContext();
     runInSandbox(ctx, 'rect(100, 50).fill("#ff0000")');
     const table = formatNodesTable(ctx);
-    expect(table).toContain('rectangle');
-    expect(table).toContain('fill');
+    expect(table).toContain("rectangle");
+    expect(table).toContain("fill");
   });
 
-  it('should format DAG as ASCII tree', () => {
+  it("should format DAG as ASCII tree", () => {
     const ctx = createContext();
     runInSandbox(ctx, 'rect(100, 50).fill("#ff0000").stroke("#000", 2)');
     const tree = formatDAGTree(ctx);
-    expect(tree).toContain('rectangle');
-    expect(tree).toContain('→');
-    expect(tree).toContain('fill');
+    expect(tree).toContain("rectangle");
+    expect(tree).toContain("→");
+    expect(tree).toContain("fill");
   });
 
-  it('should handle empty graph', () => {
+  it("should handle empty graph", () => {
     const ctx = createContext();
-    expect(formatNodesTable(ctx)).toContain('(empty)');
-    expect(formatDAGTree(ctx)).toContain('(empty)');
+    expect(formatNodesTable(ctx)).toContain("(empty)");
+    expect(formatDAGTree(ctx)).toContain("(empty)");
   });
 });
 ```
@@ -1300,8 +1300,8 @@ feat(vector-cli): table and ASCII tree formatters (HYP-308)
 - [ ] **Step 1: Write end-to-end tests**
 
 ```typescript
-describe('vecli integration', () => {
-  it('should create icon from script', () => {
+describe("vecli integration", () => {
+  it("should create icon from script", () => {
     const output = runBatch({
       expression: `
         canvas(24, 24);
@@ -1312,11 +1312,11 @@ describe('vecli integration', () => {
       canvasWidth: 24,
       canvasHeight: 24,
     });
-    expect(output).toContain('<svg');
+    expect(output).toContain("<svg");
     expect(output).toContain('viewBox="0 0 24 24"');
   });
 
-  it('should chain complex operations', () => {
+  it("should chain complex operations", () => {
     const output = runBatch({
       expression: `
         const r = rect(100, 100);
@@ -1324,10 +1324,10 @@ describe('vecli integration', () => {
         subtract(r, c).fill("#ff0000").roundCorners(5).svg();
       `,
     });
-    expect(output).toContain('<svg');
+    expect(output).toContain("<svg");
   });
 
-  it('should use variables and loops', () => {
+  it("should use variables and loops", () => {
     const ctx = createContext(200, 200);
     runInSandbox(
       ctx,

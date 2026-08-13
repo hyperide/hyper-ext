@@ -8,21 +8,21 @@
  * Proxies WebSocket connections for HMR.
  */
 
-import * as fs from 'node:fs';
-import * as http from 'node:http';
-import * as net from 'node:net';
-import * as path from 'node:path';
+import * as fs from "node:fs";
+import * as http from "node:http";
+import * as net from "node:net";
+import * as path from "node:path";
 import {
   getPreviewAssetContentType,
   shouldRetryAssetResponse,
   shouldReturnEmptyAssetResponse,
   shouldSwallowStaleBundleResponse,
-} from './PreviewAssetResponses';
+} from "./PreviewAssetResponses";
 
 // Read pre-built iframe scripts (built by esbuild as IIFE bundles)
-const interactionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-interaction.js'), 'utf-8');
-const errorDetectionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-error-detection.js'), 'utf-8');
-const consoleCaptureScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-console-capture.js'), 'utf-8');
+const interactionScriptContent = fs.readFileSync(path.join(__dirname, "iframe-interaction.js"), "utf-8");
+const errorDetectionScriptContent = fs.readFileSync(path.join(__dirname, "iframe-error-detection.js"), "utf-8");
+const consoleCaptureScriptContent = fs.readFileSync(path.join(__dirname, "iframe-console-capture.js"), "utf-8");
 const chromeDetectionScriptContent = `
 (function() {
   window.addEventListener('load', function() {
@@ -35,10 +35,10 @@ const chromeDetectionScriptContent = `
 `;
 const INJECTED_SCRIPTS = `<script data-hyper-inject="interaction">${interactionScriptContent}</script><script data-hyper-inject="error-detection">${errorDetectionScriptContent}</script><script data-hyper-inject="console-capture">${consoleCaptureScriptContent}</script>`;
 const HYPERCANVAS_SCRIPT_RESPONSES = new Map([
-  ['/__hypercanvas/iframe-interaction.js', interactionScriptContent],
-  ['/__hypercanvas/iframe-error-detection.js', errorDetectionScriptContent],
-  ['/__hypercanvas/iframe-console-capture.js', consoleCaptureScriptContent],
-  ['/__hypercanvas/chrome-detection.js', chromeDetectionScriptContent],
+  ["/__hypercanvas/iframe-interaction.js", interactionScriptContent],
+  ["/__hypercanvas/iframe-error-detection.js", errorDetectionScriptContent],
+  ["/__hypercanvas/iframe-console-capture.js", consoleCaptureScriptContent],
+  ["/__hypercanvas/chrome-detection.js", chromeDetectionScriptContent],
 ]);
 export class PreviewProxy {
   private _server: http.Server | null = null;
@@ -81,27 +81,27 @@ export class PreviewProxy {
 
   /** Read vite.config.ts base path (cached on startup, empty string if not found) */
   private async _readViteBase(): Promise<string> {
-    if (!this._projectRoot) return '';
+    if (!this._projectRoot) return "";
     try {
-      const configPath = path.join(this._projectRoot, 'vite.config.ts');
-      const content = await fs.promises.readFile(configPath, 'utf-8');
+      const configPath = path.join(this._projectRoot, "vite.config.ts");
+      const content = await fs.promises.readFile(configPath, "utf-8");
       const match = content.match(/base\s*:\s*['"]([^'"]+)['"]/);
-      return match?.[1] ?? '';
+      return match?.[1] ?? "";
     } catch {
-      return '';
+      return "";
     }
   }
 
   private async _detectRemixProject(): Promise<boolean> {
     if (!this._projectRoot) return false;
     try {
-      const packageJsonPath = path.join(this._projectRoot, 'package.json');
-      const packageJson = JSON.parse(await fs.promises.readFile(packageJsonPath, 'utf-8')) as {
+      const packageJsonPath = path.join(this._projectRoot, "package.json");
+      const packageJson = JSON.parse(await fs.promises.readFile(packageJsonPath, "utf-8")) as {
         dependencies?: Record<string, string>;
         devDependencies?: Record<string, string>;
       };
       const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
-      return Boolean(deps['@remix-run/react'] || deps['@remix-run/node']);
+      return Boolean(deps["@remix-run/react"] || deps["@remix-run/node"]);
     } catch {
       return false;
     }
@@ -121,22 +121,22 @@ export class PreviewProxy {
     });
 
     // WebSocket upgrade
-    this._server.on('upgrade', (req, socket, head) => {
+    this._server.on("upgrade", (req, socket, head) => {
       this._handleUpgrade(req, socket as net.Socket, head);
     });
 
     // Find random port and listen
     await new Promise<void>((resolve, reject) => {
-      this._server?.listen(0, 'localhost', () => {
+      this._server?.listen(0, "localhost", () => {
         const addr = this._server?.address();
-        if (addr && typeof addr === 'object') {
+        if (addr && typeof addr === "object") {
           this._proxyPort = addr.port;
           // Server-side startup log — useful for debugging proxy configuration in extension host
           console.log(`[PreviewProxy] Listening on port ${this._proxyPort}, proxying to ${this._targetPort}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         }
         resolve();
       });
-      this._server?.on('error', (err) => {
+      this._server?.on("error", (err) => {
         this._server = null;
         reject(err);
       });
@@ -170,12 +170,12 @@ export class PreviewProxy {
       clientRes.end();
       return;
     }
-    const proxyPath = clientReq.url || '/';
+    const proxyPath = clientReq.url || "/";
     const virtualScript = HYPERCANVAS_SCRIPT_RESPONSES.get(proxyPath);
     if (virtualScript !== undefined) {
       clientRes.writeHead(200, {
-        'content-type': 'application/javascript; charset=utf-8',
-        'cache-control': 'no-cache, no-store, must-revalidate',
+        "content-type": "application/javascript; charset=utf-8",
+        "cache-control": "no-cache, no-store, must-revalidate",
       });
       clientRes.end(virtualScript);
       return;
@@ -190,7 +190,7 @@ export class PreviewProxy {
     delete forwardHeaders.referer;
 
     const options: http.RequestOptions = {
-      hostname: 'localhost',
+      hostname: "localhost",
       port: this._targetPort,
       path: proxyPath,
       method: clientReq.method,
@@ -205,7 +205,7 @@ export class PreviewProxy {
         // on the wire because /etc/hosts maps localhost → 127.0.0.1.
         host: `localhost:${this._targetPort}`,
         // Prevent compressed responses so we can inject script
-        'accept-encoding': 'identity',
+        "accept-encoding": "identity",
       },
     };
 
@@ -216,7 +216,7 @@ export class PreviewProxy {
       // Applies to all paths (module files, HTML, assets) to cover any cold-start 504.
       if (
         proxyRes.statusCode === 504 &&
-        clientReq.method === 'GET' &&
+        clientReq.method === "GET" &&
         retryCount < 5 &&
         !clientRes.headersSent &&
         !clientReq.destroyed
@@ -243,8 +243,8 @@ export class PreviewProxy {
       // declared ready, but the proxy was still hitting the pre-patch bundle.
       if (
         (proxyRes.statusCode === 404 || proxyRes.statusCode === 403 || proxyRes.statusCode === 503) &&
-        proxyPath.startsWith('/test-preview') &&
-        clientReq.method === 'GET' &&
+        proxyPath.startsWith("/test-preview") &&
+        clientReq.method === "GET" &&
         retryCount < 90
       ) {
         proxyRes.resume(); // drain response
@@ -255,9 +255,9 @@ export class PreviewProxy {
         return;
       }
 
-      const contentTypeHeader = proxyRes.headers['content-type'];
-      const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader.join(';') : (contentTypeHeader ?? '');
-      const isHtml = contentType.includes('text/html');
+      const contentTypeHeader = proxyRes.headers["content-type"];
+      const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader.join(";") : (contentTypeHeader ?? "");
+      const isHtml = contentType.includes("text/html");
       const assetContentType = getPreviewAssetContentType(proxyPath);
       // 403 on assets: Vite not fully initialised — allow more retries (30 × 200ms = 6s).
       // Other retry conditions (wrong content-type / 503): 5 retries is sufficient.
@@ -273,8 +273,8 @@ export class PreviewProxy {
       if (assetContentType && shouldReturnEmptyAssetResponse(proxyRes.statusCode, isHtml)) {
         proxyRes.resume();
         clientRes.writeHead(204, {
-          'content-type': assetContentType,
-          'cache-control': 'no-cache, no-store, must-revalidate',
+          "content-type": assetContentType,
+          "cache-control": "no-cache, no-store, must-revalidate",
         });
         clientRes.end();
         return;
@@ -283,8 +283,8 @@ export class PreviewProxy {
       if (assetContentType && shouldSwallowStaleBundleResponse(proxyPath, proxyRes.statusCode)) {
         proxyRes.resume();
         clientRes.writeHead(204, {
-          'content-type': assetContentType,
-          'cache-control': 'no-cache, no-store, must-revalidate',
+          "content-type": assetContentType,
+          "cache-control": "no-cache, no-store, must-revalidate",
         });
         clientRes.end();
         return;
@@ -293,9 +293,9 @@ export class PreviewProxy {
       if (isHtml) {
         // Buffer HTML response to inject script
         const chunks: Buffer[] = [];
-        proxyRes.on('data', (chunk: Buffer) => chunks.push(chunk));
-        proxyRes.on('end', () => {
-          let html = Buffer.concat(chunks).toString('utf-8');
+        proxyRes.on("data", (chunk: Buffer) => chunks.push(chunk));
+        proxyRes.on("end", () => {
+          let html = Buffer.concat(chunks).toString("utf-8");
 
           if (!this._isRemixProject) {
             // Inject interaction + error detection scripts after <head>.
@@ -303,7 +303,7 @@ export class PreviewProxy {
             // these scripts itself via /__hypercanvas/* endpoints to avoid
             // proxy-added nodes causing hydration mismatch.
             const injectedScripts = INJECTED_SCRIPTS;
-            const headIndex = html.indexOf('<head>');
+            const headIndex = html.indexOf("<head>");
             if (headIndex !== -1) {
               html = html.slice(0, headIndex + 6) + injectedScripts + html.slice(headIndex + 6);
             } else {
@@ -313,38 +313,38 @@ export class PreviewProxy {
           }
 
           // Tier 1 isolated mode: swap user entry script to standalone canvas preview entry
-          if (this._isIsolatedMode && proxyPath.startsWith('/test-preview')) {
-            const base = this._viteBase ?? '';
+          if (this._isIsolatedMode && proxyPath.startsWith("/test-preview")) {
+            const base = this._viteBase ?? "";
             const scriptRegex = /<script\s+type="module"\s+src="([^"]+)"\s*>/g;
             let userScript: string | null = null;
             for (const match of html.matchAll(scriptRegex)) {
               const src = match[1];
-              if (!src.startsWith('/@') && !src.startsWith('https://') && !src.startsWith(`${base}@`)) {
+              if (!src.startsWith("/@") && !src.startsWith("https://") && !src.startsWith(`${base}@`)) {
                 userScript = src;
                 break;
               }
             }
             if (userScript) {
               // Derive standalone path from the user script's directory (handles client/, src/, etc.)
-              const standalonePath = userScript.replace(/\/[^/]+\.[jt]sx?$/, '/__canvas_preview_standalone__.tsx');
+              const standalonePath = userScript.replace(/\/[^/]+\.[jt]sx?$/, "/__canvas_preview_standalone__.tsx");
               html = html.replace(`src="${userScript}"`, `src="${standalonePath}"`);
               console.log(`[PreviewProxy] Tier 1 script swap: ${userScript} → ${standalonePath}`); // nosemgrep: unsafe-formatstring
             } else {
-              console.warn('[PreviewProxy] Tier 1: could not find user entry script, falling back to App Shell');
+              console.warn("[PreviewProxy] Tier 1: could not find user entry script, falling back to App Shell");
             }
           }
 
           // Inject chrome-detection script for /test-preview requests (App Shell mode)
-          if (proxyPath.startsWith('/test-preview') && !this._isRemixProject) {
+          if (proxyPath.startsWith("/test-preview") && !this._isRemixProject) {
             const chromeDetectScript = `<script>${chromeDetectionScriptContent}</script>`;
-            html = html.replace('</head>', `${chromeDetectScript}</head>`);
+            html = html.replace("</head>", `${chromeDetectScript}</head>`);
           }
 
           // Update content-length
           const headers = { ...proxyRes.headers };
-          delete headers['content-length'];
-          delete headers['content-encoding'];
-          headers['transfer-encoding'] = 'chunked';
+          delete headers["content-length"];
+          delete headers["content-encoding"];
+          headers["transfer-encoding"] = "chunked";
 
           clientRes.writeHead(proxyRes.statusCode || 200, headers);
           clientRes.end(html);
@@ -356,14 +356,14 @@ export class PreviewProxy {
       }
     });
 
-    proxyReq.on('error', (err) => {
-      console.error('[PreviewProxy] HTTP proxy error:', err.message);
+    proxyReq.on("error", (err) => {
+      console.error("[PreviewProxy] HTTP proxy error:", err.message);
       // Retry GET requests on socket errors (ECONNRESET, socket hang up, ECONNREFUSED).
       // Vite's keep-alive pool can drop a connection immediately after the initial HTML
       // response; subsequent @vite/client and module fetches hit the stale socket and
       // get ECONNRESET. Without retry these requests return 502 and React never mounts.
       // Only retrying GET because POST/PUT bodies are consumed after the first attempt.
-      if (clientReq.method === 'GET' && retryCount < 5 && !clientRes.headersSent && !clientReq.destroyed) {
+      if (clientReq.method === "GET" && retryCount < 5 && !clientRes.headersSent && !clientReq.destroyed) {
         const retryDelay = 300 * (retryCount + 1);
         console.log(`[PreviewProxy] socket error on GET, retry ${retryCount + 1}/5 in ${retryDelay}ms: ${proxyPath}`);
         setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), retryDelay);
@@ -371,13 +371,13 @@ export class PreviewProxy {
       }
       if (!clientRes.headersSent) {
         clientRes.writeHead(502);
-        clientRes.end('Proxy error');
+        clientRes.end("Proxy error");
       }
     });
 
     // On retry, clientReq body stream is already consumed. For GET requests there is
     // no body anyway — end the proxy request directly to trigger the upstream send.
-    if (retryCount > 0 && clientReq.method === 'GET') {
+    if (retryCount > 0 && clientReq.method === "GET") {
       proxyReq.end();
     } else {
       clientReq.pipe(proxyReq);
@@ -395,13 +395,13 @@ export class PreviewProxy {
 
     // Snapshot port before async ops — setTargetPort() may race with net.connect callback
     const targetPort = this._targetPort;
-    const targetSocket = net.connect(targetPort, 'localhost', () => {
+    const targetSocket = net.connect(targetPort, "localhost", () => {
       // Forward the original HTTP upgrade request to target
       const requestLine = `${req.method} ${req.url} HTTP/1.1\r\n`;
       const headers = Object.entries(req.headers)
-        .filter(([key]) => key !== 'host')
+        .filter(([key]) => key !== "host")
         .map(([key, val]) => `${key}: ${val}`)
-        .join('\r\n');
+        .join("\r\n");
 
       const hostHeader = `host: 127.0.0.1:${targetPort}`;
       targetSocket.write(`${requestLine}${hostHeader}\r\n${headers}\r\n\r\n`);
@@ -418,21 +418,21 @@ export class PreviewProxy {
     this._trackSocket(clientSocket);
     this._trackSocket(targetSocket);
 
-    targetSocket.on('error', (err) => {
+    targetSocket.on("error", (err) => {
       if (!this._isStopping) {
-        console.error('[PreviewProxy] WS proxy error:', err.message);
+        console.error("[PreviewProxy] WS proxy error:", err.message);
       }
       clientSocket.destroy();
     });
 
-    clientSocket.on('error', () => {
+    clientSocket.on("error", () => {
       targetSocket.destroy();
     });
   }
 
   private _trackSocket(socket: net.Socket): void {
     this._sockets.add(socket);
-    socket.once('close', () => {
+    socket.once("close", () => {
       this._sockets.delete(socket);
     });
   }

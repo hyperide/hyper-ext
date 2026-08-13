@@ -6,11 +6,11 @@
  * Architecture: https://hyperide.github.io/reports/preview-routing
  */
 
-import { describe, expect, it, mock } from 'bun:test';
-import * as vscode from 'vscode';
-import type { PanelRouter } from '../PanelRouter';
-import { normalizeSampleComponentName, PreviewPanel } from '../PreviewPanel';
-import type { StateHub } from '../StateHub';
+import { describe, expect, it, mock } from "bun:test";
+import * as vscode from "vscode";
+import type { PanelRouter } from "../PanelRouter";
+import { normalizeSampleComponentName, PreviewPanel } from "../PreviewPanel";
+import type { StateHub } from "../StateHub";
 
 interface MockStateHubState {
   currentComponent: { name: string; path: string } | null;
@@ -18,7 +18,7 @@ interface MockStateHubState {
   selectedIds: string[];
 }
 
-function createStateHub(initial: MockStateHubState['currentComponent'] = null) {
+function createStateHub(initial: MockStateHubState["currentComponent"] = null) {
   const state: MockStateHubState = {
     currentComponent: initial,
     insertTargetId: null,
@@ -34,11 +34,11 @@ function createStateHub(initial: MockStateHubState['currentComponent'] = null) {
 
 function createPanel(stateHub: ReturnType<typeof createStateHub>) {
   Object.assign(vscode.workspace, {
-    workspaceFolders: [{ uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 }],
+    workspaceFolders: [{ uri: vscode.Uri.file("/workspace"), name: "workspace", index: 0 }],
   });
   const panel = new PreviewPanel(
-    vscode.Uri.file('/extension'),
-    '/workspace',
+    vscode.Uri.file("/extension"),
+    "/workspace",
     stateHub as StateHub,
     {} as PanelRouter,
     {} as vscode.ExtensionContext,
@@ -88,9 +88,9 @@ function createMockPreviewWebviewPanel(options: { onHtmlWrite?: (webview: MockPr
     },
   };
 
-  Object.defineProperty(webview, 'html', {
+  Object.defineProperty(webview, "html", {
     get() {
-      return webview.htmlWrites.at(-1) ?? '';
+      return webview.htmlWrites.at(-1) ?? "";
     },
     set(value: string) {
       webview.htmlWrites.push(value);
@@ -112,53 +112,53 @@ function createMockPreviewWebviewPanel(options: { onHtmlWrite?: (webview: MockPr
   return panel;
 }
 
-describe('PreviewPanel component selection', () => {
-  it('normalizes path-like sample component names to JSX-safe identifiers', () => {
-    expect(normalizeSampleComponentName('components/Sidebar.tsx')).toBe('Sidebar');
-    expect(normalizeSampleComponentName('src/components/user-card.tsx')).toBe('UserCard');
-    expect(normalizeSampleComponentName('App')).toBe('App');
+describe("PreviewPanel component selection", () => {
+  it("normalizes path-like sample component names to JSX-safe identifiers", () => {
+    expect(normalizeSampleComponentName("components/Sidebar.tsx")).toBe("Sidebar");
+    expect(normalizeSampleComponentName("src/components/user-card.tsx")).toBe("UserCard");
+    expect(normalizeSampleComponentName("App")).toBe("App");
   });
 
-  it('does not navigate the iframe before preview generation completes', () => {
+  it("does not navigate the iframe before preview generation completes", () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
 
     (panel as PreviewPanel & { _initializeComponent: (editor: vscode.TextEditor) => void })._initializeComponent(
-      createEditor('/workspace/src/App.tsx'),
+      createEditor("/workspace/src/App.tsx"),
     );
 
     expect(stateHub.applyUpdate).toHaveBeenCalledWith({
-      currentComponent: { name: 'App', path: 'src/App.tsx' },
+      currentComponent: { name: "App", path: "src/App.tsx" },
     });
     expect(postMessage).not.toHaveBeenCalled();
   });
 
-  it('does not re-emit the same current component from an existing preview panel', () => {
-    const stateHub = createStateHub({ name: 'App', path: 'src/App.tsx' });
+  it("does not re-emit the same current component from an existing preview panel", () => {
+    const stateHub = createStateHub({ name: "App", path: "src/App.tsx" });
     const { panel, postMessage } = createPanel(stateHub);
 
     (panel as PreviewPanel & { _initializeComponent: (editor: vscode.TextEditor) => void })._initializeComponent(
-      createEditor('/workspace/src/App.tsx'),
+      createEditor("/workspace/src/App.tsx"),
     );
 
     expect(stateHub.applyUpdate).not.toHaveBeenCalled();
     expect(postMessage).not.toHaveBeenCalled();
   });
 
-  it('falls back to a visible component editor when active editor is unavailable', () => {
+  it("falls back to a visible component editor when active editor is unavailable", () => {
     const stateHub = createStateHub();
     const { panel } = createPanel(stateHub);
     vscode.window.activeTextEditor = undefined;
-    Object.assign(vscode.window, { visibleTextEditors: [createEditor('/workspace/src/App.tsx')] });
+    Object.assign(vscode.window, { visibleTextEditors: [createEditor("/workspace/src/App.tsx")] });
 
     (panel as PreviewPanel & { _initializeComponent: () => void })._initializeComponent();
 
     expect(stateHub.applyUpdate).toHaveBeenCalledWith({
-      currentComponent: { name: 'App', path: 'src/App.tsx' },
+      currentComponent: { name: "App", path: "src/App.tsx" },
     });
   });
 
-  it('falls back to an open text tab when VS Code has no active text editor', () => {
+  it("falls back to an open text tab when VS Code has no active text editor", () => {
     const stateHub = createStateHub();
     const { panel } = createPanel(stateHub);
     vscode.window.activeTextEditor = undefined;
@@ -169,7 +169,7 @@ describe('PreviewPanel component selection', () => {
           {
             tabs: [
               {
-                input: new vscode.TabInputText(vscode.Uri.file('/workspace/src/App.tsx')),
+                input: new vscode.TabInputText(vscode.Uri.file("/workspace/src/App.tsx")),
               },
             ],
           },
@@ -180,30 +180,30 @@ describe('PreviewPanel component selection', () => {
     (panel as PreviewPanel & { _initializeComponent: () => void })._initializeComponent();
 
     expect(stateHub.applyUpdate).toHaveBeenCalledWith({
-      currentComponent: { name: 'App', path: 'src/App.tsx' },
+      currentComponent: { name: "App", path: "src/App.tsx" },
     });
   });
 
-  it('resolves components against the current VS Code workspace after project switch', () => {
+  it("resolves components against the current VS Code workspace after project switch", () => {
     const stateHub = createStateHub();
     const { panel } = createPanel(stateHub);
     Object.assign(vscode.workspace, {
-      workspaceFolders: [{ uri: vscode.Uri.file('/next-workspace'), name: 'next', index: 0 }],
+      workspaceFolders: [{ uri: vscode.Uri.file("/next-workspace"), name: "next", index: 0 }],
     });
 
     (panel as PreviewPanel & { _initializeComponent: (editor: vscode.TextEditor) => void })._initializeComponent(
-      createEditor('/next-workspace/App.tsx'),
+      createEditor("/next-workspace/App.tsx"),
     );
 
     expect(stateHub.applyUpdate).toHaveBeenCalledWith({
-      currentComponent: { name: 'App', path: 'App.tsx' },
+      currentComponent: { name: "App", path: "App.tsx" },
     });
   });
 
-  it('clears shared selection when disposing the preview panel', () => {
+  it("clears shared selection when disposing the preview panel", () => {
     const stateHub = createStateHub();
-    stateHub.state.selectedIds = ['src/components/Feed.tsx:13:8'];
-    stateHub.state.insertTargetId = 'src/components/Feed.tsx:13:8';
+    stateHub.state.selectedIds = ["src/components/Feed.tsx:13:8"];
+    stateHub.state.insertTargetId = "src/components/Feed.tsx:13:8";
     const { dispose, panel } = createPanel(stateHub);
 
     panel.dispose();
@@ -215,42 +215,42 @@ describe('PreviewPanel component selection', () => {
     expect(dispose).toHaveBeenCalled();
   });
 
-  it('requires preview regeneration again after disposing the preview panel', () => {
+  it("requires preview regeneration again after disposing the preview panel", () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
     Object.assign(panel as PreviewPanel & { _currentComponent: string; _navigableComponent: string }, {
-      _currentComponent: 'src/App.tsx',
-      _navigableComponent: 'src/App.tsx',
+      _currentComponent: "src/App.tsx",
+      _navigableComponent: "src/App.tsx",
     });
 
     panel.dispose();
     (panel as PreviewPanel & { _pushFullStateToWebview: () => void })._pushFullStateToWebview();
 
     const calls = postMessage.mock.calls.map((c) => (c[0] as { type: string }).type);
-    expect(calls).not.toContain('setComponent');
-    expect(calls).not.toContain('updateUrl');
+    expect(calls).not.toContain("setComponent");
+    expect(calls).not.toContain("updateUrl");
   });
 
-  it('re-emits the same current component once after preview panel disposal', () => {
-    const stateHub = createStateHub({ name: 'App', path: 'src/App.tsx' });
+  it("re-emits the same current component once after preview panel disposal", () => {
+    const stateHub = createStateHub({ name: "App", path: "src/App.tsx" });
     const { panel } = createPanel(stateHub);
     Object.assign(panel as PreviewPanel & { _currentComponent: string; _navigableComponent: string }, {
-      _currentComponent: 'src/App.tsx',
-      _navigableComponent: 'src/App.tsx',
+      _currentComponent: "src/App.tsx",
+      _navigableComponent: "src/App.tsx",
     });
 
     panel.dispose();
     stateHub.applyUpdate.mockClear();
     (panel as PreviewPanel & { _initializeComponent: (editor: vscode.TextEditor) => void })._initializeComponent(
-      createEditor('/workspace/src/App.tsx'),
+      createEditor("/workspace/src/App.tsx"),
     );
 
     expect(stateHub.applyUpdate).toHaveBeenCalledWith({
-      currentComponent: { name: 'App', path: 'src/App.tsx' },
+      currentComponent: { name: "App", path: "src/App.tsx" },
     });
   });
 
-  it('does not overwrite an already-set currentComponent when re-attaching panel', () => {
+  it("does not overwrite an already-set currentComponent when re-attaching panel", () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
 
@@ -258,99 +258,99 @@ describe('PreviewPanel component selection', () => {
     // user picked "src/components/Feed.tsx", then closed and reopened the tab.
     // The active editor at reopen is unrelated to the previewed component.
     Object.assign(panel as PreviewPanel & { _currentComponent: string }, {
-      _currentComponent: 'src/components/Feed.tsx',
+      _currentComponent: "src/components/Feed.tsx",
     });
 
     (panel as PreviewPanel & { _initializeComponent: (editor: vscode.TextEditor) => void })._initializeComponent(
-      createEditor('/workspace/src/App.tsx'),
+      createEditor("/workspace/src/App.tsx"),
     );
 
     // Component must NOT be re-derived from editor — preserved from previous session.
-    expect((panel as PreviewPanel & { _currentComponent?: string })._currentComponent).toBe('src/components/Feed.tsx');
+    expect((panel as PreviewPanel & { _currentComponent?: string })._currentComponent).toBe("src/components/Feed.tsx");
     expect(stateHub.applyUpdate).not.toHaveBeenCalledWith(
-      expect.objectContaining({ currentComponent: { name: 'App', path: 'src/App.tsx' } }),
+      expect.objectContaining({ currentComponent: { name: "App", path: "src/App.tsx" } }),
     );
     // Pending component state is preserved locally, but iframe navigation waits for setComponentParam().
     const calls = postMessage.mock.calls.map((c) => (c[0] as { type: string }).type);
-    expect(calls).not.toContain('setComponent');
+    expect(calls).not.toContain("setComponent");
   });
 
-  it('_pushFullStateToWebview emits devserver/projectError/setComponent/url for prepared component', () => {
+  it("_pushFullStateToWebview emits devserver/projectError/setComponent/url for prepared component", () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
 
     Object.assign(
       panel as PreviewPanel & { _currentComponent: string; _navigableComponent: string; _projectError: unknown },
       {
-        _currentComponent: 'src/App.tsx',
-        _navigableComponent: 'src/App.tsx',
-        _projectError: { kind: 'react-native', detail: 'no react-native-web' },
-        _previewBaseUrl: 'http://localhost:5173',
+        _currentComponent: "src/App.tsx",
+        _navigableComponent: "src/App.tsx",
+        _projectError: { kind: "react-native", detail: "no react-native-web" },
+        _previewBaseUrl: "http://localhost:5173",
       },
     );
 
     (panel as PreviewPanel & { _pushFullStateToWebview: () => void })._pushFullStateToWebview();
 
     expect(postMessage).toHaveBeenCalledWith({
-      type: 'devserver:statusChanged',
+      type: "devserver:statusChanged",
       running: true,
-      url: 'http://localhost:5173',
+      url: "http://localhost:5173",
     });
     expect(postMessage).toHaveBeenCalledWith({
-      type: 'projectError',
-      error: { kind: 'react-native', detail: 'no react-native-web' },
+      type: "projectError",
+      error: { kind: "react-native", detail: "no react-native-web" },
     });
     expect(postMessage).toHaveBeenCalledWith({
-      type: 'setComponent',
-      component: 'src/App.tsx',
+      type: "setComponent",
+      component: "src/App.tsx",
     });
     // _updatePreviewUrl posts updateUrl when devServerRunning
     expect(postMessage).toHaveBeenCalledWith({
-      type: 'updateUrl',
-      url: 'http://localhost:5173/test-preview?component=src%2FApp.tsx',
+      type: "updateUrl",
+      url: "http://localhost:5173/test-preview?component=src%2FApp.tsx",
     });
   });
 
-  it('does not push component navigation state until the component is prepared', () => {
+  it("does not push component navigation state until the component is prepared", () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
 
     Object.assign(panel as PreviewPanel & { _currentComponent: string; _previewBaseUrl: string }, {
-      _currentComponent: 'src/App.tsx',
-      _previewBaseUrl: 'http://localhost:5173',
+      _currentComponent: "src/App.tsx",
+      _previewBaseUrl: "http://localhost:5173",
     });
 
     (panel as PreviewPanel & { _pushFullStateToWebview: () => void })._pushFullStateToWebview();
 
     const calls = postMessage.mock.calls.map((c) => (c[0] as { type: string }).type);
-    expect(calls).not.toContain('setComponent');
-    expect(calls).not.toContain('updateUrl');
+    expect(calls).not.toContain("setComponent");
+    expect(calls).not.toContain("updateUrl");
   });
 
-  it('waits for setComponentParam before navigating after dev server starts', () => {
+  it("waits for setComponentParam before navigating after dev server starts", () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
 
     Object.assign(panel as PreviewPanel & { _currentComponent: string; _devServerRunning: boolean }, {
-      _currentComponent: 'src/App.tsx',
+      _currentComponent: "src/App.tsx",
       _devServerRunning: false,
     });
 
-    panel.setPreviewUrl('http://localhost:5173');
+    panel.setPreviewUrl("http://localhost:5173");
 
     let calls = postMessage.mock.calls.map((c) => c[0] as { type: string; url?: string });
-    expect(calls.some((message) => message.type === 'updateUrl')).toBe(false);
+    expect(calls.some((message) => message.type === "updateUrl")).toBe(false);
 
-    panel.setComponentParam('src/App.tsx');
+    panel.setComponentParam("src/App.tsx");
 
     calls = postMessage.mock.calls.map((c) => c[0] as { type: string; url?: string });
     expect(calls).toContainEqual({
-      type: 'updateUrl',
-      url: 'http://localhost:5173/test-preview?component=src%2FApp.tsx',
+      type: "updateUrl",
+      url: "http://localhost:5173/test-preview?component=src%2FApp.tsx",
     });
   });
 
-  it('does not post setComponent or updateUrl when state is empty (idempotent on first load)', () => {
+  it("does not post setComponent or updateUrl when state is empty (idempotent on first load)", () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
 
@@ -360,18 +360,18 @@ describe('PreviewPanel component selection', () => {
 
     // Always emits devserver status (even when stopped) so React app reaches a known state.
     expect(postMessage).toHaveBeenCalledWith({
-      type: 'devserver:statusChanged',
+      type: "devserver:statusChanged",
       running: false,
       url: null,
     });
     // No component, no error, no URL: those messages must NOT be sent.
     const calls = postMessage.mock.calls.map((c) => (c[0] as { type: string }).type);
-    expect(calls).not.toContain('setComponent');
-    expect(calls).not.toContain('projectError');
-    expect(calls).not.toContain('updateUrl');
+    expect(calls).not.toContain("setComponent");
+    expect(calls).not.toContain("projectError");
+    expect(calls).not.toContain("updateUrl");
   });
 
-  it('uses a valid JSX component name when sample scaffold receives a path-like name', () => {
+  it("uses a valid JSX component name when sample scaffold receives a path-like name", () => {
     const stateHub = createStateHub();
     const { panel } = createPanel(stateHub);
 
@@ -383,13 +383,13 @@ describe('PreviewPanel component selection', () => {
           propEntries: Array<[string, unknown]>,
         ) => string;
       }
-    )._buildSampleScaffold('components/Sidebar.tsx', 'SampleDefault', []);
+    )._buildSampleScaffold("components/Sidebar.tsx", "SampleDefault", []);
 
-    expect(scaffold).toContain('<Sidebar');
-    expect(scaffold).not.toContain('<components/Sidebar.tsx');
+    expect(scaffold).toContain("<Sidebar");
+    expect(scaffold).not.toContain("<components/Sidebar.tsx");
   });
 
-  it('creates visible sample content for Alert-style optional-prop containers', () => {
+  it("creates visible sample content for Alert-style optional-prop containers", () => {
     const stateHub = createStateHub();
     const { panel } = createPanel(stateHub);
     const sourceCode = `
@@ -414,17 +414,17 @@ export { Alert, AlertTitle, AlertDescription };
           sourceCode?: string,
         ) => string;
       }
-    )._buildSampleScaffold('Alert', 'SampleDefault', [], sourceCode);
+    )._buildSampleScaffold("Alert", "SampleDefault", [], sourceCode);
 
-    expect(scaffold).toContain('<Alert>');
-    expect(scaffold).toContain('<AlertTitle>Preview title</AlertTitle>');
+    expect(scaffold).toContain("<Alert>");
+    expect(scaffold).toContain("<AlertTitle>Preview title</AlertTitle>");
     expect(scaffold).toContain(
-      '<AlertDescription>This sample shows the component with visible content.</AlertDescription>',
+      "<AlertDescription>This sample shows the component with visible content.</AlertDescription>",
     );
-    expect(scaffold).not.toContain('TODO');
+    expect(scaffold).not.toContain("TODO");
   });
 
-  it('accepts webview:ready fired during the initial preview HTML write', async () => {
+  it("accepts webview:ready fired during the initial preview HTML write", async () => {
     const originalLog = console.log;
     console.log = mock();
     const stateHub = {
@@ -444,7 +444,7 @@ export { Alert, AlertTitle, AlertDescription };
       onHtmlWrite(webview) {
         if (!firedInitialReady) {
           firedInitialReady = true;
-          webview.fireMessage({ type: 'webview:ready' });
+          webview.fireMessage({ type: "webview:ready" });
         }
       },
     });
@@ -457,12 +457,12 @@ export { Alert, AlertTitle, AlertDescription };
       onDidChangeConfiguration: mock(() => ({ dispose: mock() })),
     });
     Object.assign(vscode.workspace, {
-      workspaceFolders: [{ uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 }],
+      workspaceFolders: [{ uri: vscode.Uri.file("/workspace"), name: "workspace", index: 0 }],
     });
 
     const panel = new PreviewPanel(
-      vscode.Uri.file('/extension'),
-      '/workspace',
+      vscode.Uri.file("/extension"),
+      "/workspace",
       stateHub as never,
       {
         astBridge: { astService: {} },
@@ -478,15 +478,15 @@ export { Alert, AlertTitle, AlertDescription };
       console.log = originalLog;
     }
 
-    expect(stateHub.sendInit).toHaveBeenCalledWith('preview');
+    expect(stateHub.sendInit).toHaveBeenCalledWith("preview");
     expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
-      type: 'devserver:statusChanged',
+      type: "devserver:statusChanged",
       running: false,
       url: null,
     });
   });
 
-  it('uses the real default export name (Home) instead of the filename (page) for Next.js page.tsx', async () => {
+  it("uses the real default export name (Home) instead of the filename (page) for Next.js page.tsx", async () => {
     const stateHub = createStateHub();
     const { panel } = createPanel(stateHub);
 
@@ -515,14 +515,47 @@ export default function Home() {
           },
         ) => Promise<boolean>;
       }
-    )._handleCreateSampleFromError('app/page.tsx', undefined, 'SampleDefault', { revealInEditor: false });
+    )._handleCreateSampleFromError("app/page.tsx", undefined, "SampleDefault", { revealInEditor: false });
 
     // writeFile must have been called with scaffold containing <Home />, not <Page /> or <page />
     const writeCalls = vscode.workspace.fs.writeFile.mock.calls;
     expect(writeCalls.length).toBeGreaterThan(0);
-    const writtenContent = Buffer.from(writeCalls[0][1] as Uint8Array).toString('utf-8');
-    expect(writtenContent).toContain('<Home');
-    expect(writtenContent).not.toContain('<Page');
-    expect(writtenContent).not.toContain('<page');
+    const writtenContent = Buffer.from(writeCalls[0][1] as Uint8Array).toString("utf-8");
+    expect(writtenContent).toContain("<Home");
+    expect(writtenContent).not.toContain("<Page");
+    expect(writtenContent).not.toContain("<page");
+  });
+
+  it("fires onSampleCreated callback when sample is created via error boundary message", async () => {
+    const stateHub = createStateHub();
+    const { panel } = createPanel(stateHub);
+
+    const callbackPaths: string[] = [];
+    panel.onSampleCreated((path) => {
+      callbackPaths.push(path);
+    });
+
+    const alertSource = "export function Alert({ variant }: { variant?: string }) { return null; }";
+    vscode.workspace.fs.readFile.mockImplementation(() => Promise.resolve(Buffer.from(alertSource)));
+    vscode.workspace.fs.writeFile.mockImplementation(() => Promise.resolve());
+
+    // _handleCreateSampleFromError fires _onSampleCreatedCallback internally (notifySampleCreated=true
+    // by default). The message handler does NOT call it again after the function returns.
+    type InternalPanel = {
+      _handleCreateSampleFromError: (
+        path: string | undefined,
+        propValues?: Record<string, unknown>,
+        sampleName?: string,
+        options?: { componentName?: string; revealInEditor?: boolean },
+      ) => Promise<boolean>;
+    };
+    const internal = panel as unknown as InternalPanel;
+
+    const componentPath = "client/components/ui/alert.tsx";
+    await internal._handleCreateSampleFromError(componentPath, undefined, "SampleDefault", {
+      revealInEditor: false,
+    });
+
+    expect(callbackPaths).toEqual([componentPath]);
   });
 });

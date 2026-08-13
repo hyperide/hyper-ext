@@ -88,16 +88,16 @@ Instead of script swap, patch the entry file via AST (`recast`, preserves format
 
 ```tsx
 // src/index.tsx — after patch
-import React from 'react';
-import './index.css'; // static imports stay, always execute
-import { queryClient } from './lib/query';
+import React from "react";
+import "./index.css"; // static imports stay, always execute
+import { queryClient } from "./lib/query";
 
-if (new URLSearchParams(location.search).get('__preview')) {
+if (new URLSearchParams(location.search).get("__preview")) {
   /* @hyperide-managed */
-  import('./__canvas_preview__');
+  import("./__canvas_preview__");
 } else {
   /* @hyperide-managed */
-  ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
+  ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
 } /* @hyperide-managed */
 ```
 
@@ -109,9 +109,9 @@ On deactivation — strip all lines tagged with `@hyperide-managed`.
 
 ```tsx
 // .hyperide/preview.tsx — written by user or AI-generated
-import './src/index.css';
-import { QueryClientProvider, queryClient } from './src/lib/query';
-import { ThemeProvider } from './src/theme';
+import "./src/index.css";
+import { QueryClientProvider, queryClient } from "./src/lib/query";
+import { ThemeProvider } from "./src/theme";
 
 export function PreviewWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -142,7 +142,7 @@ components." with an AI generation button.
 // src/__canvas_preview__.tsx — @hyperide-managed
 export function PreviewRoot() {
   const params = new URLSearchParams(window.location.search);
-  const componentPath = params.get('component');
+  const componentPath = params.get("component");
   // ... render from registry
 }
 ```
@@ -151,14 +151,14 @@ export function PreviewRoot() {
 
 ```tsx
 // src/__canvas_preview__.tsx — @hyperide-managed
-import { PreviewWrapper } from '../.hyperide/preview';
+import { PreviewWrapper } from "../.hyperide/preview";
 
 function PreviewRoot() {
   const params = new URLSearchParams(window.location.search);
   // ...
 }
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <PreviewWrapper>
     <PreviewRoot />
   </PreviewWrapper>,
@@ -319,13 +319,13 @@ _Solution_: in the generated Next.js `page.tsx`, use `useSearchParams()` from
 `next/navigation` (SSR-safe). Requires `<Suspense>` wrapper in App Router:
 
 ```tsx
-'use client';
-import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
+"use client";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 function PreviewContent() {
   const params = useSearchParams();
-  const componentPath = params.get('component');
+  const componentPath = params.get("component");
   // ...
 }
 

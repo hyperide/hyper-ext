@@ -330,7 +330,7 @@ Ambiguous conflict:
 Earlier spec describes FastPatch as universal:
 
 ```typescript
-element.style.setProperty(cssProp, value, 'important');
+element.style.setProperty(cssProp, value, "important");
 ```
 
 This is still needed for low-latency inspector feedback. The problem is only
@@ -696,45 +696,45 @@ interface ElementStyleFacts {
 interface PackageEvidence {
   packageName: string;
   version?: string;
-  dependencyKind: 'dependencies' | 'devDependencies' | 'peerDependencies' | 'unknown';
+  dependencyKind: "dependencies" | "devDependencies" | "peerDependencies" | "unknown";
 }
 
 interface ConfigEvidence {
   filePath: string;
   kind:
-    | 'tailwind-config'
-    | 'postcss-config'
-    | 'vite-config'
-    | 'next-config'
-    | 'tsconfig'
-    | 'vanilla-extract-config'
-    | 'theme-config'
-    | 'other';
+    | "tailwind-config"
+    | "postcss-config"
+    | "vite-config"
+    | "next-config"
+    | "tsconfig"
+    | "vanilla-extract-config"
+    | "theme-config"
+    | "other";
 }
 
 interface SourceEvidence {
   filePath: string;
   cssSyntax?: CssSyntaxId;
   kind:
-    | 'css-import'
-    | 'css-module-import'
-    | 'css-in-js-import'
-    | 'ui-kit-import'
-    | 'style-prop'
-    | 'className-expression'
-    | 'theme-config'
-    | 'css-variable-definition'
-    | 'script-theme-branch';
+    | "css-import"
+    | "css-module-import"
+    | "css-in-js-import"
+    | "ui-kit-import"
+    | "style-prop"
+    | "className-expression"
+    | "theme-config"
+    | "css-variable-definition"
+    | "script-theme-branch";
 }
 
 interface ClassNameExpressionFacts {
-  kind: 'literal' | 'template' | 'call-expression' | 'member-expression' | 'unknown';
+  kind: "literal" | "template" | "call-expression" | "member-expression" | "unknown";
   staticClasses: string[];
   dynamic: boolean;
 }
 
 interface StyleAttributeFacts {
-  kind: 'object-literal' | 'identifier' | 'spread' | 'unknown';
+  kind: "object-literal" | "identifier" | "spread" | "unknown";
   hasSpread: boolean;
 }
 
@@ -754,11 +754,11 @@ interface ComponentPropSurfaceFacts {
   semanticProps: string[];
 }
 
-type IdeThemePreference = 'light' | 'dark' | 'system';
+type IdeThemePreference = "light" | "dark" | "system";
 
-type ResolvedColorScheme = 'light' | 'dark';
+type ResolvedColorScheme = "light" | "dark";
 
-type RuntimeThemeSource = 'hyperide' | 'vscode' | 'browser-system' | 'app-runtime' | 'test-fixture';
+type RuntimeThemeSource = "hyperide" | "vscode" | "browser-system" | "app-runtime" | "test-fixture";
 
 interface RuntimeThemeContext {
   ideThemePreference: IdeThemePreference;
@@ -767,7 +767,7 @@ interface RuntimeThemeContext {
   selectedTheme?: ThemeCondition[];
 }
 
-type ThemeAxisId = 'color-scheme' | 'brand' | 'density' | 'contrast' | 'platform' | (string & {});
+type ThemeAxisId = "color-scheme" | "brand" | "density" | "contrast" | "platform" | (string & {});
 
 interface ProjectThemeCapabilities {
   axes: ThemeAxisCapability[];
@@ -779,34 +779,34 @@ interface ThemeAxisCapability {
   id: ThemeAxisId;
   values: string[];
   defaultValue?: string;
-  source: 'config' | 'css' | 'runtime' | 'library' | 'inferred';
+  source: "config" | "css" | "runtime" | "library" | "inferred";
 }
 
 type ThemeMechanism =
-  | 'prefers-color-scheme'
-  | 'class-selector'
-  | 'data-attribute'
-  | 'css-custom-properties'
-  | 'tailwind-dark-variant'
-  | 'tailwind-theme'
-  | 'mui-theme'
-  | 'chakra-theme'
-  | 'mantine-theme'
-  | 'tamagui-theme'
-  | 'vanilla-extract-theme'
-  | 'css-in-js-theme-callback'
-  | 'script-branch';
+  | "prefers-color-scheme"
+  | "class-selector"
+  | "data-attribute"
+  | "css-custom-properties"
+  | "tailwind-dark-variant"
+  | "tailwind-theme"
+  | "mui-theme"
+  | "chakra-theme"
+  | "mantine-theme"
+  | "tamagui-theme"
+  | "vanilla-extract-theme"
+  | "css-in-js-theme-callback"
+  | "script-branch";
 
 interface ThemeTokenSource {
   kind:
-    | 'css-custom-property'
-    | 'tailwind-token'
-    | 'mui-theme-token'
-    | 'chakra-theme-token'
-    | 'mantine-theme-token'
-    | 'tamagui-token'
-    | 'vanilla-extract-token'
-    | 'css-in-js-theme-token';
+    | "css-custom-property"
+    | "tailwind-token"
+    | "mui-theme-token"
+    | "chakra-theme-token"
+    | "mantine-theme-token"
+    | "tamagui-token"
+    | "vanilla-extract-token"
+    | "css-in-js-theme-token";
   filePath?: string;
   owner?: string;
 }
@@ -826,25 +826,25 @@ interface ThemeVariableUsage {
 
 interface ThemeTokenUsage {
   tokenPath: string;
-  source: ThemeTokenSource['kind'];
+  source: ThemeTokenSource["kind"];
   owners: StyleSourceOwner[];
 }
 
-type StylePseudoState = 'base' | 'hover' | 'focus' | 'active' | 'focus-visible' | 'disabled';
+type StylePseudoState = "base" | "hover" | "focus" | "active" | "focus-visible" | "disabled";
 
-type StyleBreakpointKey = 'base' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | (string & {});
+type StyleBreakpointKey = "base" | "xs" | "sm" | "md" | "lg" | "xl" | (string & {});
 
 type ResponsiveConditionSource =
-  | 'tailwind-screens'
-  | 'mui-theme-breakpoints'
-  | 'chakra-theme-breakpoints'
-  | 'mantine-theme-breakpoints'
-  | 'css-media-query'
-  | 'css-container-query'
-  | 'custom';
+  | "tailwind-screens"
+  | "mui-theme-breakpoints"
+  | "chakra-theme-breakpoints"
+  | "mantine-theme-breakpoints"
+  | "css-media-query"
+  | "css-container-query"
+  | "custom";
 
 interface ViewportCondition {
-  kind: 'viewport';
+  kind: "viewport";
   key: StyleBreakpointKey;
   minWidthPx?: number;
   maxWidthPx?: number;
@@ -853,7 +853,7 @@ interface ViewportCondition {
 }
 
 interface ContainerCondition {
-  kind: 'container';
+  kind: "container";
   key?: StyleBreakpointKey;
   containerName?: string;
   minWidthPx?: number;
@@ -863,25 +863,25 @@ interface ContainerCondition {
 }
 
 interface MediaCondition {
-  kind: 'media' | 'supports';
+  kind: "media" | "supports";
   query: string;
   source: ResponsiveConditionSource;
 }
 
 type ThemeConditionSource =
-  | 'prefers-color-scheme'
-  | 'tailwind-dark-selector'
-  | 'mui-color-scheme'
-  | 'chakra-color-mode'
-  | 'mantine-color-scheme'
-  | 'tamagui-theme'
-  | 'data-attribute'
-  | 'class-selector'
-  | 'css-variable-scope'
-  | 'script-condition'
-  | 'theme-provider'
-  | 'library-theme-config'
-  | 'custom';
+  | "prefers-color-scheme"
+  | "tailwind-dark-selector"
+  | "mui-color-scheme"
+  | "chakra-color-mode"
+  | "mantine-color-scheme"
+  | "tamagui-theme"
+  | "data-attribute"
+  | "class-selector"
+  | "css-variable-scope"
+  | "script-condition"
+  | "theme-provider"
+  | "library-theme-config"
+  | "custom";
 
 interface ThemeCondition {
   axis: ThemeAxisId;
@@ -895,22 +895,22 @@ interface ThemeCondition {
 }
 
 type SelectorConditionKind =
-  | 'self-pseudo'
-  | 'ancestor-selector'
-  | 'group-selector'
-  | 'peer-selector'
-  | 'data-attribute'
-  | 'aria-attribute'
-  | 'structural-selector'
-  | 'slot-selector'
-  | 'arbitrary-selector'
-  | 'library-variant';
+  | "self-pseudo"
+  | "ancestor-selector"
+  | "group-selector"
+  | "peer-selector"
+  | "data-attribute"
+  | "aria-attribute"
+  | "structural-selector"
+  | "slot-selector"
+  | "arbitrary-selector"
+  | "library-variant";
 
 interface SelectorCondition {
   kind: SelectorConditionKind;
   selector: string;
   label?: string;
-  source: 'css-selector' | 'tailwind-variant' | 'mui-slot' | 'chakra-pseudo-prop' | 'mantine-slot' | 'custom';
+  source: "css-selector" | "tailwind-variant" | "mui-slot" | "chakra-pseudo-prop" | "mantine-slot" | "custom";
 }
 
 interface CascadeContext {
@@ -939,40 +939,40 @@ interface StyleCondition {
   }>;
 }
 
-type SourceConfidence = 'exact' | 'probable' | 'computed-only';
+type SourceConfidence = "exact" | "probable" | "computed-only";
 
 type SourceForm =
   // Class/className token on the selected element, e.g. Tailwind utility.
-  | 'elementClass'
+  | "elementClass"
   // Rule in a CSS-like stylesheet, e.g. CSS Modules, plain CSS, SCSS/Less.
-  | 'cssStyleRule'
+  | "cssStyleRule"
   // React/JS style object syntax in script/JSX, e.g. style={{}}, css={{}},
   // vanilla-extract style({ ... }).
-  | 'scriptReactStyleRule'
+  | "scriptReactStyleRule"
   // Native CSS syntax embedded in script, e.g. styled-components template.
-  | 'scriptNativeStyleRule'
+  | "scriptNativeStyleRule"
   // Component style prop surface backed by a registered mapper, e.g.
   // Tamagui padding="$4" or Chakra p={4}; not style={{}}.
-  | 'adapterKnownElementProp'
+  | "adapterKnownElementProp"
   // Generic component prop when no mapper knows its render semantics. Editable
   // through the recursive props editor or explicit prop selection only.
-  | 'arbitraryElementProp';
+  | "arbitraryElementProp";
 
 type CssSystemId =
-  | 'tailwind-v3'
-  | 'tailwind-v4'
-  | 'css-modules'
-  | 'plain-css'
-  | 'inline-style'
-  | 'emotion'
-  | 'styled-components'
-  | 'vanilla-extract'
-  | 'mui-system'
-  | 'chakra-ui'
-  | 'mantine'
-  | 'tamagui';
+  | "tailwind-v3"
+  | "tailwind-v4"
+  | "css-modules"
+  | "plain-css"
+  | "inline-style"
+  | "emotion"
+  | "styled-components"
+  | "vanilla-extract"
+  | "mui-system"
+  | "chakra-ui"
+  | "mantine"
+  | "tamagui";
 
-type CssSystemTopology = 'flat' | 'cascade';
+type CssSystemTopology = "flat" | "cascade";
 
 interface CssSystemDescriptor {
   id: CssSystemId;
@@ -980,32 +980,32 @@ interface CssSystemDescriptor {
   defaultSourceForm: SourceForm;
 }
 
-type CssSyntaxId = 'css' | 'scss' | 'sass' | 'less' | 'stylus';
+type CssSyntaxId = "css" | "scss" | "sass" | "less" | "stylus";
 
 type UiKitId =
-  | 'shadcn-ui'
-  | 'daisyui'
-  | 'radix-ui'
-  | 'mui'
-  | 'chakra-ui'
-  | 'ant-design'
-  | 'mantine'
-  | 'bootstrap'
-  | 'flowbite'
-  | 'headless-ui'
-  | 'tamagui';
+  | "shadcn-ui"
+  | "daisyui"
+  | "radix-ui"
+  | "mui"
+  | "chakra-ui"
+  | "ant-design"
+  | "mantine"
+  | "bootstrap"
+  | "flowbite"
+  | "headless-ui"
+  | "tamagui";
 
 type ComponentPropMapperId =
-  | 'tamagui'
-  | 'chakra-ui'
-  | 'mui-sx'
-  | 'mantine'
-  | 'ant-design'
-  | 'react-bootstrap'
-  | 'flowbite-react'
-  | 'radix-ui'
-  | 'headless-ui'
-  | 'shadcn-cva';
+  | "tamagui"
+  | "chakra-ui"
+  | "mui-sx"
+  | "mantine"
+  | "ant-design"
+  | "react-bootstrap"
+  | "flowbite-react"
+  | "radix-ui"
+  | "headless-ui"
+  | "shadcn-cva";
 ```
 
 No `...` in the normative type list. New systems should be added explicitly.
@@ -1273,18 +1273,18 @@ Inspector surface decision:
 
 ```typescript
 interface InspectorSurfaceDecision {
-  standardStyleInspector: 'enabled' | 'disabled';
-  propsEditor: 'hidden' | 'compact' | 'full';
+  standardStyleInspector: "enabled" | "disabled";
+  propsEditor: "hidden" | "compact" | "full";
   reasons: Array<
-    | 'intrinsic-element'
-    | 'accepts-className'
-    | 'accepts-style'
-    | 'accepts-css-prop'
-    | 'accepts-sx-prop'
-    | 'adapter-known-prop-mapper'
-    | 'source-owner-found'
-    | 'props-schema-available'
-    | 'no-standard-style-surface'
+    | "intrinsic-element"
+    | "accepts-className"
+    | "accepts-style"
+    | "accepts-css-prop"
+    | "accepts-sx-prop"
+    | "adapter-known-prop-mapper"
+    | "source-owner-found"
+    | "props-schema-available"
+    | "no-standard-style-surface"
   >;
 }
 ```
@@ -1380,7 +1380,7 @@ interface ComponentPropMapper {
 type ComponentPropMapperMatch =
   | {
       matched: true;
-      confidence: 'exact' | 'probable';
+      confidence: "exact" | "probable";
       supportedProps: string[];
       supportedStates: StylePseudoState[];
     }
@@ -1390,7 +1390,7 @@ type ComponentPropMapperMatch =
     };
 
 interface ComponentPropStyleWriteTarget {
-  sourceForm: 'adapterKnownElementProp' | 'scriptReactStyleRule' | 'elementClass' | 'cssStyleRule';
+  sourceForm: "adapterKnownElementProp" | "scriptReactStyleRule" | "elementClass" | "cssStyleRule";
   props?: Record<string, unknown>;
   propPaths?: string[][];
   sourceOwner?: StyleSourceOwner;
@@ -1494,7 +1494,7 @@ For a non-Tailwind CSS Modules project:
 this is invalid:
 
 ```tsx
-<div className={styles.app + ' px-[16px]'} />
+<div className={styles.app + " px-[16px]"} />
 ```
 
 It assumes Tailwind exists and that adding a runtime class string is the correct
@@ -2143,14 +2143,14 @@ framework adapters decide what those classes mean:
 
 ```tsx
 styles[style]; // CSS Modules key expression
-cn('foo', {
+cn("foo", {
   bar: isBar,
   [styles.baz]: isBaz,
 }) // plain CSS + CSS Modules
 `block_${mod}`; // probable plain CSS selector
 cn(
-  'p-4',
-  active && 'bg-blue-500',
+  "p-4",
+  active && "bg-blue-500",
 ) // Tailwind tokens
 `p-${p}`; // Tailwind-unsafe partial utility
 ```
@@ -2615,7 +2615,7 @@ interface ComponentPropMapperRegistry {
 
 // Example shape; actual implementation may use nested classes or factory fields.
 class TailwindV3Adapter implements FrameworkStyleAdapter {
-  readonly id = 'tailwind-v3';
+  readonly id = "tailwind-v3";
   readonly reader = new TailwindV3Adapter.Reader();
   readonly writer = new TailwindV3Adapter.Writer({
     staticClassWriter: new TailwindV3Adapter.StaticClassWriter(),
@@ -2952,7 +2952,7 @@ GitHub: [chakra-ui/chakra-ui](https://github.com/chakra-ui/chakra-ui)
 Handles:
 
 ```tsx
-<Box p={4} bg="blue.500" _hover={{ bg: 'blue.600' }} />
+<Box p={4} bg="blue.500" _hover={{ bg: "blue.600" }} />
 ```
 
 Writes:
@@ -3014,22 +3014,22 @@ Handles:
 
 ```typescript
 // Card.css.ts
-import { style } from '@vanilla-extract/css';
+import { style } from "@vanilla-extract/css";
 
 export const card = style({
-  padding: '16px',
-  backgroundColor: 'blue',
+  padding: "16px",
+  backgroundColor: "blue",
 });
 
 export const cardHover = style({
-  ':hover': {
-    backgroundColor: 'darkblue',
+  ":hover": {
+    backgroundColor: "darkblue",
   },
 });
 ```
 
 ```tsx
-import { card } from './Card.css';
+import { card } from "./Card.css";
 <div className={card} />;
 ```
 
@@ -3663,7 +3663,7 @@ AI routing output:
 interface StyleRouteDecision {
   sourceTabId: string;
   reason: string;
-  confidence: 'ai-assisted' | 'probable' | 'fallback';
+  confidence: "ai-assisted" | "probable" | "fallback";
 }
 ```
 
@@ -3738,26 +3738,26 @@ interface StyleWritePlanBase {
   selectedSourceTabId?: string;
   routeDecision?: {
     sourceTabId: string;
-    router: 'explicit-user-selection' | 'ai-style-source-router' | 'deterministic-owner-router';
+    router: "explicit-user-selection" | "ai-style-source-router" | "deterministic-owner-router";
     reason: string;
-    confidence: 'exact' | 'probable' | 'ai-assisted' | 'fallback';
+    confidence: "exact" | "probable" | "ai-assisted" | "fallback";
   };
   condition: StyleCondition;
   reason:
-    | 'existing-owner'
-    | 'project-primary-system'
-    | 'element-primary-system'
-    | 'mixed-system-tailwind-priority'
-    | 'css-module-selector-ambiguous'
-    | 'css-rule-not-found'
-    | 'dynamic-source-ambiguous'
-    | 'explicit-local-override'
-    | 'explicit-prop-edit'
-    | 'theme-branch-selected'
-    | 'theme-value-owner-selected';
-  confidence: 'exact' | 'probable' | 'fallback';
+    | "existing-owner"
+    | "project-primary-system"
+    | "element-primary-system"
+    | "mixed-system-tailwind-priority"
+    | "css-module-selector-ambiguous"
+    | "css-rule-not-found"
+    | "dynamic-source-ambiguous"
+    | "explicit-local-override"
+    | "explicit-prop-edit"
+    | "theme-branch-selected"
+    | "theme-value-owner-selected";
+  confidence: "exact" | "probable" | "fallback";
   diagnostics: Array<{
-    level: 'info' | 'warning' | 'error';
+    level: "info" | "warning" | "error";
     message: string;
   }>;
 }
@@ -3813,22 +3813,22 @@ type StyleWritePlan =
   | ArbitraryPropPlan;
 
 interface TailwindPlan extends StyleWritePlanBase {
-  sourceForm: 'elementClass';
-  cssSystem: 'tailwind-v3' | 'tailwind-v4';
+  sourceForm: "elementClass";
+  cssSystem: "tailwind-v3" | "tailwind-v4";
   strategy:
     | {
-        mode: 'static';
+        mode: "static";
         removeForProperties: string[];
         addClasses: string;
       }
     | {
-        mode: 'dynamic';
+        mode: "dynamic";
         locations: ClassNameLocation[];
         addClasses: string;
         removeForProperties: string[];
-        fallbackStrategy: 'append-to-template' | 'wrap-expression' | 'location-only';
+        fallbackStrategy: "append-to-template" | "wrap-expression" | "location-only";
         analysis: {
-          engine: 'shared-deterministic-analyzer';
+          engine: "shared-deterministic-analyzer";
           ambiguityResolverUsed?: boolean;
         };
       };
@@ -3839,7 +3839,7 @@ interface TailwindPlan extends StyleWritePlanBase {
 }
 
 interface CssFilePlanBase extends StyleWritePlanBase {
-  sourceForm: 'cssStyleRule';
+  sourceForm: "cssStyleRule";
 }
 
 // Discriminated by `cssSystem` to preserve per-system invariants.
@@ -3848,7 +3848,7 @@ interface CssFilePlanBase extends StyleWritePlanBase {
 type CssFilePlan = CssModulesFilePlan | PlainCssFilePlan;
 
 interface CssModulesFilePlan extends CssFilePlanBase {
-  cssSystem: 'css-modules';
+  cssSystem: "css-modules";
   target: {
     cssFilePath: string;
     cssSyntax: CssSyntaxId;
@@ -3864,7 +3864,7 @@ interface CssModulesFilePlan extends CssFilePlanBase {
 }
 
 interface PlainCssFilePlanBase extends CssFilePlanBase {
-  cssSystem: 'plain-css';
+  cssSystem: "plain-css";
 }
 
 // `target.mode` discriminates: edit an existing owner, or create a new rule.
@@ -3872,7 +3872,7 @@ type PlainCssFilePlan = PlainCssExistingOwnerPlan | PlainCssCreateRulePlan;
 
 interface PlainCssExistingOwnerPlan extends PlainCssFilePlanBase {
   target: {
-    mode: 'existing-owner';
+    mode: "existing-owner";
     cssFilePath: string;
     cssSyntax: CssSyntaxId;
     selector: string;
@@ -3884,14 +3884,14 @@ interface PlainCssExistingOwnerPlan extends PlainCssFilePlanBase {
 
 interface PlainCssCreateRulePlan extends PlainCssFilePlanBase {
   target: {
-    mode: 'create-rule';
+    mode: "create-rule";
     cssFilePath: string;
     cssSyntax: CssSyntaxId;
     selector: string;
     declarations: Record<string, string>;
     createMode: {
-      reason: 'no-existing-owner' | 'explicit-new-selector';
-      insertionHint: 'append-to-file' | 'before-owner' | 'after-owner';
+      reason: "no-existing-owner" | "explicit-new-selector";
+      insertionHint: "append-to-file" | "before-owner" | "after-owner";
     };
     cascadeContext?: CascadeContext;
   };
@@ -3902,15 +3902,15 @@ interface ScriptObjectStylePlan extends StyleWritePlanBase {
   //   style={{ }}, css={{ }}, sx={{ }}, styled.div({ }),
   //   vanilla-extract style({ }), Emotion object, MUI sx,
   //   Mantine style/styles object targets.
-  sourceForm: 'scriptReactStyleRule';
-  cssSystem: 'inline-style' | 'emotion' | 'styled-components' | 'vanilla-extract' | 'mui-system' | 'mantine';
+  sourceForm: "scriptReactStyleRule";
+  cssSystem: "inline-style" | "emotion" | "styled-components" | "vanilla-extract" | "mui-system" | "mantine";
   target: {
     filePath: string;
     elementRef?: string;
     // AST path to the object expression being mutated.
     objectPath: string;
     styles: Record<string, TargetStyleValue>;
-    mergeMode: 'object' | 'spread-existing-expression';
+    mergeMode: "object" | "spread-existing-expression";
     cascadeContext?: CascadeContext;
   };
 }
@@ -3922,8 +3922,8 @@ interface ScriptTemplateStylePlan extends StyleWritePlanBase {
   // tagged-template targets in scope. Other CSS-in-JS systems either use
   // object syntax (vanilla-extract, MUI sx, Mantine) routed through
   // ScriptObjectStylePlan, or are out of scope for v1.
-  sourceForm: 'scriptNativeStyleRule';
-  cssSystem: 'emotion' | 'styled-components';
+  sourceForm: "scriptNativeStyleRule";
+  cssSystem: "emotion" | "styled-components";
   target: {
     filePath: string;
     // AST path to the template literal quasi being mutated.
@@ -3934,27 +3934,27 @@ interface ScriptTemplateStylePlan extends StyleWritePlanBase {
 }
 
 interface AdapterPropPlan extends StyleWritePlanBase {
-  sourceForm: 'adapterKnownElementProp';
+  sourceForm: "adapterKnownElementProp";
   cssSystem: CssSystemId;
   target: {
     filePath: string;
     elementRef: string;
     mapperId: ComponentPropMapperId;
-    origin: 'standard-style-inspector' | 'recursive-props-editor';
+    origin: "standard-style-inspector" | "recursive-props-editor";
     props: Record<string, unknown>;
     propPaths?: string[][];
   };
 }
 
 interface ArbitraryPropPlan extends StyleWritePlanBase {
-  sourceForm: 'arbitraryElementProp';
+  sourceForm: "arbitraryElementProp";
   // No cssSystem: arbitrary prop edits are not styling-system writes.
   // requestedStyles and targetStyles on the base are empty by design;
   // the write payload lives in target.props.
   target: {
     filePath: string;
     elementRef: string;
-    origin: 'recursive-props-editor';
+    origin: "recursive-props-editor";
     props: Record<string, unknown>;
     propPaths?: string[][];
   };

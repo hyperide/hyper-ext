@@ -30,37 +30,37 @@ the concrete write plan.
 
 ```typescript
 type CssSystemId =
-  | 'tailwind-v3'
-  | 'tailwind-v4'
-  | 'css-modules'
-  | 'plain-css'
-  | 'inline-style'
-  | 'emotion'
-  | 'styled-components'
-  | 'vanilla-extract'
-  | 'mui-system'
-  | 'chakra-ui'
-  | 'mantine'
-  | 'tamagui';
+  | "tailwind-v3"
+  | "tailwind-v4"
+  | "css-modules"
+  | "plain-css"
+  | "inline-style"
+  | "emotion"
+  | "styled-components"
+  | "vanilla-extract"
+  | "mui-system"
+  | "chakra-ui"
+  | "mantine"
+  | "tamagui";
 
 type SourceForm =
   // Class/className token on the selected element, e.g. Tailwind utility.
-  | 'elementClass'
+  | "elementClass"
   // Rule in a CSS-like stylesheet, e.g. CSS Modules, plain CSS, SCSS/Less.
-  | 'cssStyleRule'
+  | "cssStyleRule"
   // React/JS style object syntax in script/JSX, e.g. style={{}}, css={{}},
   // vanilla-extract style({ ... }).
-  | 'scriptReactStyleRule'
+  | "scriptReactStyleRule"
   // Native CSS syntax embedded in script, e.g. styled-components template.
-  | 'scriptNativeStyleRule'
+  | "scriptNativeStyleRule"
   // Component style prop surface backed by a registered mapper, e.g.
   // Tamagui padding="$4" or Chakra p={4}; not style={{}}.
-  | 'adapterKnownElementProp'
+  | "adapterKnownElementProp"
   // Generic component prop when no mapper knows its render semantics. Editable
   // through the recursive props editor or explicit prop selection only.
-  | 'arbitraryElementProp';
+  | "arbitraryElementProp";
 
-type CssSyntaxId = 'css' | 'scss' | 'sass' | 'less' | 'stylus';
+type CssSyntaxId = "css" | "scss" | "sass" | "less" | "stylus";
 
 interface StyleSourceOwner {
   cssSystem: CssSystemId;
@@ -374,8 +374,8 @@ Tamagui can appear in two capability arrays with the same string and different
 roles:
 
 ```typescript
-projectCssSystems: ['tamagui'];
-projectUiKits: ['tamagui'];
+projectCssSystems: ["tamagui"];
+projectUiKits: ["tamagui"];
 ```
 
 Meaning:
@@ -424,7 +424,7 @@ how an inspector style property maps to source props.
 ```
 
 ```tsx
-<Box p={4} bg="blue.500" _hover={{ bg: 'blue.600' }} />
+<Box p={4} bg="blue.500" _hover={{ bg: "blue.600" }} />
 ```
 
 ```typescript
@@ -465,7 +465,7 @@ does not need `cssSystem` because no style adapter owns the semantics:
 
 ```typescript
 interface ComponentPropSource {
-  sourceForm: 'arbitraryElementProp';
+  sourceForm: "arbitraryElementProp";
   filePath: string;
   elementRef: string;
   propPath: string[];
@@ -474,7 +474,7 @@ interface ComponentPropSource {
 ```
 
 ```tsx
-<ThirdPartyCard color="red" size="lg" variant="solid" theme={{ mode: 'dark' }} />
+<ThirdPartyCard color="red" size="lg" variant="solid" theme={{ mode: "dark" }} />
 ```
 
 ```typescript
@@ -558,7 +558,7 @@ write target; route to another owner/fallback or emit an unsupported diagnostic.
 GitHub: [css-modules/css-modules](https://github.com/css-modules/css-modules)
 
 ```tsx
-import styles from './Card.module.css';
+import styles from "./Card.module.css";
 
 <div className={styles.card} />;
 ```
@@ -701,34 +701,34 @@ The same `className` expression can produce multiple source owners:
 ```typescript
 [
   {
-    cssSystem: 'plain-css',
-    sourceForm: 'cssStyleRule',
-    cssSyntax: 'css',
-    filePath: 'src/global.css',
-    selector: '.foo',
-    property: 'color',
-    condition: { state: 'base' },
-    confidence: 'probable',
+    cssSystem: "plain-css",
+    sourceForm: "cssStyleRule",
+    cssSyntax: "css",
+    filePath: "src/global.css",
+    selector: ".foo",
+    property: "color",
+    condition: { state: "base" },
+    confidence: "probable",
   },
   {
-    cssSystem: 'plain-css',
-    sourceForm: 'cssStyleRule',
-    cssSyntax: 'css',
-    filePath: 'src/global.css',
-    selector: '.bar',
-    property: 'color',
-    condition: { state: 'base' },
-    confidence: 'probable',
+    cssSystem: "plain-css",
+    sourceForm: "cssStyleRule",
+    cssSyntax: "css",
+    filePath: "src/global.css",
+    selector: ".bar",
+    property: "color",
+    condition: { state: "base" },
+    confidence: "probable",
   },
   {
-    cssSystem: 'css-modules',
-    sourceForm: 'cssStyleRule',
-    cssSyntax: 'css',
-    filePath: 'src/Card.module.css',
-    selector: '.baz',
-    property: 'color',
-    condition: { state: 'base' },
-    confidence: 'probable',
+    cssSystem: "css-modules",
+    sourceForm: "cssStyleRule",
+    cssSyntax: "css",
+    filePath: "src/Card.module.css",
+    selector: ".baz",
+    property: "color",
+    condition: { state: "base" },
+    confidence: "probable",
   },
 ];
 ```
@@ -742,7 +742,7 @@ concrete selectors like `.block_primary` or `.block_secondary`.
 ### Plain CSS Selector
 
 ```tsx
-import './global.css';
+import "./global.css";
 
 <div className="card featured" />;
 ```
@@ -766,7 +766,7 @@ selector is carried by `selector`.
 ### Plain SCSS Selector
 
 ```tsx
-import './App.scss';
+import "./App.scss";
 
 <div className={`block_${mod}`} />;
 ```
@@ -928,69 +928,69 @@ Examples:
 ```typescript
 [
   {
-    id: 'computed',
-    label: 'Computed',
-    condition: { state: 'base' },
-    confidence: 'computed-only',
+    id: "computed",
+    label: "Computed",
+    condition: { state: "base" },
+    confidence: "computed-only",
   },
   {
-    id: 'css-modules:card',
-    label: '.card',
-    cssSystem: 'css-modules',
-    sourceForm: 'cssStyleRule',
-    cssSyntax: 'css',
-    filePath: 'src/Card.module.css',
-    selector: '.card',
-    condition: { state: 'base' },
-    confidence: 'exact',
+    id: "css-modules:card",
+    label: ".card",
+    cssSystem: "css-modules",
+    sourceForm: "cssStyleRule",
+    cssSyntax: "css",
+    filePath: "src/Card.module.css",
+    selector: ".card",
+    condition: { state: "base" },
+    confidence: "exact",
   },
   {
-    id: 'plain-css:globalCard',
-    label: '.globalCard',
-    cssSystem: 'plain-css',
-    sourceForm: 'cssStyleRule',
-    cssSyntax: 'css',
-    filePath: 'src/global.css',
-    selector: '.globalCard',
-    condition: { state: 'base' },
-    confidence: 'probable',
+    id: "plain-css:globalCard",
+    label: ".globalCard",
+    cssSystem: "plain-css",
+    sourceForm: "cssStyleRule",
+    cssSyntax: "css",
+    filePath: "src/global.css",
+    selector: ".globalCard",
+    condition: { state: "base" },
+    confidence: "probable",
   },
   {
-    id: 'emotion:css-prop',
-    label: 'css prop',
-    cssSystem: 'emotion',
-    sourceForm: 'scriptReactStyleRule',
-    filePath: 'src/Card.tsx',
-    condition: { state: 'base' },
-    confidence: 'exact',
+    id: "emotion:css-prop",
+    label: "css prop",
+    cssSystem: "emotion",
+    sourceForm: "scriptReactStyleRule",
+    filePath: "src/Card.tsx",
+    condition: { state: "base" },
+    confidence: "exact",
   },
   {
-    id: 'styled-components:Card',
-    label: 'Card',
-    cssSystem: 'styled-components',
-    sourceForm: 'scriptNativeStyleRule',
-    filePath: 'src/Card.tsx',
-    selector: 'Card',
-    condition: { state: 'base' },
-    confidence: 'exact',
+    id: "styled-components:Card",
+    label: "Card",
+    cssSystem: "styled-components",
+    sourceForm: "scriptNativeStyleRule",
+    filePath: "src/Card.tsx",
+    selector: "Card",
+    condition: { state: "base" },
+    confidence: "exact",
   },
   {
-    id: 'inline',
-    label: 'Inline override',
-    cssSystem: 'inline-style',
-    sourceForm: 'scriptReactStyleRule',
-    filePath: 'src/Card.tsx',
-    condition: { state: 'base' },
-    confidence: 'exact',
+    id: "inline",
+    label: "Inline override",
+    cssSystem: "inline-style",
+    sourceForm: "scriptReactStyleRule",
+    filePath: "src/Card.tsx",
+    condition: { state: "base" },
+    confidence: "exact",
   },
   {
-    id: 'tamagui:props',
-    label: 'Props',
-    cssSystem: 'tamagui',
-    sourceForm: 'adapterKnownElementProp',
-    filePath: 'src/Card.tsx',
-    condition: { state: 'base' },
-    confidence: 'exact',
+    id: "tamagui:props",
+    label: "Props",
+    cssSystem: "tamagui",
+    sourceForm: "adapterKnownElementProp",
+    filePath: "src/Card.tsx",
+    condition: { state: "base" },
+    confidence: "exact",
   },
 ];
 ```

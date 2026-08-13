@@ -1,22 +1,22 @@
-import { TID } from '@shared/data-testid-map';
-import cn from 'clsx';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type Layout, Panel, Group as PanelGroup, useDefaultLayout } from 'react-resizable-panels';
+import { TID } from "@shared/data-testid-map";
+import cn from "clsx";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type Layout, Panel, Group as PanelGroup, useDefaultLayout } from "react-resizable-panels";
 // SaaS-only imports — conditionally used when engine is available
-import { useComponentMetaOptional } from '@/contexts/ComponentMetaContext';
-import { useAnimatedPanelCollapse } from '@/hooks/useAnimatedPanelCollapse';
-import { useSidebarPanelLayout } from '@/hooks/useSidebarPanelLayout';
-import { useCanvasEngineOptional } from '@/lib/canvas-engine';
-import { resolveNodeRefToUuid } from '@/lib/element-tracing/id-bridge';
-import { usePlatformContext } from '@/lib/platform';
-import { panelLayoutStorage } from '@/lib/storage';
-import { useGitStore } from '@/stores/gitStore';
-import type { ComponentListItem } from '../../../lib/component-scanner/types';
-import SidebarHeader from '../SidebarHeader';
-import { SourceControlSection } from '../SourceControlSection';
-import { TestGenerationModal } from '../TestGenerationModal';
-import { TestRunnerModal } from '../TestRunnerModal';
-import { ResizeHandle } from '../ui/resize-handle';
+import { useComponentMetaOptional } from "@/contexts/ComponentMetaContext";
+import { useAnimatedPanelCollapse } from "@/hooks/useAnimatedPanelCollapse";
+import { useSidebarPanelLayout } from "@/hooks/useSidebarPanelLayout";
+import { useCanvasEngineOptional } from "@/lib/canvas-engine";
+import { resolveNodeRefToUuid } from "@/lib/element-tracing/id-bridge";
+import { usePlatformContext } from "@/lib/platform";
+import { panelLayoutStorage } from "@/lib/storage";
+import { useGitStore } from "@/stores/gitStore";
+import type { ComponentListItem } from "../../../lib/component-scanner/types";
+import SidebarHeader from "../SidebarHeader";
+import { SourceControlSection } from "../SourceControlSection";
+import { TestGenerationModal } from "../TestGenerationModal";
+import { TestRunnerModal } from "../TestRunnerModal";
+import { ResizeHandle } from "../ui/resize-handle";
 import {
   useComponentNavigation,
   useComponentsData,
@@ -24,19 +24,19 @@ import {
   useElementsTree,
   useFunctionNavigate,
   useTestGroups,
-} from './hooks';
-import { ComponentsSection, ElementsTreeSection, PagesSection, TestsSection } from './sections';
-import type { LeftSidebarProps } from './types';
+} from "./hooks";
+import { ComponentsSection, ElementsTreeSection, PagesSection, TestsSection } from "./sections";
+import type { LeftSidebarProps } from "./types";
 
-const LEFT_SIDEBAR_PANEL_IDS = ['pages', 'components', 'elements-tree', 'tests'] as const;
-const LEFT_SIDEBAR_PANEL_IDS_WITH_SOURCE_CONTROL = ['source-control', ...LEFT_SIDEBAR_PANEL_IDS] as const;
+const LEFT_SIDEBAR_PANEL_IDS = ["pages", "components", "elements-tree", "tests"] as const;
+const LEFT_SIDEBAR_PANEL_IDS_WITH_SOURCE_CONTROL = ["source-control", ...LEFT_SIDEBAR_PANEL_IDS] as const;
 
 function isUsablePanelLayout(layout: Layout | undefined, panelIds: readonly string[]): layout is Layout {
   if (!layout) return false;
   if (Object.keys(layout).length !== panelIds.length) return false;
   return panelIds.every((id) => {
     const size = layout[id];
-    return typeof size === 'number' && Number.isFinite(size) && size >= 0;
+    return typeof size === "number" && Number.isFinite(size) && size >= 0;
   });
 }
 
@@ -49,7 +49,7 @@ export default function LeftSidebar({
   onCreateComponent,
 }: LeftSidebarProps) {
   const engine = useCanvasEngineOptional();
-  const isVSCode = usePlatformContext() === 'vscode-webview';
+  const isVSCode = usePlatformContext() === "vscode-webview";
 
   // SaaS-only: ComponentMeta context (provides meta, loadComponent, etc.)
   // In VS Code these are handled by compat hooks internally
@@ -71,7 +71,7 @@ export default function LeftSidebar({
     ? (() => {
         const root = engine.getRoot();
         const filePath = root.metadata?.relativeFilePath;
-        return (typeof filePath === 'string' ? filePath : null) || meta?.relativeFilePath || null;
+        return (typeof filePath === "string" ? filePath : null) || meta?.relativeFilePath || null;
       })()
     : null;
 
@@ -86,13 +86,13 @@ export default function LeftSidebar({
   );
 
   // Track which section (pages/components) was last clicked to prevent dual highlights
-  const [selectionSource, setSelectionSource] = useState<'pages' | 'components'>('pages');
-  const pagesActivePath = selectionSource === 'pages' ? componentNav.activePath : null;
-  const componentsActivePath = selectionSource === 'components' ? componentNav.activePath : null;
+  const [selectionSource, setSelectionSource] = useState<"pages" | "components">("pages");
+  const pagesActivePath = selectionSource === "pages" ? componentNav.activePath : null;
+  const componentsActivePath = selectionSource === "components" ? componentNav.activePath : null;
 
   const onPageClick = useCallback(
     (component: ComponentListItem) => {
-      setSelectionSource('pages');
+      setSelectionSource("pages");
       componentNav.onComponentClick(component);
     },
     [componentNav],
@@ -100,7 +100,7 @@ export default function LeftSidebar({
 
   const onComponentItemClick = useCallback(
     (component: ComponentListItem) => {
-      setSelectionSource('components');
+      setSelectionSource("components");
       componentNav.onComponentClick(component);
     },
     [componentNav],
@@ -136,7 +136,7 @@ export default function LeftSidebar({
   const expectedPanelIds = isVSCode ? LEFT_SIDEBAR_PANEL_IDS : LEFT_SIDEBAR_PANEL_IDS_WITH_SOURCE_CONTROL;
 
   const { defaultLayout: storedDefaultLayout, onLayoutChange: persistLayout } = useDefaultLayout({
-    groupId: 'left-sidebar-panels',
+    groupId: "left-sidebar-panels",
     storage: panelLayoutStorage,
   });
 
@@ -160,16 +160,16 @@ export default function LeftSidebar({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') setIsShiftPressed(true);
+      if (e.key === "Shift") setIsShiftPressed(true);
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') setIsShiftPressed(false);
+      if (e.key === "Shift") setIsShiftPressed(false);
     };
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
     };
   }, []);
 
@@ -246,17 +246,17 @@ export default function LeftSidebar({
     const handleWheel = (e: WheelEvent) => {
       e.stopPropagation();
     };
-    el.addEventListener('wheel', handleWheel, { passive: true });
+    el.addEventListener("wheel", handleWheel, { passive: true });
     return () => {
-      el.removeEventListener('wheel', handleWheel);
+      el.removeEventListener("wheel", handleWheel);
     };
   }, []);
 
   return (
     <div
       data-testid={TID.explorer.root}
-      className={cn('h-full border-r border-border bg-background flex flex-col whitespace-nowrap relative z-20', {
-        'select-none': isShiftPressed,
+      className={cn("h-full border-r border-border bg-background flex flex-col whitespace-nowrap relative z-20", {
+        "select-none": isShiftPressed,
       })}
       ref={rootRef}
     >
@@ -265,9 +265,9 @@ export default function LeftSidebar({
         <>
           <SidebarHeader />
           <div className="px-4 py-3 border-b border-border">
-            <span className="text-sm font-semibold text-foreground">{meta?.componentName || 'Untitled'}</span>
+            <span className="text-sm font-semibold text-foreground">{meta?.componentName || "Untitled"}</span>
             <p className="text-xs text-muted-foreground mt-1">
-              {meta?.projectName || meta?.repoPath?.split('/').pop() || 'No project'}
+              {meta?.projectName || meta?.repoPath?.split("/").pop() || "No project"}
             </p>
           </div>
         </>
@@ -280,18 +280,18 @@ export default function LeftSidebar({
         className="flex-1"
         defaultLayout={defaultLayout}
         onLayoutChange={onLayoutChange}
-        groupRef={groupRef as unknown as React.Ref<import('react-resizable-panels').GroupImperativeHandle>}
+        groupRef={groupRef as unknown as React.Ref<import("react-resizable-panels").GroupImperativeHandle>}
       >
         {!isVSCode && (
           <>
             <Panel
               id="source-control"
               panelRef={sourceControlPanelRef}
-              defaultSize={isPushPopoverOpen ? '30%' : '0px'}
-              minSize={isPushPopoverOpen ? '24px' : '0px'}
-              maxSize={isPushPopoverOpen ? undefined : '0px'}
+              defaultSize={isPushPopoverOpen ? "30%" : "0px"}
+              minSize={isPushPopoverOpen ? "24px" : "0px"}
+              maxSize={isPushPopoverOpen ? undefined : "0px"}
               collapsible
-              collapsedSize={isPushPopoverOpen ? '24px' : '0px'}
+              collapsedSize={isPushPopoverOpen ? "24px" : "0px"}
             >
               {isPushPopoverOpen && (
                 <SourceControlSection
@@ -303,7 +303,7 @@ export default function LeftSidebar({
             </Panel>
             <ResizeHandle
               onPointerUp={() => {
-                if (isPushPopoverOpen) handleResizeEnd(['source-control', 'pages']);
+                if (isPushPopoverOpen) handleResizeEnd(["source-control", "pages"]);
               }}
             />
           </>
@@ -314,8 +314,8 @@ export default function LeftSidebar({
           id="pages"
           panelRef={pagesPanelRef}
           defaultSize="20%"
-          minSize={hasPagesContent ? '60px' : '24px'}
-          maxSize={hasPagesContent ? undefined : '24px'}
+          minSize={hasPagesContent ? "60px" : "24px"}
+          maxSize={hasPagesContent ? undefined : "24px"}
           collapsible
           collapsedSize="24px"
         >
@@ -326,20 +326,20 @@ export default function LeftSidebar({
             activePath={pagesActivePath}
             loadingComponent={componentNav.loadingComponent}
             onComponentClick={onPageClick}
-            onToggle={() => handleUserToggle('pages', pagesPanel.toggle, pagesPanelRef)}
+            onToggle={() => handleUserToggle("pages", pagesPanel.toggle, pagesPanelRef)}
             onCreatePage={onCreatePage}
             isVSCode={isVSCode}
           />
         </Panel>
-        <ResizeHandle onPointerUp={() => handleResizeEnd(['pages', 'components'])} />
+        <ResizeHandle onPointerUp={() => handleResizeEnd(["pages", "components"])} />
 
         {/* Components */}
         <Panel
           id="components"
           panelRef={componentsPanelRef}
           defaultSize="25%"
-          minSize={hasComponentsContent ? '60px' : '24px'}
-          maxSize={hasComponentsContent ? undefined : '24px'}
+          minSize={hasComponentsContent ? "60px" : "24px"}
+          maxSize={hasComponentsContent ? undefined : "24px"}
           collapsible
           collapsedSize="24px"
         >
@@ -353,7 +353,7 @@ export default function LeftSidebar({
             activePath={componentsActivePath}
             loadingComponent={componentNav.loadingComponent}
             onComponentClick={onComponentItemClick}
-            onToggle={() => handleUserToggle('components', componentsPanel.toggle, componentsPanelRef)}
+            onToggle={() => handleUserToggle("components", componentsPanel.toggle, componentsPanelRef)}
             onReload={loadComponents}
             isReloading={isLoadingComponents}
             onCreateComponent={onCreateComponent}
@@ -361,15 +361,15 @@ export default function LeftSidebar({
             setupReason={setupReason}
           />
         </Panel>
-        <ResizeHandle onPointerUp={() => handleResizeEnd(['components', 'elements-tree'])} />
+        <ResizeHandle onPointerUp={() => handleResizeEnd(["components", "elements-tree"])} />
 
         {/* Elements Tree */}
         <Panel
           id="elements-tree"
           panelRef={elementsTreePanelRef}
           defaultSize="25%"
-          minSize={hasElementsContent ? '60px' : '24px'}
-          maxSize={hasElementsContent ? undefined : '24px'}
+          minSize={hasElementsContent ? "60px" : "24px"}
+          maxSize={hasElementsContent ? undefined : "24px"}
           collapsible
           collapsedSize="24px"
         >
@@ -384,18 +384,18 @@ export default function LeftSidebar({
             onOpenPanel={onOpenPanel}
             onElementPosition={onElementPosition}
             onFunctionNavigate={handleFunctionNavigate}
-            onToggle={() => handleUserToggle('elements-tree', elementsTreePanel.toggle, elementsTreePanelRef)}
+            onToggle={() => handleUserToggle("elements-tree", elementsTreePanel.toggle, elementsTreePanelRef)}
           />
         </Panel>
-        <ResizeHandle onPointerUp={() => handleResizeEnd(['elements-tree', 'tests'])} />
+        <ResizeHandle onPointerUp={() => handleResizeEnd(["elements-tree", "tests"])} />
 
         {/* Tests */}
         <Panel
           id="tests"
           panelRef={testsPanelRef}
           defaultSize="20%"
-          minSize={hasTestsContent ? '60px' : '24px'}
-          maxSize={hasTestsContent ? undefined : '24px'}
+          minSize={hasTestsContent ? "60px" : "24px"}
+          maxSize={hasTestsContent ? undefined : "24px"}
           collapsible
           collapsedSize="24px"
         >
@@ -405,7 +405,7 @@ export default function LeftSidebar({
             testGroups={testGroups}
             isLoading={isLoadingTests}
             currentComponentPath={currentComponentPath}
-            onToggle={() => handleUserToggle('tests', testsPanel.toggle, testsPanelRef)}
+            onToggle={() => handleUserToggle("tests", testsPanel.toggle, testsPanelRef)}
             onGenerateTests={() => setIsTestModalOpen(true)}
             onRunTests={() => setIsRunnerModalOpen(true)}
           />
@@ -422,7 +422,7 @@ export default function LeftSidebar({
           }}
           projectId={meta?.projectId}
           componentPath={currentComponentPath}
-          types={['unit', 'e2e', 'variants']}
+          types={["unit", "e2e", "variants"]}
         />
       )}
 

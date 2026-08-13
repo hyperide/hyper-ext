@@ -123,7 +123,7 @@ Generic full-area overlay container. All specific overlays compose this.
 interface OverlayShellProps {
   children: React.ReactNode;
   /** 'backdrop' = semi-transparent dark bg, 'solid' = solid bg color */
-  variant?: 'backdrop' | 'solid';
+  variant?: "backdrop" | "solid";
   /** data-testid for the root element */
   testId?: string;
 }
@@ -186,7 +186,7 @@ Shown when no component is selected or no components exist.
 
 ```tsx
 interface NoComponentOverlayProps {
-  variant: 'no-selection' | 'no-components';
+  variant: "no-selection" | "no-components";
 }
 ```
 
@@ -224,8 +224,8 @@ Shown when framework needs router patching or is unsupported. **Merges SaaS
 
 ```tsx
 interface PreviewSetupOverlayProps {
-  status: 'needs-patch' | 'unsupported';
-  frameworkSupport?: Array<{ name: string; level: 'supported' | 'planned' | 'not-planned' }>;
+  status: "needs-patch" | "unsupported";
+  frameworkSupport?: Array<{ name: string; level: "supported" | "planned" | "not-planned" }>;
   onDismiss?: () => void;
   onAutoFix?: (prompt: string) => void;
   onManualFix?: () => void;
@@ -325,8 +325,8 @@ a retry counter. The retry counter increments on:
 ```tsx
 // Generated inside __canvas_preview__.tsx
 // Host sends retryRender after detecting HMR update or file save
-window.addEventListener('message', (e) => {
-  if (e.data?.type === 'hypercanvas:retryRender') {
+window.addEventListener("message", (e) => {
+  if (e.data?.type === "hypercanvas:retryRender") {
     setRetryCount((c) => c + 1);
   }
 });
@@ -357,10 +357,10 @@ function RenderSuccessBeacon({ componentPath }: { componentPath: string }) {
   React.useEffect(() => {
     window.parent.postMessage(
       {
-        type: 'hypercanvas:componentOk',
+        type: "hypercanvas:componentOk",
         componentPath,
       },
-      '*',
+      "*",
     );
   }, [componentPath]);
   return null;
@@ -388,7 +388,7 @@ This handles all recovery scenarios:
 Add handler for `hypercanvas:componentOk`:
 
 ```tsx
-if (msg.type === 'hypercanvas:componentOk') {
+if (msg.type === "hypercanvas:componentOk") {
   setComponentError((prev) => (prev && prev.componentPath === msg.componentPath ? null : prev));
 }
 ```
