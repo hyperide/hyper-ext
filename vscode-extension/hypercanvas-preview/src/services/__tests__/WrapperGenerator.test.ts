@@ -15,7 +15,7 @@
  *            else a pass-through fallback — so the preview renders the component
  *            (or its own clean error) instead of staying blank.
  */
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -113,6 +113,28 @@ describe('ensureIsolationWrapper', () => {
     expect(written).toContain('return children;');
     expect(written).toContain('export function PreviewWrapper');
     expect(written).not.toContain('({ children } {');
+  });
+
+  // unsupported-css-smoke cluster (vanilla-extract-reddit): a wrapper that fails the
+  // parse-check is a HANDLED outcome — the generator writes the pass-through fallback.
+  // It must therefore NOT be logged at error severity (the e2e harness flags any
+  // Extension-Host console.error as an unexpected diagnostic, failing the smoke test on
+  // a fallback that actually worked). Pin: fallback emits a warn, never a console.error.
+  it('falls back via console.warn (never console.error) when the AI wrapper does not parse', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      aiBehavior = () => Promise.resolve('export function PreviewWrapper({ children } { return <>{children}</>');
+
+      const outcome = await ensureIsolationWrapper(root, fakeContext());
+
+      expect(outcome).toBe('fallback');
+      expect(errorSpy).not.toHaveBeenCalled();
+      expect(warnSpy.mock.calls.some((call) => String(call[0]).includes('failed parse-check'))).toBe(true);
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
   });
 
   it('does not clobber an existing manual wrapper', async () => {

@@ -100,9 +100,14 @@ export class ComponentService {
           this._cache.set(componentInfo.path, componentInfo);
         }
       } catch (error) {
-        console.error(
+        // Recoverable: this single file is skipped and the scan continues. A file the
+        // static analyzer can't handle (exotic/unsupported-framework syntax, or a duplicate
+        // binding such as antd's `import { Layout }` + `export function Layout`) is an
+        // expected limitation, not an extension fault — warn, don't error (error-level
+        // would imply the extension broke, and trips the e2e diagnostic-error guard).
+        console.warn(
           // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-          `[ComponentService] Error parsing ${file.fsPath}:`,
+          `[ComponentService] Skipped unparseable file ${file.fsPath}:`,
           error,
         );
       }
@@ -316,7 +321,12 @@ export class ComponentService {
       const componentNodes = this._parseRootJSX(returnJSX, parseContext);
       return convertComponentNodesToTreeNodes(componentNodes);
     } catch (error) {
-      console.error(`[ComponentService] Error parsing structure for ${componentPath}:`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+      // Recoverable: an empty element tree is returned and the inspector degrades to
+      // readonly gracefully. Parsing a component the static analyzer can't handle
+      // (unsupported-framework shapes, a duplicate `Layout` import+declaration) is an
+      // expected limitation, not an extension fault — warn, not error (don't trip the
+      // e2e diagnostic-error guard / error telemetry over a handled fallback).
+      console.warn(`[ComponentService] Could not parse structure for ${componentPath} — readonly fallback:`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       return [];
     }
   }
@@ -357,9 +367,11 @@ export class ComponentService {
 
       return await this._parseComponent(relativePath, sourceCode);
     } catch (error) {
-      console.error(
+      // Recoverable: null skips this file. Unparseable user code is an expected
+      // limitation, not an extension fault — warn, not error (see scanComponents).
+      console.warn(
         // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-        `[ComponentService] Error parsing file ${uri.fsPath}:`,
+        `[ComponentService] Skipped unparseable file ${uri.fsPath}:`,
         error,
       );
       return null;
@@ -657,9 +669,12 @@ export class ComponentService {
         props,
       };
     } catch (error) {
-      console.error(
+      // Recoverable: null means "no component info", and the caller degrades to a
+      // readonly/heuristic path. Unparseable user code is an expected limitation, not
+      // an extension fault — warn, not error (see scanComponents).
+      console.warn(
         // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-        `[ComponentService] Error parsing component ${componentPath}:`,
+        `[ComponentService] Could not parse component ${componentPath} — readonly fallback:`,
         error,
       );
       return null;

@@ -64,7 +64,11 @@ function isValidWrapper(code: string): boolean {
   try {
     ast = parseCode(code);
   } catch (error) {
-    console.error('[WrapperGenerator] Generated wrapper failed parse-check:', error);
+    // Recoverable: returning false makes the caller write the pass-through fallback
+    // wrapper instead. An AI wrapper that doesn't parse is an expected outcome the
+    // generator is designed to handle — warn, not error (error-level would imply the
+    // extension broke, and trips the e2e diagnostic-error guard over a handled fallback).
+    console.warn('[WrapperGenerator] Generated wrapper failed parse-check — using fallback:', error);
     return false;
   }
   // Require a named `PreviewWrapper` export. The bundle does
@@ -72,7 +76,8 @@ function isValidWrapper(code: string): boolean {
   // Check the AST (not a regex) so a commented-out `// export ... PreviewWrapper`
   // can't false-positive.
   if (!hasNamedPreviewWrapperExport(ast)) {
-    console.error('[WrapperGenerator] Generated wrapper has no named PreviewWrapper export — using fallback');
+    // Recoverable: caller writes the pass-through fallback instead. Warn, not error.
+    console.warn('[WrapperGenerator] Generated wrapper has no named PreviewWrapper export — using fallback');
     return false;
   }
   return true;
@@ -150,7 +155,9 @@ async function generatePreviewWrapper(workspaceRoot: string, context: vscode.Ext
     const text = await callAI(resolved, prompt);
     return _extractCode(text);
   } catch (error) {
-    console.error('[WrapperGenerator] AI call failed:', error);
+    // Recoverable: returning null makes the caller write the pass-through fallback.
+    // A failed AI call is a handled outcome, not an extension fault — warn, not error.
+    console.warn('[WrapperGenerator] AI call failed — using fallback:', error);
     return null;
   }
 }
