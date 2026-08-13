@@ -129,6 +129,32 @@ describe('parseComponentSource', () => {
       expect(titleProp?.required).toBe(true);
     });
   });
+
+  describe('destructuring defaults (HYP-454)', () => {
+    it('captures a string-literal destructuring default into PropInfo.defaultValue', () => {
+      const source = `
+        export function LocalButton({ variant = 'primary', children }: { variant?: 'primary' | 'ghost'; children: React.ReactNode }) {
+          return <button>{children}</button>;
+        }
+      `;
+      const result = parseComponentSource('src/ui/LocalButton.tsx', source);
+      const variantProp = result?.props.find((p) => p.name === 'variant');
+      expect(variantProp?.defaultValue).toBe('primary');
+      // A prop with a destructuring default is optional.
+      expect(variantProp?.required).toBe(false);
+    });
+
+    it('leaves defaultValue undefined when there is no default', () => {
+      const source = `
+        export function Tag({ label }: { label: string }) {
+          return <span>{label}</span>;
+        }
+      `;
+      const result = parseComponentSource('src/ui/Tag.tsx', source);
+      const labelProp = result?.props.find((p) => p.name === 'label');
+      expect(labelProp?.defaultValue).toBeUndefined();
+    });
+  });
 });
 
 describe('getTypeString', () => {

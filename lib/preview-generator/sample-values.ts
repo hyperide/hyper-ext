@@ -123,8 +123,17 @@ function valueForProp(prop: PropInfo): unknown | typeof UNSATISFIED {
     return nested;
   }
 
+  // Enum / string-literal union (HYP-454): prefer the component's declared default
+  // (destructuring default `variant = 'primary'` or defaultProps), captured in
+  // prop.defaultValue. Only honor a default that is itself a union member — otherwise
+  // fall back to the first member. Never sample the literal "unknown" for a resolvable
+  // union; that would override the component's real default and render it unstyled.
   const enumMembers = parseEnumMembers(type);
-  if (enumMembers) return enumMembers[0];
+  if (enumMembers) {
+    const declaredDefault = prop.defaultValue;
+    if (declaredDefault !== undefined && enumMembers.includes(declaredDefault)) return declaredDefault;
+    return enumMembers[0];
+  }
 
   // Normalize a `T | null` / `T | undefined` union down to `T` so the primitive
   // checks below see the bare keyword (parseEnumMembers already returned null for
@@ -190,7 +199,18 @@ function dedupeProps(props: readonly PropInfo[]): PropInfo[] {
   const byName = new Map<string, PropInfo>();
   for (const prop of props) {
     const existing = byName.get(prop.name);
-    if (!existing || richness(prop) > richness(existing)) byName.set(prop.name, prop);
+    if (!existing) {
+      byName.set(prop.name, { ...prop });
+      continue;
+    }
+    // Same prop emitted twice — typed interface entry (richer type / objectFields) and
+    // destructuring entry (type 'unknown', but carries defaultValue). Keep the richer
+    // type but MERGE the destructuring default, so an enum prop sees both its real
+    // union type AND its declared default (HYP-454). Picking one and dropping the other
+    // would silently lose the default and resample the first member instead.
+    const winner = richness(prop) > richness(existing) ? { ...prop } : { ...existing };
+    winner.defaultValue = winner.defaultValue ?? existing.defaultValue ?? prop.defaultValue;
+    byName.set(prop.name, winner);
   }
   return [...byName.values()];
 }

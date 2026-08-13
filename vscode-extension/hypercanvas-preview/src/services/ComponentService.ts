@@ -413,20 +413,20 @@ export class ComponentService {
         },
 
         // Function declarations (for component name)
-        FunctionDeclaration(nodePath: NodePath<t.FunctionDeclaration>) {
+        FunctionDeclaration: (nodePath: NodePath<t.FunctionDeclaration>) => {
           if (nodePath.node.id && /^[A-Z]/.test(nodePath.node.id.name)) {
             if (!componentName) {
               componentName = nodePath.node.id.name;
             }
             const firstParam = nodePath.node.params[0];
             if (t.isObjectPattern(firstParam)) {
-              props.push(...extractPropsFromDestructuring(firstParam));
+              props.push(...extractPropsFromDestructuring(firstParam, (n) => this._getTypeString(n)));
             }
           }
         },
 
         // Variable declarations (sampleRender and arrow/forwardRef function components)
-        VariableDeclarator(nodePath: NodePath<t.VariableDeclarator>) {
+        VariableDeclarator: (nodePath: NodePath<t.VariableDeclarator>) => {
           const id = nodePath.node.id;
           const init = nodePath.node.init;
 
@@ -456,7 +456,7 @@ export class ComponentService {
               if (renderFn) {
                 const firstParam = renderFn.params[0];
                 if (t.isObjectPattern(firstParam)) {
-                  props.push(...extractPropsFromDestructuring(firstParam));
+                  props.push(...extractPropsFromDestructuring(firstParam, (n) => this._getTypeString(n)));
                 }
               }
             }

@@ -28,6 +28,17 @@ export function getTypeString(node: t.TSType): string {
   if (t.isTSVoidKeyword(node)) return 'void';
   if (t.isTSNullKeyword(node)) return 'null';
   if (t.isTSUndefinedKeyword(node)) return 'undefined';
+  // String-literal union member (e.g. 'primary' in `'primary' | 'ghost'`). Without this,
+  // each literal falls through to `unknown`, collapsing the union to `unknown | unknown`
+  // and starving the sample-value enum resolver (HYP-454). Quote the literal so the
+  // sampler's quoted-member regex fires deterministically. Numeric/boolean literal unions
+  // (`1 | 2`, `true | false`) are intentionally NOT serialized here: the sampler treats
+  // bare union members as STRINGS, so emitting `1`/`true` would sample a string `'1'` and
+  // break `size === 1` comparisons. They keep their pre-existing `unknown` behavior until a
+  // typed numeric/boolean-enum sampler exists — out of scope for this string-enum fix.
+  if (t.isTSLiteralType(node) && t.isStringLiteral(node.literal)) {
+    return `'${node.literal.value}'`;
+  }
   if (t.isTSUnionType(node)) {
     return node.types.map((u) => getTypeString(u)).join(' | ');
   }
@@ -78,7 +89,40 @@ export function isForwardRefCall(init: t.Expression | null | undefined): init is
   return false;
 }
 
-export function extractPropsFromDestructuring(pattern: t.ObjectPattern): PropInfo[] {
+/**
+ * Extract prop types from an inline object type annotation on a destructuring pattern.
+ * Only processes TSTypeLiteral (e.g. `{ variant }: { variant: 'primary' | 'ghost' }`).
+ * TSTypeReference (`{ variant }: ButtonProps`) is intentionally left out — the
+ * interface/import-resolution path in ComponentService owns those.
+ * Returns a map from prop name to type string, or null when no inline type is present.
+ */
+function extractInlineTypeAnnotations(
+  pattern: t.ObjectPattern,
+  getTypeString: (node: t.TSType) => string,
+): Map<string, string> | null {
+  const annotation = pattern.typeAnnotation;
+  if (!annotation || !t.isTSTypeAnnotation(annotation)) return null;
+  const typeNode = annotation.typeAnnotation;
+  if (!t.isTSTypeLiteral(typeNode)) return null;
+
+  const map = new Map<string, string>();
+  for (const member of typeNode.members) {
+    if (
+      t.isTSPropertySignature(member) &&
+      t.isIdentifier(member.key) &&
+      member.typeAnnotation &&
+      t.isTSTypeAnnotation(member.typeAnnotation)
+    ) {
+      map.set(member.key.name, getTypeString(member.typeAnnotation.typeAnnotation));
+    }
+  }
+  return map.size > 0 ? map : null;
+}
+
+export function extractPropsFromDestructuring(
+  pattern: t.ObjectPattern,
+  getTypeString?: (node: t.TSType) => string,
+): PropInfo[] {
   let hasRest = false;
   for (const prop of pattern.properties) {
     if (t.isRestElement(prop)) {
@@ -86,15 +130,38 @@ export function extractPropsFromDestructuring(pattern: t.ObjectPattern): PropInf
       break;
     }
   }
+
+  // Resolve inline type annotations when a serializer is provided.
+  const inlineTypes = getTypeString ? extractInlineTypeAnnotations(pattern, getTypeString) : null;
+
   const result: PropInfo[] = [];
   for (const prop of pattern.properties) {
     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
       const name = prop.key.name;
-      const isOptional = ALWAYS_OPTIONAL_PROP_NAMES.has(name) || /^on[A-Z]/.test(name) || hasRest;
-      result.push({ name, type: 'unknown', required: !isOptional });
+      // A destructuring default (`variant = 'primary'`) makes the prop optional and tells
+      // the sampler which value to prefer for an enum/union prop (HYP-454). We only capture
+      // string-literal defaults — those are what the enum branch can match against.
+      const defaultValue = stringLiteralDefault(prop.value);
+      const hasDefault = defaultValue !== undefined;
+      const isOptional = ALWAYS_OPTIONAL_PROP_NAMES.has(name) || /^on[A-Z]/.test(name) || hasRest || hasDefault;
+      const type = inlineTypes?.get(name) ?? 'unknown';
+      result.push({ name, type, required: !isOptional, defaultValue });
     }
   }
   return result;
+}
+
+/**
+ * Extract a string-literal destructuring default from an ObjectProperty value.
+ * `{ variant = 'primary' }` parses the value as an AssignmentPattern whose `.right`
+ * is the default. Returns the bare string (no quotes) for StringLiteral defaults;
+ * non-literal defaults (expressions, numbers, identifiers) yield undefined.
+ */
+function stringLiteralDefault(value: t.ObjectProperty['value']): string | undefined {
+  if (t.isAssignmentPattern(value) && t.isStringLiteral(value.right)) {
+    return value.right.value;
+  }
+  return undefined;
 }
 
 /**

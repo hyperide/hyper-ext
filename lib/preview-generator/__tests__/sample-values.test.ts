@@ -38,6 +38,42 @@ describe('generateSamplePropValues', () => {
     expect(result.unsatisfied).toEqual([]);
   });
 
+  it('prefers the declared destructuring default over the first union member (HYP-454)', () => {
+    // default 'ghost' differs from the first member 'primary' — must honor the default.
+    const result = generateSamplePropValues([
+      prop({ name: 'variant', type: "'primary' | 'ghost'", defaultValue: 'ghost' }),
+    ]);
+    expect(result.values.variant).toBe('ghost');
+    expect(result.unsatisfied).toEqual([]);
+  });
+
+  it('falls back to the first member when the default is not a union member (HYP-454)', () => {
+    // A non-literal / unrelated default must not leak — fall back to first member.
+    const result = generateSamplePropValues([
+      prop({ name: 'variant', type: "'primary' | 'ghost'", defaultValue: 'somethingElse' }),
+    ]);
+    expect(result.values.variant).toBe('primary');
+    expect(result.unsatisfied).toEqual([]);
+  });
+
+  it('falls back to the first member when there is no default (HYP-454)', () => {
+    const result = generateSamplePropValues([prop({ name: 'variant', type: "'primary' | 'ghost'" })]);
+    expect(result.values.variant).toBe('primary');
+    expect(result.unsatisfied).toEqual([]);
+  });
+
+  it('merges defaultValue from a duplicate destructuring entry onto the typed entry (HYP-454)', () => {
+    // ComponentService emits TWO entries: the typed interface entry (no default) and the
+    // destructuring entry (type 'unknown', has default). dedupe must MERGE the default,
+    // not pick one and drop the other.
+    const result = generateSamplePropValues([
+      prop({ name: 'variant', type: "'primary' | 'ghost'" }),
+      prop({ name: 'variant', type: 'unknown', defaultValue: 'ghost' }),
+    ]);
+    expect(result.values.variant).toBe('ghost');
+    expect(result.unsatisfied).toEqual([]);
+  });
+
   it('generates a single-element array for array types', () => {
     const result = generateSamplePropValues([prop({ name: 'tags', type: 'string[]' })]);
     expect(Array.isArray(result.values.tags)).toBe(true);
