@@ -26,6 +26,8 @@ import type {
   SaveSnapshotResult,
   UpdatePropParams,
   UpdatePropsBatchParams,
+  UpdateStylesBatchParams,
+  UpdateStylesBatchResult,
   UpdateStylesParams,
   UpdateStylesResult,
   UpdateTextParams,
@@ -54,7 +56,10 @@ export class ASTApiServiceImpl implements ASTApiService {
     const response = await authFetch('/api/delete-elements', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nodeRefs: params.elementIds, filePath: params.filePath }),
+      body: JSON.stringify({
+        nodeRefs: params.elementIds,
+        filePath: params.filePath,
+      }),
     });
     return response.json();
   }
@@ -113,6 +118,28 @@ export class ASTApiServiceImpl implements ASTApiService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
+    });
+    return response.json();
+  }
+
+  async updateStylesBatch(params: UpdateStylesBatchParams): Promise<UpdateStylesBatchResult> {
+    // Prefer the per-element updates (nodeRef + elementLoc) when the caller resolved them client-side
+    // (HYP-593 parity); otherwise fall back to bare nodeRefs from elementIds. The route dedupes
+    // same-source instances itself (D2 §5.4), so no client-side collapse is needed here.
+    const updates = params.elementUpdates
+      ? params.elementUpdates.map((u) => ({ nodeRef: u.nodeRef, elementLoc: u.elementLoc, domClasses: u.domClasses }))
+      : params.elementIds.map((nodeRef) => ({ nodeRef }));
+    const response = await authFetch('/api/update-component-styles-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filePath: params.filePath,
+        styles: params.styles,
+        state: params.state,
+        selectedSourceTabId: params.selectedSourceTabId,
+        projectDefaultCssSystem: params.projectDefaultCssSystem,
+        updates,
+      }),
     });
     return response.json();
   }

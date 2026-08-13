@@ -9,6 +9,7 @@ import { TailwindAdapter } from '@/lib/canvas-engine/adapters/TailwindAdapter';
 import { TamaguiAdapter } from '@/lib/canvas-engine/adapters/TamaguiAdapter';
 import type { ParsedStyles } from '@/lib/canvas-engine/adapters/types';
 import {
+  readBrowserElementStyle,
   useElementStyleData,
   useGoToCode,
   useOpenAIChat,
@@ -23,6 +24,13 @@ import { useNodePodLocaleKeys } from '@/lib/platform/hooks/useNodePodLocaleKeys'
 import { useNodePodRuntimeStore } from '@/lib/platform/nodepod/nodepodRuntimeStore';
 import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
+import type { StyleSourceTab } from '@lib/style-read/types';
+import {
+  describeLandedReason,
+  describeLandedSystem,
+  describeSkipReason,
+  type SkipReasonCode,
+} from '@lib/style-write/skip-reason-codes';
 import { useEditorStore } from '@/stores/editorStore';
 
 import { useElementSelection } from '../LeftSidebar/hooks/useElementSelection';
@@ -38,6 +46,7 @@ import { useComponentPathCompat, useSelectionCompat } from './hooks/useSelection
 import { useNavigationHandlers } from './hooks/useNavigationHandlers';
 import { usePopulateStyleState } from './hooks/usePopulateStyleState';
 import { useStyleHandlers } from './hooks/useStyleHandlers';
+import { MIXED, mergeStyleData } from './hooks/useBatchStyleData';
 import { useStyleSync } from './hooks/useStyleSync';
 import {
   AppearanceSection,
@@ -55,9 +64,14 @@ import {
   StyleSourceTabsSection,
   ViewControlsSection,
 } from './sections';
-import { getExplicitStyleSourceTabId, resolveInspectorStyleSourceTabs } from './source-tabs';
+import {
+  AUTO_SOURCE_TAB_ID,
+  getExplicitStyleSourceTabId,
+  mergeForMultiSelect,
+  resolveInspectorStyleSourceTabs,
+} from './source-tabs';
 import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
-import { findNodeById } from './utils';
+import { cssToPosition, findNodeById, mapShadowSizeToValues, parseHexWithAlpha } from './utils';
 
 export default function RightSidebar({
   onOpenSettings,
@@ -124,11 +138,17 @@ export default function RightSidebar({
   const [styleRefreshKey, setStyleRefreshKey] = useState(0);
   // Tracks write failures: bindingId scopes the rollback to the exact binding that failed.
   // Without bindingId, a failure on binding A would trigger rollback in the currently-visible binding B.
-  const [i18nRollbackSignal, setI18nRollbackSignal] = useState<{ bindingId: string; counter: number } | null>(null);
+  const [i18nRollbackSignal, setI18nRollbackSignal] = useState<{
+    bindingId: string;
+    counter: number;
+  } | null>(null);
   // Keeps keyBusy=true until i18nText.key confirms the new key after a write.
   // Unlike pendingTextKeyRef (a ref used by debounced text-write), this is React state so it
   // triggers re-renders and keeps the combobox disabled during the i18nText re-read window.
-  const [pendingKeyWrite, setPendingKeyWrite] = useState<{ key: string; elementId: string } | null>(null);
+  const [pendingKeyWrite, setPendingKeyWrite] = useState<{
+    key: string;
+    elementId: string;
+  } | null>(null);
   // Locale selected by the user in the i18n inspector. Resets when element/binding changes.
   const [i18nActiveLocale, setI18nActiveLocale] = useState<string | undefined>(undefined);
   // External refresh trigger (e.g. undo/redo from extension host)
@@ -228,6 +248,15 @@ export default function RightSidebar({
   // NodePod (serverless) supports brand-new key creation end-to-end; gate the create affordance +
   // the createIfMissing flag in the write call on it (HYP-746 item 3).
   const nodePodCanCreate = !!engine && nodePodRuntimeMode === 'nodepod';
+
+  const isMultiSelect = selectedIds.length > 1;
+  // UIKit-derived project default for the surfaceless Auto floor (D2 §4.3). Threaded to the batch
+  // RPC so a surfaceless element floors to the project system, never a silent inline fallback.
+  const projectDefaultCssSystem = useMemo(() => {
+    if (inspectorUIKit === 'tailwind') return 'tailwind-v4';
+    if (inspectorUIKit === 'tamagui') return 'tamagui';
+    return undefined;
+  }, [inspectorUIKit]);
   const sourceTabs = useMemo(
     () =>
       resolveInspectorStyleSourceTabs({
@@ -238,30 +267,72 @@ export default function RightSidebar({
       }),
     [inspectorUIKit, componentPath, canInspectStyles, styleReadResult],
   );
+
+  // Multi-select source-tab row (D2 §3): an Auto intent chip, plus a concrete override ONLY when
+  // every selected element provably shares exactly one concrete system.
+  //
+  // HONESTY GATE (codex finding): the SaaS browser read does NOT yet expose each element's actual
+  // concrete system per element (surfaceDecision/source-owner facts are host-side only — the
+  // cross-realm gap tracked in HYP-664). Fabricating a per-element tab set from the project-level
+  // UIKit would make EVERY selection look homogeneous and could offer an override that mis-routes
+  // for a genuinely heterogeneous selection — the exact "never silently wrong" footgun the design
+  // refuses. Until per-element reads land, the multi-select row is Auto-only (D2 §2's explicit
+  // fallback). Auto routes per-element edit-in-place and is correct regardless; only the override
+  // affordance is withheld. mergeForMultiSelect still gates the override structurally, so when
+  // per-element tabs become available this collapses back to the full [Auto, <System>] row.
+  const multiSelectSourceTabs = useMemo(() => {
+    if (!isMultiSelect) return [] as StyleSourceTab[];
+    // No reliable per-element concrete systems in the browser path → feed empty sets → Auto only.
+    const perElementTabs = selectedIds.map(() => [] as StyleSourceTab[]);
+    return mergeForMultiSelect(perElementTabs);
+  }, [isMultiSelect, selectedIds]);
+
   // Only show the tab row when there's more than one real CSS approach to choose from.
+  // Under multi-select the merged row already encodes the hide rule (Auto-only collapses to no row).
   const visibleSourceTabs = useMemo(() => {
+    if (isMultiSelect) {
+      const hasOverride = multiSelectSourceTabs.some((tab) => tab.id !== AUTO_SOURCE_TAB_ID);
+      return hasOverride ? multiSelectSourceTabs : [];
+    }
     const nonComputed = sourceTabs.filter((tab) => tab.confidence !== 'computed-only');
     return nonComputed.length <= 1 ? [] : sourceTabs;
-  }, [sourceTabs]);
+  }, [isMultiSelect, multiSelectSourceTabs, sourceTabs]);
   const explicitSourceTabId = useMemo(() => {
+    // Under multi-select, the routing target comes from the merged Auto row. Auto carries no
+    // explicit target (per-element edit-in-place); a concrete override carries its system-level id.
+    if (isMultiSelect) {
+      if (selectedSourceTabId === AUTO_SOURCE_TAB_ID) return undefined;
+      return multiSelectSourceTabs.some((tab) => tab.id === selectedSourceTabId) ? selectedSourceTabId : undefined;
+    }
     if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
       return undefined;
     }
     return getExplicitStyleSourceTabId(selectedSourceTabId);
-  }, [sourceTabs, selectedSourceTabId]);
+  }, [isMultiSelect, multiSelectSourceTabs, sourceTabs, selectedSourceTabId]);
 
+  // Multi-select: default the routing target to the Auto intent chip (D2 §3). Reset to Auto when a
+  // stale concrete id from a previous selection no longer exists in the merged row.
   useEffect(() => {
+    if (!isMultiSelect) return;
+    if (!multiSelectSourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
+      setSelectedSourceTabId(AUTO_SOURCE_TAB_ID);
+    }
+  }, [isMultiSelect, multiSelectSourceTabs, selectedSourceTabId]);
+
+  // Single-select only (gated): when the project has exactly one concrete CSS approach, auto-select
+  // it so the user doesn't have to switch away from "Computed". MUST NOT fire under multi-select —
+  // that path owns its own 'auto' default above (D2 §3).
+  useEffect(() => {
+    if (isMultiSelect) return;
     if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
       setSelectedSourceTabId('computed');
       return;
     }
-    // When the project has exactly one concrete CSS approach, auto-select it so the user
-    // doesn't have to manually switch away from "Computed" every time.
     const nonComputedTabs = sourceTabs.filter((tab) => tab.confidence !== 'computed-only');
     if (nonComputedTabs.length === 1 && selectedSourceTabId === 'computed') {
       setSelectedSourceTabId(nonComputedTabs[0].id);
     }
-  }, [sourceTabs, selectedSourceTabId]);
+  }, [isMultiSelect, sourceTabs, selectedSourceTabId]);
 
   // Reset i18n locale selection and last-written key when the selected element changes.
   // This prevents a stale locale or stale previousKey from carrying over to a different element.
@@ -285,9 +356,93 @@ export default function RightSidebar({
     return (parsedStyles[stateKey] as Partial<ParsedStyles>) || {};
   }, [parsedStyles, currentState]);
 
+  // Multi-select: read each selected element's styles and merge, marking divergent values MIXED.
+  // Browser/SaaS only — VS Code multi-select inspector is not wired (no synchronous engine read).
+  // styleVersion/styleRefreshKey are intentional re-read triggers: a batch write bumps them so the
+  // merged snapshot refreshes from the post-write DOM/AST (mirrors the single-select read path).
+  const multiSelectReadTrigger = styleRefreshKey + styleVersion;
+  const multiSelectData = useMemo(() => {
+    // multiSelectReadTrigger participates only as a re-read signal — voided so it stays in deps.
+    void multiSelectReadTrigger;
+    if (selectedIds.length <= 1 || !engine || !styleAdapter) return null;
+
+    const allStyles: Partial<ParsedStyles>[] = [];
+    const allTexts: string[] = [];
+    for (const id of selectedIds) {
+      const data = readBrowserElementStyle(id, engine, styleAdapter);
+      if (!data?.parsedStyles) continue;
+      allTexts.push(data.textContent);
+
+      // Filter by current state variant (same as effectiveParsed for single select)
+      if (currentState) {
+        const stateKey = currentState.replace(/-([a-z])/g, (_, letter: string) =>
+          letter.toUpperCase(),
+        ) as keyof ParsedStyles;
+        allStyles.push((data.parsedStyles[stateKey] as Partial<ParsedStyles>) || {});
+      } else {
+        allStyles.push(data.parsedStyles);
+      }
+    }
+
+    if (allStyles.length === 0) return null;
+
+    const mergedText = allTexts.every((tx) => tx === allTexts[0]) ? allTexts[0] : MIXED;
+    return { styles: mergeStyleData(allStyles), mergedText };
+  }, [selectedIds, engine, styleAdapter, currentState, multiSelectReadTrigger]);
+
+  const multiSelectMerged = multiSelectData?.styles ?? null;
+
+  // D3 §5 honest skip-banner: authoritative per-element results from the last batch write. Held by
+  // element id so the banner names the excluded elements and shows the machine reason.
+  const [batchSkips, setBatchSkips] = useState<Array<{ nodeRef: string; reason?: string }>>([]);
+  // D2 cascade transparency (CTO 2026-06-11): properties that landed on a lower-priority system than
+  // the element's primary one (e.g. an inexpressible prop fell to inline). Drives the "where it
+  // landed" badge — these elements were APPLIED, not skipped. The hazard was SILENT inline over a
+  // class (two sources of truth), so we surface it. Deduped across elements by property+system+reason.
+  const [batchLanded, setBatchLanded] = useState<Array<{ property: string; system: string; reason: string }>>([]);
+  const handleBatchResults = useCallback(
+    (
+      results: Array<{
+        nodeRef: string;
+        success: boolean;
+        status?: string;
+        reason?: string;
+        landedOn?: Array<{ property: string; system: string; reason: string }>;
+      }>,
+    ) => {
+      // Post-authoritative (D3 §5.1): render the host's returned status, never infer from HTTP 200.
+      setBatchSkips(
+        results
+          .filter((r) => r.status === 'skipped' || r.status === 'failed')
+          .map((r) => ({ nodeRef: r.nodeRef, reason: r.reason })),
+      );
+      const landed = new Map<string, { property: string; system: string; reason: string }>();
+      for (const r of results) {
+        for (const l of r.landedOn ?? []) {
+          landed.set(`${l.property}\0${l.system}\0${l.reason}`, l);
+        }
+      }
+      setBatchLanded([...landed.values()]);
+    },
+    [],
+  );
+  // Invalidation (D3 §5.4): a selection change drops a stale banner — its remediation no longer
+  // applies to the new selection. Keyed on the selection identity, not length.
+  const selectionKey = selectedIds.join('\0');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: invalidate strictly on selection change
+  useEffect(() => {
+    setBatchSkips([]);
+    setBatchLanded([]);
+  }, [selectionKey]);
+
   // AI error fallback: when style sync fails, open AI chat with error context
   const handleSyncError = useCallback(
     (styles: Record<string, string>, error: string) => {
+      // HYP-301: a failed (transport-error) write leaves the inputs showing values that were
+      // never written. Re-read from the source of truth so both populate effects (single-select
+      // useElementStyleData and the multi-select merge) revert inputs to the actual baseline —
+      // same "always re-read to sync inspector with file state" idiom as the i18n error path.
+      setStyleRefreshKey((k) => k + 1);
       const styleDesc = Object.entries(styles)
         .map(([k, v]) => `${k}: ${v}`)
         .join(', ');
@@ -363,6 +518,8 @@ export default function RightSidebar({
     // the selected item, not the first rendered one (HYP-651).
     itemIndex: selectedItemIndex,
     selectedSourceTabId: explicitSourceTabId,
+    projectDefaultCssSystem,
+    onBatchResults: handleBatchResults,
     onSyncError: handleSyncError,
     onSyncStart: handleSyncStart,
     onSyncEnd: handleSyncEnd,
@@ -438,7 +595,10 @@ export default function RightSidebar({
   // Stores the last selectedId + componentPath when i18nText was valid. Used as fallback in
   // handleI18nKeyChange: HMR transiently clears selectedIds, but we still need to send the
   // second write to the correct element if the inspector panel is still showing (via ?? prev.i18nText).
-  const lastI18nElementRef = useRef<{ elementId: string; path: string | null } | null>(null);
+  const lastI18nElementRef = useRef<{
+    elementId: string;
+    path: string | null;
+  } | null>(null);
   // Tracks the last successfully written i18n key. Prevents stale previousKey when a second
   // key change arrives before the useElementStyleData re-fetch returns the new i18nText.
   const lastWrittenI18nKeyRef = useRef<string | null>(null);
@@ -491,8 +651,10 @@ export default function RightSidebar({
       if (selectedIds.length === 0 || !selectedIds[0]) {
         return;
       }
-
-      const selectedElementId = selectedIds[0];
+      // 'mixed' is a multi-select display marker only — never write it as a real layout.
+      if (layoutType === 'mixed') {
+        return;
+      }
 
       if (!componentPath) {
         console.error('[RightSidebar] No file path found');
@@ -501,7 +663,12 @@ export default function RightSidebar({
 
       try {
         setSelectedLayout(layoutType);
-        await styleAdapter.changeLayout(selectedElementId, componentPath, layoutType);
+        // Layout uses the adapter's dedicated changeLayout path (display + flex-direction
+        // together), not the style-key batch endpoint. Apply to every selected element so
+        // multi-select isn't silently partial — same file, written sequentially.
+        for (const id of selectedIds) {
+          await styleAdapter.changeLayout(id, componentPath, layoutType);
+        }
         setStyleRefreshKey((k) => k + 1);
       } catch (error) {
         console.error('[RightSidebar] Failed to change layout:', error);
@@ -612,7 +779,10 @@ export default function RightSidebar({
       if (!effectiveSelectedId) return;
       // Set before the async IIFE so debounced text writes use the new key
       // during the RPC round-trip window (i18nText.key still stale until re-read).
-      pendingTextKeyRef.current = { key: newKey, elementId: effectiveSelectedId };
+      pendingTextKeyRef.current = {
+        key: newKey,
+        elementId: effectiveSelectedId,
+      };
       // Also set React state so keyBusy stays true until i18nText.key confirms the write.
       // pendingTextKeyRef alone doesn't trigger re-renders — this state does.
       setPendingKeyWrite({ key: newKey, elementId: effectiveSelectedId });
@@ -679,7 +849,10 @@ export default function RightSidebar({
           // Without this, optimisticKey stays on the new (failed) key permanently because
           // realKey doesn't change (file unchanged), so the safety-net useEffect never fires.
           const bindingId = `${i18nText.library}|${i18nText.key}`;
-          setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
+          setI18nRollbackSignal((prev) => ({
+            bindingId,
+            counter: (prev?.counter ?? 0) + 1,
+          }));
         } finally {
           // Always release the freeze, even on throw.
           canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'done' });
@@ -769,7 +942,10 @@ export default function RightSidebar({
             }
             // write failed — rollback scoped to this binding so other visible bindings are not affected
             const bindingId = `${i18nText.library}|${i18nText.key}`;
-            setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
+            setI18nRollbackSignal((prev) => ({
+              bindingId,
+              counter: (prev?.counter ?? 0) + 1,
+            }));
           } finally {
             // always re-read to sync inspector with file state
             setStyleRefreshKey((k) => k + 1);
@@ -831,6 +1007,185 @@ export default function RightSidebar({
     setIsTextFromProps,
     isEditingTextRef,
   });
+
+  // Populate UI state from multi-select merged styles (browser mode). Separate from the
+  // single-select effect above (which early-returns when selectedId is null) so the
+  // single-select path stays untouched. MIXED values resolve to empty inputs / 'mixed' markers.
+  useEffect(() => {
+    if (!multiSelectMerged) return;
+
+    /** Resolve MIXED to empty string for display */
+    const v = (val: string | undefined | typeof MIXED): string => {
+      if (val === MIXED || val === undefined) return '';
+      return val;
+    };
+
+    setSelectedPosition(
+      multiSelectMerged.position === MIXED ? 'mixed' : cssToPosition(v(multiSelectMerged.position) || 'static'),
+    );
+    setPosTop(v(multiSelectMerged.top));
+    setPosRight(v(multiSelectMerged.right));
+    setPosBottom(v(multiSelectMerged.bottom));
+    setPosLeft(v(multiSelectMerged.left));
+    setWidth(v(multiSelectMerged.width));
+    setHeight(v(multiSelectMerged.height));
+    setMarginTop(v(multiSelectMerged.marginTop));
+    setMarginRight(v(multiSelectMerged.marginRight));
+    setMarginBottom(v(multiSelectMerged.marginBottom));
+    setMarginLeft(v(multiSelectMerged.marginLeft));
+    setPaddingTop(v(multiSelectMerged.paddingTop));
+    setPaddingRight(v(multiSelectMerged.paddingRight));
+    setPaddingBottom(v(multiSelectMerged.paddingBottom));
+    setPaddingLeft(v(multiSelectMerged.paddingLeft));
+    setGap(v(multiSelectMerged.gap));
+    setJustifyContent(v(multiSelectMerged.justifyContent));
+    setAlignItems(v(multiSelectMerged.alignItems));
+    setColumnGap(v(multiSelectMerged.columnGap));
+    setRowGap(v(multiSelectMerged.rowGap));
+    setGridJustifyItems(v(multiSelectMerged.justifyItems));
+    setGridAlignItems(v(multiSelectMerged.alignItems));
+    setGridCols(v(multiSelectMerged.gridTemplateColumns));
+    setGridRows(v(multiSelectMerged.gridTemplateRows));
+    setOpacity(v(multiSelectMerged.opacity));
+    setBorderRadius(v(multiSelectMerged.borderRadius));
+    setSelectedLayout(multiSelectMerged.layoutType === MIXED ? 'mixed' : multiSelectMerged.layoutType || 'layout');
+
+    const bgColor = multiSelectMerged.backgroundColor;
+    if (bgColor && bgColor !== MIXED) {
+      const { color, opacity: parsedFillOpacity } = parseHexWithAlpha(bgColor);
+      setBackgroundColor(color);
+      setFillOpacity(parsedFillOpacity ?? '100');
+    } else {
+      setBackgroundColor('');
+      setFillOpacity('');
+    }
+
+    const txtColor = multiSelectMerged.color;
+    if (txtColor && txtColor !== MIXED) {
+      const { color } = parseHexWithAlpha(txtColor);
+      setTextColor(color);
+    } else {
+      setTextColor('');
+    }
+
+    setBackgroundImage(
+      multiSelectMerged.backgroundImage && multiSelectMerged.backgroundImage !== MIXED
+        ? multiSelectMerged.backgroundImage
+        : null,
+    );
+    // clipContent is a boolean control — mixed overflow shows as unclipped (false).
+    setClipContent(
+      multiSelectMerged.overflow !== MIXED &&
+        (multiSelectMerged.overflow === 'hidden' ||
+          multiSelectMerged.overflow === 'scroll' ||
+          multiSelectMerged.overflow === 'auto'),
+    );
+
+    // Update strokes from merged styles — MIXED means "border exists but differs"
+    const rawBw = multiSelectMerged.borderWidth;
+    const rawBtw = multiSelectMerged.borderTopWidth;
+    const rawBrw = multiSelectMerged.borderRightWidth;
+    const rawBbw = multiSelectMerged.borderBottomWidth;
+    const rawBlw = multiSelectMerged.borderLeftWidth;
+
+    const hasBorder = (val: string | undefined | typeof MIXED) =>
+      val === MIXED || (val !== undefined && val !== '0' && val !== '0px' && val !== '');
+
+    const hasAnyBorder =
+      hasBorder(rawBw) || hasBorder(rawBtw) || hasBorder(rawBrw) || hasBorder(rawBbw) || hasBorder(rawBlw);
+
+    if (hasAnyBorder) {
+      const bw = v(rawBw);
+      const btw = v(rawBtw);
+      const brw = v(rawBrw);
+      const bbw = v(rawBbw);
+      const blw = v(rawBlw);
+      const borderWidth = bw || btw || brw || bbw || blw || '1px';
+      setStrokes([
+        {
+          id: '1',
+          visible: true,
+          color: v(multiSelectMerged.borderColor) || '#000000',
+          opacity: '100',
+          width: borderWidth.replace('px', ''),
+          style: (v(multiSelectMerged.borderStyle) as StrokeItem['style']) || 'solid',
+          sides: {
+            top: !!rawBw || !!rawBtw,
+            right: !!rawBw || !!rawBrw,
+            bottom: !!rawBw || !!rawBbw,
+            left: !!rawBw || !!rawBlw,
+          },
+        },
+      ]);
+    } else {
+      setStrokes([]);
+    }
+
+    // Update effects from merged styles
+    const mergedEffects: EffectItem[] = [];
+    const shadowVal = v(multiSelectMerged.shadow);
+    if (shadowVal && shadowVal !== 'none') {
+      const hasArbitraryValues =
+        multiSelectMerged.shadowX ||
+        multiSelectMerged.shadowY ||
+        multiSelectMerged.shadowBlur ||
+        multiSelectMerged.shadowSpread;
+      const isPreset = !hasArbitraryValues && ['sm', 'default', 'md', 'lg', 'xl', '2xl', 'inner'].includes(shadowVal);
+
+      const values = hasArbitraryValues
+        ? {
+            x: v(multiSelectMerged.shadowX),
+            y: v(multiSelectMerged.shadowY),
+            blur: v(multiSelectMerged.shadowBlur),
+            spread: v(multiSelectMerged.shadowSpread),
+          }
+        : mapShadowSizeToValues(
+            shadowVal === 'inner' ? 'default' : shadowVal,
+            shadowVal === 'inner' ? 'inner-shadow' : 'drop-shadow',
+          );
+
+      let shadowColor = '#000000';
+      let shadowOpacity = '100';
+      const sc = v(multiSelectMerged.shadowColor);
+      if (sc?.match(/^#[0-9a-fA-F]{8}$/)) {
+        shadowColor = sc.slice(0, 7);
+        const alpha = Number.parseInt(sc.slice(7, 9), 16);
+        shadowOpacity = Math.round((alpha / 255) * 100).toString();
+      } else if (sc) {
+        shadowColor = sc;
+        shadowOpacity = v(multiSelectMerged.shadowOpacity) || '100';
+      }
+
+      mergedEffects.push({
+        id: '1',
+        visible: true,
+        type: shadowVal === 'inner' ? 'inner-shadow' : 'drop-shadow',
+        x: values.x,
+        y: values.y,
+        blur: values.blur,
+        spread: values.spread,
+        color: shadowColor,
+        opacity: shadowOpacity,
+        preset: isPreset ? shadowVal : undefined,
+      });
+    }
+    const blurVal = v(multiSelectMerged.blur);
+    if (blurVal && blurVal !== 'none') {
+      mergedEffects.push({
+        id: '2',
+        visible: true,
+        type: 'blur',
+        value: blurVal,
+        color: '#000000',
+        opacity: '100',
+      });
+    }
+    setEffects(mergedEffects);
+
+    const mergedText = multiSelectData?.mergedText;
+    setTextContent(mergedText === MIXED ? '' : mergedText || '');
+    setIsTextFromProps(false);
+  }, [multiSelectMerged, multiSelectData]);
 
   // Auto-reset unsupported values when UI kit is Tamagui
   useEffect(() => {
@@ -1021,10 +1376,11 @@ export default function RightSidebar({
           />
         )}
 
-      {selectedIds.length > 1 && (
+      {/* Multi-select with no readable styles (e.g. VS Code mode, or nothing resolved) */}
+      {selectedIds.length > 1 && !multiSelectMerged && (
         <div className="px-4 py-8 text-center">
-          <p className="text-sm text-muted-foreground mb-2">Multiple elements selected</p>
-          <p className="text-xs text-muted-foreground">Select a single element to edit its properties</p>
+          <p className="text-sm text-muted-foreground mb-2">{selectedIds.length} elements selected</p>
+          <p className="text-xs text-muted-foreground">Multi-select editing is unavailable for this selection</p>
         </div>
       )}
 
@@ -1035,7 +1391,8 @@ export default function RightSidebar({
         </div>
       )}
 
-      {selectedIds.length === 1 && parsedStyles && (canvasMode !== 'multi' || activeInstanceId) && (
+      {((selectedIds.length === 1 && parsedStyles && (canvasMode !== 'multi' || activeInstanceId)) ||
+        (selectedIds.length > 1 && multiSelectMerged)) && (
         <>
           {/* Frame type + "Go to main component" (HYP-563, Figma-style affordance) */}
           <div className="w-full px-4 py-3 border-b border-border overflow-hidden flex items-center gap-2">
@@ -1043,7 +1400,7 @@ export default function RightSidebar({
               data-testid={TID.inspector.componentName}
               className="text-sm font-semibold text-foreground truncate flex-1 min-w-0"
             >
-              {getFrameType()}
+              {selectedIds.length > 1 ? `${selectedIds.length} elements selected` : getFrameType()}
             </span>
             {isMasterComponentNavigable && (
               <button
@@ -1076,7 +1433,7 @@ export default function RightSidebar({
                     type="text"
                     value={textContent}
                     onChange={handleTextContentChange}
-                    disabled={isReadonly}
+                    disabled={isReadonly || selectedIds.length > 1}
                     className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1 font-mono"
                     placeholder={
                       childrenType === 'expression' || childrenType === 'expression-complex'
@@ -1147,6 +1504,44 @@ export default function RightSidebar({
                 />
               );
             })()}
+          {/* D3 §5 honest skip-banner: muted, persistent, names the excluded elements + reason.
+              Post-authoritative — driven by the host's per-element batch results, not a client guess. */}
+          {isMultiSelect && batchSkips.length > 0 && (
+            <div
+              data-testid="inspector-multiselect-skip-banner"
+              className="w-full px-4 py-2 border-b border-border bg-muted/50 text-[11px] text-muted-foreground"
+              role="status"
+            >
+              <span className="font-medium text-foreground">
+                {batchSkips.length} of {selectedIds.length} selected {selectedIds.length === 1 ? 'element' : 'elements'}{' '}
+                couldn't be styled here
+              </span>
+              {' — '}
+              {[
+                ...new Set(
+                  batchSkips.map((s) => describeSkipReason((s.reason as SkipReasonCode) ?? 'NO_WRITABLE_TARGET')),
+                ),
+              ].join('; ')}
+              {'.'}
+            </div>
+          )}
+
+          {/* D2 cascade "where it landed" badge (CTO 2026-06-11): the write SUCCEEDED, but one or more
+              properties landed on a lower-priority system than the element's primary one — surfaced so
+              an inline-over-a-class never lands silently (two sources of truth). Transparency, not a skip. */}
+          {batchLanded.length > 0 && (
+            <div
+              data-testid="inspector-style-landed-badge"
+              className="w-full px-4 py-2 border-b border-border bg-muted/30 text-[11px] text-muted-foreground"
+              role="status"
+            >
+              {batchLanded
+                .map((l) => `${l.property} → ${describeLandedSystem(l.system)}${describeLandedReason(l.reason)}`)
+                .join('; ')}
+              {'.'}
+            </div>
+          )}
+
           {/* Style Source Tabs */}
           {canInspectStyles && (
             <StyleSourceTabsSection

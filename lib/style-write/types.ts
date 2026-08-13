@@ -231,11 +231,39 @@ export interface StyleWriteContext {
 
 // --- Write Result ---
 
+/**
+ * Why a property landed on a lower-priority system than the element's primary one (D2 cascade,
+ * CTO 2026-06-11). Drives the "where it landed" transparency badge in the inspector.
+ *   'inexpressible' — the property has no representation in the element's system (e.g. a CSS
+ *     property with no Tailwind utility, even as an arbitrary value) → fell to inline, per-property.
+ *   'project-default' / 'project-system' — a surfaceless element floored to the project system.
+ */
+type StyleLandedReason = 'inexpressible' | 'project-default' | 'project-system';
+
+export interface StyleLandedFallback {
+  /** kebab-case CSS property that landed on a fallback system. */
+  property: string;
+  /** The system it actually landed on. */
+  system: CssSystemId;
+  reason: StyleLandedReason;
+}
+
 export type StyleWriteResult =
   | {
       success: true;
-      plan: StyleWritePlan;
+      /**
+       * The executed plan. Absent only for an inline-only cascade fallback write (D2, CTO 2026-06-11)
+       * where every requested property was inexpressible in the resolved system and landed inline —
+       * that write has no system plan. All normal writes set it.
+       */
+      plan?: StyleWritePlan;
       mutatedFiles: string[];
+      /**
+       * Per-property cascade fallbacks (D2, CTO 2026-06-11). Present and non-empty ONLY when one or
+       * more properties landed on a lower-priority system than the element's primary one. The write
+       * still succeeded everywhere — this is transparency, not failure. Empty/absent = clean write.
+       */
+      landedOn?: StyleLandedFallback[];
     }
   | {
       success: false;

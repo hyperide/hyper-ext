@@ -1298,3 +1298,210 @@ export function App(props) {
     });
   });
 });
+
+describe('executeStyleWriteRequest — D2 priority cascade, per-property inexpressible fallback (CTO 2026-06-11)', () => {
+  it('an inexpressible property falls to inline with a landedOn badge, while expressible props stay in Tailwind', async () => {
+    // mixBlendMode has no Tailwind utility (the generator returns no class for it); color does
+    // (text-[#f00]). The write must NOT silently drop mixBlendMode and must NOT skip the element —
+    // it lands mixBlendMode inline (as an isolated per-property last resort) and keeps color in TW.
+    const appPath = '/project/src/App.tsx';
+    const fileIO = new InMemoryFileIO({
+      [appPath]: `export function App() {
+  return (
+    <div className="pl-2">Hi</div>
+  );
+}
+`,
+    });
+    const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+    const result = await executeStyleWriteRequest({
+      ast,
+      sourceFilePath: appPath,
+      element,
+      styles: { color: '#ff0000', mixBlendMode: 'multiply' },
+      selectedSourceTabId: 'auto',
+      runtimeThemeContext: {
+        ideThemePreference: 'system',
+        resolvedColorScheme: 'light',
+        source: 'test-fixture',
+      },
+      fileIO,
+      projectRoot: '/project',
+    });
+
+    expect(result.success).toBe(true);
+    const written = fileIO.content(appPath);
+    // color stayed in Tailwind (arbitrary value), mixBlendMode landed inline.
+    expect(written).toMatch(/text-\[#ff0000\]|text-red-500/);
+    expect(written).toContain("mixBlendMode: 'multiply'");
+    // The "where it landed" transparency signal names the inline-redirected property.
+    expect(result.success === true && result.landedOn).toEqual([
+      expect.objectContaining({ property: 'mix-blend-mode', system: 'inline-style', reason: 'inexpressible' }),
+    ]);
+  });
+
+  it('a fully-expressible Tailwind write reports no landedOn fallback', async () => {
+    const appPath = '/project/src/App.tsx';
+    const fileIO = new InMemoryFileIO({
+      [appPath]: `export function App() {
+  return (
+    <div className="pl-2">Hi</div>
+  );
+}
+`,
+    });
+    const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+    const result = await executeStyleWriteRequest({
+      ast,
+      sourceFilePath: appPath,
+      element,
+      styles: { color: '#ff0000' },
+      selectedSourceTabId: 'auto',
+      runtimeThemeContext: {
+        ideThemePreference: 'system',
+        resolvedColorScheme: 'light',
+        source: 'test-fixture',
+      },
+      fileIO,
+      projectRoot: '/project',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success === true && (result.landedOn ?? [])).toEqual([]);
+  });
+
+  it('an explicit pinned unsupported tab still errors — the cascade is for Auto/computed only', async () => {
+    // A user who explicitly pins an unsupported target gets an honest error, not a silent inline
+    // cascade. The always-writes cascade only governs Auto resolution.
+    const appPath = '/project/src/App.tsx';
+    const original = `export function App() {
+  return (
+    <div className="pl-2">Hi</div>
+  );
+}
+`;
+    const fileIO = new InMemoryFileIO({ [appPath]: original });
+    const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+    const result = await executeStyleWriteRequest({
+      ast,
+      sourceFilePath: appPath,
+      element,
+      styles: { color: '#ff0000', mixBlendMode: 'multiply' },
+      selectedSourceTabId: 'tamagui:props',
+      runtimeThemeContext: {
+        ideThemePreference: 'system',
+        resolvedColorScheme: 'light',
+        source: 'test-fixture',
+      },
+      fileIO,
+      projectRoot: '/project',
+    });
+
+    expect(result.success).toBe(false);
+    expect(fileIO.content(appPath)).toBe(original);
+  });
+
+  it('clearing a Tailwind style (empty value) is a removal, NOT an inexpressible inline fallback (codex P1)', async () => {
+    // Empty value = clear. It must stay on the Tailwind write so the old utility is stripped, never
+    // dropped as an inline no-op (which would leave the class in place and falsely report success).
+    const appPath = '/project/src/App.tsx';
+    const fileIO = new InMemoryFileIO({
+      [appPath]: `export function App() {
+  return (
+    <div className="text-red-500 pl-2">Hi</div>
+  );
+}
+`,
+    });
+    const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+    const result = await executeStyleWriteRequest({
+      ast,
+      sourceFilePath: appPath,
+      element,
+      styles: { color: '' },
+      selectedSourceTabId: 'auto',
+      runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'test-fixture' },
+      fileIO,
+      projectRoot: '/project',
+    });
+
+    expect(result.success).toBe(true);
+    const written = fileIO.content(appPath);
+    expect(written).not.toContain('text-red-500');
+    // Not coerced into a bogus inline color.
+    expect(written).not.toContain('color:');
+    expect(result.success === true && (result.landedOn ?? [])).toEqual([]);
+  });
+
+  it('does NOT fall to inline under a pseudo-state — inline cannot represent hover (codex P2)', async () => {
+    // mixBlendMode is inexpressible in TW, but under state=hover an inline fallback would become an
+    // always-on base style. The split is gated to base state, so under hover the property stays in the
+    // system write (no inline style attribute appears).
+    const appPath = '/project/src/App.tsx';
+    const fileIO = new InMemoryFileIO({
+      [appPath]: `export function App() {
+  return (
+    <div className="pl-2">Hi</div>
+  );
+}
+`,
+    });
+    const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+    const result = await executeStyleWriteRequest({
+      ast,
+      sourceFilePath: appPath,
+      element,
+      styles: { color: '#ff0000', mixBlendMode: 'multiply' },
+      selectedSourceTabId: 'auto',
+      state: 'hover',
+      runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'test-fixture' },
+      fileIO,
+      projectRoot: '/project',
+    });
+
+    expect(result.success).toBe(true);
+    const written = fileIO.content(appPath);
+    // No inline pseudo-state coercion — mixBlendMode did not land as a base inline style.
+    expect(written).not.toContain('mixBlendMode');
+    expect(result.success === true && (result.landedOn ?? [])).toEqual([]);
+  });
+
+  it('defers to the planner when the element has a CSS Modules owner — no inline shadowing (codex P2)', async () => {
+    // cn(styles.root, 'p-2'): elementCssSystems[0] is Tailwind, but the planner may own a property via
+    // the .module.css. The cascade split must NOT steal it to inline; with a css-modules owner present
+    // the split is skipped entirely so the planner routes per-property.
+    const appPath = '/project/src/App.tsx';
+    const cssPath = '/project/src/App.module.css';
+    const fileIO = new InMemoryFileIO({
+      [appPath]: `import styles from './App.module.css';
+export function App() {
+  return (
+    <div className={cn(styles.root, 'p-2')}>Hi</div>
+  );
+}
+`,
+      [cssPath]: `.root {\n  color: red;\n}\n`,
+    });
+    const { ast, element } = await parseElement(fileIO, appPath, 4, 4);
+
+    const result = await executeStyleWriteRequest({
+      ast,
+      sourceFilePath: appPath,
+      element,
+      styles: { mixBlendMode: 'multiply' },
+      selectedSourceTabId: 'auto',
+      runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'test-fixture' },
+      fileIO,
+      projectRoot: '/project',
+    });
+
+    // The write resolved through the normal planner (css-modules owner present), not the inline split.
+    // No cascade inline-fallback landedOn was emitted for it.
+    expect(result.success === true && (result.landedOn ?? [])).toEqual([]);
+  });
+});

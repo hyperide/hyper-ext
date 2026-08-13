@@ -30,6 +30,26 @@ interface UseStyleSyncOptions {
   itemIndex?: number | null;
   /** Selected non-computed style source tab for shared write routing */
   selectedSourceTabId?: string;
+  /**
+   * UIKit-derived project default for the surfaceless Auto floor under multi-select (D2 §4.3).
+   * Threaded only on the batch path; the surfaceless element floors to this instead of silent inline.
+   */
+  projectDefaultCssSystem?: string;
+  /**
+   * Authoritative per-element batch results from the host (D2 §6.2 / D3 §5.1). Fired after a
+   * multi-select write so the inspector can render the post-authoritative skip-banner AND the D2
+   * cascade "where it landed" badge (CTO 2026-06-11): `landedOn` lists properties that fell to a
+   * lower-priority system on an APPLIED element (e.g. an inexpressible prop that landed inline).
+   */
+  onBatchResults?: (
+    results: Array<{
+      nodeRef: string;
+      success: boolean;
+      status?: string;
+      reason?: string;
+      landedOn?: Array<{ property: string; system: string; reason: string }>;
+    }>,
+  ) => void;
   /** Called when style sync fails (e.g. to open AI chat as fallback) */
   onSyncError?: (styles: Record<string, string>, error: string) => void;
   /** Called when setIsStyleSyncing(true) */
@@ -62,6 +82,8 @@ export function useStyleSync({
   engine,
   itemIndex,
   selectedSourceTabId,
+  projectDefaultCssSystem,
+  onBatchResults,
   onSyncError,
   onSyncStart,
   onSyncEnd,
@@ -139,18 +161,70 @@ export function useStyleSync({
       return;
     }
 
-    // Tree selection stores parse UUIDs the server can never resolve (HYP-593):
-    // convert to a tracer nodeRef when possible, and carry the AST loc so the
-    // server can fall back to a node-map loc match when conversion misses.
-    const writeId = engine ? resolveUuidToNodeRef(selectedId, engine) : selectedId;
-    const elementLoc = engine ? (getElementLocByUuid(selectedId, engine) ?? undefined) : undefined;
-
     const styles = Object.fromEntries(styleQueueRef.current);
     styleQueueRef.current.clear();
 
     // Cancel any previous verification
     verificationCleanupRef.current?.();
     verificationCleanupRef.current = null;
+
+    // Multi-select batch path: one request applies the same styles to every selected element.
+    // Routed through the engine for atomic undo/redo. SaaS only — VS Code multi-select batch
+    // (astOps.updateStylesBatch RPC) is not wired yet. Resolved early, before the single-select
+    // writeId/elementLoc lookup (HYP-593) which the batch path does not need and which reads the
+    // engine root that a multi-select batch never has to touch.
+    //
+    // Props-mode adapters (Tamagui/RN) are NOT routed through the style batch here: the batch
+    // transport carries CSS through the style writer, and props-mode needs convertToProps + an
+    // updateProps channel per element (the per-rung dispatch tracked in HYP-664). Sending raw CSS
+    // to the style batch for a props-mode project would mis-route (codex finding), so we refuse the
+    // batch path for props-mode and let the inspector report multi-select editing as unavailable —
+    // never silently wrong. (className/style adapters route correctly through the style batch.)
+    if (selectedIds.length > 1 && engine && styleAdapter.writeMode === 'props') {
+      console.warn('[useStyleSync] Multi-select batch editing is not wired for props-mode adapters (HYP-664)');
+      return;
+    }
+    if (selectedIds.length > 1 && engine) {
+      console.log('[useStyleSync] Syncing style changes for', selectedIds.length, 'elements via engine:', styles);
+      setIsStyleSyncing(true);
+      onSyncStart?.();
+      // Per-element resolution for HYP-593 parity with single-select: a tree selection stores parse
+      // UUIDs the server's NodeMap can never resolve. Resolve each to a tracer nodeRef when possible
+      // and carry its AST loc so the batch route can fall back to a cross-checked loc match instead of
+      // STALE_SOURCE-skipping an element that single-select would have written. Same id-bridge calls
+      // the single-select path uses below (:200-201), one per selected element. domClasses mirrors the
+      // single-select live-DOM className (HYP-544) — the executor's authoritative replace target for
+      // expression/conditional classes; keyed on the resolved nodeRef, exactly like single-select.
+      const elementUpdates = selectedIds.map((id) => {
+        const nodeRef = resolveUuidToNodeRef(id, engine);
+        return {
+          nodeRef,
+          elementLoc: getElementLocByUuid(id, engine) ?? undefined,
+          domClasses: getDOMClassesFromIframe(nodeRef),
+        };
+      });
+      try {
+        await engine.updateASTStylesBatch?.(selectedIds, filePath, styles, {
+          state: currentState,
+          selectedSourceTabId,
+          projectDefaultCssSystem,
+          elementUpdates,
+          onResults: onBatchResults,
+        });
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error('[useStyleSync] Failed to sync batch style changes:', errorMsg);
+        onSyncError?.(styles, errorMsg);
+      }
+      finishSync();
+      return;
+    }
+
+    // Tree selection stores parse UUIDs the server can never resolve (HYP-593):
+    // convert to a tracer nodeRef when possible, and carry the AST loc so the
+    // server can fall back to a node-map loc match when conversion misses.
+    const writeId = engine ? resolveUuidToNodeRef(selectedId, engine) : selectedId;
+    const elementLoc = engine ? (getElementLocByUuid(selectedId, engine) ?? undefined) : undefined;
 
     // Prepare CSS properties for verification
     const cssProperties = getUniqueCSSProperties(Object.keys(styles));
@@ -264,6 +338,8 @@ export function useStyleSync({
     engine,
     itemIndex,
     selectedSourceTabId,
+    projectDefaultCssSystem,
+    onBatchResults,
     onSyncError,
     onSyncStart,
     onStyleNotApplied,

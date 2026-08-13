@@ -242,6 +242,111 @@ const EMPTY_DATA: ElementStyleData = {
 };
 
 // ============================================================================
+// Browser-mode synchronous reader (shared by the hook and multi-select merge)
+// ============================================================================
+
+/**
+ * Synchronously read one element's parsed styles + text in browser/SaaS mode.
+ *
+ * Walks the engine AST (sample structure preferred), falling back to source-location
+ * resolution via the active tracer when `elementId` is a nodeRef, then reads styles
+ * through the supplied adapter against the matching iframe DOM element.
+ *
+ * Returns null when no AST node and no DOM element can be found. When only a DOM element
+ * exists (NodePod mode), `parsedStyles` is null but `textContent`/`tagType` are populated.
+ *
+ * Shared so multi-select can read each element identically to the single-select hook.
+ */
+export function readBrowserElementStyle(
+  elementId: string,
+  engine: CanvasEngine,
+  styleAdapter: StyleAdapter,
+  itemIndex?: number | null,
+): {
+  parsedStyles: ParsedStyles | null;
+  childrenType: ElementStyleData['childrenType'];
+  textContent: string;
+  tagType: string;
+} | null {
+  let astNode: ReturnType<typeof findNodeById> = null;
+  const root = engine.getRoot();
+
+  // Prefer sampleStructure (what the iframe renders) over astStructure (component definition)
+  const rootAst = root.metadata?.sampleStructure ?? root.metadata?.astStructure;
+  if (Array.isArray(rootAst)) {
+    astNode = findNodeById(rootAst, elementId);
+  }
+
+  if (!astNode) {
+    for (const childId of root.children || []) {
+      const inst = engine.getInstance(childId);
+      const childAst = inst?.metadata?.sampleStructure ?? inst?.metadata?.astStructure;
+      if (Array.isArray(childAst)) {
+        astNode = findNodeById(childAst, elementId);
+        if (astNode) break;
+      }
+    }
+  }
+
+  // elementId might be a nodeRef (canvas click) — resolve via source location
+  if (!astNode) {
+    const tracer = getActiveTracer();
+    if (tracer) {
+      const source = tracer.getSourceByNodeRef(elementId);
+      if (source) {
+        if (Array.isArray(rootAst)) {
+          astNode = findAstNodeBySourceLoc(rootAst, source.line, source.column);
+        }
+        if (!astNode) {
+          for (const childId of root.children || []) {
+            const inst = engine.getInstance(childId);
+            const childAst = inst?.metadata?.sampleStructure ?? inst?.metadata?.astStructure;
+            if (Array.isArray(childAst)) {
+              astNode = findAstNodeBySourceLoc(childAst, source.line, source.column);
+              if (astNode) break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Get DOM element from iframe for computed styles (itemIndex selects specific .map() item)
+  const domElement = getElementFromIframe(elementId, itemIndex);
+
+  if (!astNode) {
+    // NodePod mode: no server-side AST, show minimal element info from DOM
+    if (domElement) {
+      return {
+        parsedStyles: null,
+        childrenType: undefined,
+        textContent: domElement.textContent?.trim() ?? '',
+        tagType: domElement.tagName.toLowerCase(),
+      };
+    }
+    return null;
+  }
+
+  const domTextContent = domElement?.textContent?.trim() || '';
+
+  // Read parsed styles via adapter (TailwindAdapter or TamaguiAdapter)
+  const parsed = styleAdapter.read(astNode, domElement || undefined);
+
+  // Determine text content
+  let textContent = '';
+  if (astNode.childrenType !== 'jsx') {
+    textContent = astNode.childrenType ? String(astNode.props?.children ?? '') : domTextContent;
+  }
+
+  return {
+    parsedStyles: parsed,
+    childrenType: astNode.childrenType,
+    textContent,
+    tagType: astNode.type || 'unknown',
+  };
+}
+
+// ============================================================================
 // Hook
 // ============================================================================
 
@@ -297,86 +402,8 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
     // Browser mode: synchronous engine + DOM
     // =================================================================
     if (engine && styleAdapter) {
-      // Find AST node by walking engine tree
-      let astNode: ReturnType<typeof findNodeById> = null;
-      const root = engine.getRoot();
-
-      // Prefer sampleStructure (what the iframe renders) over astStructure (component definition)
-      const rootAst = root.metadata?.sampleStructure ?? root.metadata?.astStructure;
-      if (Array.isArray(rootAst)) {
-        astNode = findNodeById(rootAst, elementId);
-      }
-
-      if (!astNode) {
-        for (const childId of root.children || []) {
-          const inst = engine.getInstance(childId);
-          const childAst = inst?.metadata?.sampleStructure ?? inst?.metadata?.astStructure;
-          if (Array.isArray(childAst)) {
-            astNode = findNodeById(childAst, elementId);
-            if (astNode) break;
-          }
-        }
-      }
-
-      // elementId might be a nodeRef (canvas click) — resolve via source location
-      if (!astNode) {
-        const tracer = getActiveTracer();
-        if (tracer) {
-          const source = tracer.getSourceByNodeRef(elementId);
-          if (source) {
-            if (Array.isArray(rootAst)) {
-              astNode = findAstNodeBySourceLoc(rootAst, source.line, source.column);
-            }
-            if (!astNode) {
-              for (const childId of root.children || []) {
-                const inst = engine.getInstance(childId);
-                const childAst = inst?.metadata?.sampleStructure ?? inst?.metadata?.astStructure;
-                if (Array.isArray(childAst)) {
-                  astNode = findAstNodeBySourceLoc(childAst, source.line, source.column);
-                  if (astNode) break;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Get DOM element from iframe for computed styles (itemIndex selects specific .map() item)
-      const domElement = getElementFromIframe(elementId, itemIndex);
-
-      if (!astNode) {
-        // NodePod mode: no server-side AST, show minimal element info from DOM
-        if (domElement) {
-          setData({
-            parsedStyles: null,
-            childrenType: undefined,
-            textContent: domElement.textContent?.trim() ?? '',
-            tagType: domElement.tagName.toLowerCase(),
-            loading: false,
-          });
-        } else {
-          setData(EMPTY_DATA);
-        }
-        return;
-      }
-      const domTextContent = domElement?.textContent?.trim() || '';
-
-      // Read parsed styles via adapter (TailwindAdapter or TamaguiAdapter)
-      const parsed = styleAdapter.read(astNode, domElement || undefined);
-
-      // Determine text content
-      let textContent = '';
-      if (astNode.childrenType !== 'jsx') {
-        textContent = astNode.childrenType ? String(astNode.props?.children ?? '') : domTextContent;
-      }
-
-      setData({
-        parsedStyles: parsed,
-        childrenType: astNode.childrenType,
-        textContent,
-        tagType: astNode.type || 'unknown',
-        loading: false,
-      });
+      const browserData = readBrowserElementStyle(elementId, engine, styleAdapter, itemIndex);
+      setData(browserData ? { ...browserData, loading: false } : EMPTY_DATA);
       return;
     }
 

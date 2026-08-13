@@ -15,6 +15,7 @@ import type {
   DocumentTree as IDocumentTree,
 } from '../models/types';
 import { ASTBatchDeleteOperation } from '../operations/ASTBatchDeleteOperation';
+import { ASTBatchStyleOperation } from '../operations/ASTBatchStyleOperation';
 import { ASTDeleteOperation } from '../operations/ASTDeleteOperation';
 import { ASTDuplicateOperation } from '../operations/ASTDuplicateOperation';
 import { ASTEditConditionOperation } from '../operations/ASTEditConditionOperation';
@@ -408,6 +409,64 @@ export class CanvasEngine {
       return operation._pendingPromise;
     }
     console.error('[CanvasEngine] Failed to update AST styles:', result.error);
+  }
+
+  /**
+   * Apply one set of Tailwind styles to multiple elements at once (multi-select inspector edits).
+   * Records a single ASTBatchStyleOperation in history so undo/redo is atomic across all elements.
+   * Falls back to the single-element path when only one element is selected.
+   */
+  updateASTStylesBatch(
+    elementIds: string[],
+    filePath: string,
+    styles: Record<string, string>,
+    options?: {
+      state?: string;
+      selectedSourceTabId?: string;
+      projectDefaultCssSystem?: string;
+      /** Per-element nodeRef + AST loc (HYP-593 parity). Resolved client-side; threaded to the route. */
+      elementUpdates?: ConstructorParameters<typeof ASTBatchStyleOperation>[1]['elementUpdates'];
+      onResults?: ConstructorParameters<typeof ASTBatchStyleOperation>[1]['onResults'];
+    },
+  ): Promise<void> | undefined {
+    if (elementIds.length === 0) {
+      console.warn('[CanvasEngine] No elements to style');
+      return;
+    }
+
+    if (elementIds.length === 1) {
+      // Forward the per-element resolution so the single-element fallback keeps single-select parity:
+      // domClasses is the HYP-544 residual-override replace target and elementLoc the HYP-593 loc
+      // fallback — both are dropped if only state/sourceTab are threaded.
+      const only = options?.elementUpdates?.[0];
+      return this.updateASTStyles(elementIds[0], filePath, styles, {
+        state: options?.state,
+        selectedSourceTabId: options?.selectedSourceTabId,
+        domClasses: only?.domClasses,
+        elementLoc: only?.elementLoc,
+      });
+    }
+
+    const operation = new ASTBatchStyleOperation(this.api, {
+      elementIds,
+      filePath,
+      styles,
+      state: options?.state,
+      selectedSourceTabId: options?.selectedSourceTabId,
+      projectDefaultCssSystem: options?.projectDefaultCssSystem,
+      elementUpdates: options?.elementUpdates,
+      onResults: options?.onResults,
+    });
+
+    const result = operation.execute(this.tree);
+
+    if (result.success) {
+      this.historyManager.record(operation);
+      this.emitHistoryChange();
+      this.log(`AST styles updated for ${elementIds.length} elements`);
+      return operation._pendingPromise;
+    }
+    console.error('[CanvasEngine] Failed to update AST styles (batch):', result.error);
   }
 
   /**

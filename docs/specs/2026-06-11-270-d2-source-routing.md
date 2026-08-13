@@ -23,26 +23,52 @@ carries `selectedSourceTabId = undefined` per element, each element routes again
 (existing `getElementCssSystems` / `resolveRequestCssSystem` per-element fallback — already live).
 
 The pressure-test added the load-bearing guardrails this doc treats as **hard requirements**, not
-nice-to-haves: **no silent inline fallback** (unresolvable → skip-banner, never `style={{…}}`),
-a **frozen `BatchStyleWritePlan`** applied verbatim, a **stale guard** (`STALE_PLAN`), **same-source
-dedupe**, intersection at **`cssSystem + property + condition`** (not tab-label), **partial results
-first-class** (`applied | skipped | failed` per element), and **scoped file-snapshot undo**.
+nice-to-haves: a **priority cascade that ALWAYS writes** (CTO 2026-06-11 — see §1/§2/§4.4; the cascade
+supersedes the earlier "skip unresolvable into a banner" model), a **frozen `BatchStyleWritePlan`**
+applied verbatim, a **stale guard** (`STALE_PLAN`), **same-source dedupe**, intersection at
+**`cssSystem + property + condition`** (not tab-label), **partial results first-class**
+(`applied | skipped | failed` per element), and **scoped file-snapshot undo**.
+
+> **CTO REDESIGN — cascade-with-guaranteed-write, NOT skip (2026-06-11).** The earlier D2 model
+> ("unknown / inexpressible → skip into the D3 banner, never inline") is **rejected and replaced**.
+> The correct model is a **priority cascade that always writes**; inline is a legitimate last rung,
+> not dirt. Unknown is not a skip (cascade element → project priority → prompt → inline).
+> Inexpressible is not a skip (**per-property** fallback down the priority order → ultimately inline;
+> TW v4 arbitrary values like `shadow-[…]` make even that uncommon). The only remaining skip is
+> **STALE/safety** (source changed between read and write). Transparency replaces silence: a property
+> that lands lower carries a small "where it landed" badge ("shadow → inline (outside TW scale)"). The
+> hazard was never inline — it was _silent_ inline over a class (two sources of truth that drift on
+> the next edit). §1/§2/§4.4 below are written to the cascade model; anything in older revisions that
+> says "skip" for unknown/inexpressible is stale.
 
 ---
 
 ## 1. What is v1 vs deferred (read this before estimating)
 
 **v1 (ships in #270):**
+
 - The N>1 source-tab row: Auto chip + intersection-only concrete override; heterogeneous → no row.
 - Per-element edit-in-place write routing via per-element `selectedSourceTabId = undefined` (§4).
 - The frozen `BatchStyleWritePlan` contract (§5) and its application by the host (§6).
-- No silent inline fallback — unresolvable elements skip into the D3 banner with a reason code (§4.4).
+- **Priority cascade that ALWAYS writes (CTO 2026-06-11, §4.4).** Unknown is never a skip — the write
+  cascades `element-own system → project priority system → (no project system → prompt the user) →
+inline`. Inexpressible is never an element-level skip — it falls **per-property** down the priority
+  order to inline (only that property, the rest stay in the system; prefer TW v4 arbitrary values
+  first). inline is a legitimate last rung. The cascade resolver is `resolveWriteCascade`
+  (`style-write-request-context.ts`) and the per-property inexpressible split lives in
+  `executeStyleWriteRequest` (`style-write-executor.ts`).
+- **"Where it landed" transparency badge (§4.4).** When a property lands on a lower-priority system or
+  inline, the host returns `landedOn` per applied element and the inspector renders a small badge
+  ("shadow → inline (outside the system's scale)"). Visibility, not prohibition — the silent-inline
+  hazard is removed without forbidding inline.
 - Stale guard (`STALE_PLAN`), same-source dedupe, intersection at `cssSystem+property+condition` (§5).
 - Partial results (`applied | skipped | failed` per element/property) returned authoritatively (§6.2).
 - Scoped file-snapshot undo: one undo step, one `FileEdit` per **unique mutated** file (§6.3).
-- The UIKit-derived surfaceless-floor change to `resolveRequestCssSystem` (§4.3).
+- The UIKit-derived surfaceless-floor change to `resolveRequestCssSystem` (§4.3), now the
+  `project-default` rung of the cascade.
 
 **Deferred (NOT in #270 v1 — explicit follow-up tickets):**
+
 - **Audit log** for every batch write (D2.SRE7) — who/where, request id, applied/skipped/failed counts,
   files touched, routing mode, reasons. v1 returns the per-element results to the UI; persisting an
   audit trail is its own ticket.
@@ -74,12 +100,15 @@ the tab row under all multi-select?**
   memo (§3) and **touches no write semantics**. This is the only genuine UX taste call.
 
 Everything else is decided and needs no CTO input: no coverage badges, edit-in-place via per-element
-undefined, intersection-only concrete chips, hide-row-when-Auto-only, the surfaceless UIKit floor, and
+undefined, intersection-only concrete chips, hide-row-when-Auto-only, the priority cascade (§4.4), and
 all of the §5 guardrails.
 
 > Note (not an open call, resolved): the original D2 residual "surfaceless-floor default" question is
-> answered — v1 uses the deterministic UIKit-derived default (§4.3). A richer priority-config is the
-> deferred AI/config layer above. Do not reopen it in v1.
+> answered — v1 uses the deterministic UIKit-derived default as the `project-default` rung of the
+> cascade (§4.3/§4.4). When the project has NO styling system at all (no UIKit default, no detected
+> system), the cascade resolver flags `needsProjectSystemPrompt` so the client can offer "set up
+> Tailwind?"; declined → inline. A richer AI/priority-config is the deferred layer above. Do not
+> reopen it in v1.
 
 ---
 
@@ -139,6 +168,7 @@ Per-element `filePath` is REQUIRED (D4 cross-file = v1; `useStyleSync` today sen
 one `filePath` — that plumbing is a D4 cost the batch handler needs regardless).
 
 ### 4.1 Auto selected (default / heterogeneous)
+
 Carry `selectedSourceTabId = undefined` for every element. Each element independently hits
 `resolveRequestCssSystem` (`lib/style-write/style-write-request-context.ts:108-117`). Because
 `getRequestRoutableCssSystem(undefined) → undefined`, it falls to the per-element fallback.
@@ -154,47 +184,66 @@ to `tailwind-v4` first under Auto (edit-in-place prefers the class). No override
 this under multi-select unless the WHOLE selection is homogeneous.
 
 ### 4.2 Concrete override selected (homogeneous only)
+
 Carry the shared tab id (e.g. `'tailwind-v4:elementClass'`) for ALL N. `getRequestRoutableCssSystem`
 resolves it identically per element; no throw, no no-op, because the chip was only offered under full
 intersection. For the css-modules override the file-qualified id must round-trip through
 `createCssModuleSourceOwnersFromReferences` (`request-context.ts:119-125`) — only offer this override
 when all elements reference writable css-modules (system-level intersection per §3).
 
-### 4.3 The ONE net-new server change — explicit, project-aware floor (NO silent inline)
-Today `resolveRequestCssSystem`'s floor is `elementCssSystems?.[0] ?? projectCssSystems?.[0] ??
-'inline-style'` (`request-context.ts:116`).
+### 4.3 The priority-cascade floor — `resolveWriteCascade` (CTO 2026-06-11)
 
-- **Keep edit-in-place (`elementCssSystems[0]`) as-is.** Do NOT change it.
-- **Change the surfaceless case** (`elementCssSystems` empty — today silently `'inline-style'`): thread
-  a `projectDefaultCssSystem` from the client (derived from `inspectorUIKit`, `RightSidebar.tsx:86-87`:
-  tailwind → `tailwind-v4`, tamagui → `tamagui`, else `inline-style`) into the batch RPC and use it as
-  the `projectCssSystems[0]` the executor passes. Existing-surface element → edits in place; surfaceless
-  element → project UIKit default. One plumbed field, not a config system.
+The Auto/computed write target is resolved by `resolveWriteCascade`
+(`lib/style-write/style-write-request-context.ts`), which `resolveRequestCssSystem` now delegates to.
+It ALWAYS returns a system — the cascade never refuses to write — plus the rung it landed on and an
+`isFallback` flag (drives the badge). Priority order:
 
-### 4.4 NO SILENT INLINE FALLBACK — REQUIREMENT (D2.SRE-consensus / codex #2)
-Under Auto in a batch, `'inline-style'` MUST NOT be a silent terminal fallback. An element that does
-**not** resolve to a concrete writable owner (empty capabilities from an HMR race / freshly-rewritten
-file, masked owner, expression-backed style, unsupported source) is **EXCLUDED from the write and
-reported into the D3 skip-banner** with a machine-readable reason, NOT coerced into `style={{…}}`.
-Inline silently wins the cascade forever and masks future edits through other tabs — that is the single
-most destructive flaw the pressure-test flagged, and it is structurally removed here.
+1. `element` — the element's own system (`elementCssSystems[0]`). Edit-in-place. `isFallback: false`.
+2. `project-default` — the UIKit-derived `projectDefaultCssSystem`, threaded from the client
+   (`inspectorUIKit`: tailwind → `tailwind-v4`, tamagui → `tamagui`, else undefined). The surfaceless
+   element floors here. `isFallback: true`.
+3. `project-system` — a detected (non-UIKit) project system (`projectCssSystems[0]`). `isFallback: true`.
+4. `inline` — the universal last rung. When NOTHING above applies the project genuinely has no styling
+   system: the resolver returns `inline-style` AND flags `needsProjectSystemPrompt` so the client can
+   offer "set up Tailwind?" before accepting it; declined → inline. Never a skip.
 
-Reason codes this design emits — drawn from the **single canonical `SkipReasonCode` enum defined in the
-D3 doc §5.3** (do not maintain a second enum here):
-- `STALE_SOURCE` — selection/source/snapshot changed between plan and flush. NOTE: the internal
-  plan-guard STATE in `BatchStyleWritePlan` handling is named `STALE_PLAN` (§5.3); the host-emitted /
-  banner-rendered CODE is `STALE_SOURCE`. Map `STALE_PLAN → STALE_SOURCE` at the result boundary.
-- `NO_WRITABLE_TARGET` — Auto resolved to nothing concrete and the UIKit floor does not apply (truly
-  surfaceless with no project default, or only an unsupported source).
-- `OWNER_MASKED` — the existing owner is masked by inline style / later class order / higher-specificity
-  CSS such that editing it is a visual no-op; skip rather than write an invisible change (or route to
-  the effective owner if available). Surfaced as `applied_but_ineffective` if it was applied but proven
-  ineffective (§6.2).
-- `EXPRESSION_BACKED_SOURCE` — the style comes from `clsx` / `cva` / a conditional prop / `items.map(…)`
-  / spread props — not a plain editable slot; skip (the writer has no safe transform).
+This is one resolver, not a config system. The earlier "surfaceless → silent inline" is now the
+explicit `project-default`/`inline` rungs with `isFallback`/`needsProjectSystemPrompt` surfaced.
 
-The surfaceless UIKit floor (§4.3) is the ONLY automatic fallback, and it is deterministic and visible
-in the plan; everything else skips into the banner.
+### 4.4 PRIORITY CASCADE — ALWAYS WRITE, NEVER SKIP FOR UNKNOWN/INEXPRESSIBLE (CTO 2026-06-11)
+
+**This supersedes the earlier "no silent inline fallback → skip into the banner" model.** That model
+was wrong: an empty/surfaceless element is NOT "nowhere to write" — the project has a priority styling
+system, and inline is a legitimate last rung. The cascade ALWAYS lands a value. The real hazard was
+never inline itself — it was **silent** inline over a class (two sources of truth that drift on the
+next edit). We remove the silence (a transparency badge), not the inline.
+
+- **UNKNOWN (element has no detected system) is NOT a skip.** The write cascades via §4.3:
+  `element-own → project-default → project-system → (no system at all → prompt "set up Tailwind?" →
+declined →) inline`. Guaranteed write.
+- **INEXPRESSIBLE (a property not representable in the element's system) is NOT an element-level skip.**
+  It is a **PER-PROPERTY** fallback: only the inexpressible property falls down the priority order to
+  inline; every expressible property stays in the element's system. Implemented in
+  `executeStyleWriteRequest` (`style-write-executor.ts`) via `splitInexpressibleProperties` — for
+  Tailwind, a property the generator can't emit any class for (even an arbitrary value) is split out and
+  written inline on the same element; the rest are written as classes. **TW v4 arbitrary values
+  (`shadow-[…]`, `text-[#…]`) make this rare — prefer arbitrary-value expression before falling lower.**
+- **TRANSPARENCY, not silence.** When a property lands on a lower-priority system or inline, the host
+  returns `landedOn: [{ property, system, reason }]` on the applied element (§6.2), and the inspector
+  renders a small badge ("shadow → inline (outside the system's scale)"), via `describeLandedSystem` /
+  `describeLandedReason`. The element is **applied**, not skipped.
+
+**SKIP narrows to STALE/safety ONLY.** The only remaining skip is when the source changed between the
+inspector read and the write flush so the writer can't safely target the node (a different node could be
+corrupted). That is a safety concern, not a "where to write" concern. The canonical code is
+`STALE_SOURCE` (internal plan-guard state `STALE_PLAN`, mapped at the result boundary, §5.3). The route
+emits it when a nodeRef no longer resolves (`updateComponentStylesBatch.ts`).
+
+> Retained `SkipReasonCode` values (`NO_WRITABLE_TARGET`, `OWNER_MASKED`, `EXPRESSION_BACKED_SOURCE`,
+> `DS_ADAPTER_UNMAPPED_PROPERTY`, …) stay in the canonical enum (D3 §5.3) for the D3 stylability ladder
+> and deferred follow-ups, but D2's Auto write path no longer EMITS them for unknown/inexpressible —
+> those cascade and write. `NO_WRITABLE_TARGET` is now only a genuinely-terminal structural blocker
+> (e.g. an explicit pinned tab the project can't honor), which under Auto effectively never happens.
 
 ---
 
@@ -204,6 +253,7 @@ No planless batch writes. Every batch edit gesture produces ONE frozen, inspecta
 applies **exactly** that plan and nothing else.
 
 ### 5.1 Shape (per-gesture, immutable once frozen)
+
 ```
 BatchStyleWritePlan {
   requestId: string                 // operation id, unique per gesture
@@ -237,12 +287,14 @@ BatchStyleWriteEntry {
 ```
 
 ### 5.2 Freeze per gesture (codex #3 / pragmatic R3)
+
 Slider drags and debounced inputs MUST NOT re-route between ticks. Resolve the route ONCE at the start
 of the gesture, then keep writing the SAME owner until the gesture ends or the plan goes stale. A new
 owner created by the first write of a gesture must not flip the route for subsequent ticks of the same
 gesture.
 
 ### 5.3 Stale guard → `STALE_PLAN` (D2.SRE2 / codex #3)
+
 Before flush, the host compares the plan's `selectionRevision` + `sourceSnapshot` against current state.
 If selection, source map, preview build, or a touched file's snapshot changed between inspector read and
 write flush, that entry (or the whole plan if interdependent) is **aborted with the internal guard state
@@ -252,6 +304,7 @@ host-emitted / banner-rendered reason CODE is the canonical `STALE_SOURCE` (D3 �
 `STALE_PLAN → STALE_SOURCE` at the result boundary.
 
 ### 5.4 Same-source dedupe (D2.SRE3 / codex #5) — REQUIREMENT
+
 Multiple selected RENDERED instances that resolve to the SAME JSX source node (e.g. two renders of one
 `items.map(...)` element, two instances of one component definition) MUST collapse to ONE mutation in
 the plan. Without dedupe the same class/style is double-applied (or appended twice). Dedupe key =
@@ -259,6 +312,7 @@ the plan. Without dedupe the same class/style is double-applied (or appended twi
 collapses correctly (the affected-vs-selected **UI** surfacing is the deferred blast-radius item, §1).
 
 ### 5.5 Concrete override must prove coverage (D2.SRE4 / codex #4)
+
 The intersection that gates the override chip (§3) is computed at `cssSystem + property + condition +
 writable capability`, NOT same tab-label. An override is offered only if EVERY selected element has a
 writable owner for that property in that source under the active condition. Same label is not enough.
@@ -268,6 +322,7 @@ writable owner for that property in that source under the active condition. Same
 ## 6. Host application + results + undo
 
 ### 6.1 Atomic handler
+
 New host handler `ast:updateStylesBatch` modeled on `_handleMoveElement` (`AstBridge.ts:526-584`): ONE
 `beginTracking()/try/finally endTracking()`, loop calling `astService.updateStyles(...)` DIRECTLY
 (bypassing `_withUndoTracking`), applying ONLY the frozen plan's `planned` entries. `updateStyles`
@@ -275,14 +330,21 @@ re-resolves the element and refreshes the NodeMap per mutated file on every call
 sequential looping does not corrupt later elements' offsets.
 
 ### 6.2 Partial results are first-class (D2.SRE5 / codex #6) — REQUIREMENT
+
 The host returns an AUTHORITATIVE per-element/per-property result array — `applied | skipped | failed |
 applied_but_ineffective` — with reason codes. The UI MUST NOT infer success from "request returned 200".
 `applied_but_ineffective` covers the masked-owner case where the write landed in source but is proven
 not to change the rendered value (§4.4 `OWNER_MASKED`). Skipped/failed entries carry their reason code.
+An **applied** entry additionally carries `landedOn: [{ property, system, reason }]` (CTO 2026-06-11)
+when the priority cascade put one or more properties on a lower-priority system than the element's
+primary one (§4.4) — this drives the "where it landed" badge. Under the cascade, the dominant outcome
+is `applied` (often with `landedOn`); `skipped`/`failed` narrow to STALE/safety.
 
 ### 6.3 Scoped file-snapshot undo (D2.SRE6 / codex #6) — REQUIREMENT
+
 One undo batch via the existing `recordBatchEdit` primitive (`UndoRedoService.ts:67`), with **exactly
 one `FileEdit` per UNIQUE mutated file** and snapshots only for files actually changed:
+
 - Capture `contentBefore` per unique file BEFORE its FIRST mutation.
 - Read `contentAfter` per unique file AFTER the LAST mutation.
 - Failed/skipped elements contribute no `FileEdit`.
@@ -316,9 +378,9 @@ byte-identical.
   `:86-87`) into the batch RPC.
 - `StyleSourceTabsSection.tsx`: render the `'auto'` chip label; NO badge/coverage field.
 - `lib/style-write/style-write-request-context.ts`: treat `'auto'` identically to `'computed'` in
-  `getRequestRoutableCssSystem`/`resolveRequestCssSystem`; change ONLY the surfaceless floor to honor
-  `projectCssSystems[0]` from the client (keep edit-in-place untouched); emit skip reason codes instead
-  of silent inline. Add the N=1 byte-identical regression test.
+  `getRequestRoutableCssSystem`/`resolveRequestCssSystem`; the surfaceless floor is the priority cascade
+  `resolveWriteCascade` (element → project-default → project-system → inline + `needsProjectSystemPrompt`),
+  exported for testing and badge data (CTO 2026-06-11, §4.3/§4.4). Edit-in-place untouched.
 - `lib/style-write/style-write-executor.ts`: the pre-context guard in `executeStyleWriteRequest` rejects
   any non-routable `selectedSourceTabId` EXCEPT `'computed'` BEFORE the request-context resolution runs.
   `'auto'` MUST be accepted there too (add it to the allowed-non-routable set alongside `'computed'`, OR
@@ -332,6 +394,17 @@ byte-identical.
   Without the message-union + adapter-method additions, the shared inspector can build a `BatchStyleWritePlan`
   but VS Code/Platform message routing will reject/never-dispatch the new type (the project's known
   message-union pitfall). The handler case lives in `AstBridge.handleMessage` (`:94-130`).
+- `lib/style-write/style-write-executor.ts`: the per-property inexpressible cascade —
+  `splitInexpressibleProperties` (Tailwind: a property the generator emits no class for falls out) +
+  `applyInlineFallbackWrite` (land the inexpressible props inline on the same element), returning
+  `landedOn` on the success result (CTO 2026-06-11, §4.4). Only under Auto/computed; an explicit pinned
+  unsupported tab still errors.
+- `lib/style-write/types.ts`: `StyleWriteResult` success branch carries `landedOn?: StyleLandedFallback[]`.
+- `lib/style-write/skip-reason-codes.ts`: `describeLandedSystem` / `describeLandedReason` badge labels.
+- `server/routes/updateComponentStylesBatch.ts` + `client/lib/canvas-engine/services/ASTApiService.ts`:
+  thread `landedOn` from the executor result through to the per-element batch result.
+- `useStyleSync.ts` + `RightSidebar.tsx`: `onBatchResults` carries `landedOn`; the inspector dedupes
+  and renders the "where it landed" badge (`inspector-style-landed-badge`).
 - `useStyleSync.ts` + the `ast:updateStylesBatch` handler (needed by #270 anyway): build/freeze the
   `BatchStyleWritePlan`, gesture-freeze the route, stale-guard, same-source dedupe, per-element
   `filePath` + `selectedSourceTabId` (undefined/`'auto'` for Auto), return per-element results.

@@ -66,6 +66,8 @@ export function positionToCss(pos: PositionType): string {
     abs: 'absolute',
     fixed: 'fixed',
     sticky: 'sticky',
+    // Multi-select divergence — no concrete CSS to write; treated as static.
+    mixed: 'static',
   };
   return map[pos];
 }
@@ -160,7 +162,10 @@ const NON_NEGATIVE_LENGTH_KEYS = new Set<string>([
   'outlineWidth',
 ]);
 
-function parseNumericPart(input: string | undefined): { num: number; unit: string } {
+function parseNumericPart(input: string | undefined): {
+  num: number;
+  unit: string;
+} {
   if (!input) return { num: 0, unit: '' };
   const m = input.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
   if (!m) return { num: 0, unit: '' };

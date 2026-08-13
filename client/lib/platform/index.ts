@@ -26,7 +26,7 @@
 export { createBrowserAdapters } from './BrowserAdapter';
 export type { ElementStyleData, UseElementStyleDataOptions } from './hooks/useElementStyleData';
 // Platform hooks
-export { classNameToStyles, useElementStyleData } from './hooks/useElementStyleData';
+export { classNameToStyles, readBrowserElementStyle, useElementStyleData } from './hooks/useElementStyleData';
 // Provider and hooks
 export {
   canvasRPC,

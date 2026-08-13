@@ -69,7 +69,9 @@ describe('useStyleSync', () => {
     );
 
     act(() => {
-      result.current.syncStyleChange('paddingLeft', '16px', { debounceOnly: true });
+      result.current.syncStyleChange('paddingLeft', '16px', {
+        debounceOnly: true,
+      });
     });
 
     rerender({
@@ -97,7 +99,9 @@ describe('useStyleSync', () => {
     );
 
     act(() => {
-      result.current.syncStyleChange('paddingLeft', '16px', { debounceOnly: true });
+      result.current.syncStyleChange('paddingLeft', '16px', {
+        debounceOnly: true,
+      });
     });
 
     await act(waitPastDebounce);
@@ -173,5 +177,135 @@ describe('useStyleSync', () => {
     // Without the index every .map() item shares one nodeRef and the patch
     // lands on the first rendered item, not the selected one (HYP-651).
     expect(applyPatch).toHaveBeenCalledWith('list-item', { backgroundColor: 'red' }, 2);
+  });
+
+  it('routes multi-select edits through engine.updateASTStylesBatch with all selected ids', async () => {
+    // Real engine: the batch path now resolves a per-element nodeRef + elementLoc (HYP-593 parity),
+    // which reads the engine root via the id-bridge — a bare partial mock would throw in getAstTrees.
+    const { engine } = createEngine();
+    const updateASTStylesBatch = spyOn(engine, 'updateASTStylesBatch').mockImplementation(() => Promise.resolve());
+
+    const { result } = renderHook(() =>
+      useStyleSync({
+        selectedIds: ['el-a', 'el-b', 'el-c'],
+        filePath: 'src/components/Card.tsx',
+        styleAdapter,
+        astOps: createAstOps(mock(async () => {})),
+        engine,
+      }),
+    );
+
+    act(() => {
+      result.current.syncStyleChange('backgroundColor', 'red', {
+        debounceOnly: true,
+      });
+    });
+
+    await act(waitPastDebounce);
+
+    expect(updateASTStylesBatch).toHaveBeenCalledTimes(1);
+    const [ids, file, styles, options] = updateASTStylesBatch.mock.calls[0] as [
+      string[],
+      string,
+      Record<string, string>,
+      { state?: string; selectedSourceTabId?: string; elementUpdates?: unknown },
+    ];
+    expect(ids).toEqual(['el-a', 'el-b', 'el-c']);
+    expect(file).toBe('src/components/Card.tsx');
+    expect(styles).toEqual({ backgroundColor: 'red' });
+    expect(options.state).toBeUndefined();
+    expect(options.selectedSourceTabId).toBeUndefined();
+    // Single-element path must not fire for a multi-select edit.
+    expect(engine.updateASTStyles).not.toHaveBeenCalled();
+  });
+
+  it('threads a per-element nodeRef + elementLoc into the batch write (HYP-593 parity)', async () => {
+    // In jsdom there is no AST tree, so the id-bridge resolves nodeRef to the raw id and elementLoc to
+    // undefined — but the batch path MUST still build one elementUpdate per selected id (with the same
+    // nodeRef/elementLoc shape single-select sends) so the server loc fallback can fire in production.
+    const { engine } = createEngine();
+    const updateASTStylesBatch = spyOn(engine, 'updateASTStylesBatch').mockImplementation(() => Promise.resolve());
+
+    const { result } = renderHook(() =>
+      useStyleSync({
+        selectedIds: ['el-a', 'el-b'],
+        filePath: 'src/components/Card.tsx',
+        styleAdapter,
+        astOps: createAstOps(mock(async () => {})),
+        engine,
+      }),
+    );
+
+    act(() => {
+      result.current.syncStyleChange('backgroundColor', 'red', { debounceOnly: true });
+    });
+
+    await act(waitPastDebounce);
+
+    const options = updateASTStylesBatch.mock.calls[0]?.[3] as {
+      elementUpdates?: Array<{ nodeRef: string; elementLoc?: unknown }>;
+    };
+    expect(options.elementUpdates).toHaveLength(2);
+    expect(options.elementUpdates?.map((u) => u.nodeRef)).toEqual(['el-a', 'el-b']);
+    // No AST tree in jsdom → elementLoc resolves to undefined, but the field is plumbed end-to-end.
+    expect(options.elementUpdates?.[0]).toHaveProperty('nodeRef');
+  });
+
+  it('fires onSyncError when the batch engine write rejects (HYP-301 revert trigger)', async () => {
+    // Real engine: the batch path resolves per-element nodeRef/elementLoc through the id-bridge, which
+    // reads the engine root — a bare partial mock would throw in getAstTrees before the write rejects.
+    const { engine } = createEngine();
+    spyOn(engine, 'updateASTStylesBatch').mockImplementation(() => Promise.reject(new Error('transport down')));
+    const onSyncError = mock(() => {});
+
+    const { result } = renderHook(() =>
+      useStyleSync({
+        selectedIds: ['el-a', 'el-b'],
+        filePath: 'src/components/Card.tsx',
+        styleAdapter,
+        astOps: createAstOps(mock(async () => {})),
+        engine,
+        onSyncError,
+      }),
+    );
+
+    act(() => {
+      result.current.syncStyleChange('backgroundColor', 'red', {
+        debounceOnly: true,
+      });
+    });
+
+    await act(waitPastDebounce);
+
+    expect(onSyncError).toHaveBeenCalledTimes(1);
+    expect(onSyncError).toHaveBeenCalledWith({ backgroundColor: 'red' }, 'transport down');
+  });
+
+  it('routes single-select edits through engine.updateASTStyles, not the batch path', async () => {
+    // Real engine so the single-select writeId/elementLoc resolution (HYP-593) has a root to read;
+    // a partial `{ updateASTStyles }` mock would throw in getElementLocByUuid before the write.
+    const { engine } = createEngine();
+    const updateASTStylesBatch = spyOn(engine, 'updateASTStylesBatch').mockImplementation(() => Promise.resolve());
+
+    const { result } = renderHook(() =>
+      useStyleSync({
+        selectedIds: ['el-a'],
+        filePath: 'src/components/Card.tsx',
+        styleAdapter,
+        astOps: createAstOps(mock(async () => {})),
+        engine,
+      }),
+    );
+
+    act(() => {
+      result.current.syncStyleChange('backgroundColor', 'red', {
+        debounceOnly: true,
+      });
+    });
+
+    await act(waitPastDebounce);
+
+    expect(engine.updateASTStyles).toHaveBeenCalledTimes(1);
+    expect(updateASTStylesBatch).not.toHaveBeenCalled();
   });
 });

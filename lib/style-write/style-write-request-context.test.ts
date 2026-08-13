@@ -7,7 +7,66 @@
  * Architecture: https://hyperide.github.io/reports/style-write-unification
  */
 import { describe, expect, it } from 'bun:test';
-import { createStyleWriteContextFromRequest, getRequestRoutableCssSystem } from './style-write-request-context';
+import {
+  createStyleWriteContextFromRequest,
+  getRequestRoutableCssSystem,
+  resolveWriteCascade,
+} from './style-write-request-context';
+
+describe('resolveWriteCascade (D2 cascade — always writes, never skips for unknown)', () => {
+  it('edits in place: an element-owned system wins (no fallback, step "element")', () => {
+    const result = resolveWriteCascade({
+      filePath: '/p/App.tsx',
+      elementRef: '/p/App.tsx:7:4',
+      styles: { color: 'red' },
+      selectedSourceTabId: 'auto',
+      elementCssSystems: ['tailwind-v4'],
+      projectDefaultCssSystem: 'tailwind-v4',
+    });
+    expect(result).toEqual({ system: 'tailwind-v4', step: 'element', isFallback: false });
+  });
+
+  it('UNKNOWN (surfaceless) element cascades to the project priority system — NOT a skip', () => {
+    const result = resolveWriteCascade({
+      filePath: '/p/App.tsx',
+      elementRef: '/p/App.tsx:7:4',
+      styles: { color: 'red' },
+      selectedSourceTabId: 'auto',
+      elementCssSystems: [],
+      projectDefaultCssSystem: 'tailwind-v4',
+    });
+    expect(result).toEqual({ system: 'tailwind-v4', step: 'project-default', isFallback: true });
+  });
+
+  it('UNKNOWN element with a detected project system (no UIKit default) cascades to it', () => {
+    const result = resolveWriteCascade({
+      filePath: '/p/App.tsx',
+      elementRef: '/p/App.tsx:7:4',
+      styles: { color: 'red' },
+      selectedSourceTabId: 'auto',
+      elementCssSystems: [],
+      projectCssSystems: ['css-modules'],
+    });
+    expect(result).toEqual({ system: 'css-modules', step: 'project-system', isFallback: true });
+  });
+
+  it('PROJECT WITH NO SYSTEM AT ALL → needs-prompt (set up Tailwind?), inline as the declined floor', () => {
+    const result = resolveWriteCascade({
+      filePath: '/p/App.tsx',
+      elementRef: '/p/App.tsx:7:4',
+      styles: { color: 'red' },
+      selectedSourceTabId: 'auto',
+      elementCssSystems: [],
+      // No project default, no detected project systems — the genuine "no system at all" case.
+    });
+    expect(result).toEqual({
+      system: 'inline-style',
+      step: 'inline',
+      isFallback: true,
+      needsProjectSystemPrompt: true,
+    });
+  });
+});
 
 describe('getRequestRoutableCssSystem', () => {
   it('extracts explicit Tailwind source tab IDs', () => {
@@ -22,6 +81,60 @@ describe('getRequestRoutableCssSystem', () => {
     expect(getRequestRoutableCssSystem(undefined)).toBeUndefined();
     expect(getRequestRoutableCssSystem('computed')).toBeUndefined();
     expect(getRequestRoutableCssSystem('tamagui:props')).toBeUndefined();
+  });
+
+  it('treats the multi-select Auto chip like computed (no explicit target)', () => {
+    expect(getRequestRoutableCssSystem('auto')).toBeUndefined();
+  });
+});
+
+describe('createStyleWriteContextFromRequest — Auto + surfaceless floor (D2 §4.3/§4.4)', () => {
+  it('treats the Auto chip identically to computed — edits in place via element systems', () => {
+    const context = createStyleWriteContextFromRequest({
+      filePath: '/project/src/App.tsx',
+      elementRef: '/project/src/App.tsx:7:4',
+      styles: { color: 'red' },
+      selectedSourceTabId: 'auto',
+      elementCssSystems: ['tailwind-v4'],
+    });
+    expect(context.projectCapabilities.projectCssSystems).toEqual(['tailwind-v4']);
+  });
+
+  it('does NOT throw for the Auto chip (it is a non-routable sentinel, not an unsupported tab)', () => {
+    expect(() =>
+      createStyleWriteContextFromRequest({
+        filePath: '/project/src/App.tsx',
+        elementRef: '/project/src/App.tsx:7:4',
+        styles: { color: 'red' },
+        selectedSourceTabId: 'auto',
+        elementCssSystems: ['inline-style'],
+      }),
+    ).not.toThrow();
+  });
+
+  it('a surfaceless element floors to the project UIKit default, NOT a silent inline fallback', () => {
+    const context = createStyleWriteContextFromRequest({
+      filePath: '/project/src/App.tsx',
+      elementRef: '/project/src/App.tsx:7:4',
+      styles: { color: 'red' },
+      selectedSourceTabId: 'auto',
+      // No element systems (surfaceless), but the project default is Tailwind.
+      elementCssSystems: [],
+      projectDefaultCssSystem: 'tailwind-v4',
+    });
+    expect(context.projectCapabilities.projectCssSystems).toEqual(['tailwind-v4']);
+  });
+
+  it('keeps edit-in-place: an existing element system wins over the project default', () => {
+    const context = createStyleWriteContextFromRequest({
+      filePath: '/project/src/App.tsx',
+      elementRef: '/project/src/App.tsx:7:4',
+      styles: { color: 'red' },
+      selectedSourceTabId: 'auto',
+      elementCssSystems: ['css-modules'],
+      projectDefaultCssSystem: 'tailwind-v4',
+    });
+    expect(context.projectCapabilities.projectCssSystems).toEqual(['css-modules']);
   });
 });
 

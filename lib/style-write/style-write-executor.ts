@@ -18,6 +18,7 @@ import { NodeFileIO } from '@lib/ast/node-file-io';
 import { createFileParser, printNodeSource, spliceNodeSource } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import type { CssSystemId, RuntimeThemeContext, StyleSourceOwner } from '@lib/style-read/types';
+import { generateTailwindClasses } from '@lib/tailwind/generator';
 import { removeConflictingClasses } from '@lib/tailwind/parser';
 import type { ClassNameLocation as LegacyClassNameLocation } from '@lib/types';
 import postcss, { type AtRule, type Declaration, type Root, type Rule } from 'postcss';
@@ -30,12 +31,13 @@ import {
 import type {
   AdapterPropPlan,
   CssFilePlan,
+  StyleLandedFallback,
   StyleWritePlan,
   StyleWriteResult,
   TailwindPlan,
   TargetStyleValue,
 } from './types';
-import { errorMessage } from './utils';
+import { camelToKebab, errorMessage } from './utils';
 
 /**
  * HYP-544 Phase 3 — a candidate token the empirical color-probe found to DRIVE the element's
@@ -98,6 +100,11 @@ export interface ExecuteStyleWriteRequestInput {
    * color write to an inline-style override (twMerge can't change inline/var-driven colors).
    */
   probeDriving?: ProbeDrivingCandidate[];
+  /**
+   * UIKit-derived project default for a SURFACELESS element under Auto routing (D2 §4.3). Used only
+   * as the floor when the element owns no concrete system; edit-in-place still wins. No silent inline.
+   */
+  projectDefaultCssSystem?: CssSystemId;
 }
 
 interface ElementRefPosition {
@@ -493,7 +500,14 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
   }
 
   const cssSystem = getRequestRoutableCssSystem(input.selectedSourceTabId);
-  if (input.selectedSourceTabId && !cssSystem && input.selectedSourceTabId !== 'computed') {
+  // 'auto' is the multi-select intent sentinel — accepted here symmetric with 'computed' so the
+  // per-element edit-in-place floor (request-context) runs instead of throwing (D2 §8).
+  if (
+    input.selectedSourceTabId &&
+    !cssSystem &&
+    input.selectedSourceTabId !== 'computed' &&
+    input.selectedSourceTabId !== 'auto'
+  ) {
     return { success: false, error: `Unsupported style source tab for request routing: ${input.selectedSourceTabId}` };
   }
 
@@ -510,31 +524,162 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
     return { success: false, error: 'CSS Modules source owner unavailable for selected source tab' };
   }
 
-  const elementCssSystems = getElementCssSystems(input.element, sourceOwners, cssSystem, Object.keys(input.styles));
+  const elementCssSystems = getElementCssSystems(
+    input.element,
+    sourceOwners,
+    cssSystem,
+    Object.keys(input.styles),
+    input.projectDefaultCssSystem,
+  );
+
+  // D2 priority cascade (CTO 2026-06-11): under Auto/computed, a property the resolved system can't
+  // express must NOT be silently dropped — it falls to inline PER-PROPERTY while the rest stay in the
+  // system. inline is an isolated last rung, not "the element became inline". Only Auto/computed
+  // cascades; an explicit pinned tab (cssSystem set) keeps its honest all-or-error behavior.
+  //
+  // Guards (codex review): the split is conservative so it never steals a write the planner would
+  // place correctly:
+  //   - base state only — inline cannot represent a pseudo-state (hover/focus), so under a non-base
+  //     condition we keep everything in the system (TW writes the `hover:`-prefixed class); falling to
+  //     inline would turn a hover edit into an always-on base style.
+  //   - no css-modules owner — for mixed `cn(styles.root, 'p-2')` the planner may pick the exact
+  //     css-modules owner per property; splitting on the Tailwind generator would shadow a
+  //     `.module.css` declaration inline. If the element has a css-modules owner, defer to the planner.
+  const isBaseState = !input.state || input.state === 'base';
+  const hasCssModulesOwner = sourceOwners.some((owner) => owner.cssSystem === 'css-modules');
+  const isAutoRouting = !cssSystem;
+  const resolvedSystem = elementCssSystems[0];
+  const eligibleForCascadeSplit = isAutoRouting && isBaseState && !hasCssModulesOwner && Boolean(resolvedSystem);
+  const { expressible, inexpressible } = eligibleForCascadeSplit
+    ? splitInexpressibleProperties(resolvedSystem, input.styles)
+    : { expressible: input.styles, inexpressible: {} as Record<string, string> };
+  const inexpressibleKeys = Object.keys(inexpressible);
+
   const manager = createDefaultStyleWriteManager({
     executor: new StyleWriteExecutor({
       fileIO: input.fileIO,
       projectRoot: input.projectRoot,
       domClasses: input.domClasses,
       probeDriving: input.probeDriving,
-      requestedStyles: input.styles,
+      requestedStyles: expressible,
     }),
   });
   const context = createStyleWriteContextFromRequest({
     filePath: input.sourceFilePath,
     elementRef,
     tagName: getTagName(input.element),
-    styles: input.styles,
+    styles: expressible,
     selectedSourceTabId: input.selectedSourceTabId,
     state: input.state,
     sourceOwners,
     elementCssSystems,
     projectCssSystems: elementCssSystems,
+    projectDefaultCssSystem: input.projectDefaultCssSystem,
     runtimeThemeContext: input.runtimeThemeContext,
   });
 
-  const plan = await manager.createPlan(context);
-  return manager.execute(plan);
+  // Land the inexpressible properties inline FIRST, on the original (un-reformatted) element
+  // position. The subsequent system write re-reads from the fileIO and only touches className, so the
+  // inline style survives. Doing inline first avoids resolving the element against a position the
+  // system write may have shifted by reprinting. No-op when nothing is inexpressible.
+  const inlineMutatedFiles: string[] = [];
+  if (inexpressibleKeys.length > 0) {
+    const inlineWrite = await applyInlineFallbackWrite({
+      fileIO: input.fileIO,
+      sourceFilePath: input.sourceFilePath,
+      elementRef,
+      styles: inexpressible,
+    });
+    if (!inlineWrite.success) {
+      return inlineWrite;
+    }
+    inlineMutatedFiles.push(...inlineWrite.mutatedFiles);
+  }
+
+  // Write the expressible properties to the resolved system. Skip the system write entirely if EVERY
+  // requested property was inexpressible there (avoid an empty-class no-op) — the inline write above
+  // already landed everything.
+  let result: StyleWriteResult;
+  if (Object.keys(expressible).length > 0) {
+    const plan = await manager.createPlan(context);
+    result = await manager.execute(plan);
+  } else {
+    // Every requested property was inexpressible in the resolved system and landed inline above; no
+    // system plan was executed. The inline write is the whole write.
+    result = { success: true, mutatedFiles: [] };
+  }
+
+  if (result.success === false) {
+    return result;
+  }
+  if (inexpressibleKeys.length === 0) {
+    return result;
+  }
+
+  const landedOn: StyleLandedFallback[] = inexpressibleKeys.map((key) => ({
+    property: camelToKebab(key),
+    system: 'inline-style',
+    reason: 'inexpressible',
+  }));
+  const mutatedFiles = [...new Set([...inlineMutatedFiles, ...(result.mutatedFiles ?? [])])];
+  return { success: true, plan: result.plan, mutatedFiles, landedOn };
+}
+
+/**
+ * Split requested styles into those the resolved system can express vs those it cannot (D2 cascade).
+ * For Tailwind, expressibility is decided by the generator: a property that yields no utility class
+ * (even an arbitrary value) is inexpressible and falls to inline. TW v4 arbitrary values make this
+ * rare (shadow-[…], text-[#…] etc. ARE expressible). Non-Tailwind systems express everything they
+ * are asked for here (inline/css-modules accept any declaration), so nothing splits out.
+ *
+ * A property with an EMPTY value is a REMOVAL, never inexpressible (codex review): the Tailwind writer
+ * needs the key in `requestedStyles` so `removeForProperties` strips the old utility. The generator
+ * yields no class for an empty value, so it must stay expressible or clearing a Tailwind style would
+ * silently leave the old class. Callers gate this to base-state, no-css-modules-owner cases.
+ */
+function splitInexpressibleProperties(
+  system: CssSystemId,
+  styles: Record<string, string>,
+): { expressible: Record<string, string>; inexpressible: Record<string, string> } {
+  if (system !== 'tailwind-v4' && system !== 'tailwind-v3') {
+    return { expressible: styles, inexpressible: {} };
+  }
+
+  const expressible: Record<string, string> = {};
+  const inexpressible: Record<string, string> = {};
+  for (const [key, value] of Object.entries(styles)) {
+    // Empty value = clear/removal → keep in the system write so the old utility is stripped.
+    if (value === '' || value == null) {
+      expressible[key] = value;
+      continue;
+    }
+    const generated = generateTailwindClasses({ [key]: value }).trim();
+    if (generated.length > 0) {
+      expressible[key] = value;
+    } else {
+      inexpressible[key] = value;
+    }
+  }
+  return { expressible, inexpressible };
+}
+
+/** Apply an inline-style override on the element for the inexpressible properties (D2 cascade floor). */
+async function applyInlineFallbackWrite(input: {
+  fileIO?: FileIO;
+  sourceFilePath: string;
+  elementRef: string;
+  styles: Record<string, string>;
+}): Promise<StyleWriteResult> {
+  const parser = createFileParser(input.fileIO ?? new NodeFileIO());
+  const { ast, absolutePath } = await parser.readAndParseFile(input.sourceFilePath);
+  const position = parseElementRef(input.elementRef);
+  const element = position ? (findElementByPosition(ast, position.line, position.column)?.element ?? null) : null;
+  if (!element) {
+    return { success: false, error: `Element not found for inline fallback: ${input.elementRef}` };
+  }
+  applyInlineStyleUpdate(element, input.styles);
+  await parser.writeAST(ast, absolutePath);
+  return { success: true, mutatedFiles: [absolutePath] };
 }
 
 function getElementRef(filePath: string, element: t.JSXElement): string | null {
@@ -572,6 +717,7 @@ function getElementCssSystems(
   sourceOwners: StyleSourceOwner[],
   selectedSystem: CssSystemId | undefined,
   requestedStyleKeys: string[] = [],
+  projectDefaultCssSystem?: CssSystemId,
 ): CssSystemId[] {
   const systems: CssSystemId[] = [];
 
@@ -607,7 +753,11 @@ function getElementCssSystems(
   }
 
   if (systems.length === 0) {
-    systems.push('inline-style');
+    // Surfaceless element: floor to the UIKit-derived project default when the client supplied
+    // one (D2 §4.3 — NOT a silent inline fallback). inline-style remains the last resort only when
+    // no project default is threaded (single-select callers that don't pass one keep today's
+    // behavior).
+    systems.push(projectDefaultCssSystem ?? 'inline-style');
   }
 
   return [...new Set(systems)];

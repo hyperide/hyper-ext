@@ -26,6 +26,8 @@ import type {
   SaveSnapshotResult,
   UpdatePropParams,
   UpdatePropsBatchParams,
+  UpdateStylesBatchParams,
+  UpdateStylesBatchResult,
   UpdateStylesParams,
   UpdateStylesResult,
   UpdateTextParams,
@@ -80,6 +82,10 @@ export class MockASTApiService implements ASTApiService {
     snapshotId: 1,
     className: 'flex p-4',
     oldClassName: 'flex',
+  };
+  updateStylesBatchResult: UpdateStylesBatchResult = {
+    success: true,
+    results: [],
   };
   updatePropResult: ApiResult = { success: true };
   updatePropsBatchResult: ApiResult = { success: true };
@@ -139,6 +145,11 @@ export class MockASTApiService implements ASTApiService {
     return { ...this.updateStylesResult };
   }
 
+  async updateStylesBatch(params: UpdateStylesBatchParams): Promise<UpdateStylesBatchResult> {
+    this.calls.push({ method: 'updateStylesBatch', args: [params] });
+    return { ...this.updateStylesBatchResult };
+  }
+
   async updateProp(params: UpdatePropParams): Promise<ApiResult> {
     this.calls.push({ method: 'updateProp', args: [params] });
     return { ...this.updatePropResult };
@@ -171,11 +182,17 @@ export class MockASTApiService implements ASTApiService {
   }
 
   async restoreFileSnapshot(snapshotId: number, filePath: string, sampleName?: string): Promise<void> {
-    this.calls.push({ method: 'restoreFileSnapshot', args: [snapshotId, filePath, sampleName] });
+    this.calls.push({
+      method: 'restoreFileSnapshot',
+      args: [snapshotId, filePath, sampleName],
+    });
   }
 
   async reloadComponent(filePath: string, sampleName?: string): Promise<void> {
-    this.calls.push({ method: 'reloadComponent', args: [filePath, sampleName] });
+    this.calls.push({
+      method: 'reloadComponent',
+      args: [filePath, sampleName],
+    });
   }
 
   // Test helpers

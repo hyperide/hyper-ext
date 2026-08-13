@@ -20,6 +20,11 @@ import type { StyleWriteContext } from './types';
 import { camelToKebab } from './utils';
 
 const REQUEST_ROUTABLE_SYSTEMS = new Set<CssSystemId>(['tailwind-v4', 'css-modules', 'inline-style']);
+/**
+ * Non-routable sentinels: no explicit write target → fall back to per-element edit-in-place.
+ * 'auto' is the multi-select intent chip (D2 §4); it is treated identically to 'computed'.
+ */
+const NON_ROUTABLE_SENTINEL_TABS = new Set(['computed', 'auto']);
 const PSEUDO_STATES = new Set<StylePseudoState>(['base', 'hover', 'focus', 'active', 'focus-visible', 'disabled']);
 
 const DEFAULT_RUNTIME_THEME_CONTEXT: RuntimeThemeContext = {
@@ -39,6 +44,12 @@ export interface StyleWriteRequestContextInput {
   sourceOwners?: StyleSourceOwner[];
   elementCssSystems?: CssSystemId[];
   projectCssSystems?: CssSystemId[];
+  /**
+   * UIKit-derived project default for a surfaceless element (D2 §4.3). Used ONLY as the floor
+   * when the element owns no concrete system — edit-in-place (elementCssSystems[0]) still wins.
+   * Threaded from the client (tailwind → tailwind-v4, tamagui → tamagui, else inline-style).
+   */
+  projectDefaultCssSystem?: CssSystemId;
 }
 
 export interface CssModuleSourceOwnersInput {
@@ -105,15 +116,69 @@ export function getRequestRoutableCssSystem(selectedSourceTabId: string | undefi
   return undefined;
 }
 
+/**
+ * One step of the D2 priority cascade — which rung of the ladder the write actually landed on.
+ * 'element' = edit-in-place; 'project-default' = UIKit-derived priority system; 'project-system' =
+ * a detected (non-UIKit) project system; 'inline' = the universal last rung (CTO 2026-06-11).
+ */
+type WriteCascadeStep = 'element' | 'project-default' | 'project-system' | 'inline';
+
+export interface WriteCascadeResult {
+  /** The system the write lands in. ALWAYS defined — the cascade never refuses to write (CTO 2026-06-11). */
+  system: CssSystemId;
+  /** Which rung resolved it (drives the "where it landed" transparency badge, D2 §4.4). */
+  step: WriteCascadeStep;
+  /** true when the write did NOT land on the element's own system (a lower-priority rung). */
+  isFallback: boolean;
+  /**
+   * true ONLY for the genuine "project has no styling system at all" case: no element system, no
+   * UIKit default, no detected project system. The client should prompt ("set up Tailwind?") before
+   * accepting the inline floor; declined → inline (the `system` already returned here). Never a skip.
+   */
+  needsProjectSystemPrompt?: boolean;
+}
+
+/**
+ * D2 priority cascade (CTO 2026-06-11) — resolves the write target so the writer ALWAYS lands a
+ * value; "unknown" / surfaceless is never a skip. Priority order, per the HYP-581 comment:
+ *   element-own system → project priority (UIKit) default → detected project system →
+ *   (no system at all → prompt the user; declined →) inline.
+ * inline is a legitimate last rung, not dirt. The only real skip is STALE/safety, handled upstream
+ * at the source-resolution boundary (the route), not here.
+ */
+export function resolveWriteCascade(input: StyleWriteRequestContextInput): WriteCascadeResult {
+  const elementSystem = input.elementCssSystems?.[0];
+  if (elementSystem) {
+    return { system: elementSystem, step: 'element', isFallback: false };
+  }
+
+  if (input.projectDefaultCssSystem) {
+    return { system: input.projectDefaultCssSystem, step: 'project-default', isFallback: true };
+  }
+
+  const detectedProjectSystem = input.projectCssSystems?.[0];
+  if (detectedProjectSystem) {
+    return { system: detectedProjectSystem, step: 'project-system', isFallback: true };
+  }
+
+  // No element system, no UIKit default, no detected project system — the project genuinely has no
+  // styling system. Floor to inline so the write still lands, and signal the client to offer "set up
+  // Tailwind?" before accepting it. Inline here is the declined-floor, never a skip.
+  return { system: 'inline-style', step: 'inline', isFallback: true, needsProjectSystemPrompt: true };
+}
+
 function resolveRequestCssSystem(input: StyleWriteRequestContextInput): CssSystemId {
   const selectedSystem = getRequestRoutableCssSystem(input.selectedSourceTabId);
   if (selectedSystem) return selectedSystem;
 
-  if (input.selectedSourceTabId && input.selectedSourceTabId !== 'computed') {
+  if (input.selectedSourceTabId && !NON_ROUTABLE_SENTINEL_TABS.has(input.selectedSourceTabId)) {
     throw new Error(`Unsupported style source tab for request routing: ${input.selectedSourceTabId}`);
   }
 
-  return input.elementCssSystems?.[0] ?? input.projectCssSystems?.[0] ?? 'inline-style';
+  // Auto / computed → run the priority cascade. Edit-in-place wins; surfaceless cascades down to the
+  // project default, a detected project system, and finally inline (CTO 2026-06-11 — always writes,
+  // never a silent skip). The cascade step + isFallback are surfaced separately for the badge.
+  return resolveWriteCascade(input).system;
 }
 
 export function createCssModuleSourceOwnersFromReferences(input: CssModuleSourceOwnersInput): StyleSourceOwner[] {

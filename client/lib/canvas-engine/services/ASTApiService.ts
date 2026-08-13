@@ -152,6 +152,59 @@ export interface UpdateStylesResult {
   error?: string;
 }
 
+/** Per-element resolution carried to the route for the HYP-593 loc fallback + same-source dedupe. */
+interface BatchElementUpdate {
+  /** Tracer nodeRef (or the raw id when unresolved). Resolve target + same-source dedupe key. */
+  nodeRef: string;
+  /** Client-side AST loc — server cross-checks it when nodeRef is a parse UUID it can't resolve (HYP-593). */
+  elementLoc?: { line: number; column: number; endLine?: number; endColumn?: number };
+  /**
+   * Live applied className from the DOM (HYP-544) — the executor's authoritative replace target for
+   * expression/conditional classes. Mirrors single-select's `domClasses`, carried per element.
+   */
+  domClasses?: string;
+}
+
+export interface UpdateStylesBatchParams {
+  /** nodeRefs of the elements to update — all expected to live in the same file */
+  elementIds: string[];
+  filePath: string;
+  styles: Record<string, string>;
+  state?: string;
+  selectedSourceTabId?: string;
+  /** UIKit-derived project default for the surfaceless Auto floor (D2 §4.3). No silent inline. */
+  projectDefaultCssSystem?: string;
+  /**
+   * Per-element nodeRef + elementLoc for HYP-593 parity (the route's loc fallback). When absent, the
+   * impl falls back to mapping elementIds to bare nodeRefs (callers that don't resolve client-side).
+   */
+  elementUpdates?: BatchElementUpdate[];
+}
+
+interface UpdateStylesBatchElementResult {
+  nodeRef: string;
+  success: boolean;
+  error?: string;
+  /** Authoritative per-element outcome (D2 §6.2). */
+  status?: 'applied' | 'skipped' | 'failed' | 'applied_but_ineffective';
+  /** Machine reason code for the D3 skip-banner (D3 §5.3). */
+  reason?: string;
+  /**
+   * D2 cascade transparency (CTO 2026-06-11): on an APPLIED element, properties that landed on a
+   * lower-priority system than the element's primary one (e.g. an inexpressible prop fell to inline).
+   * Drives the "where it landed" badge. The write still succeeded — visibility, not a skip.
+   */
+  landedOn?: Array<{ property: string; system: string; reason: string }>;
+}
+
+export interface UpdateStylesBatchResult {
+  success: boolean;
+  results?: UpdateStylesBatchElementResult[];
+  /** Pre-batch file snapshot injected by fileSnapshotMiddleware — undo point for the whole batch */
+  snapshotId?: number;
+  error?: string;
+}
+
 export interface UpdatePropParams {
   selectedId: string;
   filePath: string;
@@ -210,6 +263,7 @@ export interface ASTApiService {
   mapLiteralArrayOp(params: MapLiteralArrayOpParams): Promise<MapLiteralArrayOpResult>;
   pasteElement(params: PasteElementParams): Promise<PasteElementResult>;
   updateStyles(params: UpdateStylesParams): Promise<UpdateStylesResult>;
+  updateStylesBatch(params: UpdateStylesBatchParams): Promise<UpdateStylesBatchResult>;
   updateProp(params: UpdatePropParams): Promise<ApiResult>;
   updatePropsBatch(params: UpdatePropsBatchParams): Promise<ApiResult>;
   updateText(params: UpdateTextParams): Promise<ApiResult>;

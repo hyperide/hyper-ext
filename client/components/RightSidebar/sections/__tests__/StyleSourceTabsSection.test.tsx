@@ -8,7 +8,24 @@
 import { describe, expect, it } from 'bun:test';
 import type { StyleSourceTab } from '@lib/style-read/types';
 import { fireEvent, render } from '@testing-library/react';
+import { AUTO_SOURCE_TAB_ID, mergeForMultiSelect } from '../../source-tabs';
 import { StyleSourceTabsSection } from '../StyleSourceTabsSection';
+
+const tailwindTab: StyleSourceTab = {
+  id: 'tailwind-v4:elementClass',
+  label: 'Tailwind',
+  cssSystem: 'tailwind-v4',
+  sourceForm: 'elementClass',
+  condition: { state: 'base' },
+  confidence: 'probable',
+};
+const inlineTab: StyleSourceTab = {
+  id: 'inline-style',
+  label: 'Inline',
+  cssSystem: 'inline-style',
+  condition: { state: 'base' },
+  confidence: 'probable',
+};
 
 const tabs: StyleSourceTab[] = [
   {
@@ -63,5 +80,28 @@ describe('StyleSourceTabsSection', () => {
     fireEvent.click(getByRole('button', { name: '.card' }));
 
     expect(selected).toEqual(['css-modules:card']);
+  });
+
+  describe('multi-select (D2 §3) — mergeForMultiSelect → render pipeline', () => {
+    it('renders Auto + the concrete override for a homogeneous all-Tailwind selection', () => {
+      const merged = mergeForMultiSelect([[tailwindTab], [tailwindTab], [tailwindTab]]);
+      const { getByRole } = render(
+        <StyleSourceTabsSection tabs={merged} selectedTabId={AUTO_SOURCE_TAB_ID} onSourceTabChange={() => {}} />,
+      );
+
+      expect(getByRole('button', { name: 'Auto' }).getAttribute('aria-pressed')).toBe('true');
+      expect(getByRole('button', { name: 'Tailwind' })).toBeTruthy();
+    });
+
+    it('renders ONLY Auto for a heterogeneous selection (override withheld)', () => {
+      const merged = mergeForMultiSelect([[tailwindTab], [inlineTab]]);
+      const { getByRole, queryByRole } = render(
+        <StyleSourceTabsSection tabs={merged} selectedTabId={AUTO_SOURCE_TAB_ID} onSourceTabChange={() => {}} />,
+      );
+
+      expect(getByRole('button', { name: 'Auto' })).toBeTruthy();
+      expect(queryByRole('button', { name: 'Tailwind' })).toBeNull();
+      expect(queryByRole('button', { name: 'Inline' })).toBeNull();
+    });
   });
 });

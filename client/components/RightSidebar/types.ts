@@ -1,7 +1,7 @@
 import type { ComponentGroup } from '../../../lib/component-scanner/types';
 
-export type PositionType = 'static' | 'rel' | 'abs' | 'fixed' | 'sticky';
-export type LayoutType = 'layout' | 'col' | 'row' | 'grid';
+export type PositionType = 'static' | 'rel' | 'abs' | 'fixed' | 'sticky' | 'mixed';
+export type LayoutType = 'layout' | 'col' | 'row' | 'grid' | 'mixed';
 export type UIKitType = 'tailwind' | 'tamagui' | 'none';
 
 export interface RightSidebarProps {
@@ -20,7 +20,10 @@ export interface RightSidebarProps {
   activeProjectName?: string | null;
   publicDirExists?: boolean;
   /** Component groups to show when Explorer is hidden (VS Code ext only) */
-  componentGroups?: { atomGroups: ComponentGroup[]; compositeGroups: ComponentGroup[] } | null;
+  componentGroups?: {
+    atomGroups: ComponentGroup[];
+    compositeGroups: ComponentGroup[];
+  } | null;
   /** Whether the Explorer sidebar is currently visible */
   explorerVisible?: boolean;
   /** Called when user clicks a component in the empty state list */
