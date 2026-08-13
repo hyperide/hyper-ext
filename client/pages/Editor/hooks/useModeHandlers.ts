@@ -7,7 +7,6 @@ interface UseModeHandlersDeps {
   engine: CanvasEngine;
   isBoardModeActive: boolean;
   isCodeEditorMode: boolean;
-  mode: 'design' | 'interact' | 'code';
   setActiveDesignInstanceId: (id: string | null) => void;
   setActiveBoardInstance: (id: string | null) => void;
   setBoardModeActive: (active: boolean) => void;
@@ -22,7 +21,6 @@ export function useModeHandlers(deps: UseModeHandlersDeps) {
     engine,
     isBoardModeActive,
     isCodeEditorMode,
-    mode,
     setActiveDesignInstanceId,
     setActiveBoardInstance,
     setBoardModeActive,

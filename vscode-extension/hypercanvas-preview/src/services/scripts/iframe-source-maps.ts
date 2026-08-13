@@ -1,10 +1,5 @@
 import type { SourceLocation } from '@shared/element-tracing/types';
-import {
-  type Fiber,
-  findNearestSourceLocation,
-  getFiberFromDOM,
-  getItemIndexFromFiber,
-} from '@shared/element-tracing/fiber-internals';
+import type { Fiber } from '@shared/element-tracing/fiber-internals';
 import { isSyntheticPreviewPath, selectNonSyntheticCachedLocation } from '@shared/element-tracing/synthetic-preview';
 
 /** Cache: "chunkUrl:line:col" → resolved SourceLocation (null = warmed but unresolvable). */

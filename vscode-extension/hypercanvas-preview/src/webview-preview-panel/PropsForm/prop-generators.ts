@@ -1,5 +1,4 @@
 import type { PropTypeInfo } from '@shared/types/props';
-import { humanize } from './prop-type-utils';
 
 const NAMES = [
   'John Doe',

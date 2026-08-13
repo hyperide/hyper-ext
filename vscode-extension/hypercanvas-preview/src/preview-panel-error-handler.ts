@@ -5,7 +5,6 @@
 
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { generateSamplePropValues } from '@lib/preview-generator';
 import { ensureSample } from '@lib/preview-generator';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
 import { VSCodeFileIO } from './vscode-file-io';

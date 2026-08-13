@@ -313,9 +313,10 @@ export function CanvasEditor({ onOpenSettings }: Props) {
   // Right sidebar effective width (also sets CSS variable for ConnectionStatus badge)
   const rightSidebarWidth = useRightSidebarWidth(isCodeEditorMode, sidebarsHidden, commentsSidebarWidth);
 
-  // Smart deferred mounting: prioritize component based on initial mode
-  // Both components stay mounted after first mount to enable fast switching
-  const initialModeRef = useRef(mode);
+  // Both components stay mounted after first mount to enable fast switching.
+  // Initial mode is encoded directly in the ready-flag initial state below;
+  // useDeferredMount keys off isCodeEditorMode (HYP-561 extraction replaced the
+  // former initialModeRef read with the flag-based logic in that hook).
   const [codeServerReady, setCodeServerReady] = useState(mode === 'code');
   const [iframeReady, setIframeReady] = useState(mode !== 'code');
 
@@ -558,7 +559,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     engine,
     isBoardModeActive,
     isCodeEditorMode,
-    mode,
     setActiveDesignInstanceId,
     setActiveBoardInstance,
     setBoardModeActive,

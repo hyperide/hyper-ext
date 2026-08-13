@@ -62,7 +62,6 @@ describe('findTraceableParent', () => {
   it('skips ancestors with no source key and walks further up', () => {
     const root = setupDOM('<section><div class="untraceable"><img></div></section>');
     const section = root.querySelector('section') as HTMLElement;
-    const div = root.querySelector('div.untraceable') as HTMLElement;
     const img = root.querySelector('img') as HTMLElement;
 
     // Intermediate <div> has no source key (e.g. injected by a portal /

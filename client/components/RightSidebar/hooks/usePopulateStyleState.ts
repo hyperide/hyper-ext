@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import type { ParsedStyles } from '@/lib/canvas-engine/adapters/types';
 import type { CanvasEngine } from '@/lib/canvas-engine';
 import type { EffectItem, StrokeItem } from '../types';

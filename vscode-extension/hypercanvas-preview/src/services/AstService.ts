@@ -37,7 +37,7 @@ import {
 } from '@lib/ast/jsx-deps';
 import { type MasterComponentResolution, resolveMasterComponent } from '@lib/ast/master-component-resolver';
 import { buildAliasMapFromTsconfig } from '@lib/ast/tsconfig-alias-map';
-import { cloneElement, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
+import { cloneElement } from '@lib/ast/mutator';
 import { createFileParser } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import { traverseJSXElements } from '@lib/ast/traverser';

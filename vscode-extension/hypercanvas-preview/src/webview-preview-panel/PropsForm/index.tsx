@@ -1,12 +1,7 @@
 import type { PropTypeInfo } from '@shared/types/props';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { humanize, toPropTypeInfo } from './prop-type-utils';
-import {
-  canGenerateSomeValue,
-  generateObjectValues,
-  getGenerateAllAvailability,
-  getStringFieldGenerator,
-} from './prop-generators';
+import { generateObjectValues, getGenerateAllAvailability, getStringFieldGenerator } from './prop-generators';
 import {
   arrayAddButtonStyle,
   arrayContainerStyle,
@@ -139,7 +134,6 @@ export function PropsForm({
   }, [fields, onChange]);
 
   const generateAllAvailability = useMemo(() => getGenerateAllAvailability(fields), [fields]);
-  const generateDisabled = !canGenerateSomeValue(fields);
 
   const unfilledRequired = useMemo(() => {
     const result: Array<{ path: string; label: string }> = [];

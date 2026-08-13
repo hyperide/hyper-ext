@@ -81,7 +81,7 @@ export default function IframeCanvas({
 
   const { setPendingSelection } = useTracerSelectionSync({ tracer, engine, clickRetryQueue });
 
-  const { loading, previewReady, canvasMode, canvasComposition, iframeSize } = useIframeCanvas({
+  const { previewReady, canvasMode, iframeSize } = useIframeCanvas({
     projectId: meta?.projectId,
     componentPath,
     onCanvasModeChange,

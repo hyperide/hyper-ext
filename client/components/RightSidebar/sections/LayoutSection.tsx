@@ -13,7 +13,6 @@ import { memo } from 'react';
 import IconFlexRow from '../../icons/IconFlexRow';
 import IconSpacingHorizontal from '../../icons/IconSpacingHorizontal';
 import { Input } from '../../ui/input';
-import { LAYOUT_OPTIONS } from '../constants';
 import type { LayoutType, UIKitType } from '../types';
 import { GridLayoutControls, LayoutGrid, PaddingControls, useLayoutSection } from './layout-section';
 

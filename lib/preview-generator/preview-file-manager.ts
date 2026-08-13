@@ -30,24 +30,11 @@ import {
   type ProviderWrapConfig,
   type SSRMockConfig,
 } from './generator';
-import { buildContainerSampleJsxBody } from './sample-scaffold';
 import { ensureGitExclude, ensureStandaloneEntry } from './preview-file-ops';
 import { buildEntry, computeImportPath } from './preview-build-entry';
-import {
-  detectExportStyle,
-  detectProviderShell,
-  detectRouterShell,
-  detectSSRHooks,
-  type ExportStyle,
-  extractComponentName,
-  extractDeclaredPropNames,
-  extractMountedRootImportSources,
-  hasComponentExport,
-  scanRenderableExportNames,
-  scanSampleExports,
-} from './scanner';
+import { detectProviderShell, extractMountedRootImportSources, scanSampleExports } from './scanner';
 import { isExplicitWebAppShell, isFrameworkReserved, isPreviewIneligibleByName } from './preview-constants';
-import { pathCaseKey, RECAST_PARSER } from './preview-ast-helpers';
+import { RECAST_PARSER } from './preview-ast-helpers';
 import {
   buildCanonicalPathMap,
   canonicalizeComponentPath,

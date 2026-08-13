@@ -1,4 +1,3 @@
-import cn from 'clsx';
 import IconHorizontalPadding from '../../../icons/IconHorizontalPadding';
 import IconVerticalPadding from '../../../icons/IconVerticalPadding';
 import IconPaddingBottom from '../../../icons/IconPaddingBottom';
@@ -41,8 +40,6 @@ export function PaddingControls({
   syncStyleChange,
   focusInput,
 }: PaddingControlsProps) {
-  const DB = { debounceOnly: true } as const;
-
   return (
     <div className="grid grid-cols-2 gap-2 flex-1">
       {paddingExpanded ? (

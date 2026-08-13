@@ -9,18 +9,10 @@ import type { NodeRef } from '@shared/element-tracing/types';
 import type { FileIO } from '@lib/ast/file-io';
 import type { ColorProbeCandidate } from './color-probe-types';
 import { mutateElement } from './ast-mutation-utils';
-import { insertElement, duplicateElement, pasteElement, wrapElement } from './ast-element-ops';
 import { deleteElements } from './ast-delete';
 import { updateStyles } from './ast-update-utils';
 import { setAttribute, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
-import type {
-  AstOperationResult,
-  DuplicateElementResult,
-  InsertElementResult,
-  UpdateStylesResult,
-  UpdateTextResult,
-  WrapElementResult,
-} from './ast-types';
+import type { AstOperationResult, UpdateStylesResult, UpdateTextResult } from './ast-types';
 import type { FindElementResult } from '@lib/types';
 
 export interface MutationWrapperDeps {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { CanvasEngine } from '@/lib/canvas-engine';
-import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
+import { useSharedEditorState } from '@/lib/platform/shared-editor-state';
 
 /**
  * Get selected IDs from engine (SaaS) or shared editor state (VS Code).
