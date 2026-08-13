@@ -8,9 +8,9 @@
  */
 
 import fs from 'node:fs';
-import { join, posix } from 'node:path';
+import { join } from 'node:path';
 import type { FileIO } from '../ast/file-io';
-import { detectFramework } from './framework-routing';
+import { detectFramework, detectHtmlModuleEntry } from './framework-routing';
 import { PreviewFileManager } from './preview-file-manager';
 
 export type PreviewMode = 'app-shell' | 'isolated';
@@ -354,40 +354,9 @@ export class PreviewModeManager {
   }
 
   private async _detectHtmlEntryFile(): Promise<string | null> {
-    const htmlFiles = ['index.html', 'src/index.html', 'client/index.html', 'app/index.html'];
-    for (const htmlRel of htmlFiles) {
-      let html: string;
-      try {
-        html = await this._io.readFile(join(this._projectRoot, htmlRel));
-      } catch {
-        continue;
-      }
-
-      const htmlDir = htmlRel.includes('/') ? htmlRel.slice(0, htmlRel.lastIndexOf('/')) : '';
-      // HTML tag names are case-insensitive — match `<SCRIPT>`/`<Script>` too
-      // (CodeQL js/bad-tag-filter). Regex HTML parsing is a smell; this only
-      // sniffs the module entry script, it does not strip/sanitize markup.
-      const scriptTags = html.matchAll(/<script\b[^>]*>/gi);
-      for (const match of scriptTags) {
-        const tag = match[0];
-        if (!/\btype=["']module["']/i.test(tag)) continue;
-        const src = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1];
-        if (!src || src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/@')) continue;
-
-        const rel = src.startsWith('/') ? src.slice(1) : posix.normalize(posix.join(htmlDir, src));
-        if (!/\.[cm]?[jt]sx?$/.test(rel)) continue;
-
-        const abs = join(this._projectRoot, rel);
-        try {
-          await this._io.readFile(abs);
-          return abs;
-        } catch {
-          /* script target not present */
-        }
-      }
-    }
-
-    return null;
+    // Delegates to the shared probe in framework-routing so the SPA entry patcher and the
+    // Bun-app classifier use exactly one candidate list + module-script heuristic (HYP-885).
+    return detectHtmlModuleEntry(this._projectRoot, this._io);
   }
 
   private async _patchEntryFile(options?: {

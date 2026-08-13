@@ -16,6 +16,7 @@ import { listenLoopback } from './netProbe';
 import {
   buildDevServerUnreachableHtml,
   getPreviewAssetContentType,
+  shouldFallbackToRootRoute,
   shouldRetryAssetResponse,
   shouldReturnEmptyAssetResponse,
   shouldShowDevServerUnreachable,
@@ -225,14 +226,25 @@ export class PreviewProxy {
   /**
    * Handle HTTP requests: proxy to target, inject script into HTML.
    * Retries up to 5 times for /test-preview 404/503 to handle dev server FSWatch lag.
+   *
+   * `rootFallbackAttempted` (HYP-903): once true, the request is upstream-routed to
+   * `/` instead of `proxyPath` — see the `shouldFallbackToRootRoute` branch below.
+   * `proxyPath` itself is untouched so every client-visible check (isolated-mode
+   * script swap, chrome-detection injection) still keys off the ORIGINAL request path.
    */
-  private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse, retryCount = 0): void {
+  private _handleHttp(
+    clientReq: http.IncomingMessage,
+    clientRes: http.ServerResponse,
+    retryCount = 0,
+    rootFallbackAttempted = false,
+  ): void {
     if (!this._isServing()) {
       clientRes.writeHead(503);
       clientRes.end();
       return;
     }
     const proxyPath = clientReq.url || '/';
+    const upstreamPath = rootFallbackAttempted ? '/' : proxyPath;
     const virtualScript = HYPERCANVAS_SCRIPT_RESPONSES.get(proxyPath);
     if (virtualScript !== undefined) {
       clientRes.writeHead(200, {
@@ -254,7 +266,7 @@ export class PreviewProxy {
     const options: http.RequestOptions = {
       hostname: 'localhost',
       port: this._targetPort,
-      path: proxyPath,
+      path: upstreamPath,
       method: clientReq.method,
       headers: {
         ...forwardHeaders,
@@ -281,13 +293,17 @@ export class PreviewProxy {
         clientReq.method === 'GET' &&
         retryCount < 5 &&
         !clientRes.headersSent &&
-        !clientReq.destroyed
+        !clientRes.destroyed
       ) {
         proxyRes.resume();
         const delay = 500 * (retryCount + 1);
         // codeql[js/log-injection] -- extension-host console diagnostic; proxyPath is the user's own preview request path, no log-consumer trust boundary
         console.log(`[PreviewProxy] 504 on GET, retry ${retryCount + 1}/5 in ${delay}ms: ${proxyPath}`); // nosemgrep: unsafe-formatstring
-        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), delay);
+        // Preserve rootFallbackAttempted (HYP-903): dropping it here would silently revert an
+        // already-fallen-back request from `/` back to the original dead `/test-preview` path
+        // if `/` itself 504s. Dormant today (testPreviewRetryBudget is always > 5), but this
+        // parameter must be threaded through every retry branch, not just the one that sets it.
+        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted), delay);
         return;
       }
 
@@ -311,16 +327,49 @@ export class PreviewProxy {
       // keeps its known-good pre-inflation budget of 60 (~222s, 682fdf22). Vite/Next
       // also use 16 (gate is a no-op for them but their fast initial compile fits
       // the base budget); webpack is additionally gate-protected.
+      //
+      // HYP-903: the retry-scheduling guard below checks clientRes.destroyed, NOT
+      // clientReq.destroyed. Live-verified against cms-spa's Bun dev server (in-memory
+      // route table, near-zero response latency): a GET request's IncomingMessage
+      // auto-destroys its own (empty) readable side as soon as it's been piped/consumed
+      // — often before this response callback even runs — which is unrelated to whether
+      // the CLIENT connection is still alive. Guarding on clientReq.destroyed here meant
+      // retryCount never advanced past 0 against a fast enough upstream: the condition
+      // silently evaluated false, no setTimeout was scheduled, and the request hung
+      // forever with clientRes never written. clientRes.destroyed correctly reflects the
+      // underlying socket, i.e. "did the client actually disconnect".
+      const testPreviewRetryBudgetValue = testPreviewRetryBudget(this._isRemixProject);
+      const isTestPreviewPath = proxyPath.startsWith('/test-preview');
       if (
         (proxyRes.statusCode === 404 || proxyRes.statusCode === 403 || proxyRes.statusCode === 503) &&
-        proxyPath.startsWith('/test-preview') &&
+        isTestPreviewPath &&
         clientReq.method === 'GET' &&
-        retryCount < testPreviewRetryBudget(this._isRemixProject)
+        retryCount < testPreviewRetryBudgetValue
       ) {
         proxyRes.resume(); // drain response
-        if (!clientReq.destroyed && !clientRes.headersSent) {
+        if (!clientRes.destroyed && !clientRes.headersSent) {
           const delay = Math.min(200 * 1.7 ** retryCount, 4000);
-          setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), delay);
+          setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted), delay);
+        }
+        return;
+      }
+
+      // HYP-903: the retry budget above is exhausted and the dev server is STILL
+      // 404/403/503-ing /test-preview. Some dev servers (e.g. Bun's
+      // `Bun.serve({ routes: { '/': index } })`) have no catch-all/SPA-fallback route
+      // and serve ONLY their root path — /test-preview 404s FOREVER there, not from
+      // FSWatch lag. Before giving up, retry the SAME request once against `/`: if the
+      // dev server serves HTML there, treat it as the effective response. `proxyPath`
+      // (used below for isolated-mode script-swap / chrome-detection injection) is
+      // unchanged — only the upstream request target moves to `/`.
+      if (
+        !rootFallbackAttempted &&
+        shouldFallbackToRootRoute(proxyPath, proxyRes.statusCode, retryCount, testPreviewRetryBudgetValue)
+      ) {
+        proxyRes.resume();
+        // clientRes.destroyed, not clientReq.destroyed — see the HYP-903 note above.
+        if (!clientRes.destroyed && !clientRes.headersSent) {
+          this._handleHttp(clientReq, clientRes, retryCount, true);
         }
         return;
       }
@@ -339,7 +388,11 @@ export class PreviewProxy {
         )
       ) {
         proxyRes.resume();
-        if (!clientReq.destroyed && !clientRes.headersSent) {
+        // clientRes.destroyed, not clientReq.destroyed — see the HYP-903 note above. This
+        // branch auto-merged from #627 with the pre-fix `clientReq.destroyed` check still in
+        // place; left inconsistent it would silently skip writing this warning page in the
+        // same way the other retry-scheduling guards used to silently skip retrying.
+        if (!clientRes.destroyed && !clientRes.headersSent) {
           clientRes.writeHead(200, {
             'content-type': 'text/html; charset=utf-8',
             'cache-control': 'no-cache, no-store, must-revalidate',
@@ -358,8 +411,9 @@ export class PreviewProxy {
       const assetRetryLimit = proxyRes.statusCode === 403 ? 30 : 5;
       if (assetContentType && shouldRetryAssetResponse(proxyRes.statusCode, isHtml) && retryCount < assetRetryLimit) {
         proxyRes.resume();
-        if (!clientReq.destroyed && !clientRes.headersSent) {
-          setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), 200);
+        // clientRes.destroyed, not clientReq.destroyed — see the HYP-903 note above.
+        if (!clientRes.destroyed && !clientRes.headersSent) {
+          setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted), 200);
         }
         return;
       }
@@ -409,7 +463,7 @@ export class PreviewProxy {
           }
 
           // Tier 1 isolated mode: swap user entry script to standalone canvas preview entry
-          if (this._isIsolatedMode && proxyPath.startsWith('/test-preview')) {
+          if (this._isIsolatedMode && isTestPreviewPath) {
             const base = this._viteBase ?? '';
             const scriptRegex = /<script\s+type="module"\s+src="([^"]+)"\s*>/g;
             let userScript: string | null = null;
@@ -431,7 +485,7 @@ export class PreviewProxy {
           }
 
           // Inject chrome-detection script for /test-preview requests (App Shell mode)
-          if (proxyPath.startsWith('/test-preview') && !this._isRemixProject) {
+          if (isTestPreviewPath && !this._isRemixProject) {
             const chromeDetectScript = `<script>${chromeDetectionScriptContent}</script>`;
             html = html.replace('</head>', `${chromeDetectScript}</head>`);
           }
@@ -460,11 +514,12 @@ export class PreviewProxy {
       // response; subsequent @vite/client and module fetches hit the stale socket and
       // get ECONNRESET. Without retry these requests return 502 and React never mounts.
       // Only retrying GET because POST/PUT bodies are consumed after the first attempt.
-      if (clientReq.method === 'GET' && retryCount < 5 && !clientRes.headersSent && !clientReq.destroyed) {
+      // clientRes.destroyed, not clientReq.destroyed — see the HYP-903 note above.
+      if (clientReq.method === 'GET' && retryCount < 5 && !clientRes.headersSent && !clientRes.destroyed) {
         const retryDelay = 300 * (retryCount + 1);
         // codeql[js/log-injection] -- extension-host console diagnostic; proxyPath is the user's own preview request path, no log-consumer trust boundary
         console.log(`[PreviewProxy] socket error on GET, retry ${retryCount + 1}/5 in ${retryDelay}ms: ${proxyPath}`);
-        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), retryDelay);
+        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted), retryDelay);
         return;
       }
       if (!clientRes.headersSent) {
@@ -488,6 +543,11 @@ export class PreviewProxy {
     // a minimal upstream + proxy pair, retries only proceeded past attempt #1 once GET
     // categorically never piped). Piping was only ever needed for request bodies (POST/PUT
     // etc.); using `.end()` for every GET — first attempt included — removes the race.
+    //
+    // This also covers the HYP-903 root-route fallback recursion (which can re-enter
+    // `_handleHttp` at retryCount 0 with `rootFallbackAttempted` true): since EVERY GET now
+    // `.end()`s regardless of retryCount/rootFallbackAttempted, there's no narrower case
+    // left that needs its own gate.
     if (clientReq.method === 'GET') {
       proxyReq.end();
     } else {

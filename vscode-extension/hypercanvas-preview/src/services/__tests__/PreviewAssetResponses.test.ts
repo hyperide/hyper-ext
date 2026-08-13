@@ -10,6 +10,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildDevServerUnreachableHtml,
   getPreviewAssetContentType,
+  shouldFallbackToRootRoute,
   shouldRetryAssetResponse,
   shouldReturnEmptyAssetResponse,
   shouldShowDevServerUnreachable,
@@ -110,6 +111,36 @@ describe('testPreviewRetryBudget (HYP-370 Phase 5 walk-back)', () => {
     const remixMs = totalRetryBudgetMs(testPreviewRetryBudget(true));
     expect(remixMs).toBeLessThan(totalRetryBudgetMs(90));
     expect(remixMs).toBeGreaterThan(totalRetryBudgetMs(16)); // still covers SSR cold-start
+  });
+});
+
+describe('shouldFallbackToRootRoute (HYP-903)', () => {
+  // cms-spa-shaped dev servers (`Bun.serve({ routes: { '/': index } })`) have no
+  // catch-all/SPA-fallback route: `/test-preview` 404s FOREVER, not from FSWatch lag.
+  // Once the retry budget above is exhausted, this predicate says "give the dev
+  // server's own root a try" instead of giving up outright — root is the one path
+  // such a server DOES serve.
+  it('is true once the retry budget is exhausted and /test-preview is still erroring', () => {
+    expect(shouldFallbackToRootRoute('/test-preview?component=src%2FApp.tsx', 404, 16, 16)).toBe(true);
+    expect(shouldFallbackToRootRoute('/test-preview?component=src%2FApp.tsx', 403, 20, 16)).toBe(true);
+    expect(shouldFallbackToRootRoute('/test-preview?component=src%2FApp.tsx', 503, 16, 16)).toBe(true);
+  });
+
+  it('is false while retries remain — do not shortcut the FSWatch-lag retry loop', () => {
+    expect(shouldFallbackToRootRoute('/test-preview?component=src%2FApp.tsx', 404, 15, 16)).toBe(false);
+    expect(shouldFallbackToRootRoute('/test-preview?component=src%2FApp.tsx', 0, 16, 16)).toBe(false);
+  });
+
+  it('is false for any path other than /test-preview — never redirects asset/API requests', () => {
+    expect(shouldFallbackToRootRoute('/src/App.tsx', 404, 16, 16)).toBe(false);
+    expect(shouldFallbackToRootRoute('/api/projects', 404, 16, 16)).toBe(false);
+    expect(shouldFallbackToRootRoute('/', 404, 16, 16)).toBe(false);
+  });
+
+  it('is false for statuses outside the known dead-end set', () => {
+    expect(shouldFallbackToRootRoute('/test-preview?component=src%2FApp.tsx', 500, 16, 16)).toBe(false);
+    expect(shouldFallbackToRootRoute('/test-preview?component=src%2FApp.tsx', 502, 16, 16)).toBe(false);
+    expect(shouldFallbackToRootRoute('/test-preview?component=src%2FApp.tsx', undefined, 16, 16)).toBe(false);
   });
 });
 

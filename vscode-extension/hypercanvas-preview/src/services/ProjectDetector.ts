@@ -12,6 +12,8 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { invokesBunRuntime, readNxDevCommand } from '@lib/preview-generator/framework-routing';
+import type { NxPackageJson } from '@lib/preview-generator/framework-routing';
 import { getWriterBackedCssSystemIds } from '@lib/style-adapters/registry';
 import type { CssSystem, ProjectInfo, ProjectType, RepoType, UnsupportedProjectError } from '../types';
 import { CSS_SYSTEM_TO_ADAPTER_ID } from '../types';
@@ -257,12 +259,21 @@ export async function detectProjectType(projectPath: string): Promise<ProjectTyp
   if (deps.webpack || deps['webpack-dev-server'] || deps['webpack-cli']) return 'webpack';
 
   // Bun as bundler: @types/bun is the clearest signal (Vite/webpack projects don't have it).
-  // bun-plugin-* deps or a dev script invoking bun directly (bun --hot / bun src/) also count.
+  // bun-plugin-* deps or a dev script invoking the bun runtime also count.
+  //
+  // HYP-904: `devScript` alone misses an nx-monorepo passthrough (`scripts.dev` = "nx run
+  // <pkg>:dev --outputStyle=stream"), whose REAL host command lives one level deeper at
+  // `nx.targets.dev.options.command` (conloca's cms-spa: `bun --bun --hot dev-server.tsx`).
+  // Read both, exactly like framework-routing.ts::detectFramework's own Bun-app signal —
+  // shares that file's `invokesBunRuntime` word-boundary check instead of this function's
+  // former looser regex (`/\bbun\s+(--hot|--watch|src\/|index\.)/`, which required a
+  // specific flag immediately after "bun" and so missed "bun --bun --hot ...").
   const hasBunTypes = Boolean(deps['@types/bun']);
   const hasBunPlugin = Object.keys(deps).some((k) => k.startsWith('bun-plugin-'));
   const scripts = packageJson.scripts as Record<string, string> | undefined;
   const devScript = scripts?.dev ?? scripts?.start ?? '';
-  const bunDirectInvocation = /\bbun\s+(--hot|--watch|src\/|index\.)/.test(devScript);
+  const nxDevCommand = readNxDevCommand(packageJson as NxPackageJson);
+  const bunDirectInvocation = invokesBunRuntime(devScript) || invokesBunRuntime(nxDevCommand);
   if (hasBunTypes || hasBunPlugin || bunDirectInvocation) return 'bun';
 
   // Check for config files

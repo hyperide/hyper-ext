@@ -110,20 +110,26 @@ export function shouldSwallowStaleBundleResponse(proxyPath: string, statusCode: 
 export function testPreviewRetryBudget(isRemixProject: boolean): number {
   return isRemixProject ? 60 : 16;
 }
-
 /**
- * True once the `/test-preview` retry budget (testPreviewRetryBudget) is exhausted and the
- * dev server is STILL answering 404/403/503 for the preview document itself.
+ * True once the `/test-preview` retry budget (testPreviewRetryBudget) above is
+ * exhausted and the dev server is STILL 404/403/503-ing it.
  *
- * HYP-903 (live-verified against conloca's cms-spa): a dev server with no catch-all/SPA
- * fallback route for `/test-preview` — e.g. Bun's `Bun.serve({ routes: { '/': index } })`,
- * which serves only `/` — 404s forever; curling it directly returns status 404 with a
- * completely empty body and no content-type. Before this predicate existed, that raw
- * empty body fell straight through PreviewProxy's non-HTML pass-through to the iframe: a
- * genuinely blank canvas with zero indication of why. Gates showing an explicit
- * "dev server unreachable" page instead of that silent pass-through.
+ * HYP-903 (live-verified against conloca's cms-spa): a dev server with no
+ * catch-all/SPA-fallback route for `/test-preview` — e.g. Bun's
+ * `Bun.serve({ routes: { '/': index } })`, which serves only `/` — 404s FOREVER,
+ * not from the FSWatch lag the retry loop above exists to ride out. Contrast the
+ * WORKING Bun samples (`hyperide-bun-spa`, `bun-tw-shadcn-sample`), which use a
+ * catch-all (`fetch()` fallback / `routes: { '/*': index }`) and so serve
+ * `/test-preview` directly — this predicate never fires for them because their
+ * retry never exhausts on a real 404.
+ *
+ * Gates PreviewProxy retrying the SAME request one more time against `/` instead
+ * of giving up: the one path a serve-at-root dev server DOES answer. This is
+ * PreviewProxy's FIRST recovery attempt once the retry budget is spent —
+ * `shouldShowDevServerUnreachable` below is the fallback of THIS fallback, gated
+ * on the root retry having already been tried and having ALSO failed.
  */
-export function shouldShowDevServerUnreachable(
+export function shouldFallbackToRootRoute(
   proxyPath: string,
   statusCode: number | undefined,
   retryCount: number,
@@ -134,6 +140,28 @@ export function shouldShowDevServerUnreachable(
     proxyPath.startsWith('/test-preview') &&
     retryCount >= retryBudget
   );
+}
+
+/**
+ * True once the `/test-preview` retry budget is exhausted AND the one-shot root-route
+ * fallback (shouldFallbackToRootRoute, tried first by PreviewProxy) has ALSO come back
+ * 404/403/503. At that point retrying again would just repeat the same dead end, so
+ * PreviewProxy shows this explicit "dev server unreachable" page instead of letting the
+ * (usually empty-bodied) error response pass straight through to the iframe as a silent
+ * blank canvas.
+ *
+ * Shares `shouldFallbackToRootRoute`'s exact trigger formula on purpose — both predicates
+ * answer the same underlying question ("is this dev server's /test-preview a permanent
+ * dead end, not FSWatch lag?"); PreviewProxy tells them apart by call ORDER
+ * (`rootFallbackAttempted`), not by a different boolean condition.
+ */
+export function shouldShowDevServerUnreachable(
+  proxyPath: string,
+  statusCode: number | undefined,
+  retryCount: number,
+  retryBudget: number,
+): boolean {
+  return shouldFallbackToRootRoute(proxyPath, statusCode, retryCount, retryBudget);
 }
 
 const HTML_ESCAPE_MAP: Record<string, string> = {

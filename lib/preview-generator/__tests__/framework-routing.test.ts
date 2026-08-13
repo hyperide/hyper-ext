@@ -207,6 +207,152 @@ describe('detectFramework — primary via package.json', () => {
     expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
   });
 
+  // HYP-885: a Bun-based nx-monorepo sub-package (conloca cms-spa) has NEITHER a per-package
+  // bun.lock (only the monorepo root does) NOR the exact `bun-plugin-tailwind` name (it uses the
+  // differently-named `bun-tailwindcss`), so the old two-signal check returned 'unknown' →
+  // 'unsupported' → indefinite blank canvas. The local Bun-APP signal fixes this: it needs BOTH
+  // a dev/host command that runs the Bun runtime AND a real React HTML module entry.
+  it('detects Bun (nx-monorepo sub-package): nx dev command runs bun + React HTML entry, no local lockfile', async () => {
+    const io = makeIO(
+      {
+        // scripts.dev is an nx passthrough — the real command is nested under nx.targets.dev.
+        scripts: { dev: 'nx run cms-spa:dev --outputStyle=stream' },
+        nx: { targets: { dev: { options: { command: 'bun --bun --hot dev-server.tsx' } } } },
+        // bun-tailwindcss, NOT bun-plugin-tailwind → the old dep-name check misses it.
+        devDependencies: { 'bun-tailwindcss': '^0.0.9', react: '^19.0.0' },
+      },
+      [`${root}/src/main.tsx`],
+      {
+        [`${root}/src/index.html`]:
+          '<!doctype html><div id="root"></div><script type="module" src="./main.tsx"></script>',
+      },
+    );
+    // No local bun.lock and no bun-plugin-tailwind — this passes ONLY via the new local signal.
+    expect((await detectFramework(root, io)).framework).toBe('bun');
+  });
+
+  // HYP-885: the local signal's command half must also fire from a direct `scripts.dev` bun
+  // invocation (a single-repo Bun app with no nx passthrough), not only via nx.targets.dev.
+  it('detects Bun via a direct scripts.dev bun command + React HTML entry (no lockfile, no nx)', async () => {
+    const io = makeIO(
+      { scripts: { dev: 'bun --hot dev-server.tsx' }, devDependencies: { react: '^19.0.0' } },
+      [`${root}/src/main.tsx`],
+      { [`${root}/src/index.html`]: '<script type="module" src="./main.tsx"></script>' },
+    );
+    expect((await detectFramework(root, io)).framework).toBe('bun');
+  });
+
+  // HYP-885: `bunx` is a real Bun-runtime command word the regex accepts — lock it positively.
+  // Also covers a root-level index.html (htmlDir === '', the `posix.join('', src)` branch).
+  it('detects Bun via a bunx dev command + root index.html React entry', async () => {
+    const io = makeIO(
+      { scripts: { dev: 'bunx --bun serve.ts' }, devDependencies: { react: '^19.0.0' } },
+      [`${root}/main.tsx`],
+      { [`${root}/index.html`]: '<script type="module" src="./main.tsx"></script>' },
+    );
+    expect((await detectFramework(root, io)).framework).toBe('bun');
+  });
+
+  // HYP-885 regression guard: a pure LIBRARY sub-package (conloca mdx) has no `dev` script, no
+  // `nx.targets.dev`, and no HTML entry — nothing to preview. It must stay 'unknown' (→ honest
+  // 'unsupported' terminal screen), never over-eagerly matched as Bun. A bun command in a
+  // NON-dev nx target (`test`) must NOT trigger the signal either.
+  it('mdx-shaped library sub-package (no dev script/target, no HTML entry) stays unknown', async () => {
+    const io = makeIO({
+      scripts: { test: 'nx run mdx:test --outputStyle=stream' },
+      nx: { targets: { test: { options: { command: 'bun --conditions=production test' } } } },
+      dependencies: { react: '^19.0.0' },
+    });
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
+  });
+
+  // HYP-885: Astro detection is unaffected. website/astro also carries `nx.targets.dev`, but its
+  // command is `astro dev` — the astro dep wins earlier, AND the Bun-command regex must not match
+  // `astro dev` even if it reached the Bun block.
+  it('astro sub-package with nx dev command "astro dev" stays astro', async () => {
+    const io = makeIO({
+      dependencies: { astro: '^4.0.0' },
+      scripts: { dev: 'nx run website:dev --outputStyle=stream' },
+      nx: { targets: { dev: { options: { command: 'astro dev' } } } },
+    });
+    expect((await detectFramework(root, io)).framework).toBe('astro');
+  });
+
+  // HYP-885 bonus: prove the Bun-command regex is anchored on word boundaries, not a naive
+  // substring/`\b` match. `astro dev` (no astro dep here) and `bunyan-logger start` both contain
+  // no real `bun`/`bunx` command word, and `bun-tailwindcss --watch` is a hyphenated CLI NAME
+  // where a naive `\bbun\b` WOULD false-match (\b sits between `n` and `-`). All must stay unknown
+  // even though each fixture also has a React HTML entry (so only the command check can reject them).
+  it('does not treat a hyphenated command name (bun-tailwindcss) as a Bun-runtime invocation', async () => {
+    const io = makeIO(
+      { scripts: { dev: 'bun-tailwindcss --watch -i in.css -o out.css' }, devDependencies: { react: '^19.0.0' } },
+      [`${root}/src/main.tsx`],
+      { [`${root}/src/index.html`]: '<script type="module" src="./main.tsx"></script>' },
+    );
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
+  });
+
+  it('does not classify as Bun when "bun" is only a substring of another word (bunyan-logger)', async () => {
+    const io = makeIO(
+      { scripts: { dev: 'bunyan-logger start' }, devDependencies: { react: '^19.0.0' } },
+      [`${root}/src/main.tsx`],
+      { [`${root}/src/index.html`]: '<script type="module" src="./main.tsx"></script>' },
+    );
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
+  });
+
+  it('rejects a non-Bun host command ("astro dev") even with a React HTML entry present', async () => {
+    const io = makeIO(
+      { nx: { targets: { dev: { options: { command: 'astro dev' } } } }, devDependencies: { react: '^19.0.0' } },
+      [`${root}/src/main.tsx`],
+      { [`${root}/src/index.html`]: '<script type="module" src="./main.tsx"></script>' },
+    );
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
+  });
+
+  // HYP-885: BOTH signals are required (AND), so neither alone over-matches.
+  it('requires both signals: a Bun dev command WITHOUT a React HTML entry is not enough → unknown', async () => {
+    const io = makeIO({
+      nx: { targets: { dev: { options: { command: 'bun --hot dev-server.tsx' } } } },
+      dependencies: { react: '^19.0.0' },
+    });
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
+  });
+
+  it('requires both signals: a React HTML entry WITHOUT a Bun dev command is not enough → unknown', async () => {
+    const io = makeIO(
+      { scripts: { dev: 'node server.js' }, devDependencies: { react: '^19.0.0' } },
+      [`${root}/src/main.tsx`],
+      { [`${root}/src/index.html`]: '<script type="module" src="./main.tsx"></script>' },
+    );
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
+  });
+
+  // HYP-885: signal (b) needs a RESOLVABLE module entry, not merely an HTML file. An index.html
+  // whose <script type="module" src> points at a file that doesn't exist → detectHtmlModuleEntry
+  // returns null → not Bun. (This "the entry actually resolves" property is what makes the signal
+  // meaningful rather than "any index.html".)
+  it('does not classify as Bun when the HTML module entry points at a nonexistent file', async () => {
+    const io = makeIO(
+      { scripts: { dev: 'bun --hot dev-server.tsx' }, devDependencies: { react: '^19.0.0' } },
+      [], // note: src/main.tsx is NOT present
+      { [`${root}/src/index.html`]: '<script type="module" src="./main.tsx"></script>' },
+    );
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
+  });
+
+  it('local Bun-app signal requires React in deps (Bun HTML entry without React → unknown)', async () => {
+    const io = makeIO(
+      {
+        nx: { targets: { dev: { options: { command: 'bun --hot dev-server.tsx' } } } },
+        dependencies: { preact: '^10.0.0' },
+      },
+      [`${root}/src/main.tsx`],
+      { [`${root}/src/index.html`]: '<script type="module" src="./main.tsx"></script>' },
+    );
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
+  });
+
   it('detects Vite via vite.config.ts when vite is hoisted (monorepo sub-package, no explicit vite dep)', async () => {
     const io = makeIO({ dependencies: { react: '^19.0.0' } }, [`${root}/vite.config.ts`]);
     expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
@@ -253,6 +399,23 @@ describe('detectFramework — primary via package.json', () => {
     const io: FileIO = {
       async readFile() {
         throw new Error('ENOENT');
+      },
+      async writeFile() {},
+      async access() {
+        throw new Error('ENOENT');
+      },
+    };
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
+  });
+
+  // HYP-885 regression: a valid-but-non-object package.json (literal JSON `null`) must still
+  // resolve to 'unknown', not throw. `pkg` is now read again in the Bun block (`pkg.scripts`),
+  // so `null.scripts` would throw OUTSIDE the parse try — the defensive object-guard prevents it.
+  it('returns unknown (does not throw) when package.json is a literal JSON null', async () => {
+    const io: FileIO = {
+      async readFile(p: string) {
+        if (p.endsWith('package.json')) return 'null';
+        throw new Error(`ENOENT: ${p}`);
       },
       async writeFile() {},
       async access() {

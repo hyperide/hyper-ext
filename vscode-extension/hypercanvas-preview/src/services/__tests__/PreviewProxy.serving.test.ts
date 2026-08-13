@@ -183,10 +183,13 @@ describe('PreviewProxy process-shim', () => {
  * /test-preview retry-exhaustion warning (HYP-903/HYP-914).
  *
  * Exercises the REAL wiring end-to-end (not just the pure predicate/builder unit tests in
- * PreviewAssetResponses.test.ts): an upstream that never serves /test-preview (matching the
- * live-verified conloca cms-spa topology — `Bun.serve({ routes: { '/': index } })`, 404 with
- * an empty body) must, after the retry budget is exhausted, get an explicit 200 HTML warning
- * through the proxy instead of the raw empty pass-through.
+ * PreviewAssetResponses.test.ts): a dev server that is truly unreachable everywhere — NOT
+ * the cms-spa "serves only root" shape (that root-fallback-SUCCEEDS case is covered by
+ * PreviewProxy.catchall-fallback.test.ts) — must, once the retry budget AND the one-shot
+ * root-route fallback have both come back empty, get an explicit 200 HTML warning through
+ * the proxy instead of the raw empty pass-through. If root instead served real HTML here,
+ * the correct combined behavior is to show THAT content (root-fallback succeeding), not
+ * this warning — so this test's upstream 404s root too, to reach the genuine dead-end case.
  *
  * The real backoff sums to ~46s (16 retries, non-Remix) — too slow for a unit test. Fast-
  * forward it by capping every setTimeout delay at 1ms; this preserves the exact retry COUNT
@@ -216,17 +219,15 @@ describe('PreviewProxy /test-preview retry exhaustion (HYP-903/HYP-914)', () => 
   });
 
   it('serves the explicit warning page once retries are exhausted, not the raw empty 404', async () => {
-    // Replace the default-200 marker upstream with one shaped like cms-spa's real Bun dev
-    // server: /test-preview 404s with an empty body, everything else (root) serves 200 HTML.
+    // A dev server with NO working route at all — /test-preview AND root both 404 with an
+    // empty body. Root also failing is what distinguishes this from the cms-spa shape (root
+    // fallback succeeds there, covered by PreviewProxy.catchall-fallback.test.ts): only once
+    // BOTH the retry budget and the root-route fallback are exhausted does this warning page
+    // fire — if root served real content instead, that content should win over this warning.
     await upstream.close();
-    upstream = await startUpstream((req, res) => {
-      if ((req.url ?? '').startsWith('/test-preview')) {
-        res.writeHead(404, { 'content-length': '0' });
-        res.end();
-        return;
-      }
-      res.writeHead(200, { 'content-type': 'text/html' });
-      res.end('<html><body>root</body></html>');
+    upstream = await startUpstream((_req, res) => {
+      res.writeHead(404, { 'content-length': '0' });
+      res.end();
     });
 
     proxy = new PreviewProxy(upstream.port);

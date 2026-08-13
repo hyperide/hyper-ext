@@ -7,7 +7,7 @@
  * Architecture: https://hyperide.github.io/reports/preview-routing
  */
 
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import type { FileIO } from '../ast/file-io';
 
 export type FrameworkType =
@@ -47,9 +47,100 @@ async function exists(io: FileIO, p: string): Promise<boolean> {
   }
 }
 
-interface PackageJson {
+/**
+ * Nx project config embedded in package.json. In an nx monorepo `scripts.dev` is usually a
+ * passthrough (`nx run <pkg>:dev`) and the REAL host command lives one level deeper, at
+ * `nx.targets.dev.options.command`.
+ *
+ * Exported (HYP-904) so ProjectDetector.ts's own, independent bun/framework detector reads
+ * this identical shape instead of re-deriving its own inline cast — the two detectors already
+ * drifted once (HYP-885 fixed this file's Bun-app signal; ProjectDetector.ts kept the old,
+ * nx-blind one until HYP-904).
+ */
+export interface NxPackageJson {
+  nx?: { targets?: Record<string, { options?: { command?: string } }> };
+}
+
+/** The real dev command for an nx-monorepo passthrough package, if present. */
+export function readNxDevCommand(pkg: NxPackageJson | undefined): string | undefined {
+  return pkg?.nx?.targets?.dev?.options?.command;
+}
+
+interface PackageJson extends NxPackageJson {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  /** Package scripts — read for the local Bun-app signal (`scripts.dev` running the Bun runtime). */
+  scripts?: Record<string, string>;
+}
+
+/**
+ * HTML files (priority order) that may carry a local app's module entry `<script>`.
+ * Single source of truth shared by two consumers so they can never disagree about "does
+ * this project have a module HTML entry": PreviewModeManager patches the entry this resolves
+ * to, and detectFramework uses the same probe as one of the two local Bun-app signals.
+ */
+const HTML_MODULE_ENTRY_CANDIDATES = ['index.html', 'src/index.html', 'client/index.html', 'app/index.html'] as const;
+
+/**
+ * Resolve a local HTML file's `<script type="module" src="...">` to the ABSOLUTE path of the
+ * module it points at, when that module exists on disk. Returns null when no candidate HTML has
+ * a module script whose target resolves to a real local .js/.jsx/.ts/.tsx file.
+ *
+ * Mirrors the heuristic the extension relies on for SPA entry patching (Bun/webpack/parcel):
+ * external/absolute-URL and Vite virtual (`/@`) scripts are ignored; the src is resolved
+ * relative to the HTML file's own directory. PreviewModeManager._detectHtmlEntryFile delegates
+ * here so the classifier and the patcher share exactly one implementation.
+ */
+export async function detectHtmlModuleEntry(projectRoot: string, io: FileIO): Promise<string | null> {
+  for (const htmlRel of HTML_MODULE_ENTRY_CANDIDATES) {
+    let html: string;
+    try {
+      html = await io.readFile(join(projectRoot, htmlRel));
+    } catch {
+      continue;
+    }
+
+    const htmlDir = htmlRel.includes('/') ? htmlRel.slice(0, htmlRel.lastIndexOf('/')) : '';
+    // HTML tag names are case-insensitive — match `<SCRIPT>`/`<Script>` too
+    // (CodeQL js/bad-tag-filter). Regex HTML parsing is a smell; this only sniffs the
+    // module entry script, it does not strip/sanitize markup.
+    const scriptTags = html.matchAll(/<script\b[^>]*>/gi);
+    for (const match of scriptTags) {
+      const tag = match[0];
+      if (!/\btype=["']module["']/i.test(tag)) continue;
+      const src = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1];
+      if (!src || src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/@')) continue;
+
+      const rel = src.startsWith('/') ? src.slice(1) : posix.normalize(posix.join(htmlDir, src));
+      if (!/\.[cm]?[jt]sx?$/.test(rel)) continue;
+
+      const abs = join(projectRoot, rel);
+      try {
+        await io.readFile(abs);
+        return abs;
+      } catch {
+        /* script target not present */
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * True when a package script/command string invokes the Bun RUNTIME (`bun …` / `bunx …`) as a
+ * real command word — anchored on whitespace or string start/end so it does NOT false-match a
+ * hyphenated dependency NAME (`bun-tailwindcss`) or an unrelated word (`bunyan-logger start`).
+ * A naive `\bbun\b` fails here: `\b` sits between `n` and `-`, so it WOULD match inside
+ * `bun-tailwindcss`. Non-Bun host commands like `astro dev` / `vite` are correctly rejected.
+ *
+ * Exported (HYP-904) so ProjectDetector.ts's OWN, independent bun/framework detector can share
+ * this exact check instead of re-deriving its own (looser) regex that drifts out of sync —
+ * ProjectDetector's pre-fix `/\bbun\s+(--hot|--watch|src\/|index\.)/` required a specific flag
+ * immediately after `bun`, so it missed `bun --bun --hot dev-server.tsx` (conloca's cms-spa).
+ */
+export function invokesBunRuntime(command: string | undefined): boolean {
+  return command !== undefined && /(?:^|\s)bunx?(?=\s|$)/.test(command);
 }
 
 const ASTRO_CONFIG_FILES = [
@@ -91,11 +182,16 @@ async function readAstroSrcDir(projectRoot: string, io: FileIO): Promise<string 
 export async function detectFramework(projectRoot: string, io: FileIO): Promise<DetectionResult> {
   // 1. Read package.json once — primary signal for all frameworks
   let deps: Record<string, string> = {};
+  let pkg: PackageJson = {};
   try {
-    const pkg = JSON.parse(await io.readFile(join(projectRoot, 'package.json'))) as PackageJson;
+    const parsed = JSON.parse(await io.readFile(join(projectRoot, 'package.json'))) as unknown;
+    // Keep `pkg` an object even for a valid-but-non-object package.json (e.g. literal `null`):
+    // `pkg` is read again below (step 7 `pkg.scripts`/`pkg.nx`), and `null.scripts` would throw
+    // OUTSIDE this try — regressing the "malformed package.json → unknown" contract.
+    pkg = parsed && typeof parsed === 'object' ? (parsed as PackageJson) : {};
     deps = { ...pkg.dependencies, ...pkg.devDependencies };
   } catch {
-    /* package.json missing — fall through to unknown */
+    /* package.json missing or unparseable — fall through to unknown */
   }
 
   // 2. Next.js — sub-classify via filesystem, preserve actual dir for path generation
@@ -178,9 +274,33 @@ export async function detectFramework(projectRoot: string, io: FileIO): Promise<
 
   // 7. Bun's React template serves index.html through Bun.serve() and does
   // not have a framework router. Patch its browser entry file like a plain SPA.
+  //
+  // Three OR-ed signals classify a project as 'bun':
+  //   • a LOCAL bun.lock/bun.lockb (classic single-repo Bun app), or
+  //   • a `bun-plugin-tailwind` dependency (Bun's React+Tailwind starter), or
+  //   • a LOCAL Bun-APP signal (HYP-885): BOTH a dev/host script that actually runs through
+  //     the Bun runtime AND a real React HTML module entry to patch.
+  //
+  // The local Bun-APP signal exists for monorepo sub-packages that have NEITHER a per-package
+  // lockfile (only the monorepo root has bun.lock) NOR the exact `bun-plugin-tailwind` name
+  // (conloca's cms-spa uses the differently-named `bun-tailwindcss`). Both halves are
+  // deliberately PER-PACKAGE: we must NOT walk up to a monorepo-root bun.lock, which would
+  // misclassify a pure library sub-package (e.g. conloca's `mdx`, no dev script at all) as a
+  // Bun app. The dev command is read from BOTH `scripts.dev` and, for nx passthroughs
+  // (`nx run <pkg>:dev`), the nested `nx.targets.dev.options.command`.
   const hasBunLock =
     (await exists(io, join(projectRoot, 'bun.lock'))) || (await exists(io, join(projectRoot, 'bun.lockb')));
-  if (hasBunLock || deps['bun-plugin-tailwind']) {
+  const runsBunLocally = invokesBunRuntime(pkg.scripts?.dev) || invokesBunRuntime(readNxDevCommand(pkg));
+  // The HTML-entry probe (up to 4 file reads) runs ONLY when the cheap signals warrant it: a
+  // local bun dev command is present AND this isn't already Bun by lockfile/plugin. So a plain
+  // React library that merely reaches step 7 pays nothing for the second signal.
+  const isLocalBunApp =
+    runsBunLocally &&
+    !hasBunLock &&
+    !deps['bun-plugin-tailwind'] &&
+    Boolean(deps.react) &&
+    (await detectHtmlModuleEntry(projectRoot, io)) !== null;
+  if (hasBunLock || deps['bun-plugin-tailwind'] || isLocalBunApp) {
     return { framework: 'bun' };
   }
 
