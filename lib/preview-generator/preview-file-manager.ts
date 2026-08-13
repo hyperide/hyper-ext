@@ -30,7 +30,13 @@ import {
   type ProviderWrapConfig,
   type SSRMockConfig,
 } from './generator';
-import { clearSkipWorktree, ensureGitExclude, ensureSkipWorktree, ensureStandaloneEntry } from './preview-file-ops';
+import {
+  clearSkipWorktree,
+  ensureGitExclude,
+  ensureSkipWorktree,
+  ensureStandaloneEntry,
+  listSkipWorktreeFiles,
+} from './preview-file-ops';
 import { buildEntry, computeImportPath } from './preview-build-entry';
 import { getSampleFilePath } from './sample-ensurer';
 import {
@@ -1134,7 +1140,11 @@ export class PreviewFileManager {
    * Uses recast for AST editing (preserves formatting). Tags with @hyperide-managed.
    * Only for Vite SPA JSX router (App Shell mode, no wrapper).
    */
-  async patchRouterConfig(routerFilePath: string, onBeforeWrite?: () => void): Promise<RouterPatchOutcome> {
+  async patchRouterConfig(
+    routerFilePath: string,
+    onBeforeWrite?: () => void,
+    onWrite?: (written: string) => void,
+  ): Promise<RouterPatchOutcome> {
     const source = await this.io.readFile(routerFilePath);
     const ast = recast.parse(source, { parser: RECAST_PARSER });
 
@@ -1227,8 +1237,10 @@ export class PreviewFileManager {
     const previewImport = `import CanvasPreview from '${importPath}'; // @hyperide-managed\n`;
     const output = recast.print(ast).code;
     const alreadyImportsPreview = await this._hasImport(routerFilePath, importPath);
+    const written = alreadyImportsPreview ? output : previewImport + output;
     onBeforeWrite?.();
-    await this.io.writeFile(routerFilePath, alreadyImportsPreview ? output : previewImport + output);
+    await this.io.writeFile(routerFilePath, written);
+    onWrite?.(written);
     return 'written';
   }
 
@@ -1291,6 +1303,7 @@ export class PreviewFileManager {
     entryFilePath: string,
     importTarget = './__canvas_preview__',
     onBeforeWrite?: () => void,
+    onWrite?: (written: string) => void,
   ): Promise<boolean> {
     const source = await this.io.readFile(entryFilePath);
     if (source.includes('@hyperide-managed')) return false;
@@ -1440,12 +1453,15 @@ export class PreviewFileManager {
       const appendedSource = `${source}\n// @hyperide-managed\nif (${condition}) { ${importBody}; }\n`;
       onBeforeWrite?.();
       await this.io.writeFile(entryFilePath, appendedSource);
+      onWrite?.(appendedSource);
       await this._skipWorktreeEntry(entryFilePath);
       return true;
     }
 
+    const printed = recast.print(ast).code;
     onBeforeWrite?.();
-    await this.io.writeFile(entryFilePath, recast.print(ast).code);
+    await this.io.writeFile(entryFilePath, printed);
+    onWrite?.(printed);
     await this._skipWorktreeEntry(entryFilePath);
     return true;
   }
@@ -1464,9 +1480,45 @@ export class PreviewFileManager {
    * Remove the skip-worktree flag after reverting the @hyperide-managed patch
    * so git tracks the file again (counterpart to _skipWorktreeEntry).
    */
-  private async _clearSkipWorktreeEntry(absoluteFilePath: string): Promise<void> {
+  private async _clearSkipWorktreeEntry(absoluteFilePath: string): Promise<boolean> {
     const gitRoot = await this.findGitRoot(dirname(absoluteFilePath));
-    if (gitRoot) clearSkipWorktree(absoluteFilePath, gitRoot);
+    if (!gitRoot) return true; // not a git repo — nothing to clear, treat as success
+    return clearSkipWorktree(absoluteFilePath, gitRoot);
+  }
+
+  /**
+   * Public counterpart to {@link _skipWorktreeEntry}: clear the skip-worktree flag on an
+   * EXACT, known-patched file path. The crash-revert (HYP-945) uses this to clear the flag on
+   * the file it actually patched, rather than re-detecting the entry — detection can drift
+   * (index.html re-pointed to a different entry between patch and revert) and leave the real
+   * patched file flagged. Returns whether the clear succeeded so the caller can log a failure
+   * (a dangling flag is this fix's one failure mode). True when the file is not in git.
+   */
+  async clearSkipWorktreeFor(absoluteFilePath: string): Promise<boolean> {
+    const gitRoot = await this.findGitRoot(dirname(absoluteFilePath));
+    if (!gitRoot) return true; // not a git repo — nothing to clear, treat as success
+    // Distinguish "not flagged" (untracked, or never flagged) from a REAL clear failure, so the
+    // caller's dangling-flag warn stays a meaningful signal (git returns nonzero for an
+    // untracked path, which would otherwise warn on every revert in an uncommitted project).
+    const rel = relative(gitRoot, absoluteFilePath).replace(/\\/g, '/');
+    if (!listSkipWorktreeFiles(gitRoot, rel).includes(rel)) return true; // nothing to clear
+    return clearSkipWorktree(absoluteFilePath, gitRoot);
+  }
+
+  /**
+   * Absolute paths of every file currently marked skip-worktree UNDER this project's root
+   * (empty when not in git). Scoped to projectRoot — NOT the whole git repo — so a monorepo
+   * sweep never touches a sibling package another HyperIDE instance may be previewing, and the
+   * git listing stays cheap. The HYP-945 crash-recovery sweep marker-gates these to find an
+   * entry HyperIDE flagged even after the entry detection has drifted / never covered a
+   * custom-named entry — without depending on in-memory snapshots lost to a hard crash.
+   */
+  async listSkipWorktreePathsInProject(): Promise<string[]> {
+    const gitRoot = await this.findGitRoot(this.projectRoot);
+    if (!gitRoot) return [];
+    // Forward-slash pathspec — git treats backslash pathspecs unreliably on Windows.
+    const pathspec = (relative(gitRoot, this.projectRoot) || '.').replace(/\\/g, '/');
+    return listSkipWorktreeFiles(gitRoot, pathspec).map((rel) => join(gitRoot, rel));
   }
 
   /**

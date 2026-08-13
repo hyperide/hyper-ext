@@ -32,6 +32,7 @@ import { shouldRetryWithAppWrapper } from '@shared/components/preview-chrome/app
 import * as vscode from 'vscode';
 import { runAppModeActivation } from './webview-preview-panel/app-mode-activation';
 import { resetPreviewToAppShell } from './webview-preview-panel/reset-to-app-shell';
+import { createLivenessGuard, runGuardedStartupSweep } from './startup-sweep';
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import {
@@ -107,12 +108,22 @@ let session: SessionTelemetry | null = null;
 let prepareDevServerTargetRef: (() => Promise<{ kind: 'ready' } | { kind: 'ambiguous'; targets: string[] }>) | null =
   null;
 let rerootDevServerTargetRef: ((target: string) => Promise<void>) | null = null;
+// The live PreviewModeManager, exposed at module scope so deactivate() can best-effort
+// revert any @hyperide-managed injection it left in the target app's own source before
+// the host tears down (HYP-945). Updated on activation and every workspace reroot.
+let activeModeManagerRef: PreviewModeManager | null = null;
+// Set at the top of deactivate() so the git-discard re-patch watcher's debounced callback
+// does NOT re-inject after deactivate()'s revert has cleaned the target source — the
+// watcher's write would otherwise race the shutdown revert and re-dirty the tree (HYP-945).
+// Reset on activate() so a re-activation in the same host starts clean.
+let isDeactivating = false;
 let _prevDiagnosticSinkPath: string | undefined;
 let _diagnosticCaptureActive = false;
 
 export function activate(context: vscode.ExtensionContext) {
   const activationStartedAt = Date.now();
   console.log('[HyperIDE] Extension activating...');
+  isDeactivating = false; // reset for a re-activation in the same host (HYP-945)
 
   // Telemetry seam. Constructs safely with NO keys and stays inert when
   // telemetry is disabled — must never throw or block activation.
@@ -1144,7 +1155,16 @@ export function activate(context: vscode.ExtensionContext) {
   let activeWorkspaceRoot = workspaceRoot;
   let previewManager = createPreviewFileManager(activeWorkspaceRoot);
   let modeManager = createPreviewModeManager(activeWorkspaceRoot);
-  modeManager.startWatching();
+  activeModeManagerRef = modeManager;
+
+  // Single liveness predicate for every async continuation that could touch the target
+  // source after being superseded (HYP-945). Keyed on the MODULE-LEVEL activeModeManagerRef
+  // (updated on every activate + reroot, nulled in deactivate) so a stale continuation from
+  // a prior activation can't pass after a deactivate→reactivate cycle. See createLivenessGuard.
+  const isManagerLive = createLivenessGuard<PreviewModeManager>(
+    () => activeModeManagerRef,
+    () => isDeactivating,
+  );
 
   // Re-patch entry/router file after git-discard removes the @hyperide-managed marker.
   // Watches both the router file (App.tsx for vite-spa-jsx-router) and the entry file
@@ -1158,16 +1178,32 @@ export function activate(context: vscode.ExtensionContext) {
       mgr.detectRouterFile().catch(() => null),
       mgr.getEntryFilePath().catch(() => null),
     ]);
+    // A reroot/deactivate may have superseded this manager during the awaits above. Do NOT
+    // register watchers for an abandoned root into the shared entryWatcherDisposables array
+    // — that would leak cross-root watchers and re-inject into a root nothing owns (HYP-945).
+    if (!isManagerLive(mgr)) return;
 
     let repatchTimer: ReturnType<typeof setTimeout> | undefined;
     const scheduleRepatch = () => {
       clearTimeout(repatchTimer);
       repatchTimer = setTimeout(async () => {
+        // Only re-inject for a still-live manager: a reroot may have evicted this one, or
+        // the host may be shutting down (deactivate()'s revert already cleaned the source).
+        // Either way a re-patch here would re-dirty an abandoned/torn-down tree (HYP-945).
+        // KNOWN RESIDUAL: this is a check-then-act — a reroot/deactivate landing DURING the
+        // awaited onComponentSelected below can still momentarily dirty the abandoned root.
+        // Pre-existing (onComponentSelected always wrote without a liveness gate); self-heals
+        // via the next activation's startup sweep. A full fix needs cancellation inside
+        // PreviewModeManager (a larger shared-lib change), tracked as follow-up.
+        if (!isManagerLive(mgr)) return;
         // No previewPanel.refresh() — watcher fires on extension's own patch writes too;
         // calling refresh() here resets the iframe mid-setup. HMR handles the reload.
         await mgr.onComponentSelected().catch(() => {});
       }, 300);
     };
+    // Cancel a pending debounce when these watchers are disposed (reroot/teardown) so a
+    // queued timer can't outlive the manager it belongs to.
+    entryWatcherDisposables.push({ dispose: () => clearTimeout(repatchTimer) });
 
     for (const filePath of [routerFile, entryFile]) {
       if (!filePath) continue;
@@ -1178,7 +1214,28 @@ export function activate(context: vscode.ExtensionContext) {
       entryWatcherDisposables.push(watcher);
     }
   };
-  void setupEntryFileWatcher(activeWorkspaceRoot, modeManager);
+  // Startup stale-injection sweep (HYP-945): a prior session may have crashed between
+  // an @hyperide-managed router/entry patch and the canvas-preview swap, leaving the
+  // target app's own tracked source dirty. Nothing owns that injection now (we just
+  // activated), so revert it — the reliable backstop for a hard crash/kill where no
+  // teardown revert ran. The sweep MUST complete before ANY watcher comes online:
+  // startWatching()'s FSWatch and the re-patch watcher both react to injection state,
+  // and the re-patch watcher re-injects whenever the marker disappears (git-discard
+  // recovery), so if either were live during the sweep it could read the sweep's own
+  // revert write as a discard and re-inject, churning the file right back to dirty.
+  // Order per manager: sweep → startWatching → re-patch watcher. The liveness guard drops
+  // the watcher (re)start when a reroot has superseded this manager mid-sweep, or the host
+  // began shutting down (HYP-945 P2) — see runGuardedStartupSweep.
+  const startupSweep = (mgr: PreviewModeManager, rootPath: string): void => {
+    void runGuardedStartupSweep(
+      mgr,
+      () => isManagerLive(mgr),
+      // Return the promise (don't void it) so the helper awaits + catches an async
+      // rejection from watcher construction after setupEntryFileWatcher's first await.
+      () => setupEntryFileWatcher(rootPath, mgr),
+    );
+  };
+  startupSweep(modeManager, activeWorkspaceRoot);
 
   // Re-root only the preview/dev axis (file manager, mode manager, dev server) to
   // `targetRoot`. Used for BOTH a workspace-folder change and a monorepo sub-project
@@ -1195,12 +1252,22 @@ export function activate(context: vscode.ExtensionContext) {
   const rerootPreviewPipeline = (targetRoot: string): Promise<void> => {
     if (targetRoot === activeWorkspaceRoot) return Promise.resolve();
 
+    // Dispose the OLD workspace's re-patch watchers AND mode watcher FIRST, then revert
+    // its injection (HYP-945). Order matters: if the old re-patch watcher were still
+    // live, it would read the old manager's own revert write as a git-discard and
+    // re-inject into a workspace we're about to abandon — stranding it dirty forever
+    // (no future teardown or sweep owns that root again). Best-effort — never blocks.
+    for (const d of entryWatcherDisposables) d.dispose();
+    entryWatcherDisposables = [];
     modeManager.stopWatching();
+    void modeManager.revertManagedInjections();
     activeWorkspaceRoot = targetRoot;
     previewManager = createPreviewFileManager(activeWorkspaceRoot);
     modeManager = createPreviewModeManager(activeWorkspaceRoot);
-    modeManager.startWatching();
-    void setupEntryFileWatcher(activeWorkspaceRoot, modeManager);
+    activeModeManagerRef = modeManager;
+    // Sweep the newly-rooted workspace, then start its watchers — same ordering
+    // rationale as activation (sweep before any watcher goes live).
+    startupSweep(modeManager, activeWorkspaceRoot);
 
     // Not awaited here on purpose: the promise is returned to the caller, which
     // decides whether to await it (eager dev-server start) or fire-and-forget.
@@ -1948,6 +2015,28 @@ export function activate(context: vscode.ExtensionContext) {
 
 export async function deactivate() {
   console.log('[HyperIDE] Extension deactivating...');
+  // Flip BEFORE the revert so the re-patch watcher's debounced callback can't re-inject
+  // over the shutdown revert (HYP-945).
+  isDeactivating = true;
+
+  // Revert any @hyperide-managed injection still applied to the target app's own
+  // tracked source so a graceful shutdown never leaves the client repo dirty
+  // (HYP-945). Best-effort and byte-identical via the manager's pre-injection
+  // snapshots; the startup sweep is the backstop if this is skipped. Time-boxed so a
+  // slow/hung FS can't eat the ~4s deactivate budget the telemetry flush below needs —
+  // a local revert is normally tens of ms; on timeout the startup sweep still cleans up.
+  if (activeModeManagerRef) {
+    const mgr = activeModeManagerRef;
+    activeModeManagerRef = null;
+    try {
+      await Promise.race([
+        mgr.revertManagedInjections(),
+        new Promise<void>((resolve) => setTimeout(resolve, 1500).unref?.()),
+      ]);
+    } catch (err) {
+      console.error('[HyperIDE] Managed-injection revert on deactivate failed:', err);
+    }
+  }
 
   // Telemetry: emit session.ended (+ errorThenQuit check), flush, and shut down.
   // Run FIRST so the flush has the full ~4s deactivate budget. Best-effort.

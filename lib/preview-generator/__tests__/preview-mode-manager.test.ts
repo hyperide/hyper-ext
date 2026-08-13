@@ -1304,3 +1304,192 @@ createRoot(document.getElementById('root')!).render(<App />);
     expect(await io.readFile(`${root}/src/app/App.tsx`)).not.toContain('@hyperide-managed');
   });
 });
+
+// HYP-945: a crash between the @hyperide-managed router-patch injection and the canvas-preview
+// swap used to leave the target app's OWN tracked source dirty. The manager now snapshots the
+// pre-injection bytes and reverts on any crash/teardown. Self-contained fixtures (this block was
+// relocated out of the HYP-931 describe during the HYP-934 merge).
+describe('PreviewModeManager — crash-revert of managed injections (HYP-945)', () => {
+  const ROUTER_SOURCE = `import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+`;
+  const ENTRY_SOURCE = `import { createRoot } from 'react-dom/client';
+import App from './App';
+
+createRoot(document.getElementById('root')!).render(<App />);
+`;
+  function bunWithRouterFiles(): Record<string, string> {
+    return {
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { react: '^18' } }),
+      [`${root}/bun.lock`]: '',
+      [`${root}/src/App.tsx`]: ROUTER_SOURCE,
+      [`${root}/src/index.tsx`]: ENTRY_SOURCE,
+    };
+  }
+
+  it('reverts the injected router patch byte-identical on crash/teardown (snapshot restore, HYP-945)', async () => {
+    const io = makeIO(bunWithRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onComponentSelected();
+    // Sanity: the injection actually landed in the target's own App.tsx.
+    expect(await io.readFile(`${root}/src/App.tsx`)).toContain('@hyperide-managed');
+
+    // Simulate a crash/teardown BETWEEN injection and the canvas-preview swap.
+    await m.revertManagedInjections();
+
+    // The target app's own source is byte-identical to pre-injection — nothing left
+    // dirty in the client working tree, and the untouched entry file is unchanged.
+    expect(await io.readFile(`${root}/src/App.tsx`)).toBe(ROUTER_SOURCE);
+    expect(await io.readFile(`${root}/src/index.tsx`)).toBe(ENTRY_SOURCE);
+  });
+
+  it('sweeps a stale injection a prior crashed session left behind with no snapshot (startup sweep, HYP-945)', async () => {
+    const io = makeIO(bunWithRouterFiles());
+    const opts = {
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    };
+
+    // Session 1 injects, then hard-crashes: its in-memory snapshot dies with the process.
+    const crashed = new PreviewModeManager(opts);
+    await crashed.onComponentSelected();
+    expect(await io.readFile(`${root}/src/App.tsx`)).toContain('@hyperide-managed');
+
+    // Session 2 activates fresh — owns NO snapshot, so it must AST-revert the stale marker.
+    const fresh = new PreviewModeManager(opts);
+    await fresh.revertManagedInjections();
+
+    const app = await io.readFile(`${root}/src/App.tsx`);
+    expect(app).not.toContain('@hyperide-managed');
+    expect(app).not.toContain('/test-preview');
+    // The user's own route + router survive the sweep.
+    expect(app).toContain('path="/"');
+    expect(app).toContain('BrowserRouter');
+  });
+
+  it('is a safe no-op when nothing was ever injected', async () => {
+    const io = makeIO(bunWithRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.revertManagedInjections();
+
+    expect(await io.readFile(`${root}/src/App.tsx`)).toBe(ROUTER_SOURCE);
+    expect(await io.readFile(`${root}/src/index.tsx`)).toBe(ENTRY_SOURCE);
+  });
+
+  it('preserves a user edit made on top of a live injection (surgical AST revert, not byte-clobber, HYP-945)', async () => {
+    const io = makeIO(bunWithRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onComponentSelected();
+
+    // The user adds their own route WHILE the injection is live — now the file differs
+    // from what we wrote, so the pre-injection snapshot must NOT be restored over it.
+    const injected = await io.readFile(`${root}/src/App.tsx`);
+    const edited = injected.replace(
+      '<Route path="/" element={<Home />} />',
+      '<Route path="/" element={<Home />} />\n        <Route path="/dashboard" element={<Home />} />',
+    );
+    expect(edited).not.toBe(injected); // guard: the replace actually landed
+    await io.writeFile(`${root}/src/App.tsx`, edited);
+
+    await m.revertManagedInjections();
+
+    const result = await io.readFile(`${root}/src/App.tsx`);
+    expect(result).toContain('path="/dashboard"'); // the user's edit survived
+    expect(result).not.toContain('@hyperide-managed'); // our injection was stripped
+    expect(result).not.toContain('/test-preview');
+  });
+
+  it('reverts an injected ENTRY-file patch byte-identical on crash/teardown (router-less bun/webpack tier, HYP-945)', async () => {
+    // Exercises the _applyEntryPatch snapshot path — a distinct code branch from the
+    // router path above. Router-less bun app → entry-file patching.
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { react: '^18' } }),
+      [`${root}/bun.lock`]: '',
+      [`${root}/src/index.tsx`]: ENTRY_SOURCE,
+    });
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onComponentSelected();
+    expect(await io.readFile(`${root}/src/index.tsx`)).toContain('@hyperide-managed');
+
+    await m.revertManagedInjections();
+
+    expect(await io.readFile(`${root}/src/index.tsx`)).toBe(ENTRY_SOURCE);
+  });
+
+  it('re-captures a fresh baseline across a patch → revert → patch cycle (HYP-945)', async () => {
+    // The snapshot is dropped on every revert, so a second patch must snapshot a fresh
+    // pristine baseline — otherwise a later crash-revert would restore stale bytes.
+    const io = makeIO(bunWithRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onComponentSelected();
+    await m.revertManagedInjections();
+    expect(await io.readFile(`${root}/src/App.tsx`)).toBe(ROUTER_SOURCE);
+
+    // Second cycle — the injection is fresh, and the crash-revert still lands byte-identical.
+    await m.onComponentSelected();
+    expect(await io.readFile(`${root}/src/App.tsx`)).toContain('@hyperide-managed');
+    await m.revertManagedInjections();
+    expect(await io.readFile(`${root}/src/App.tsx`)).toBe(ROUTER_SOURCE);
+  });
+
+  it('does not resurrect pre-injection bytes when the user already removed the marker (git discard, HYP-945)', async () => {
+    const io = makeIO(bunWithRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onComponentSelected();
+    // User runs `git discard` on the injected file, restoring it themselves. The snapshot's
+    // `after` no longer matches disk, so revert must leave the current bytes untouched.
+    await io.writeFile(`${root}/src/App.tsx`, ROUTER_SOURCE);
+
+    await m.revertManagedInjections();
+
+    expect(await io.readFile(`${root}/src/App.tsx`)).toBe(ROUTER_SOURCE);
+  });
+});

@@ -66,15 +66,48 @@ export function ensureSkipWorktree(absoluteFilePath: string, gitRoot: string): v
  * @hyperide-managed injection is reverted so git tracks the file again.
  *
  * Same path-form precondition as ensureSkipWorktree.
- * Failures are intentionally silent: a dangling skip-worktree flag is recoverable
- * (developer sees no unintended changes in git status; next revert call retries).
+ * Returns whether the `git update-index --no-skip-worktree` call SUCCEEDED (exit 0, no
+ * spawn error) so callers can surface a failed clear — a dangling skip-worktree flag is the
+ * one failure mode of the HYP-945 crash-revert and must be observable, not silent. A false
+ * return is best-effort recoverable (the next revert call retries) but should be logged.
  */
-export function clearSkipWorktree(absoluteFilePath: string, gitRoot: string): void {
+export function clearSkipWorktree(absoluteFilePath: string, gitRoot: string): boolean {
   const relPath = relative(gitRoot, absoluteFilePath);
-  spawnSync('git', ['update-index', '--no-skip-worktree', relPath], {
+  const res = spawnSync('git', ['update-index', '--no-skip-worktree', relPath], {
     cwd: gitRoot,
     stdio: 'ignore',
   });
+  return !res.error && res.status === 0;
+}
+
+/**
+ * Every tracked file currently marked skip-worktree, as repo-relative paths (the 'S' tag in
+ * `git ls-files -v`). Empty on any git failure. Used by the HYP-945 crash-recovery sweep to
+ * find files HyperIDE flagged regardless of entry detection (which can drift, or never covered
+ * a custom entry name). The caller marker-gates before reverting, so a user's own skip-worktree
+ * flag on an unmarked file is never touched.
+ */
+export function listSkipWorktreeFiles(gitRoot: string, pathspec?: string): string[] {
+  // -z: NUL-separated AND raw (no C-quoting), so non-ASCII / spaced / newlined paths parse
+  // correctly — otherwise git C-quotes them (core.quotePath default true) and the file is
+  // silently dropped from recovery, exactly the case this sweep is meant to catch.
+  // pathspec scopes the listing to a subtree (the active project in a monorepo) — both an
+  // OWNERSHIP boundary (never touch a sibling package another instance is previewing) and a
+  // perf bound (don't walk the whole monorepo index on every revert).
+  const args = ['ls-files', '-v', '-z'];
+  if (pathspec) args.push('--', pathspec);
+  const res = spawnSync('git', args, { cwd: gitRoot, encoding: 'utf8' });
+  if (res.error || res.status !== 0 || typeof res.stdout !== 'string') return [];
+  const out: string[] = [];
+  for (const entry of res.stdout.split('\0')) {
+    if (!entry) continue;
+    // Format per entry: "<tag> <path>". 'S' = skip-worktree. The lowercase 's' is accepted
+    // defensively (git lowercases tags when the assume-unchanged bit is also set); it is rare
+    // and the ownership marker-gate downstream makes accepting it harmless.
+    const tag = entry.charAt(0);
+    if (tag === 'S' || tag === 's') out.push(entry.slice(2));
+  }
+  return out;
 }
 
 export async function ensureStandaloneEntry(
