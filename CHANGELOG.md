@@ -6,6 +6,13 @@ All notable changes to HyperCanvas Preview are documented here.
 
 ### Bug fixes
 
+## [0.1.69] — 2026-07-12
+
+### Bug fixes
+
+- **React Router v6.4 data-router preview-route patching** — bun apps with a real (data) router now get router-aware patching so the preview route resolves; entry-file fallback when `patchRouterConfig` no-ops on a data router (HYP-934, #655)
+- **Preview crash-path no longer leaves the target repo dirty** — the preview crash/teardown path now reverts the `@hyperide`-managed injection (including the skip-worktree flag) and sweeps on startup, so a crashed preview no longer leaves injected patches dirtying the user's repo (HYP-945, #654)
+- **Mode HUD no longer covers app content + quiet dev-server spawn** — the mode HUD overlay no longer obscures app content, and the dev-server spawn no longer emits the Node DEP0190 deprecation warning (HYP-962, #653)
 - **Non-compound UI primitives no longer dead-end on "No sample for this component"** — opening a `components/ui/*.tsx` file with no authored `SampleDefault` and no compound sibling exports (a plain `Card`/`Button`/`Badge`-style shadcn primitive) now renders via the existing deterministic per-prop generator instead of landing on the terminal "no sample" screen; registry inclusion only excludes a UI primitive when it BOTH lacks a renderable sample AND has unresolvable `declaredPropNames` (HYP-915) (`daeb50f9`, `94469cb7`, `7968c1bc`)
 
 ## [0.1.68] — 2026-07-09
