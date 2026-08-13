@@ -318,7 +318,7 @@ evidence_required:
 | `E2E` | Playwright+Electron test result against real VS Code Extension or SaaS browser. Artifacts: `docker.log` (named `[test-done]` lines), `ast-debug.log` (AST trace), `screenshots/` (failure captures). | Docker harness (`HYPER_E2E_SHARDS=3 bash scripts/docker-parallel-run.sh`) |
 | `L1` | `bun test` unit test result on L1 core engine (`lib/`, `server/`). Covers AST read/write, StyleWritePlanner, i18n read/write in isolation. | Local or CI: `bun test` in `lib/` or `server/` |
 | `typecheck` | `tsc --noEmit` passing on the affected layer. Evidence for structural type invariants only — not for runtime behavior. | `bun run typecheck` in `vscode-extension/hypercanvas-preview/` or root |
-| `manual:agent` | Agent reads each screenshot with the Read tool, describes literally what is visible, and sends validated screenshots to Telegram. Agent also produces a test-suite summary: which tests ran, what each test checks, and what the CTO should look for visually. This step is mandatory for every behavioral fix — not optional when E2E passes. | Agent (Read tool + `send-tg-file.sh --photo`) |
+| `manual:agent` | Agent reads each screenshot with the Read tool, describes literally what is visible, and sends validated screenshots to Telegram. Agent also produces a test-suite summary: which tests ran, what each test checks, and what the CTO should look for visually. This step is mandatory for every behavioral fix — not optional when E2E passes. | Agent (Read tool + `tg --photo`) |
 | `manual:cto` | CTO acceptance: explicit sign-off after reviewing the agent's Telegram report and screenshots. A fix is not done until the CTO has seen and approved the visual evidence. | CTO via Telegram |
 
 Both `manual` sub-kinds are unified under guard location `manual` in evidence_required.
@@ -343,7 +343,7 @@ The agent duty is two-stage:
    - Read the failure/pass screenshot with the Read tool
    - Describe literally what is visible (not what was expected)
    - Check representativeness: empty preview, "No element selected", raw `{t("...")}` literal, blank canvas, mismatched component — if any of these are present, the screenshot is **invalid**. Stop, identify which fix step produced the bad state, apply the fix, re-run the test, restart this protocol from the beginning. Loop until the screenshot shows the actual feature under test in a meaningful state.
-   - Send the valid screenshot to Telegram via `send-tg-file.sh --photo`
+   - Send the valid screenshot to Telegram via `tg --photo`
    - Describe the test suite: what each test name covers, what the CTO should look for
 
 2. **CTO acceptance** — CTO reviews the Telegram message and screenshots, gives explicit sign-off. The agent marks the commission retired only after this sign-off is received.

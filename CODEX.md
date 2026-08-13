@@ -14,7 +14,7 @@ at session end.
 **Building extension:** `./vscode-extension/hypercanvas-preview/build-and-install.sh`
 
 **Telegram reports:** never pipe raw tool output, logs, diffs, transcripts, or
-model context into `send-tg-report.sh`. Write a short human summary manually and
+model context into Telegram (the `tg` CLI). Write a short human summary manually and
 link the local log/workfile path for details. Pagination is for normal long
 answers, not a license to send megabytes of uncurated text. For long-running
 work, keep a periodic heartbeat active and send a concise status at least every
