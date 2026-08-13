@@ -12,6 +12,7 @@
  */
 
 import * as crypto from 'node:crypto';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { normalizeSampleComponentName } from '@lib/preview-generator';
 import type { RouteSuggestion } from '@lib/preview-generator/route-heuristics';
@@ -1520,26 +1521,195 @@ export class PreviewPanel {
     this._stateHub.applyUpdate({ selectedIds: [], insertTargetId: null });
   }
   /**
+   * Focus the previewed component's document before falling back to VS
+   * Code's native undo — the bare 'undo' command acts on the focused editor
+   * and silently no-ops when the preview webview holds focus instead, which
+   * is the normal state when the canvasUndo keybinding fires (HYP-1026).
+   *
+   * Prefers the column the document is ALREADY visible in (the user may
+   * have dragged its tab elsewhere since it was first opened) and only
+   * falls back to ViewColumn.One — the code column extension.ts establishes
+   * when it first opens a component alongside the preview — when the
+   * document isn't visible in any group. Unconditionally forcing
+   * ViewColumn.One would itself create a duplicate tab / disrupt the
+   * layout if the document were already open in a different column
+   * (Codex review P2 on PR #673). Compares by full URI (not just `fsPath`)
+   * so a same-path virtual editor in another scheme (e.g. a `git:` diff)
+   * can't be mistaken for the real file editor.
+   *
+   * `existingEditor?.viewColumn ?? ViewColumn.One` (NOT a plain `existingEditor
+   * ? existingEditor.viewColumn : One` ternary): `TextEditor.viewColumn` is
+   * itself `ViewColumn | undefined` for editors not hosted in one of the main
+   * groups (e.g. a notebook cell editor). Passing that `undefined` straight
+   * through to `showTextDocument` does NOT "keep it where it is" — VS Code
+   * resolves an undefined viewColumn to the ACTIVE group, which during the
+   * normal empty-stack-undo trigger is the preview webview's group — i.e. it
+   * silently reintroduces the exact HYP-1026 no-op this helper exists to fix.
+   * Falling back to ViewColumn.One in that case is deliberate, even though the
+   * document is technically "visible" somewhere.
+   *
+   * Not handled: the preview webview itself occupying ViewColumn.One. The
+   * codebase's own convention (HYP-363) is that the preview panel always
+   * opens in ViewColumn.Two — `createOrShow` defaults to it and
+   * `extension.ts` always requests it explicitly — so a preview panel
+   * dragged by the user into column One is an already-nonstandard layout
+   * this fix doesn't attempt to special-case, consistent with `extension.ts`
+   * hardcoding ViewColumn.One for the component editor without checking
+   * where the preview panel currently lives.
+   */
+  private async _focusPreviewedDocumentForNativeUndo(componentDocument: vscode.TextDocument): Promise<void> {
+    const existingEditor = vscode.window.visibleTextEditors.find(
+      (editor) => editor.document.uri.toString() === componentDocument.uri.toString(),
+    );
+    await vscode.window.showTextDocument(componentDocument, {
+      viewColumn: existingEditor?.viewColumn ?? vscode.ViewColumn.One,
+      preserveFocus: false,
+      // preview: false — omitting this lets showTextDocument open the document
+      // as a preview (italic) tab, which REPLACES whatever unrelated preview
+      // tab may already be showing in the target column. That's the same
+      // class of layout disruption this whole helper exists to avoid.
+      preview: false,
+    });
+  }
+  /**
+   * Build the previewed component's expected `Uri`, preserving the workspace
+   * folder's URI scheme instead of forcing `file:`. `vscode.Uri.file(...)`
+   * always produces a `file:` URI, but a document open under Remote SSH, WSL,
+   * Dev Containers, or a virtual filesystem provider keeps a different scheme
+   * (e.g. `vscode-remote:`) even though its `fsPath` matches `componentPath`
+   * exactly. Comparing against a forced `file:` URI on those hosts never
+   * matches the real open document — same `fsPath`, wrong scheme — silently
+   * reintroducing the HYP-1026 no-op there (Codex P2, PR #673).
+   *
+   * Falls back to `Uri.file` when no workspace folder matches (e.g. a
+   * monorepo sub-project root that isn't itself a VS Code workspace folder,
+   * or unit tests with no `workspaceFolders` configured) — `file:` is the
+   * only sane default without a folder URI to inherit the scheme from.
+   *
+   * In a MULTI-ROOT workspace the DEEPEST folder that actually CONTAINS
+   * `componentPath` always wins (longest matching `fsPath`), never a mere
+   * ancestor: a plain `.find()` over `f.uri.fsPath === root ||
+   * componentPath.startsWith(...)` can stop at an earlier, less specific
+   * ancestor folder (e.g. a repo root folder) before reaching the actual
+   * active folder, producing the wrong scheme/authority for a provider that
+   * exposes an overlapping `fsPath` (Codex P2, PR #673 follow-up). This does
+   * NOT special-case `_workspaceRoot`'s own folder — a review pass pointed
+   * out that unconditionally preferring an exact `_workspaceRoot` match
+   * would itself pick the wrong (shallower) folder whenever a MORE specific
+   * nested workspace folder also contains `componentPath` (e.g. a nested
+   * Dev Container sub-folder with its own scheme). `_workspaceRoot`'s folder
+   * still wins in the common case simply because it's usually the deepest
+   * (or only) containing folder — no special-casing needed.
+   */
+  private _resolveComponentUri(componentPath: string): vscode.Uri {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    const folder = folders
+      .filter((f) => componentPath === f.uri.fsPath || componentPath.startsWith(f.uri.fsPath + path.sep))
+      .sort((a, b) => b.uri.fsPath.length - a.uri.fsPath.length)[0];
+    if (!folder) {
+      return vscode.Uri.file(componentPath);
+    }
+    // '' when componentPath === folder.uri.fsPath exactly (unreachable in
+    // practice — componentPath is always `join(root, currentComponent)` with
+    // a non-empty currentComponent — but guarded rather than passing an
+    // empty segment through to joinPath).
+    const relative = path.relative(folder.uri.fsPath, componentPath);
+    const relativeSegments = relative === '' ? [] : relative.split(path.sep);
+    return vscode.Uri.joinPath(folder.uri, ...relativeSegments);
+  }
+  /**
+   * Resolve the previewed component's OPEN `TextDocument` and focus it, if any is
+   * open, ahead of a native undo/redo fallback. Runs regardless of whether
+   * `this._panel` is currently set — `_currentComponent` outlives panel disposal
+   * (see the class-level "panel was disposed and re-created" comment), and the
+   * canvasUndo/canvasRedo keybindings can still fire from the Explorer/Inspector
+   * sidebar `when`-clauses while no preview panel is open. Skipping this step in
+   * that case reintroduces the exact HYP-1026 no-op the panel-present path
+   * already guards against — native undo/redo has no focused text editor to act
+   * on when focus is on a sidebar webview instead.
+   *
+   * Looks up the document by FULL URI (via `_resolveComponentUri`, scheme
+   * included), not `fsPath` alone: `vscode.workspace.textDocuments` can
+   * contain a same-path document in a different scheme (e.g. a `git:` Source
+   * Control diff view, or a remote workspace's own scheme). An `fsPath`-only
+   * comparison would match that other document instead of the real file —
+   * showTextDocument/native-undo then act on the wrong document and silently
+   * no-op, reintroducing HYP-1026 via this lookup rather than the
+   * `visibleTextEditors` column lookup inside `_focusPreviewedDocumentForNativeUndo`.
+   *
+   * Returns the resolved `TextDocument` when one was found and focused, or
+   * `undefined` otherwise — callers MUST gate any post-native-command save on
+   * THIS specific document, not on `vscode.window.activeTextEditor` after the
+   * fact. `activeTextEditor` re-read post-command isn't guaranteed to still
+   * be the document this method focused (the native command or something it
+   * triggers could shift focus), and when nothing was found to focus at all
+   * (no `_currentComponent`, or its document isn't open), "active" is
+   * whatever the user already had focused for unrelated reasons — saving it
+   * just because it happens to be dirty would be an unwanted side effect of
+   * an undo/redo that never touched it (review follow-up).
+   */
+  private async _focusPreviewedDocumentIfOpen(): Promise<vscode.TextDocument | undefined> {
+    if (!this._currentComponent) {
+      return undefined;
+    }
+    const componentPath = path.join(this._workspaceRoot, this._currentComponent);
+    const componentUri = this._resolveComponentUri(componentPath).toString();
+    const componentDocument = vscode.workspace.textDocuments.find(
+      (document: vscode.TextDocument) => document.uri.toString() === componentUri,
+    );
+    if (!componentDocument) {
+      return undefined;
+    }
+    // Focus whenever the previewed document is open — not only when dirty.
+    // VS Code's native undo stack survives a save (isDirty=false does not
+    // mean "no undo history"), so gating the focus step on isDirty leaves
+    // the exact HYP-1026 no-op for an edit that was already auto-saved.
+    await this._focusPreviewedDocumentForNativeUndo(componentDocument);
+    return componentDocument;
+  }
+  /**
+   * Run the native VS Code undo fallback: focus the previewed document (if
+   * open), invoke bare `'undo'`, save THAT SAME document if it's left dirty,
+   * then reveal the preview panel — only when one exists (`panel?.reveal()`;
+   * this fallback also runs with no panel open, see `undo()`). The save
+   * target is the document `_focusPreviewedDocumentIfOpen` actually resolved
+   * — not a re-read of `vscode.window.activeTextEditor` after the native
+   * command, which isn't guaranteed to still be that document, and which
+   * would be an unrelated editor entirely when nothing was found to focus.
+   */
+  private async _nativeUndoFallback(panel: vscode.WebviewPanel | undefined): Promise<void> {
+    const focusedDocument = await this._focusPreviewedDocumentIfOpen();
+    await vscode.commands.executeCommand('undo');
+    if (focusedDocument?.isDirty) {
+      await focusedDocument.save();
+    }
+    panel?.reveal();
+  }
+  /**
    * Undo last canvas operation (called from VS Code keybinding command).
-   * Falls back to VS Code native undo when canvas stack is empty.
+   * Falls back to VS Code native undo when the canvas stack is empty.
+   *
+   * The content-based canvas undo stack (`UndoRedoService`) lives independently
+   * of `this._panel` and survives the preview panel being closed, so it is
+   * always tried first — `astBridge.undo(panel)` accepts `panel === undefined`
+   * and simply skips `panel.reveal()` in that case. Without this, closing the
+   * preview panel (while the Explorer/Inspector sidebar keeps the canvasUndo
+   * keybinding live) skipped straight to native undo even when there was valid
+   * canvas history to restore — silently discarding it and undoing an
+   * unrelated native editor operation instead (Codex P1, PR #673).
    */
   public async undo(): Promise<void> {
     console.log('[PreviewPanel] undo() called (keybinding command)');
     const panel = this._panel;
-    if (!panel) {
-      console.log('[PreviewPanel] undo: no panel, falling back to native undo');
-      await vscode.commands.executeCommand('undo');
-      return;
-    }
+    // Captured BEFORE calling undo(): its boolean return is ambiguous — `false`
+    // also means "already in progress" or "the snapshot write failed", neither
+    // of which is "nothing to undo". Falling back to native history in those
+    // cases would revert unrelated editor content instead (Codex P1 follow-up).
+    const stackWasEmpty = !this._panelRouter.astBridge.canUndo();
     const handled = await this._panelRouter.astBridge.undo(panel);
     console.log(`[PreviewPanel] undo: astBridge.undo returned ${handled}`);
-    if (!handled) {
-      console.log('[PreviewPanel] undo: falling back to native VS Code undo');
-      await vscode.commands.executeCommand('undo');
-      const editor = vscode.window.activeTextEditor;
-      if (editor?.document.isDirty) {
-        await editor.document.save();
-      }
+    if (!handled && stackWasEmpty) {
+      await this._nativeUndoFallback(panel);
     }
     // Always bump styleVersion to refresh inspector — both canvas stack and native undo paths
     // revert the file on disk, but inspector caches styles and needs explicit invalidation
@@ -1549,20 +1719,46 @@ export class PreviewPanel {
   }
   /**
    * Redo last canvas operation (called from VS Code keybinding command).
-   * Falls back to VS Code native redo when canvas stack is empty.
+   *
+   * Same content-based-stack-first ordering as `undo()` — `astBridge.redo(panel)`
+   * is tried whether or not a panel is open, since the redo stack also
+   * survives panel disposal.
+   *
+   * No native redo fallback when a panel IS present and canvas redo is
+   * unhandled: applyEdit() syncs populate VS Code's native undo stack,
+   * causing spurious file writes when canRedo()=false — canvas redo stays
+   * self-contained in that case (pre-existing, deliberate — see `03285a7f`).
+   * With NO panel at all, native redo remains the true last resort (nothing
+   * else could have handled it), and now focuses the previewed document
+   * first for the same reason `_nativeUndoFallback` does.
+   *
+   * KNOWN LIMITATION (pre-existing, not introduced here — this branch ran
+   * unconditionally before this fix; the fix only narrowed it to run after
+   * the content-based stack is checked first): a native redo in this
+   * true-last-resort branch can still replay stale VS Code editor history
+   * from before the last real content-based edit, since panel disposal
+   * doesn't clear VS Code's own undo/redo history. Tracked in HYP-1128.
    */
   public async redo(): Promise<void> {
     console.log('[PreviewPanel] redo() called (keybinding command)');
     const panel = this._panel;
-    if (!panel) {
-      console.log('[PreviewPanel] redo: no panel, falling back to native redo');
-      await vscode.commands.executeCommand('redo');
-      return;
-    }
+    // See undo()'s matching comment — captured before the call for the same reason.
+    const stackWasEmpty = !this._panelRouter.astBridge.canRedo();
     const handled = await this._panelRouter.astBridge.redo(panel);
     console.log(`[PreviewPanel] redo: astBridge.redo returned ${handled}`);
-    // No native redo fallback — applyEdit() syncs populate VS Code's native undo stack,
-    // causing spurious file writes when canRedo()=false. Canvas redo is self-contained.
+    if (!handled && stackWasEmpty && !panel) {
+      const focusedDocument = await this._focusPreviewedDocumentIfOpen();
+      await vscode.commands.executeCommand('redo');
+      // Save THAT SAME document if left dirty — matches `_nativeUndoFallback`'s
+      // behavior/gating (see its doc comment for why this isn't a re-read of
+      // `activeTextEditor`). Without this, a redone edit in this no-panel
+      // last-resort branch either stayed unpersisted on disk, or (gated on
+      // activeTextEditor alone) could save an unrelated editor the user
+      // already had open (review follow-up).
+      if (focusedDocument?.isDirty) {
+        await focusedDocument.save();
+      }
+    }
     // Always bump styleVersion to refresh inspector after redo
     this._bumpStyleVersion();
     // Re-emit selection after HMR settles so the new fiber tree picks it up

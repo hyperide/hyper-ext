@@ -205,4 +205,80 @@ describe('UndoRedoService', () => {
       expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
     });
   });
+
+  describe('canRedo() during beginTracking()/endTracking() — the trackingCount clause never conflicts with a non-empty stack', () => {
+    // A review pass on PR #673's follow-up raised a P1 concern: PreviewPanel's
+    // undo()/redo() gate a native-fallback decision on `!canRedo()`, and
+    // `canRedo()` is `redoStack.length > 0 && trackingCount === 0` — so in
+    // theory `trackingCount > 0` could report "empty" while the redo stack
+    // still has real entries, wrongly triggering a native fallback instead of
+    // "busy". This test proves that scenario is UNREACHABLE through the public
+    // API: `beginTracking()` unconditionally clears `_redoStack` as its FIRST,
+    // synchronous action (see its own doc comment), so by the time any caller
+    // observes `trackingCount > 0`, the redo stack is already empty — the
+    // `trackingCount === 0` clause never actually diverges from a plain
+    // `redoStack.length > 0` check for any reachable call sequence.
+    it('has an empty redo stack the instant tracking begins, even if redo had entries a moment earlier', async () => {
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.recordEdit('/workspace/a.tsx', 'v1', 'v2');
+      expect(await svc.undo({ reveal: mock(() => {}) } as vscode.WebviewPanel)).toBe(true);
+      // Redo stack now has one entry from the undo above.
+      expect(svc.canRedo()).toBe(true);
+
+      svc.beginTracking();
+      try {
+        // canRedo() reports false while tracking — NOT because trackingCount
+        // masks a real entry, but because beginTracking() already cleared it.
+        expect(svc.canRedo()).toBe(false);
+      } finally {
+        svc.endTracking();
+      }
+    });
+  });
+
+  describe('canUndo() preflight during a concurrent in-flight undo() — a second overlapping call never sees a false "empty"', () => {
+    // Another review-pass P1 concern: PreviewPanel.undo() reads `canUndo()`
+    // BEFORE calling `undo()`, specifically to tell "nothing to undo" apart
+    // from "undo() returned false because a concurrent call is already in
+    // flight" (`_inProgress`). This test drives that exact race with the REAL
+    // service (not mocks standing in for its return value): a first undo()
+    // call's file write is held open on a controllable promise, and a SECOND
+    // undo() call's `canUndo()` is read while the first is still pending.
+    it('keeps canUndo() true while a first undo() with the same (last) stack entry is still writing', async () => {
+      let releaseFirstWrite: (() => void) | undefined;
+      const firstWriteGate = new Promise<void>((resolve) => {
+        releaseFirstWrite = resolve;
+      });
+      let writeCallCount = 0;
+      (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mockImplementation(async () => {
+        writeCallCount++;
+        if (writeCallCount === 1) {
+          await firstWriteGate;
+        }
+      });
+
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.recordEdit('/workspace/a.tsx', 'before', 'after');
+
+      const panel = { reveal: mock(() => {}) } as unknown as vscode.WebviewPanel;
+      const firstUndo = svc.undo(panel);
+
+      // The first undo() call is now inside its file-write await, holding
+      // `_inProgress = true` and the stack entry NOT YET popped. A second,
+      // overlapping call's canUndo() preflight (as PreviewPanel.undo() does)
+      // must see the stack as still non-empty — never a false "empty".
+      expect(svc.canUndo()).toBe(true);
+      const secondUndoHandled = await svc.undo(panel);
+      // The second call is correctly rejected as "busy" (_inProgress), not
+      // "handled" — its caller's stackWasEmpty-gated native fallback must
+      // NOT fire, because canUndo() (read above) correctly reported true.
+      expect(secondUndoHandled).toBe(false);
+
+      releaseFirstWrite?.();
+      expect(await firstUndo).toBe(true);
+      // Only after the first call fully completes does the stack become
+      // genuinely empty.
+      expect(svc.canUndo()).toBe(false);
+    });
+  });
 });

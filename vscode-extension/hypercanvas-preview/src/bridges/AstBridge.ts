@@ -486,12 +486,30 @@ export class AstBridge {
     return this._withUndoTracking(filePath, () => this._astService.pasteElement(filePath, targetId, tsxCode));
   }
 
-  async undo(panel: vscode.WebviewPanel): Promise<boolean> {
+  /** `panel` is optional — the content-based stack lives in UndoRedoService, not the panel. */
+  async undo(panel?: vscode.WebviewPanel): Promise<boolean> {
     return this._undoRedoService.undo(panel);
   }
 
-  async redo(panel: vscode.WebviewPanel): Promise<boolean> {
+  async redo(panel?: vscode.WebviewPanel): Promise<boolean> {
     return this._undoRedoService.redo(panel);
+  }
+
+  /**
+   * Whether the content-based undo/redo stack currently has an entry.
+   * Callers deciding whether to fall back to VS Code's native undo/redo
+   * MUST check this BEFORE calling `undo()`/`redo()`, not just inspect their
+   * boolean return value: `false` from `undo()`/`redo()` is ambiguous — it
+   * also means "already in progress" or "the snapshot write failed", neither
+   * of which means "nothing to undo/redo". Falling back to native history in
+   * those cases can revert unrelated editor content (Codex P1, PR #673 follow-up).
+   */
+  canUndo(): boolean {
+    return this._undoRedoService.canUndo();
+  }
+
+  canRedo(): boolean {
+    return this._undoRedoService.canRedo();
   }
 
   // === Read-only query methods (with sub-project prefix translation) ===

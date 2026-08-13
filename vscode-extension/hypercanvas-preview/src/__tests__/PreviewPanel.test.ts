@@ -6,7 +6,7 @@
  * Architecture: https://hyperide.github.io/reports/preview-routing
  */
 
-import { describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import * as vscode from 'vscode';
 import type { PanelRouter } from '../PanelRouter';
 import { normalizeSampleComponentName, PreviewPanel, toPickerGroups } from '../PreviewPanel';
@@ -1170,5 +1170,614 @@ describe('PreviewPanel off-screen webview guard (HYP-363)', () => {
     panel.createOrShow(vscode.ViewColumn.Three);
 
     expect(createWebviewPanel.mock.calls[0][2]).toBe(vscode.ViewColumn.Three);
+  });
+});
+
+/**
+ * HYP-1026 — empty-stack canvas undo/redo native fallback.
+ *
+ * Background: when the content-based canvas undo stack is empty,
+ * PreviewPanel.undo()/redo() fall back to VS Code's native undo/redo. Commit
+ * 24d012913 (2026-04-07) proved that 'default:undo'/'default:redo' are NOT
+ * valid executable command ids (they only exist for keybinding `when`-clause
+ * overriding) and reverted the fallback to the bare 'undo'/'redo' command ids
+ * — these tests pin that decision so it is never silently flipped back.
+ *
+ * The real bug this ticket fixes: the fallback never explicitly focused the
+ * previewed document before asking VS Code to undo. When the preview webview
+ * has focus (the normal state when the canvasUndo keybinding fires), the
+ * bare 'undo' command has no focused text editor to act on and silently
+ * no-ops — the user's direct source edit is never reverted. The fix brings
+ * the dirtied previewed document into focus first (mirroring the "focuses
+ * the target document" design described in the original HYP-151 commit
+ * message, which was never actually implemented at this call site).
+ */
+describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
+  // Several tests below mutate vscode.window.visibleTextEditors to simulate the
+  // previewed document already being open in some column. Reset unconditionally
+  // after every test in this describe (not just the tests preceding a mutator) so
+  // a stale non-empty array can never leak into a later test in this block or
+  // any describe that follows it in the file.
+  afterEach(() => {
+    Object.assign(vscode.window, { visibleTextEditors: [] });
+  });
+
+  function createFallbackPanel(
+    stateHub: ReturnType<typeof createStateHub>,
+    astBridgeOverrides: {
+      undo?: ReturnType<typeof mock>;
+      redo?: ReturnType<typeof mock>;
+      canUndo?: ReturnType<typeof mock>;
+      canRedo?: ReturnType<typeof mock>;
+    } = {},
+  ) {
+    Object.assign(vscode.workspace, {
+      workspaceFolders: [{ uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 }],
+    });
+    const reveal = mock();
+    const astBridge = {
+      setSubProjectPrefix: mock(() => {}),
+      undo: astBridgeOverrides.undo ?? mock(() => Promise.resolve(false)),
+      redo: astBridgeOverrides.redo ?? mock(() => Promise.resolve(false)),
+      // Default to "stack empty" — matches the default undo/redo mocks above.
+      // Callers exercising the busy/failed-but-non-empty distinction override
+      // this explicitly (see the "false does not mean empty" regression tests).
+      canUndo: astBridgeOverrides.canUndo ?? mock(() => false),
+      canRedo: astBridgeOverrides.canRedo ?? mock(() => false),
+    };
+    const panel = new PreviewPanel(
+      vscode.Uri.file('/extension'),
+      '/workspace',
+      stateHub as StateHub,
+      {
+        setSubProjectPrefix: mock(() => {}),
+        astBridge,
+        getComponentGroups: mock(() =>
+          Promise.resolve({ data: { atomGroups: [], compositeGroups: [], pageGroups: [] } }),
+        ),
+      } as unknown as PanelRouter,
+      {} as vscode.ExtensionContext,
+    );
+    Object.assign(panel as PreviewPanel & { _panel: unknown }, {
+      _panel: { reveal, webview: { postMessage: mock(() => Promise.resolve(true)) } },
+    });
+    return { panel, reveal, astBridge };
+  }
+
+  it('undo(): no panel — falls back to bare "undo", never the invalid "default:undo"', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
+
+    await panel.undo();
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('undo');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('default:undo');
+  });
+
+  it('redo(): no panel — falls back to bare "redo", never the invalid "default:redo"', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
+
+    await panel.redo();
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('redo');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('default:redo');
+  });
+
+  it('undo(): empty canvas stack — focuses the dirtied previewed document before native undo, then reveals the panel', async () => {
+    const stateHub = createStateHub();
+    const { panel, reveal } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'src/App.tsx',
+    });
+
+    const dirtyDoc = {
+      uri: vscode.Uri.file('/workspace/src/App.tsx'),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
+    Object.assign(vscode.workspace, { textDocuments: [dirtyDoc] });
+
+    const callOrder: string[] = [];
+    (vscode.window.showTextDocument as ReturnType<typeof mock>).mockImplementation(() => {
+      callOrder.push('showTextDocument');
+      return Promise.resolve({ document: dirtyDoc });
+    });
+    (vscode.commands.executeCommand as ReturnType<typeof mock>).mockImplementation((id: unknown) => {
+      callOrder.push(`executeCommand:${String(id)}`);
+      return Promise.resolve();
+    });
+    Object.assign(vscode.window, { activeTextEditor: { document: dirtyDoc } });
+
+    await panel.undo();
+
+    // The dirtied source document must be focused BEFORE the native undo
+    // command runs — otherwise 'undo' has no focused editor to act on and
+    // silently does nothing (the HYP-1026 bug).
+    expect(callOrder).toEqual(['showTextDocument', 'executeCommand:undo']);
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
+      dirtyDoc,
+      expect.objectContaining({ preserveFocus: false, viewColumn: vscode.ViewColumn.One }),
+    );
+    expect(reveal).toHaveBeenCalled();
+    expect(dirtyDoc.save).toHaveBeenCalled();
+  });
+
+  it('undo(): empty canvas stack — focuses the previewed document even when NOT dirty (undo history survives a save)', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'src/App.tsx',
+    });
+
+    // Already saved (isDirty: false) — but VS Code's native undo stack survives
+    // a save, so the previewed document must still be focused before 'undo'
+    // runs. Gating the focus step on isDirty would leave this exact case
+    // silently broken (the HYP-1026 bug, just for an already-saved edit).
+    const cleanDoc = {
+      uri: vscode.Uri.file('/workspace/src/App.tsx'),
+      isDirty: false,
+      save: mock(() => Promise.resolve(true)),
+    };
+    Object.assign(vscode.workspace, { textDocuments: [cleanDoc] });
+
+    await panel.undo();
+
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
+      cleanDoc,
+      expect.objectContaining({ preserveFocus: false, viewColumn: vscode.ViewColumn.One }),
+    );
+  });
+
+  it('undo(): empty canvas stack — document not visible in any group — focuses it in ViewColumn.One, the established code column (Codex P2, PR #673)', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'src/App.tsx',
+    });
+
+    // Simulate the normal empty-stack-undo trigger: the preview webview (column 2)
+    // has focus and the component document isn't open as a visible editor
+    // anywhere yet. Without an explicit viewColumn, showTextDocument would
+    // default to whatever group is "active" — the preview panel's column,
+    // not the code column — disrupting the user's two-column layout.
+    const dirtyDoc = {
+      uri: vscode.Uri.file('/workspace/src/App.tsx'),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
+    Object.assign(vscode.workspace, { textDocuments: [dirtyDoc] });
+    // visibleTextEditors starts empty (shared beforeEach in mock-vscode.ts,
+    // reinforced by this describe's own afterEach above).
+
+    await panel.undo();
+
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
+      dirtyDoc,
+      expect.objectContaining({ viewColumn: vscode.ViewColumn.One }),
+    );
+  });
+
+  it('undo(): empty canvas stack — document already visible in a DIFFERENT column — reuses that column instead of forcing ViewColumn.One (Codex P2, PR #673)', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'src/App.tsx',
+    });
+
+    // The user dragged the component's tab to a third column since it was
+    // first opened. Unconditionally forcing ViewColumn.One here would open a
+    // SECOND editor for the same document in column One — the exact
+    // duplicate-tab symptom the P2 warned hardcoding One could reintroduce.
+    const dirtyDoc = {
+      uri: vscode.Uri.file('/workspace/src/App.tsx'),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
+    Object.assign(vscode.workspace, {
+      textDocuments: [dirtyDoc],
+    });
+    Object.assign(vscode.window, {
+      visibleTextEditors: [{ document: dirtyDoc, viewColumn: vscode.ViewColumn.Three }],
+    });
+
+    await panel.undo();
+
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
+      dirtyDoc,
+      expect.objectContaining({ viewColumn: vscode.ViewColumn.Three }),
+    );
+  });
+
+  it('undo(): empty canvas stack — a `git:` diff editor for the same path is visible — NOT mistaken for the real file editor, still falls back to ViewColumn.One', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'src/App.tsx',
+    });
+
+    // The user has a Source Control diff of the same file open in column Three
+    // (scheme 'git', same fsPath as the real file). Comparing by fsPath alone
+    // would wrongly treat that read-only diff editor as "the document already
+    // visible" and reuse its column — focusing a diff editor that native
+    // 'undo' can't act on, reintroducing the HYP-1026 no-op. Comparing by full
+    // URI (scheme included) must reject this match and fall back to
+    // ViewColumn.One instead.
+    const realDoc = {
+      uri: vscode.Uri.file('/workspace/src/App.tsx'),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
+    const gitDiffDoc = {
+      uri: vscode.Uri.from({ scheme: 'git', path: '/workspace/src/App.tsx' }),
+    };
+    Object.assign(vscode.workspace, { textDocuments: [realDoc] });
+    Object.assign(vscode.window, {
+      visibleTextEditors: [{ document: gitDiffDoc, viewColumn: vscode.ViewColumn.Three }],
+    });
+
+    await panel.undo();
+
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
+      realDoc,
+      expect.objectContaining({ viewColumn: vscode.ViewColumn.One }),
+    );
+  });
+
+  it('undo(): empty canvas stack — document visible but hosted outside a normal column (viewColumn undefined) — still falls back to ViewColumn.One, never lets undefined resolve to the active/preview group', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'src/App.tsx',
+    });
+
+    // A visible editor CAN have viewColumn === undefined (e.g. a notebook cell
+    // editor, or any host not in one of the main editor groups). Passing that
+    // undefined straight through to showTextDocument does NOT "keep it where
+    // it is" — VS Code resolves it to the ACTIVE group, which during the
+    // normal empty-stack-undo trigger is the preview webview's group. A plain
+    // `existingEditor ? existingEditor.viewColumn : One` ternary (instead of
+    // `existingEditor?.viewColumn ?? One`) would regress exactly this case.
+    const dirtyDoc = {
+      uri: vscode.Uri.file('/workspace/src/App.tsx'),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
+    Object.assign(vscode.workspace, { textDocuments: [dirtyDoc] });
+    Object.assign(vscode.window, {
+      visibleTextEditors: [{ document: dirtyDoc, viewColumn: undefined }],
+    });
+
+    await panel.undo();
+
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
+      dirtyDoc,
+      expect.objectContaining({ viewColumn: vscode.ViewColumn.One }),
+    );
+  });
+
+  it('undo(): empty canvas stack — no _currentComponent set — skips the focus step but still runs native undo', async () => {
+    const stateHub = createStateHub();
+    const { panel, reveal } = createFallbackPanel(stateHub);
+    // _currentComponent left unset (undefined) — nothing to resolve/focus.
+    Object.assign(vscode.workspace, {
+      textDocuments: [{ uri: vscode.Uri.file('/workspace/src/Other.tsx'), isDirty: true, save: mock() }],
+    });
+
+    await panel.undo();
+
+    expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('undo');
+    expect(reveal).toHaveBeenCalled();
+  });
+
+  it('undo(): canvas stack handled the edit — never focuses a document or reveals the panel (native fallback is fully skipped)', async () => {
+    const stateHub = createStateHub();
+    const { panel, reveal } = createFallbackPanel(stateHub, { undo: mock(() => Promise.resolve(true)) });
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'src/App.tsx',
+    });
+
+    await panel.undo();
+
+    // handled === true means the content-based canvas stack reverted the
+    // file itself — the native-fallback branch (focus/executeCommand/reveal)
+    // must not run at all.
+    expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+    expect(reveal).not.toHaveBeenCalled();
+  });
+
+  // NOTE on the undo/redo asymmetry below: this is PRE-EXISTING, deliberate
+  // behavior untouched by this diff (redo() itself is not modified here) —
+  // see commit 03285a7f "fix(undo-redo): remove native redo fallback that
+  // corrupted canvas state". undo()'s native fallback runs whenever the
+  // canvas stack is empty (panel present or not); redo()'s native fallback
+  // runs ONLY when there is no panel at all (a true last-resort with no
+  // canvas context). The two tests below intentionally assert opposite
+  // executeCommand outcomes for that reason — it is not a bug in either test.
+  it('redo(): empty canvas stack — no native fallback (self-contained by design, confirmed for HYP-1026)', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+
+    await panel.redo();
+
+    // Canvas redo stays self-contained: applyEdit() writes silently populate
+    // VS Code's native undo stack — a native redo fallback here would replay
+    // stale content (03285a7f).
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('undo(): empty canvas stack — a `workspace.textDocuments` entry with the same fsPath but a `git:` scheme is NEVER treated as the previewed document (scheme-blind lookup regression)', async () => {
+    const stateHub = createStateHub();
+    const { panel, reveal } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'src/App.tsx',
+    });
+
+    // Only a `git:` diff-view document for the same path is open — the real
+    // `file:` document is NOT in workspace.textDocuments at all (e.g. only a
+    // Source Control diff of App.tsx was ever opened). A lookup that compares
+    // by `fsPath` alone would wrongly match this read-only diff document and
+    // hand it to showTextDocument/native-undo, which silently no-ops on it —
+    // reintroducing the HYP-1026 bug via the OTHER lookup site (the one that
+    // decides WHICH document object gets focused, not the visibleTextEditors
+    // column lookup already covered above).
+    const gitDiffDoc = { uri: vscode.Uri.from({ scheme: 'git', path: '/workspace/src/App.tsx' }) };
+    Object.assign(vscode.workspace, { textDocuments: [gitDiffDoc] });
+
+    await panel.undo();
+
+    expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('undo');
+    expect(reveal).toHaveBeenCalled();
+  });
+
+  it('undo(): no panel, but `_currentComponent` is still set (panel was closed, focus is on a sidebar view) — still focuses the previewed document before native undo', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _panel: unknown; _currentComponent: string | undefined }, {
+      _panel: undefined,
+      _currentComponent: 'src/App.tsx',
+    });
+
+    // The preview panel tab was closed but `_currentComponent` survives (this
+    // codebase persists it across panel disposal — see the class-level
+    // "panel was disposed and re-created" comment). The canvasUndo keybinding
+    // still fires while the Explorer/Inspector sidebar view is focused
+    // (its own `when` clause), so without this focus step native 'undo' acts
+    // on the sidebar webview and silently no-ops — reintroducing HYP-1026 for
+    // the no-panel case specifically.
+    const dirtyDoc = {
+      uri: vscode.Uri.file('/workspace/src/App.tsx'),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
+    Object.assign(vscode.workspace, { textDocuments: [dirtyDoc] });
+
+    const callOrder: string[] = [];
+    (vscode.window.showTextDocument as ReturnType<typeof mock>).mockImplementation(() => {
+      callOrder.push('showTextDocument');
+      return Promise.resolve({ document: dirtyDoc });
+    });
+    (vscode.commands.executeCommand as ReturnType<typeof mock>).mockImplementation((id: unknown) => {
+      callOrder.push(`executeCommand:${String(id)}`);
+      return Promise.resolve();
+    });
+
+    await panel.undo();
+
+    expect(callOrder).toEqual(['showTextDocument', 'executeCommand:undo']);
+  });
+
+  it('undo(): no panel, but the content-based canvas stack still has a handleable entry — restores it via astBridge, never touches native undo (no-panel-undo bypass regression)', async () => {
+    const stateHub = createStateHub();
+    const undo = mock(() => Promise.resolve(true));
+    const { panel } = createFallbackPanel(stateHub, { undo });
+    Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
+
+    await panel.undo();
+
+    // The content-based UndoRedoService stack outlives panel disposal, so it
+    // must be tried BEFORE falling back to native undo even with no panel —
+    // astBridge.undo() is called with `undefined` (not skipped), and since it
+    // reports handled=true, no native fallback runs at all.
+    expect(undo).toHaveBeenCalledWith(undefined);
+    expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('redo(): no panel, but the content-based canvas stack still has a handleable entry — restores it via astBridge, never touches native redo (no-panel-redo bypass regression)', async () => {
+    const stateHub = createStateHub();
+    const redo = mock(() => Promise.resolve(true));
+    const { panel } = createFallbackPanel(stateHub, { redo });
+    Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
+
+    await panel.redo();
+
+    expect(redo).toHaveBeenCalledWith(undefined);
+    expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('undo(): empty canvas stack — the previewed document is open under a NON-file workspace-folder scheme (e.g. `vscode-remote:`) — still matched and focused (remote-scheme URI regression)', async () => {
+    const stateHub = createStateHub();
+    const { panel, reveal } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'src/App.tsx',
+    });
+
+    // Simulate a Remote SSH / WSL / Dev Containers workspace folder: its URI
+    // keeps a non-`file` scheme even though `fsPath` is the familiar local
+    // path. `Uri.file(componentPath)` would force `file:` and never match
+    // this document — reintroducing the HYP-1026 no-op on those hosts.
+    Object.assign(vscode.workspace, {
+      workspaceFolders: [
+        { uri: vscode.Uri.from({ scheme: 'vscode-remote', authority: 'ssh-remote', path: '/workspace' }), name: 'workspace', index: 0 },
+      ],
+    });
+    const remoteDoc = {
+      uri: vscode.Uri.from({ scheme: 'vscode-remote', authority: 'ssh-remote', path: '/workspace/src/App.tsx' }),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
+    Object.assign(vscode.workspace, { textDocuments: [remoteDoc] });
+
+    await panel.undo();
+
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(remoteDoc, expect.objectContaining({ preserveFocus: false }));
+    expect(reveal).toHaveBeenCalled();
+  });
+
+  it('undo(): astBridge.undo() returns false because a snapshot write FAILED (stack was non-empty) — does NOT fall back to native undo ("false" ≠ "empty" regression)', async () => {
+    const stateHub = createStateHub();
+    // canUndo() reports a real, non-empty stack; undo() itself returns false
+    // because the underlying content write failed (UndoRedoService.undo()
+    // returns false in that case too, not only when the stack is empty).
+    const { panel, reveal } = createFallbackPanel(stateHub, {
+      undo: mock(() => Promise.resolve(false)),
+      canUndo: mock(() => true),
+    });
+
+    await panel.undo();
+
+    // A failed content-based write must NOT trigger native undo — that would
+    // revert unrelated editor content instead of surfacing the real failure.
+    expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+    expect(reveal).not.toHaveBeenCalled();
+  });
+
+  it('redo(): astBridge.redo() returns false because it is already IN PROGRESS (stack was non-empty), with no panel — does NOT fall back to native redo ("false" ≠ "empty" regression)', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub, {
+      redo: mock(() => Promise.resolve(false)),
+      canRedo: mock(() => true),
+    });
+    Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
+
+    await panel.redo();
+
+    // A concurrent in-progress redo returning false must not be treated as
+    // "nothing to redo" — native redo would replay unrelated editor history.
+    expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('undo(): empty canvas stack — a multi-root workspace has an ANCESTOR folder (also containing the component) before the actual active folder — the ANCESTOR must NOT win just because it appears first or matches `_workspaceRoot` by fsPath (multi-root scheme regression)', async () => {
+    const stateHub = createStateHub();
+    const { panel, reveal } = createFallbackPanel(stateHub);
+    // `_currentComponent` is under a nested sub-folder ('sub/'), so
+    // `componentPath` is contained by BOTH the shallow `/workspace` folder
+    // (which also happens to equal `_workspaceRoot` — this is exactly the
+    // case a naive "prefer the exact `_workspaceRoot` match" rule would get
+    // wrong) AND a deeper, more specific `/workspace/sub` folder that exposes
+    // a DIFFERENT scheme (standing in for a nested Dev Container/virtual
+    // filesystem sub-project). The deeper, more specific folder must win —
+    // that's the one whose scheme the real open document actually uses.
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'sub/App.tsx',
+    });
+    Object.assign(vscode.workspace, {
+      workspaceFolders: [
+        { uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 },
+        { uri: vscode.Uri.from({ scheme: 'nested-fs', path: '/workspace/sub' }), name: 'sub', index: 1 },
+      ],
+    });
+    const realDoc = {
+      uri: vscode.Uri.from({ scheme: 'nested-fs', path: '/workspace/sub/App.tsx' }),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
+    // A `file:`-scheme document at the SAME fsPath must be ignored — matching
+    // it instead of `realDoc` would be exactly the wrong-scheme regression.
+    const wrongSchemeDoc = { uri: vscode.Uri.file('/workspace/sub/App.tsx'), isDirty: true, save: mock() };
+    Object.assign(vscode.workspace, { textDocuments: [wrongSchemeDoc, realDoc] });
+
+    await panel.undo();
+
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(realDoc, expect.objectContaining({ preserveFocus: false }));
+    expect(reveal).toHaveBeenCalled();
+  });
+
+  it('redo(): no panel, empty canvas stack — native redo left the FOCUSED previewed document dirty — saves it, matching undo()\'s behavior (redo/undo save-parity regression)', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _panel: unknown; _currentComponent: string | undefined }, {
+      _panel: undefined,
+      _currentComponent: 'src/App.tsx',
+    });
+
+    // The save must be gated on the previewed document actually being found
+    // and focused (`_currentComponent` set + a matching open document) — not
+    // merely on `activeTextEditor` being dirty, which could be an unrelated
+    // editor the user already had open (see the NEXT test).
+    const dirtyDoc = { uri: vscode.Uri.file('/workspace/src/App.tsx'), isDirty: true, save: mock(() => Promise.resolve(true)) };
+    Object.assign(vscode.workspace, { textDocuments: [dirtyDoc] });
+    (vscode.window.showTextDocument as ReturnType<typeof mock>).mockImplementation(() =>
+      Promise.resolve({ document: dirtyDoc }),
+    );
+    Object.assign(vscode.window, { activeTextEditor: { document: dirtyDoc } });
+
+    await panel.redo();
+
+    // Without this, a redone edit in the no-panel last-resort branch stayed
+    // unpersisted on disk — undo()'s native fallback always saved; redo()'s
+    // didn't (asymmetry flagged in review).
+    expect(dirtyDoc.save).toHaveBeenCalled();
+  });
+
+  it('redo(): no panel, empty canvas stack — no previewed document was found/focused — does NOT save the merely-coincidentally-active editor (unsafe-save regression)', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
+    // No `_currentComponent` set — nothing was found/focused by this undo/redo
+    // at all. `activeTextEditor` here is whatever the user already had open
+    // for unrelated reasons.
+    const unrelatedDirtyDoc = { uri: vscode.Uri.file('/workspace/src/Unrelated.tsx'), isDirty: true, save: mock(() => Promise.resolve(true)) };
+    Object.assign(vscode.window, { activeTextEditor: { document: unrelatedDirtyDoc } });
+
+    await panel.redo();
+
+    expect(unrelatedDirtyDoc.save).not.toHaveBeenCalled();
+  });
+
+  it('undo(): no previewed document was found/focused — does NOT save the merely-coincidentally-active editor (unsafe-save regression)', async () => {
+    const stateHub = createStateHub();
+    const { panel, reveal } = createFallbackPanel(stateHub);
+    // No `_currentComponent` set — the focus step is a no-op.
+    const unrelatedDirtyDoc = { uri: vscode.Uri.file('/workspace/src/Unrelated.tsx'), isDirty: true, save: mock(() => Promise.resolve(true)) };
+    Object.assign(vscode.window, { activeTextEditor: { document: unrelatedDirtyDoc } });
+
+    await panel.undo();
+
+    expect(unrelatedDirtyDoc.save).not.toHaveBeenCalled();
+    expect(reveal).toHaveBeenCalled();
+  });
+
+  it('undo(): empty canvas stack — NO workspace folder matches at all (`workspaceFolders` is empty) — `_resolveComponentUri` falls back to plain `Uri.file`, still finds a `file:`-scheme open document', async () => {
+    const stateHub = createStateHub();
+    const { panel, reveal } = createFallbackPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
+      _currentComponent: 'src/App.tsx',
+    });
+    // No workspace folders at all (e.g. a single-file window, or a monorepo
+    // sub-project root that was never itself registered as a workspace
+    // folder) — `_resolveComponentUri` has nothing to inherit a scheme from
+    // and must fall back to a plain `Uri.file(componentPath)`.
+    Object.assign(vscode.workspace, { workspaceFolders: [] });
+    const realDoc = {
+      uri: vscode.Uri.file('/workspace/src/App.tsx'),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
+    Object.assign(vscode.workspace, { textDocuments: [realDoc] });
+
+    await panel.undo();
+
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(realDoc, expect.objectContaining({ preserveFocus: false }));
+    expect(reveal).toHaveBeenCalled();
   });
 });

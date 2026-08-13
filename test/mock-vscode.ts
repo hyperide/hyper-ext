@@ -45,8 +45,28 @@ class MockUri {
   }
 
   fsPath: string;
+
+  // Mirrors real vscode.Uri#toString() (`scheme://authority/path`) so tests
+  // comparing editors by full URI — not just fsPath, which a same-path
+  // virtual document in another scheme (e.g. a `git:` diff) can also match —
+  // get a real per-instance comparison instead of every MockUri instance
+  // stringifying to the same inherited `Object.prototype.toString()` value.
+  // Deliberately path-only: this mock has no query/fragment fields (nothing
+  // in this codebase constructs a MockUri with either), so real Uri#toString()'s
+  // `?query#fragment` suffix and percent-encoding are out of scope here.
+  toString(): string {
+    return `${this.scheme}://${this.authority}${this.path}`;
+  }
+
   static file(p: string) {
     return new MockUri('file', '', p);
+  }
+
+  // Mirrors real vscode.Uri.from() — lets tests build a non-`file` scheme URI
+  // (e.g. `git:` for a Source Control diff editor) with the same path as a
+  // real file, to exercise scheme-sensitive comparisons like toString() above.
+  static from({ scheme, authority = '', path = '' }: { scheme: string; authority?: string; path?: string }) {
+    return new MockUri(scheme, authority, path);
   }
 
   static joinPath(base: MockUri, ...segments: string[]) {

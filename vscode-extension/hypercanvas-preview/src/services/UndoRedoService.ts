@@ -108,7 +108,15 @@ export class UndoRedoService {
     );
   }
 
-  async undo(panel: vscode.WebviewPanel): Promise<boolean> {
+  /**
+   * `panel` is optional: the content-based undo/redo stacks live in this
+   * service, independent of any webview panel, and survive the preview panel
+   * being closed. Callers with no live panel (e.g. the canvasUndo keybinding
+   * firing from the Explorer/Inspector sidebar while the preview tab is
+   * closed) still get the content-based stack tried first — `panel?.reveal()`
+   * is a no-op rather than a crash in that case (HYP-1026 follow-up).
+   */
+  async undo(panel?: vscode.WebviewPanel): Promise<boolean> {
     console.log(
       `[UndoRedoService] undo() called — canUndo=${this.canUndo()}, inProgress=${this._inProgress}, undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
     );
@@ -142,14 +150,15 @@ export class UndoRedoService {
           `[UndoRedoService] undo OK — undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
         );
       }
-      panel.reveal();
+      panel?.reveal();
       return success;
     } finally {
       this._inProgress = false;
     }
   }
 
-  async redo(panel: vscode.WebviewPanel): Promise<boolean> {
+  /** See the `undo()` doc comment above — `panel` is optional for the same reason. */
+  async redo(panel?: vscode.WebviewPanel): Promise<boolean> {
     console.log(
       `[UndoRedoService] redo() called — canRedo=${this.canRedo()}, inProgress=${this._inProgress}, undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
     );
@@ -183,7 +192,7 @@ export class UndoRedoService {
           `[UndoRedoService] redo OK — undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
         );
       }
-      panel.reveal();
+      panel?.reveal();
       return success;
     } finally {
       this._inProgress = false;
@@ -202,15 +211,54 @@ export class UndoRedoService {
     if (this._trackingCount > 0) this._trackingCount--;
   }
 
+  /**
+   * `_undoStack.pop()` inside `undo()` happens AFTER its file-write `await`s
+   * complete, with no further `await` between the pop and `_inProgress` being
+   * reset to `false` in `undo()`'s `finally`. So a caller that reads
+   * `canUndo()` as a preflight BEFORE calling `undo()` (to distinguish
+   * "nothing to undo" from "undo() returned false because it's already in
+   * progress") can never observe a state where the stack was already popped
+   * by a concurrent in-flight `undo()` call while `_inProgress` is still
+   * `true` — those two state changes are atomic relative to any other
+   * scheduled call. A second, overlapping `undo()` call's `canUndo()` read
+   * either lands BEFORE the in-flight call's pop (stack still has the entry,
+   * so `canUndo()` correctly stays `true`) or AFTER the in-flight call has
+   * fully returned (stack is genuinely empty by then, so `canUndo()`
+   * correctly reports `false`). Reviewed and traced during a PR #673
+   * follow-up review pass that raised this exact race as a P1 concern; see
+   * `PreviewPanel.undo()`'s `stackWasEmpty` preflight and the matching test
+   * in `UndoRedoService.test.ts`.
+   */
   canUndo(): boolean {
     return this._undoStack.length > 0;
   }
 
+  /**
+   * The `_trackingCount === 0` clause never actually diverges from a plain
+   * `_redoStack.length > 0` check: `beginTracking()` unconditionally clears
+   * `_redoStack` as its first, synchronous action, so by the time any caller
+   * can observe `_trackingCount > 0`, the redo stack is ALREADY empty. This
+   * is a documented invariant, not a coincidence — see the beginTracking()
+   * doc comment and the `UndoRedoService.test.ts` test proving it
+   * (`describe('canRedo() during beginTracking()/endTracking()...')`, added
+   * after a review pass on PR #673's follow-up raised whether callers gating
+   * a native-undo/redo-fallback decision on `canRedo()` could be fooled into
+   * treating a non-empty stack as empty during a tracked edit — they cannot.
+   */
   canRedo(): boolean {
     return this._redoStack.length > 0 && this._trackingCount === 0;
   }
 
-  /** Write content disk-first, then sync only dirty VS Code documents. */
+  /**
+   * Write content disk-first, then sync only dirty VS Code documents.
+   *
+   * KNOWN LIMITATION (pre-existing, extension-wide — not specific to undo/redo):
+   * always builds a local `file:` URI and matches open documents by `fsPath`
+   * alone. There is no support anywhere in this extension for non-`file`
+   * schemes (Remote SSH / WSL / Dev Containers / virtual filesystem
+   * providers) — the whole file I/O layer (`vscode-file-io.ts`) shares this
+   * assumption. Tracked in HYP-1128.
+   */
   private async _writeContent(filePath: string, content: string): Promise<boolean> {
     try {
       const uri = vscode.Uri.file(filePath);
