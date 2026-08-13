@@ -5,8 +5,19 @@
 
 import * as t from '@babel/types';
 import { getConflictingPrefixes } from '../tailwind/generator.js';
+import { removeConflictingClasses } from '../tailwind/parser.js';
 import type { ClassNameLocation } from '../types.js';
 import { getAttribute, setAttribute } from './mutator.js';
+
+/** Callee names whose first/string arguments hold static Tailwind class literals. */
+const CLASS_MERGE_CALLEES = new Set(['cn', 'clsx', 'classnames', 'classNames', 'twMerge', 'cva', 'tw']);
+
+function getCalleeName(callee: t.Expression | t.V8IntrinsicIdentifier): string | null {
+  if (t.isIdentifier(callee)) return callee.name;
+  // twMerge(clsx(...)) or styles.cn(...) — use the trailing member property name
+  if (t.isMemberExpression(callee) && t.isIdentifier(callee.property)) return callee.property.name;
+  return null;
+}
 
 /**
  * Detect type of className attribute
@@ -533,11 +544,167 @@ function appendToLastString(
   lastQuasi.value.cooked = ` ${newValue}`;
 }
 
+interface InPlaceReplaceResult {
+  /** A conflicting same-property class was found and stripped in at least one static literal. */
+  handledConflict: boolean;
+  /**
+   * After rewrite, the new class is guaranteed to be present at runtime regardless of which
+   * conditional branch is taken. When false, the caller must still append the new class so the
+   * inspector's intent applies on every code path (e.g. a ternary with a dynamic branch).
+   */
+  guaranteedNewClass: boolean;
+}
+
+/**
+ * Strip the conflicting same-property class from the STATIC string literals of a complex className
+ * expression (cn()/clsx()/twMerge()/ternary), injecting the new class where a conflict was removed.
+ *
+ * Reuses the same state-aware conflict detection the plain-string path uses
+ * (parser.removeConflictingClasses), so gradients/opacity/non-color bg classes and unrelated state
+ * variants are preserved exactly like the string path.
+ *
+ * Semantics per node:
+ * - string literal: if it carries a conflicting class, strip it and inject the new class →
+ *   the new class is then unconditionally present in that literal.
+ * - cn()/clsx()/... call: arguments are concatenated (additive). The new class is guaranteed if
+ *   ANY eligible argument guarantees it. A conflict in any argument counts as handled.
+ * - ternary: branches are mutually exclusive. The new class is guaranteed only if BOTH branches
+ *   guarantee it; a conflict in either branch counts as handled (and is stripped) but does not by
+ *   itself guarantee unconditional presence.
+ *
+ * Deliberately NOT rewritten (documented limitation): string literals reachable only through a
+ * dynamic sub-expression such as `cond && "text-red-500"`, or object/array args. We never mutate
+ * those — rewriting an author's conditional would change its runtime semantics (e.g. dropping the
+ * color entirely on the false branch). A same-group class living only in such a branch therefore
+ * survives; the caller still concat-appends the new class so the inspector's value applies on every
+ * path. With plain `clsx` (no twMerge) this can leave both classes in the attribute, and Tailwind's
+ * conflict resolution follows generated-CSS order, not attribute order — so the visual result for
+ * that residual case is not guaranteed. This is acceptable: inspector-written classes live in the
+ * static portion, which is always rewritten correctly.
+ */
+function replaceConflictingInStaticLiterals(
+  expr: t.Expression,
+  newClasses: Record<string, string>,
+  changedStyleKeys: string[],
+  state?: string,
+): InPlaceReplaceResult {
+  const classString = Object.values(newClasses).join(' ');
+
+  const visit = (node: t.Expression): InPlaceReplaceResult => {
+    if (t.isStringLiteral(node)) {
+      const { preserved, removed } = removeConflictingClasses(node.value, changedStyleKeys, state);
+      if (removed.length === 0) {
+        return { handledConflict: false, guaranteedNewClass: false };
+      }
+      // Preserve the literal's leading/trailing whitespace. A concat tail like `' text-red-500'`
+      // (the shape the append fallback itself produces) needs its leading space kept, or the new
+      // class would glue onto the preceding operand's last class at runtime (`...p-2text-blue-500`).
+      const lead = /^\s*/.exec(node.value)?.[0] ?? '';
+      const trail = /\s*$/.exec(node.value)?.[0] ?? '';
+      const core = classString ? [preserved, classString].filter(Boolean).join(' ').trim() : preserved.trim();
+      node.value = `${lead}${core}${trail}`;
+      // After injection the literal unconditionally carries the new class (when there is one).
+      return { handledConflict: true, guaranteedNewClass: Boolean(classString) };
+    }
+
+    if (t.isParenthesizedExpression(node)) {
+      return visit(node.expression);
+    }
+
+    // String concatenation `(left) + ' classes'` — the exact shape the append fallback below
+    // produces. On a SECOND inspector pick the previously-written color now lives inside this
+    // BinaryExpression, so we MUST recurse it or the old color is never stripped (the user's
+    // "doesn't even find the value it wrote itself" report).
+    //
+    // Operands appear in the className string left-to-right, so conflict resolution is ordered:
+    // the new class is guaranteed-and-winning only if the LAST operand carries it. A later operand
+    // we can't fully account for (an opaque `props.className`, or an analyzable operand that didn't
+    // unconditionally inject the new class) might contribute a same-group class after ours — so any
+    // such trailing operand clears the guarantee and the caller appends the new class last (matching
+    // the cn()/clsx() merge-call semantics below).
+    if (t.isBinaryExpression(node) && node.operator === '+') {
+      const operands: t.Expression[] = [];
+      if (t.isExpression(node.left)) operands.push(node.left);
+      operands.push(node.right);
+      let handledConflict = false;
+      let newClassIsLast = false;
+      for (const operand of operands) {
+        const r = visit(operand);
+        handledConflict = handledConflict || r.handledConflict;
+        // This operand injected the new class unconditionally → it is (for now) the last one
+        // carrying it. Any subsequent operand that does NOT guarantee it clears the flag.
+        newClassIsLast = r.guaranteedNewClass;
+      }
+      return { handledConflict, guaranteedNewClass: newClassIsLast };
+    }
+
+    if (t.isConditionalExpression(node)) {
+      const consequent = visit(node.consequent);
+      const alternate = visit(node.alternate);
+      return {
+        handledConflict: consequent.handledConflict || alternate.handledConflict,
+        // Mutually exclusive branches: guaranteed only if every branch carries the new class.
+        guaranteedNewClass: consequent.guaranteedNewClass && alternate.guaranteedNewClass,
+      };
+    }
+
+    if (t.isCallExpression(node)) {
+      const calleeName = getCalleeName(node.callee);
+      if (calleeName && CLASS_MERGE_CALLEES.has(calleeName)) {
+        let handledConflict = false;
+        let anyArgGuarantees = false;
+        // A merge call (cn/clsx/twMerge) resolves last-wins per Tailwind group. Any argument we
+        // cannot analyze (a dynamic branch like `cond && "..."`, a spread, a variable) might carry a
+        // LATER same-group class that overrides our injected one. If even one such arg exists we
+        // cannot claim the new class is guaranteed — the caller must append it last so it wins.
+        let hasUnanalyzableArg = false;
+        for (const arg of node.arguments) {
+          if (t.isStringLiteral(arg)) {
+            // A plain string literal is fully analyzable — its classes are exactly what we see.
+            const result = visit(arg);
+            handledConflict = handledConflict || result.handledConflict;
+            anyArgGuarantees = anyArgGuarantees || result.guaranteedNewClass;
+          } else if (t.isConditionalExpression(arg) || t.isCallExpression(arg)) {
+            const result = visit(arg);
+            handledConflict = handledConflict || result.handledConflict;
+            anyArgGuarantees = anyArgGuarantees || result.guaranteedNewClass;
+            // A ternary/nested call only fully guarantees the new class when every path carries it.
+            // If it didn't, it may emit a later same-group class we couldn't account for.
+            if (!result.guaranteedNewClass) {
+              hasUnanalyzableArg = true;
+            }
+          } else {
+            // Spread, object, identifier, member, logical (`cond && "..."`), etc. — opaque.
+            hasUnanalyzableArg = true;
+          }
+        }
+        return {
+          handledConflict,
+          guaranteedNewClass: anyArgGuarantees && !hasUnanalyzableArg,
+        };
+      }
+    }
+
+    return { handledConflict: false, guaranteedNewClass: false };
+  };
+
+  return visit(expr);
+}
+
 /**
  * Wrap expression in concatenation
  * className={expr} -> className={(expr) + ' bg-red-500'}
+ *
+ * First attempts to replace the conflicting class within the expression's static string literals
+ * (so old + new color classes don't both survive). Only when no static literal held a conflicting
+ * class does it fall back to appending via concatenation.
  */
-function wrapInConcatenation(element: t.JSXElement, newClasses: Record<string, string>): void {
+function wrapInConcatenation(
+  element: t.JSXElement,
+  newClasses: Record<string, string>,
+  changedStyleKeys: string[],
+  state?: string,
+): void {
   const attr = getAttribute(element, 'className');
   if (!attr) return;
 
@@ -555,7 +722,18 @@ function wrapInConcatenation(element: t.JSXElement, newClasses: Record<string, s
     return;
   }
 
-  // Wrap expression in parentheses and add concatenation
+  // Strip the conflicting same-property class from the static literals first (so old + new color
+  // classes never both survive within the expression).
+  const { guaranteedNewClass } = replaceConflictingInStaticLiterals(expr, newClasses, changedStyleKeys, state);
+  if (guaranteedNewClass) {
+    // The new class is now unconditionally present on every runtime branch — no append needed.
+    return;
+  }
+
+  // The new class is NOT guaranteed on every code path (no static literal held the conflict, or it
+  // lived only in some branches / a dynamic sub-expression). Append it so the inspector's intent
+  // always applies. Conflicts already stripped above won't duplicate the OLD class; at worst the new
+  // class appears twice (harmless — same class).
   const newExpr = t.binaryExpression('+', t.parenthesizedExpression(expr), t.stringLiteral(` ${classString}`));
 
   setAttribute(element, 'className', t.jsxExpressionContainer(newExpr));
@@ -598,6 +776,7 @@ export function modifyDynamicClassName(
   newClasses: Record<string, string>,
   changedStyleKeys: string[],
   fallback: 'append' | 'wrap',
+  state?: string,
 ): void {
   const type = detectClassNameType(element);
 
@@ -623,10 +802,11 @@ export function modifyDynamicClassName(
     if (fallback === 'append') {
       appendToLastString(element, newClasses, changedStyleKeys);
     } else {
-      wrapInConcatenation(element, newClasses);
+      wrapInConcatenation(element, newClasses, changedStyleKeys, state);
     }
   } else {
-    // For call expressions and other expressions, always wrap
-    wrapInConcatenation(element, newClasses);
+    // For call expressions and other expressions, try in-place conflict replacement,
+    // falling back to concatenation only when no static literal held the conflicting class.
+    wrapInConcatenation(element, newClasses, changedStyleKeys, state);
   }
 }

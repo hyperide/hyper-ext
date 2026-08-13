@@ -12,6 +12,14 @@ import { svgToPng } from '../src/png';
 
 const args = process.argv.slice(2);
 
+// `vecli mcp` — serve the vector-engine MCP tools over stdio. Dynamic import keeps
+// the MCP SDK off the batch hot path (same pattern as the TUI branch below).
+if (args[0] === 'mcp') {
+  const { serveMcpStdio } = await import('../src/mcp/stdio');
+  await serveMcpStdio();
+  process.exit(0);
+}
+
 // Parse flags
 let execFile: string | undefined;
 let outputFile: string | undefined;

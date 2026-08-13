@@ -173,6 +173,7 @@ export class StyleWriteExecutor {
         { newClasses: plan.strategy.addClasses },
         plan.strategy.removeForProperties,
         plan.strategy.mode === 'dynamic' && plan.strategy.fallbackStrategy === 'wrap-expression' ? 'wrap' : 'append',
+        tailwindStatePrefix(plan),
       );
     }
 
