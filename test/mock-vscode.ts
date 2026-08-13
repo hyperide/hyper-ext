@@ -159,6 +159,7 @@ const env = {
     writeText: mock(() => Promise.resolve()),
     readText: mock(() => Promise.resolve('')),
   },
+  openExternal: mock(() => Promise.resolve(true)),
 };
 
 /* ---------- WorkspaceEdit ---------- */

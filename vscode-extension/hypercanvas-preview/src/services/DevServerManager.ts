@@ -35,6 +35,17 @@ import {
   getProjectInfo,
 } from './ProjectDetector';
 import { detectWindowsOemCodePage, StreamOutputDecoder } from './windowsOutputDecoding';
+import { detectAvailableTools } from './toolchainDetector';
+import {
+  ensureDependencies,
+  ensureTool,
+  findMissingLocalBinaries,
+  requiredToolsForPackageManager,
+  shouldInstallDependencies,
+  ToolchainInstallError,
+  type ToolchainProgress,
+} from './toolchainInstaller';
+import { mergePathEntries, refreshPathForChild } from './toolchainPath';
 
 /**
  * Pure predicate behind {@link DevServerManager._hasDirtyViteConfig}: do any of the dirty open
@@ -207,6 +218,16 @@ export interface SpawnCommand {
   branch: 'wrapper-script' | 'pm-run';
 }
 
+/**
+ * One stage of the HYP-1169 toolchain pipeline (globals → deps → verify).
+ * `run` receives the shared progress sink (already prefixed with "Step i/N")
+ * and the outer notification's cancellation token.
+ */
+interface ToolchainPhase {
+  title: string;
+  run: (progress: ToolchainProgress, token: { isCancellationRequested: boolean }) => Promise<void>;
+}
+
 /** The `<pm> run <script>` invocation for a package manager (npm/pnpm/bun run, yarn bare). */
 function pmRunCommand(packageManager: PackageManager, script: string): { cmd: string; args: string[] } {
   if (packageManager === 'yarn') return { cmd: 'yarn', args: [script] };
@@ -260,6 +281,57 @@ export async function resolveSpawnCommand(
   return { ...pmRunCommand(packageManager, script), cwd: projectPath, branch: 'pm-run' };
 }
 
+/** Tokens that resolve globally (package managers / runtimes), never from node_modules/.bin. */
+const PACKAGE_MANAGER_TOKENS: Record<string, true> = {
+  npm: true,
+  pnpm: true,
+  yarn: true,
+  bun: true,
+  node: true,
+  corepack: true,
+};
+
+/** Runner tokens whose NEXT non-flag token is the binary actually executed (`bunx nx …`, `npx vite …`). */
+const RUNNER_TOKENS: Record<string, true> = { npx: true, bunx: true, dlx: true, pnpx: true };
+
+/**
+ * The local binaries a resolved spawn command needs from `<plan.cwd>/node_modules/.bin`
+ * (HYP-1169 round 2). Mirrors what will actually be executed:
+ *  - 'wrapper-script' branch: the script TEXT runs directly at the workspace
+ *    root, so its first executable token (e.g. bare `nx` after the HYP-1160
+ *    wrapper normalization) must exist in .bin — a missing one dies with
+ *    "'nx' is not recognized" (Alex's Windows run). Behind a runner token
+ *    (`bunx nx …`) the runner's TARGET is the local binary, not the runner.
+ *  - 'pm-run' branch: `<pm> run <script>` — the package manager itself
+ *    prepends every ancestor node_modules/.bin when running the script, so
+ *    there is nothing to verify from the spawn command.
+ */
+export function requiredLocalBinaries(
+  cmd: string,
+  args: readonly string[],
+  branch: 'wrapper-script' | 'pm-run',
+): string[] {
+  if (branch !== 'wrapper-script') return [];
+  if (RUNNER_TOKENS[cmd]) {
+    const target = args.find((token) => !token.startsWith('-'));
+    return target && !PACKAGE_MANAGER_TOKENS[target] ? [target] : [];
+  }
+  return PACKAGE_MANAGER_TOKENS[cmd] ? [] : [cmd];
+}
+
+/**
+ * One-line PATH rendering for the output channel (HYP-1169 round 2): a full
+ * Windows PATH is thousands of chars; log the first entries (the ones that
+ * decide resolution) plus a summary of the rest so a "binary not on PATH" bug
+ * is a one-glance diagnosis.
+ */
+export function truncatePathForLog(path: string, maxEntries = 6): string {
+  const separator = path.includes(';') ? ';' : ':';
+  const entries = path.split(separator).filter(Boolean);
+  if (entries.length <= maxEntries) return path;
+  return `${entries.slice(0, maxEntries).join(separator)}${separator}… (+${entries.length - maxEntries} more entries, ${path.length} chars total)`;
+}
+
 export function shouldRepairDependencies(errorMessage: string, logs: LogEntry[]): boolean {
   const text = `${errorMessage}\n${logs.map((entry) => entry.line).join('\n')}`.toLowerCase();
   return (
@@ -282,6 +354,18 @@ export function buildInstallCommand(packageManager: PackageManager): { cmd: stri
     default:
       return { cmd: 'npm', args: ['install'] };
   }
+}
+
+/**
+ * The PATH for the dev-server child (HYP-1169): the spawn cwd's
+ * node_modules/.bin first (wrapper-script binaries resolve the way `npm run`
+ * would resolve them), then the TOOLCHAIN-REFRESHED PATH — not raw
+ * `process.env.PATH`, which the extension host snapshotted at VS Code launch
+ * and which therefore cannot see a package manager _prepareToolchain just
+ * installed mid-session.
+ */
+export function buildDevServerChildPath(cwd: string, refreshedPath: string): string {
+  return `${join(cwd, 'node_modules', '.bin')}${delimiter}${refreshedPath}`;
 }
 
 /**
@@ -488,6 +572,18 @@ export class DevServerManager {
   private _adoptedRecord: OwnedDevServerRecord | null = null;
   private _outputChannel: vscode.OutputChannel;
   private _onStatusChangeListeners: Array<(state: DevServerState) => void> = [];
+
+  // HYP-1169 toolchain seam (self-healing bring-up). Field-shaped so tests can
+  // inject fakes via Object.assign (same convention as _spawnPlanBaseDir /
+  // _orphanBaseDir) — production uses the real services.
+  private _toolchain = {
+    detectAvailableTools,
+    ensureTool,
+    ensureDependencies,
+    shouldInstallDependencies,
+    findMissingLocalBinaries,
+    refreshPathForChild,
+  };
 
   // Log buffer and error detection
   private _logs: LogEntry[] = [];
@@ -1039,6 +1135,26 @@ export class DevServerManager {
       // Resolve the spawn plan (pm + cwd + command), reusing the persisted plan
       // on respawn (HYP-1160) instead of re-detecting.
       const plan = await this._resolveSpawnPlan(devScript, scripts);
+
+      // HYP-1169 self-healing toolchain, BEFORE the spawn: make sure the plan's
+      // package manager actually exists on this machine (auto-installing it with
+      // progress when missing), proactively install project dependencies, and
+      // rebuild the child PATH from fresh sources so a just-installed tool is
+      // visible to the spawn. A fresh machine must get a running preview, not
+      // "'bun' is not recognized". buildMissingCommandHint remains as the
+      // last-resort explanation if all of this still fails.
+      const childPath = await this._prepareToolchain(plan);
+
+      // Post-toolchain supersede check (HYP-52 pattern): installs can take
+      // minutes; a stop()/reroot that bumped the generation while
+      // _prepareToolchain awaited abandons this start. A proxy exists, so tear
+      // it down; no child was spawned, so transition to 'stopped' before
+      // returning (the exit handler that normally resets _status never fires).
+      if (gen !== this._generation) {
+        this._stopProxy();
+        this.transition('stopped');
+        return this.getState();
+      }
       // No copy of plan.args: the plan is a fresh local resolution (nothing
       // else holds the array), and appendScriptCliArgs below mutates it in place.
       const command = { cmd: plan.cmd, args: plan.args };
@@ -1047,6 +1163,12 @@ export class DevServerManager {
         `[DevServer] Starting ${command.cmd} ${command.args.join(' ')} (port ${this._port}) in ${plan.cwd}`,
       );
       this._outputChannel.appendLine(`[DevServer] Project: ${this._projectPath}`);
+      // HYP-1169 round 2: the exact PATH the child will resolve binaries
+      // against — the next "'x' is not recognized" becomes a one-glance
+      // diagnosis instead of a log archaeology session.
+      this._outputChannel.appendLine(
+        `[DevServer] Child PATH: ${truncatePathForLog(buildDevServerChildPath(plan.cwd, childPath))}`,
+      );
 
       // Pass --port via CLI for frameworks that support it.
       // Env vars PORT/VITE_PORT alone are not reliable (Vite ignores them).
@@ -1060,10 +1182,13 @@ export class DevServerManager {
         cwd: plan.cwd,
         env: {
           ...process.env,
-          // Resolve wrapper-script binaries (nx, turbo, …) the way `npm run`
-          // would: the install root's node_modules/.bin first on PATH. Harmless
+          // HYP-1169: refreshed toolchain PATH (registry user PATH on win32,
+          // well-known per-user bin dirs on unix) instead of the launch-time
+          // process.env.PATH snapshot, with the install root's
+          // node_modules/.bin prepended so wrapper-script binaries (nx,
+          // turbo, …) resolve the way `npm run` would resolve them. Harmless
           // for `<pm> run` commands, which do this themselves.
-          PATH: `${join(plan.cwd, 'node_modules', '.bin')}${delimiter}${process.env.PATH ?? ''}`,
+          PATH: buildDevServerChildPath(plan.cwd, childPath),
           PORT: String(this._port),
           // For Vite
           VITE_PORT: String(this._port),
@@ -1652,6 +1777,238 @@ export class DevServerManager {
    */
   private _buildCommand(packageManager: PackageManager, script: string): { cmd: string; args: string[] } {
     return pmRunCommand(packageManager, script);
+  }
+
+  /**
+   * HYP-1169 self-healing toolchain, round 2: a ONE-SHOT pipeline that runs
+   * in _runStart AFTER the spawn plan is resolved and BEFORE the child is
+   * spawned. Returns the refreshed PATH the child's env must use.
+   *
+   * The full command chain is analyzed UP FRONT: the global tools the plan's
+   * package manager needs (requiredToolsForPackageManager) and the local
+   * binaries the normalized spawn command needs from node_modules/.bin
+   * (requiredLocalBinaries). Then, in order:
+   *   1. GLOBALS — ensureTool per required tool: a cached "available" entry
+   *      is trusted only after a live `<tool> --version` probe (a failed probe
+   *      invalidates the cache and re-runs the install); every install is
+   *      post-verified and its probe-resolved binary dirs are collected for
+   *      the child PATH. markToolAvailable never fires on exit code alone.
+   *   2. DEPENDENCIES — `<pm> install` in the plan cwd, MANDATORY: a failure
+   *      stops the pipeline with a friendly error + Retry action (one retry
+   *      inside this phase). The install child sees the verified tool dirs on
+   *      PATH — otherwise `bun install` fails with "'bun' is not recognized"
+   *      on the very machine that just installed bun (Alex's Windows run).
+   *   3. VERIFY — the local binaries the spawn command needs must exist in
+   *      <plan.cwd>/node_modules/.bin; a missing one (incomplete install)
+   *      stops the pipeline naming the binary + the log location, with a
+   *      Retry that force-reinstalls. Never spawn blind into "not recognized".
+   *   4. PATH — verified tool dirs prepended (deduped) over the refreshed
+   *      PATH. refreshPathForChild (registry query on win32) is SKIPPED when
+   *      nothing was installed and no verified dirs exist (review nit: a warm
+   *      start must not pay a registry spawn).
+   *
+   * UX (fix 4): while there is real work (a missing tool or stale deps), one
+   * progress notification reports "Step i/N: <phase>…" and a companion
+   * notification offers 'Open Logs' (reveals the HyperIDE Dev Server output
+   * channel, where installer output streams live).
+   */
+  private async _prepareToolchain(plan: SpawnCommand & { packageManager: PackageManager }): Promise<string> {
+    const pm = plan.packageManager;
+    const requiredTools = requiredToolsForPackageManager(pm);
+    const localBinaries = requiredLocalBinaries(plan.cmd, plan.args, plan.branch);
+    const availability = await this._toolchain.detectAvailableTools();
+    const depsStale = await this._toolchain.shouldInstallDependencies(plan.cwd, pm);
+    const toolDirs: string[] = [];
+    const installRan = { value: requiredTools.some((tool) => !availability[tool]) || depsStale };
+
+    const phases: ToolchainPhase[] = requiredTools.map((tool) => ({
+      title: `Checking ${tool}`,
+      run: async (progress, token) => {
+        const dirs = await this._toolchain.ensureTool(tool, {
+          availability,
+          output: this._outputChannel,
+          confirmSudo: (description) => this._confirmSudoInstall(description),
+          exec: { progress, token },
+        });
+        for (const dir of dirs) {
+          if (!toolDirs.some((d) => d.toLowerCase() === dir.toLowerCase())) toolDirs.push(dir);
+        }
+      },
+    }));
+    if (depsStale) phases.push(this._depsPhase(plan, toolDirs));
+    phases.push(this._verifyPhase(plan, localBinaries, toolDirs, installRan));
+
+    try {
+      await this._runToolchainPhases(phases, installRan.value);
+    } catch (error) {
+      if (error instanceof ToolchainInstallError) {
+        const action = await vscode.window.showErrorMessage(error.message, 'Open instructions', 'Open Logs');
+        if (action === 'Open instructions') {
+          void vscode.env.openExternal(vscode.Uri.parse(error.docsUrl));
+        } else if (action === 'Open Logs') {
+          this._outputChannel.show();
+        }
+      }
+      throw error;
+    }
+
+    const basePath =
+      installRan.value || toolDirs.length > 0 ? await this._toolchain.refreshPathForChild() : (process.env.PATH ?? '');
+    if (toolDirs.length === 0) return basePath;
+    // Verified binary dirs FIRST (they won a live `<tool> --version`), then the
+    // refreshed PATH, deduped.
+    return mergePathEntries(
+      toolDirs.join(delimiter),
+      basePath.split(delimiter).filter(Boolean),
+      process.platform !== 'linux',
+      delimiter,
+    );
+  }
+
+  /** `<pm> install` in the plan cwd, with the verified tool dirs on the child's PATH. */
+  private async _runDepsInstall(
+    plan: SpawnCommand & { packageManager: PackageManager },
+    toolDirs: readonly string[],
+    progress: ToolchainProgress,
+    token: { isCancellationRequested: boolean },
+    force: boolean,
+  ): Promise<void> {
+    await this._toolchain.ensureDependencies(plan.cwd, plan.packageManager, {
+      output: this._outputChannel,
+      force,
+      exec: {
+        progress,
+        token,
+        env: { PATH: [...toolDirs, ...(process.env.PATH ?? '').split(delimiter).filter(Boolean)].join(delimiter) },
+      },
+    });
+  }
+
+  /**
+   * The dependency-install phase (fix 2): MANDATORY, never blind-continued.
+   * A failure stops the pipeline with a friendly error + Retry action; the
+   * retry runs once inside the phase, a second failure propagates.
+   */
+  private _depsPhase(
+    plan: SpawnCommand & { packageManager: PackageManager },
+    toolDirs: readonly string[],
+  ): ToolchainPhase {
+    const pm = plan.packageManager;
+    return {
+      title: `Installing project dependencies (${pm} install)…`,
+      run: async (progress, token) => {
+        try {
+          await this._runDepsInstall(plan, toolDirs, progress, token, false);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this._outputChannel.appendLine(`[DevServer] Dependency install failed: ${message}`);
+          const choice = await vscode.window.showErrorMessage(
+            `HyperIDE could not install the project dependencies (${pm} install), so the dev server cannot start. ` +
+              `The full install log is in the 'HyperIDE Dev Server' output channel.`,
+            'Retry',
+            'Open Logs',
+          );
+          if (choice === 'Open Logs') this._outputChannel.show();
+          if (choice !== 'Retry') throw error;
+          await this._runDepsInstall(plan, toolDirs, progress, token, false);
+        }
+      },
+    };
+  }
+
+  /**
+   * The verification phase (fix 2): the local binaries the normalized spawn
+   * command needs must exist in <plan.cwd>/node_modules/.bin AFTER the
+   * install — a missing one stops the start with a friendly error naming the
+   * binary and the log location. Retry force-reinstalls (a half-written
+   * node_modules can look fresh by mtime) and re-verifies.
+   */
+  private _verifyPhase(
+    plan: SpawnCommand & { packageManager: PackageManager },
+    localBinaries: readonly string[],
+    toolDirs: readonly string[],
+    installRan: { value: boolean },
+  ): ToolchainPhase {
+    return {
+      title: 'Verifying installation…',
+      run: async (progress, token) => {
+        let missing = await this._toolchain.findMissingLocalBinaries(plan.cwd, localBinaries);
+        if (missing.length === 0) return;
+        const names = missing.map((binary) => `'${binary}'`).join(', ');
+        this._outputChannel.appendLine(
+          `[DevServer] Required local binaries missing from ${plan.cwd}/node_modules/.bin: ${names}`,
+        );
+        const choice = await vscode.window.showErrorMessage(
+          `HyperIDE installed the dependencies, but ${names} ${missing.length === 1 ? 'is' : 'are'} still missing ` +
+            `from node_modules/.bin — starting now would fail with "'${missing[0]}' is not recognized". ` +
+            `The install log is in the 'HyperIDE Dev Server' output channel.`,
+          'Retry',
+          'Open Logs',
+        );
+        if (choice === 'Open Logs') this._outputChannel.show();
+        if (choice === 'Retry') {
+          await this._runDepsInstall(plan, toolDirs, progress, token, true);
+          installRan.value = true;
+          missing = await this._toolchain.findMissingLocalBinaries(plan.cwd, localBinaries);
+        }
+        if (missing.length > 0) {
+          throw new Error(
+            `Dev server cannot start: ${names} missing from node_modules/.bin after ${plan.packageManager} install. ` +
+              `See the 'HyperIDE Dev Server' output channel for the install log.`,
+          );
+        }
+      },
+    };
+  }
+
+  /**
+   * Drive the toolchain phases through ONE progress notification (step i/N
+   * per phase) plus a companion 'Open Logs' offer — but only when there is
+   * real work to show (a missing tool or a dependency install); a warm start
+   * runs the same phases silently.
+   */
+  private async _runToolchainPhases(phases: ToolchainPhase[], notify: boolean): Promise<void> {
+    const runAll = async (report: (message: string) => void, token: { isCancellationRequested: boolean }) => {
+      for (let i = 0; i < phases.length; i++) {
+        const prefix = `Step ${i + 1}/${phases.length}`;
+        report(`${prefix}: ${phases[i].title}`);
+        await phases[i].run({ report: (message) => report(`${prefix}: ${message}`) }, token);
+      }
+    };
+    if (!notify) {
+      await runAll(() => {}, { isCancellationRequested: false });
+      return;
+    }
+    void vscode.window
+      .showInformationMessage(
+        'HyperIDE is preparing the toolchain for this project (installing missing tools / dependencies).',
+        'Open Logs',
+      )
+      .then((choice) => {
+        if (choice === 'Open Logs') this._outputChannel.show();
+      });
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'HyperIDE: Preparing the toolchain',
+        cancellable: true,
+      },
+      (progress, token) => runAll((message) => progress.report({ message }), token),
+    );
+  }
+
+  /**
+   * Modal confirmation for the ONE install path that needs administrator
+   * rights (linux node via apt). Everything else in the toolchain installer is
+   * sudo-free; this dialog is what keeps the no-silent-sudo invariant true.
+   */
+  private async _confirmSudoInstall(description: string): Promise<boolean> {
+    const choice = await vscode.window.showWarningMessage(
+      `HyperIDE needs to install ${description}, which requires administrator (sudo) access. Proceed?`,
+      { modal: true },
+      'Install',
+    );
+    return choice === 'Install';
   }
 
   private async _repairDependencies(packageManager: PackageManager): Promise<void> {
