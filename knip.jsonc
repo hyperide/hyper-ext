@@ -1,0 +1,68 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  // This repo is NOT a uniform workspace monorepo. There are four distinct
+  // project roots with different dependency sets:
+  //   - "."                                    root app: client/ server/ lib/ shared/ scripts/
+  //   - "packages/*"                           the real bun workspaces (vector-cli/engine/wasm)
+  //   - "vscode-extension/hypercanvas-preview" own package.json + esbuild + tsconfig
+  //   - "vscode-extension/hypercanvas-code-server"
+  // templates/** and server/docker/** are standalone scaffolds and must never be
+  // analyzed (nextjs-tamagui is its own nested monorepo and explodes).
+  // No vite plugin drives the main app (built by scripts/build-client.ts) and tests
+  // run under `bun test` (not vitest/jest), so test entries are declared explicitly.
+  // Config files (drizzle/tailwind/postcss), server/main.ts, esbuild.js and each
+  // package's main/bin are auto-detected by knip from package.json + known plugins —
+  // do NOT list them as explicit entries (knip flags them as redundant).
+  //
+  // Two "Add entry / refine project files" hints remain (root + hypercanvas-preview).
+  // These are knip's high-unused-file-ratio heuristic, NOT a misconfiguration: the
+  // repo genuinely has ~58 unused files / 491 unused exports. Silencing them would
+  // require adding fake entry points that mask real dead code — out of scope here
+  // (HYP-416 is config SETUP; the unused-code cleanup is follow-up work).
+  "ignore": ["templates/**", "server/docker/**"],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "client/App.tsx",
+        "client/__canvas_preview__.tsx",
+        "client/main.tsx",
+        "server/index.ts",
+        "scripts/*.{ts,cjs}",
+        "**/*.test.{ts,tsx}",
+        "**/__tests__/**/*.{ts,tsx}",
+      ],
+      "project": [
+        "client/**/*.{ts,tsx}",
+        "server/**/*.ts",
+        "lib/**/*.ts",
+        "shared/**/*.{ts,tsx,js}",
+        "scripts/**/*.{ts,cjs}",
+        "test/**/*.ts",
+      ],
+    },
+    "packages/*": {
+      // Each package's entry (src/index.ts or src/context.ts via `main`, bin/vecli.ts
+      // via `bin`) is inferred from its own package.json. Only declare test files.
+      "entry": ["**/*.test.ts"],
+      "project": "src/**/*.ts",
+    },
+    "vscode-extension/hypercanvas-preview": {
+      "entry": [
+        "src/webview/index.tsx",
+        "src/webview-left/index.tsx",
+        "src/webview-right/index.tsx",
+        "src/webview-preview-panel/index.tsx",
+        "src/webview-ai-chat/index.tsx",
+        "src/services/scripts/iframe-interaction.ts",
+        "src/services/scripts/iframe-error-detection.ts",
+        "src/__tests__/**/*.{ts,tsx}",
+        "**/*.test.{ts,tsx}",
+      ],
+      "project": "src/**/*.{ts,tsx}",
+    },
+    "vscode-extension/hypercanvas-code-server": {
+      "entry": ["**/*.test.ts"],
+      "project": "src/**/*.ts",
+    },
+  },
+}
