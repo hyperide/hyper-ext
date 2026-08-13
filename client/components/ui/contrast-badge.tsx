@@ -36,6 +36,8 @@ export function ContrastBadge({ hex, pairedHex, isTextColor }: ContrastBadgeProp
     <HoverCard openDelay={200} closeDelay={100}>
       <HoverCardTrigger asChild>
         <span
+          data-testid="inspector-contrast-badge"
+          data-contrast-level={level}
           className={cn(
             'text-[9px] px-1 rounded font-medium shrink-0 mr-1 cursor-default',
             level === 'AAA' && 'bg-green-100 dark:bg-green-900 text-green-900 dark:text-green-100',

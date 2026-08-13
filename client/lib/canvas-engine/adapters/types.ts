@@ -53,6 +53,11 @@ export interface ParsedStyles {
   // Background
   backgroundColor?: string;
   backgroundImage?: string;
+  /** Effective painted background (own bg composited over ancestors down to the page),
+   *  as an opaque '#rrggbb'. Resolved at DOM read time. Used as the contrast pair for the
+   *  element's text color so a transparent/unset background is judged against the real
+   *  painted color instead of the literal `transparent` (which falsely reads as "Bad"). */
+  effectiveBackgroundColor?: string;
 
   // Border
   borderWidth?: string; // General border width

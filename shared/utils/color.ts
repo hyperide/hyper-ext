@@ -223,6 +223,99 @@ export function normalizeComputedColor(value: string): string | null {
   return null;
 }
 
+// ============================================================================
+// Effective (painted) background resolution — alpha compositing
+//
+// An element with a transparent/unset background paints none of its own color; the
+// color seen behind its text is whatever opaque ancestor (or the page canvas) sits
+// below. Judging text contrast against the element's literal `transparent` yields a
+// meaningless 1:1 ratio → a false "Bad". These helpers composite the layer stack down
+// to an opaque color so contrast is judged against the real painted background.
+// ============================================================================
+
+export interface RgbaColor {
+  r: number;
+  g: number;
+  b: number;
+  /** Straight (non-premultiplied) alpha, 0–1. */
+  a: number;
+}
+
+function clampByte(n: number): number {
+  if (Number.isNaN(n)) return 0;
+  return Math.max(0, Math.min(255, n));
+}
+
+function clampUnit(n: number): number {
+  if (Number.isNaN(n)) return 1;
+  return Math.max(0, Math.min(1, n));
+}
+
+/**
+ * Parse a CSS color string into straight-alpha RGBA.
+ *
+ * Handles the `transparent` keyword (a=0), `rgb()`/`rgba()` (the comma form
+ * getComputedStyle emits), and hex (`#rgb`, `#rrggbb`, `#rrggbbaa`). Returns null for
+ * anything it cannot interpret (other named colors, `hsl()`, gradients, `currentColor`)
+ * so callers skip layers they can't reason about rather than guessing black.
+ */
+export function parseCssColor(value: string): RgbaColor | null {
+  if (!value) return null;
+  const v = value.trim();
+  if (v.toLowerCase() === 'transparent') return { r: 0, g: 0, b: 0, a: 0 };
+
+  const rgbaMatch = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(v);
+  if (rgbaMatch) {
+    return {
+      r: clampByte(Number.parseFloat(rgbaMatch[1])),
+      g: clampByte(Number.parseFloat(rgbaMatch[2])),
+      b: clampByte(Number.parseFloat(rgbaMatch[3])),
+      a: rgbaMatch[4] === undefined ? 1 : clampUnit(Number.parseFloat(rgbaMatch[4])),
+    };
+  }
+
+  const hexAlpha = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(v);
+  if (hexAlpha) {
+    return {
+      r: Number.parseInt(hexAlpha[1], 16),
+      g: Number.parseInt(hexAlpha[2], 16),
+      b: Number.parseInt(hexAlpha[3], 16),
+      a: Number.parseInt(hexAlpha[4], 16) / 255,
+    };
+  }
+
+  const rgb = hexToRgb(v);
+  return rgb ? { ...rgb, a: 1 } : null;
+}
+
+/** Composite `top` over `bottom` (Porter-Duff source-over, straight alpha). */
+export function compositeOver(top: RgbaColor, bottom: RgbaColor): RgbaColor {
+  const a = top.a + bottom.a * (1 - top.a);
+  if (a === 0) return { r: 0, g: 0, b: 0, a: 0 };
+  const blend = (ct: number, cb: number) => (ct * top.a + cb * bottom.a * (1 - top.a)) / a;
+  return { r: blend(top.r, bottom.r), g: blend(top.g, bottom.g), b: blend(top.b, bottom.b), a };
+}
+
+/**
+ * Flatten a stack of background layers into one opaque `#rrggbb`.
+ *
+ * `layers` are ordered top-first (the element's own background) to bottom-last (the
+ * outermost ancestor). Unparseable or fully transparent layers are skipped. The stack
+ * is composited over `base` — an opaque stand-in for the browser canvas (default white).
+ * Always returns an opaque hex because the base is opaque.
+ */
+export function flattenBackgroundLayers(layers: string[], base = '#ffffff'): string {
+  const baseRgba = parseCssColor(base);
+  let acc: RgbaColor = baseRgba ? { ...baseRgba, a: 1 } : { r: 255, g: 255, b: 255, a: 1 };
+  // Composite bottom-up: paint the page, then each ancestor, then the element on top.
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const layer = parseCssColor(layers[i]);
+    if (!layer || layer.a === 0) continue;
+    acc = compositeOver(layer, acc);
+  }
+  return rgbToHex(acc.r, acc.g, acc.b);
+}
+
 /** Parse hex with alpha channel (#rrggbbaa) → { color: '#rrggbb', opacity: '0-100' } */
 export function parseHexWithAlpha(hex: string): {
   color: string;

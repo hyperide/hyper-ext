@@ -1,14 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import {
   colorDistance,
+  compositeOver,
   contrastRatio,
   findContrastFixHex,
+  flattenBackgroundLayers,
   hexToHsl,
   hexToRgb,
   hexWithAlpha,
   hslToHex,
   hslToRgb,
   normalizeComputedColor,
+  parseCssColor,
   parseHexWithAlpha,
   rgbToHex,
   wcagLevel,
@@ -257,6 +260,110 @@ describe('normalizeComputedColor', () => {
   test('rgba semi-transparent white → hex with alpha', () => {
     // 0.5 * 255 = 127.5 → round → 128 = 0x80
     expect(normalizeComputedColor('rgba(255, 255, 255, 0.5)')).toBe('#ffffff80');
+  });
+});
+
+describe('parseCssColor', () => {
+  test('transparent keyword → alpha 0', () => {
+    expect(parseCssColor('transparent')).toEqual({ r: 0, g: 0, b: 0, a: 0 });
+  });
+
+  test('rgb() → opaque', () => {
+    expect(parseCssColor('rgb(0, 0, 0)')).toEqual({ r: 0, g: 0, b: 0, a: 1 });
+  });
+
+  test('rgba() with alpha 0 (computed transparent) → alpha 0', () => {
+    expect(parseCssColor('rgba(0, 0, 0, 0)')).toEqual({ r: 0, g: 0, b: 0, a: 0 });
+  });
+
+  test('rgba() with fractional alpha', () => {
+    expect(parseCssColor('rgba(255, 255, 255, 0.5)')).toEqual({ r: 255, g: 255, b: 255, a: 0.5 });
+  });
+
+  test('hex (#rrggbb) → opaque', () => {
+    expect(parseCssColor('#000000')).toEqual({ r: 0, g: 0, b: 0, a: 1 });
+  });
+
+  test('hex with alpha (#rrggbbaa)', () => {
+    const c = parseCssColor('#ffffff80');
+    expect(c).not.toBeNull();
+    expect(c?.r).toBe(255);
+    expect(c?.a).toBeCloseTo(0.5, 1);
+  });
+
+  test('uninterpretable values → null (named colors, gradients, currentColor)', () => {
+    expect(parseCssColor('currentColor')).toBeNull();
+    expect(parseCssColor('rebeccapurple')).toBeNull();
+    expect(parseCssColor('linear-gradient(red, blue)')).toBeNull();
+    expect(parseCssColor('')).toBeNull();
+  });
+});
+
+describe('compositeOver', () => {
+  test('opaque top fully covers bottom', () => {
+    const out = compositeOver({ r: 255, g: 0, b: 0, a: 1 }, { r: 0, g: 0, b: 255, a: 1 });
+    expect(out).toEqual({ r: 255, g: 0, b: 0, a: 1 });
+  });
+
+  test('fully transparent top leaves bottom untouched', () => {
+    const out = compositeOver({ r: 255, g: 255, b: 255, a: 0 }, { r: 0, g: 0, b: 0, a: 1 });
+    expect(out).toEqual({ r: 0, g: 0, b: 0, a: 1 });
+  });
+
+  test('50% white over black → mid gray', () => {
+    const out = compositeOver({ r: 255, g: 255, b: 255, a: 0.5 }, { r: 0, g: 0, b: 0, a: 1 });
+    expect(out.a).toBe(1);
+    expect(out.r).toBeCloseTo(127.5, 1);
+  });
+});
+
+describe('flattenBackgroundLayers', () => {
+  test('transparent element over an opaque black ancestor → black (NOT transparent/black-default)', () => {
+    // The exact TweetComposer case: textarea bg-transparent over a black page body.
+    expect(flattenBackgroundLayers(['rgba(0, 0, 0, 0)', 'rgb(0, 0, 0)'])).toBe('#000000');
+  });
+
+  test('transparent element over an opaque white ancestor → white', () => {
+    expect(flattenBackgroundLayers(['transparent', 'rgb(255, 255, 255)'])).toBe('#ffffff');
+  });
+
+  test('all-transparent stack falls back to the white page canvas', () => {
+    expect(flattenBackgroundLayers(['rgba(0, 0, 0, 0)', 'transparent'])).toBe('#ffffff');
+  });
+
+  test('custom opaque base is honored when the stack is transparent', () => {
+    expect(flattenBackgroundLayers(['transparent'], '#000000')).toBe('#000000');
+  });
+
+  test('semi-transparent own background composites over the ancestor', () => {
+    // white @ 50% over black → mid gray
+    expect(flattenBackgroundLayers(['rgba(255, 255, 255, 0.5)', 'rgb(0, 0, 0)'])).toBe('#808080');
+  });
+
+  test('topmost opaque layer wins over anything below it', () => {
+    expect(flattenBackgroundLayers(['rgb(255, 0, 0)', 'rgb(0, 0, 255)'])).toBe('#ff0000');
+  });
+
+  test('unparseable layers are skipped, not treated as black', () => {
+    expect(flattenBackgroundLayers(['currentColor', 'rgb(0, 0, 0)'])).toBe('#000000');
+  });
+});
+
+describe('effective background fixes false "Bad" contrast (regression: TweetComposer textarea)', () => {
+  // textarea className: "bg-transparent text-twitter-text"; page body background #000000;
+  // twitter-text resolves to #e7e9ea (near-white). Real contrast is ~18:1 (AAA).
+  const TEXT = '#e7e9ea';
+
+  test('the bug: judging text against the literal transparent yields a false Fail', () => {
+    // hexToRgb('transparent') is null → contrastRatio returns 1 → wcagLevel 'Fail' → "Bad".
+    expect(wcagLevel(contrastRatio(TEXT, 'transparent'))).toBe('Fail');
+  });
+
+  test('the fix: resolved effective background → text reads AAA, not Fail', () => {
+    const layers = ['rgba(0, 0, 0, 0)' /* own bg-transparent */, 'rgb(0, 0, 0)' /* body */];
+    const effectiveBg = flattenBackgroundLayers(layers);
+    expect(effectiveBg).toBe('#000000');
+    expect(wcagLevel(contrastRatio(TEXT, effectiveBg))).toBe('AAA');
   });
 });
 

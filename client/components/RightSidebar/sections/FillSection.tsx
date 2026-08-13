@@ -6,8 +6,21 @@ import { Input } from '../../ui/input';
 import type { UIKitType } from '../types';
 import { hexWithAlpha, parseHexWithAlpha } from '../utils';
 
+/**
+ * Pick the background to judge the element's text contrast against: the resolved
+ * effective painted background when available, otherwise the element's own background —
+ * but never the literal `transparent`, which produces a meaningless 1:1 "Bad" verdict.
+ */
+function resolveTextContrastBg(effective: string | undefined, ownBg: string): string | undefined {
+  if (effective) return effective;
+  if (ownBg && ownBg.toLowerCase() !== 'transparent') return ownBg;
+  return undefined;
+}
+
 interface FillSectionProps {
   backgroundColor: string;
+  /** Effective painted background ('#rrggbb') used as the contrast pair for text color. */
+  textContrastBackgroundHex?: string;
   fillOpacity: string;
   backgroundImage: string | null;
   textColor: string;
@@ -38,6 +51,7 @@ interface FillSectionProps {
 
 export const FillSection = memo(function FillSection({
   backgroundColor,
+  textContrastBackgroundHex,
   fillOpacity,
   backgroundImage,
   textColor,
@@ -167,7 +181,7 @@ export const FillSection = memo(function FillSection({
           componentPath={componentPath}
           opacity={textOpacity}
           onOpacityChange={onTextOpacityChange}
-          contrastPairedHex={backgroundColor || undefined}
+          contrastPairedHex={resolveTextContrastBg(textContrastBackgroundHex, backgroundColor)}
           contrastRole="text"
         />
         <div className="flex items-center gap-2">

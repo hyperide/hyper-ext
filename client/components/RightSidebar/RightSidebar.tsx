@@ -356,6 +356,20 @@ export default function RightSidebar({
     return (parsedStyles[stateKey] as Partial<ParsedStyles>) || {};
   }, [parsedStyles, currentState]);
 
+  // Effective painted background behind the selected element — the correct contrast pair
+  // for its text color. A transparent/unset background resolves up the ancestor chain to
+  // the real page color, so contrast is judged against what's actually painted (not the
+  // literal `transparent`, which falsely reads as "Bad").
+  //
+  // State-aware: the resolved effective bg is a base-state snapshot. When a pseudo-state
+  // (hover/focus/…) overrides the background, judge the (also state-filtered) text color
+  // against THAT variant's background instead — otherwise `hover:bg-white hover:text-white`
+  // would be checked against the base bg and falsely pass. Skipped for multi-select.
+  const variantBackground = currentState ? effectiveParsed.backgroundColor : undefined;
+  const textContrastBackgroundHex = isMultiSelect
+    ? undefined
+    : (variantBackground ?? parsedStyles?.effectiveBackgroundColor);
+
   // Multi-select: read each selected element's styles and merge, marking divergent values MIXED.
   // Browser/SaaS only — VS Code multi-select inspector is not wired (no synchronous engine read).
   // styleVersion/styleRefreshKey are intentional re-read triggers: a batch write bumps them so the
@@ -1655,6 +1669,7 @@ export default function RightSidebar({
             {canInspectStyles && (
               <FillSection
                 backgroundColor={backgroundColor}
+                textContrastBackgroundHex={textContrastBackgroundHex}
                 fillOpacity={fillOpacity}
                 backgroundImage={backgroundImage}
                 textColor={textColor}

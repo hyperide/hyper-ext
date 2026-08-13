@@ -12,6 +12,7 @@ import type { StyleReadResult } from '@lib/style-read/types';
 import type { SelectedElementRuntimeStyle } from '@lib/types';
 import type { I18nBindingResult } from '@shared/i18n-text/types';
 import { normalizeComputedColor } from '@shared/utils/color';
+import { computeEffectiveBackgroundColor } from '@shared/utils/effective-background';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { findNodeById } from '@/components/RightSidebar/utils';
 import type { CanvasEngine } from '@/lib/canvas-engine';
@@ -198,6 +199,13 @@ export function mergeRuntimeStyle(
     }
   }
 
+  // Effective painted background resolved in the iframe (already an opaque hex —
+  // no normalization). Drives correct text-contrast judgement for transparent elements.
+  if (!merged.effectiveBackgroundColor && cs.effectiveBackgroundColor) {
+    merged.effectiveBackgroundColor = cs.effectiveBackgroundColor;
+    changed = true;
+  }
+
   if (!merged.borderWidth && cs.borderWidth && cs.borderWidth !== '0px') {
     merged.borderWidth = cs.borderWidth;
     changed = true;
@@ -331,6 +339,12 @@ export function readBrowserElementStyle(
 
   // Read parsed styles via adapter (TailwindAdapter or TamaguiAdapter)
   const parsed = styleAdapter.read(astNode, domElement || undefined);
+
+  // Resolve the effective painted background from the live DOM (browser/SaaS mode has
+  // direct iframe DOM access). VS Code mode fills this via the runtime-style snapshot.
+  if (domElement && !parsed.effectiveBackgroundColor) {
+    parsed.effectiveBackgroundColor = computeEffectiveBackgroundColor(domElement);
+  }
 
   // Determine text content
   let textContent = '';
