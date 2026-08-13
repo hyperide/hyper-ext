@@ -15,7 +15,7 @@
  * prefix. Single source of truth — keep in sync on both sides. Changing this
  * requires matching sandbox image rebuild.
  */
-export const SANDBOX_MOUNT_PREFIX = '/app/';
+const SANDBOX_MOUNT_PREFIX = '/app/';
 
 const CONTAINER_PREFIXES = [SANDBOX_MOUNT_PREFIX] as const;
 

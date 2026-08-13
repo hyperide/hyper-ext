@@ -52,7 +52,7 @@ export interface PreviewModeManagerOptions {
 const DEFAULT_PREVIEW_ROUTE_UPDATE_DELAY_MS = 4000;
 
 /** Default: node:fs.watch with debounce. Suitable for local extension use. */
-export function fsWatchFactory(projectRoot: string, onChange: () => void): () => void {
+function fsWatchFactory(projectRoot: string, onChange: () => void): () => void {
   const hyperideDir = join(projectRoot, '.hyperide');
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;

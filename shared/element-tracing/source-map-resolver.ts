@@ -9,7 +9,7 @@
 import type { SourceLocation } from './types';
 
 /** One entry in an indexed source map's sections array. */
-export interface SourceMapSection {
+interface SourceMapSection {
   offset: { line: number; column: number };
   map?: SourceMapV3; // Inline child map; absent when the section uses `url` instead
 }

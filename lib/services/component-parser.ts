@@ -20,7 +20,7 @@ const traverse = _traverse.default || _traverse;
 // Types
 // ============================================
 
-export type CondItemType = 'if-then' | 'if-else' | 'else-if' | 'switch-case';
+type CondItemType = 'if-then' | 'if-else' | 'else-if' | 'switch-case';
 
 export interface ComponentNode {
   id: string;
@@ -211,7 +211,7 @@ export function findLocalComponentDefinition(
 /**
  * Parse component body and extract JSX from return statements
  */
-export function parseLocalComponentBody(
+function parseLocalComponentBody(
   componentDef: t.ArrowFunctionExpression | t.FunctionExpression | t.FunctionDeclaration,
   parseContext: ParseContext,
   expandedComponents: Set<string>,
@@ -302,7 +302,7 @@ export function parseLocalComponentBody(
  * Parse function body and extract all JSX elements it may return.
  * Handles direct JSX returns, array.push patterns, and multiple returns.
  */
-export function parseLocalFunctionBody(
+function parseLocalFunctionBody(
   functionDef: t.ArrowFunctionExpression | t.FunctionExpression | t.FunctionDeclaration,
   parseContext: ParseContext,
   mapContext?: MapContext,

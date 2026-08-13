@@ -811,7 +811,7 @@ const SPECIAL_CASE_PREFIXES: Record<string, string[]> = {
  * @param styleKey - CSS property name (e.g., 'alignItems', 'justifyItems')
  * @returns Array of prefixes to match for conflict removal
  */
-export function getConflictingPrefixesForProperty(styleKey: string): string[] {
+function getConflictingPrefixesForProperty(styleKey: string): string[] {
   // Check special cases first
   if (SPECIAL_CASE_PREFIXES[styleKey]) {
     return SPECIAL_CASE_PREFIXES[styleKey];

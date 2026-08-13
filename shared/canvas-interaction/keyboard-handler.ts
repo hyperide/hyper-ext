@@ -25,7 +25,7 @@ export interface NodeMapLookup {
   findDOMElement: (source: SourceLocation, itemIndex: number) => HTMLElement | null;
 }
 
-export interface KeyboardHandlerCallbacks {
+interface KeyboardHandlerCallbacks {
   onSelectElement: (id: string, itemIndex?: number | null) => void;
   onSelectMultiple: (ids: string[]) => void;
   onClearSelection: () => void;

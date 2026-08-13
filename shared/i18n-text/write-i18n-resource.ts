@@ -10,7 +10,7 @@ import { discoverLayout } from './resolve-i18n-resource';
 import { writeTsLocaleValue } from './ts-locale-ast';
 import type { I18nLibrary } from './types';
 
-export type I18nWriteError = 'missing-locale-file' | 'parse-error' | 'unsupported-format' | 'read-only' | 'io-error';
+type I18nWriteError = 'missing-locale-file' | 'parse-error' | 'unsupported-format' | 'read-only' | 'io-error';
 
 export interface WriteI18nResourceParams {
   projectRoot: string;

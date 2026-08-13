@@ -54,7 +54,7 @@ export interface SiblingInfo {
   readonly domIndex: number;
 }
 
-export interface OrderWriteEntry {
+interface OrderWriteEntry {
   readonly elementId: string;
   readonly filePath: string;
   /** Pre-computed new className, ready to send to `astOps.updateProps`. */
@@ -115,7 +115,7 @@ export function pickActiveBreakpoint(
  * to a null plan because the order-N path can only model "before / after a sibling" —
  * dropping into the middle of a target is the AST insert path's job.
  */
-export type OrderDropPosition = 'before' | 'after' | 'inside';
+type OrderDropPosition = 'before' | 'after' | 'inside';
 
 export interface ComputeOrderWritePlanInput {
   readonly siblings: readonly SiblingInfo[];

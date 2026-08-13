@@ -32,7 +32,7 @@ export function detectClassNameType(element: t.JSXElement): 'string' | 'template
  * Modify a string literal in place by applying class removal/addition logic
  * Also handles synthetic StringLiterals created from template quasi (via __quasiRef)
  */
-export function modifyStringLiteralInPlace(
+function modifyStringLiteralInPlace(
   stringLiteral: t.StringLiteral,
   newClasses: Record<string, string>,
   changedStyleKeys: string[],
@@ -400,7 +400,7 @@ function findStringLiteralByCodeLine(
  * This modifies the actual variable/string where classes are defined
  * @returns Number of successfully modified string literals
  */
-export function modifyByLocations(
+function modifyByLocations(
   ast: t.File,
   sourceCode: string,
   locations: ClassNameLocation[],
@@ -497,7 +497,7 @@ function removeConflictingClassesFromString(classes: string, prefixes: string[])
  * Also removes conflicting classes from ALL quasis
  * className={`base block ${dynamic}`} -> className={`base ${dynamic} flex`}
  */
-export function appendToLastString(
+function appendToLastString(
   element: t.JSXElement,
   newClasses: Record<string, string>,
   changedStyleKeys: string[],
@@ -540,7 +540,7 @@ export function appendToLastString(
  * Wrap expression in concatenation
  * className={expr} -> className={(expr) + ' bg-red-500'}
  */
-export function wrapInConcatenation(element: t.JSXElement, newClasses: Record<string, string>): void {
+function wrapInConcatenation(element: t.JSXElement, newClasses: Record<string, string>): void {
   const attr = getAttribute(element, 'className');
   if (!attr) return;
 
@@ -567,7 +567,7 @@ export function wrapInConcatenation(element: t.JSXElement, newClasses: Record<st
 /**
  * Modify static className (fallback to existing logic)
  */
-export function modifyStaticClassName(
+function modifyStaticClassName(
   element: t.JSXElement,
   newClasses: Record<string, string>,
   changedStyleKeys: string[],
