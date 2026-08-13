@@ -1366,7 +1366,9 @@ export function activate(context: vscode.ExtensionContext) {
     logsProvider,
     stateHub,
     panelRouter,
-    mcpServer,
+    // Live getter, NOT `mcpServer` by value: setupMcpServer() runs below, AFTER this
+    // call, so a snapshot here would be permanently null (regressed setupMcp in #383).
+    getMcpServer: () => mcpServer,
     prepareDevServerTargetRef,
     rerootDevServerTargetRef,
     getWorkspaceRoot,

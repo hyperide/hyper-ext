@@ -48,7 +48,15 @@ export interface CommandContext {
   logsProvider: LogsPanelProvider | null;
   stateHub: StateHub | null;
   panelRouter: PanelRouter | null;
-  mcpServer: HyperMcpServer | null;
+  /**
+   * Live accessor for the MCP server. MUST be a getter, not a by-value field:
+   * `setupMcpServer(...)` runs AFTER `registerCommands(...)` in activate(), so a
+   * snapshot captured at registration time is permanently null. The getter closes
+   * over activate()'s `let mcpServer` and always reads the current value.
+   * Regression guard: a by-value field broke `hypercanvas.setupMcp` in #383
+   * (592f8e67) — the gate always saw null and aborted with "MCP server is not running".
+   */
+  getMcpServer: () => HyperMcpServer | null;
   prepareDevServerTargetRef: (() => Promise<{ kind: 'ready' } | { kind: 'ambiguous'; targets: string[] }>) | null;
   rerootDevServerTargetRef: ((target: string) => Promise<void>) | null;
   getWorkspaceRoot: () => string | null;
@@ -877,7 +885,8 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
   // Setup MCP for AI agents (Copilot, Claude Code, Codex, OpenCode)
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.setupMcp', async () => {
-      if (!ctx.mcpServer || ctx.mcpServer.port === 0) {
+      const mcpServer = ctx.getMcpServer();
+      if (!mcpServer || mcpServer.port === 0) {
         vscode.window.showErrorMessage('HyperCanvas MCP server is not running');
         return;
       }
@@ -924,7 +933,7 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
 
       if (!picked || picked.length === 0) return;
 
-      const url = ctx.mcpServer.url;
+      const url = mcpServer.url;
 
       const configRoot = getCurrentRoot();
       for (const agent of picked) {
