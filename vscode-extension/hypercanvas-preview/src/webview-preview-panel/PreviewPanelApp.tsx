@@ -545,6 +545,29 @@ interface ComponentErrorOverlayProps {
 }
 
 /**
+ * Compute the overlay's "needs attention" list, kept CONSISTENT with the editable
+ * Props panel: never flag a prop the user can't act on.
+ *
+ * The raw candidates are the union of (a) required props the auto-sample generator
+ * couldn't satisfy and (b) prop names regex-scraped out of the runtime error. (b)
+ * can name props that don't exist in the prop schema (e.g. `name` scraped from a
+ * `reading 'name'` crash), for which PropsForm renders NO field. We drop those.
+ *
+ * The editable field set mirrors PropsForm: when a schema is present (even empty)
+ * the fields come from the schema; otherwise from the extracted prop names.
+ */
+export function computeAttentionProps(input: {
+  unsatisfiedProps: readonly string[];
+  extractedProps: readonly string[];
+  propsSchema: import('./PropsForm').SimplePropInfo[] | null | undefined;
+}): string[] {
+  const { unsatisfiedProps, extractedProps, propsSchema } = input;
+  const editableFieldNames = new Set(propsSchema ? propsSchema.map((p) => p.name) : extractedProps);
+  const candidates = [...new Set([...unsatisfiedProps, ...extractedProps])];
+  return candidates.filter((name) => editableFieldNames.has(name));
+}
+
+/**
  * Extract prop names from common React error messages.
  * - "Cannot read properties of undefined (reading 'likes')" → ['likes']
  * - "Cannot read properties of null (reading 'name')" → ['name']
@@ -587,11 +610,12 @@ function ComponentErrorOverlay({
 
   const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
   // Feature #210 — props that need the user's attention: the union of props the
-  // auto-sample generator couldn't satisfy and prop names parsed out of the
-  // actual render error. Auto-generation already ran and failed; these are why.
+  // auto-sample generator couldn't satisfy and prop names parsed out of the actual
+  // render error. Filtered to props that have an editable field, so the
+  // "needs attention" list stays consistent with the Props panel (HYP-453).
   const attentionProps = useMemo(
-    () => [...new Set([...(unsatisfiedProps ?? []), ...extractedProps])],
-    [unsatisfiedProps, extractedProps],
+    () => computeAttentionProps({ unsatisfiedProps: unsatisfiedProps ?? [], extractedProps, propsSchema }),
+    [unsatisfiedProps, extractedProps, propsSchema],
   );
   const cachedValues = useMemo(() => propsCache.get(componentPath), [componentPath]);
   const propValuesRef = useRef<Record<string, unknown>>(cachedValues ?? {});

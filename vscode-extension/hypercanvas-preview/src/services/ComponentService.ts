@@ -17,7 +17,7 @@ import * as vscode from 'vscode';
 import { getDirectoryTree } from '../../../../lib/component-scanner/directory-tree';
 import { ComponentScanner } from '../../../../lib/component-scanner/scanner';
 import type { ComponentsData, TestGroup, TestInfo } from '../../../../lib/component-scanner/types';
-import { extractPropsFromDestructuring, isForwardRefCall } from './componentSourceParser';
+import { extractPropsFromDestructuring, getTypeString, isForwardRefCall } from './componentSourceParser';
 import { FileProjectStructureStore } from './FileStructureStore';
 
 // Re-export shared types for convenience
@@ -664,45 +664,11 @@ export class ComponentService {
   }
 
   /**
-   * Get type string from TypeScript AST node
+   * Get type string from TypeScript AST node.
+   * Delegates to the pure module-level getTypeString for testability.
    */
   private _getTypeString(node: t.TSType): string {
-    if (t.isTSStringKeyword(node)) return 'string';
-    if (t.isTSNumberKeyword(node)) return 'number';
-    if (t.isTSBooleanKeyword(node)) return 'boolean';
-    if (t.isTSAnyKeyword(node)) return 'any';
-    if (t.isTSVoidKeyword(node)) return 'void';
-    if (t.isTSNullKeyword(node)) return 'null';
-    if (t.isTSUndefinedKeyword(node)) return 'undefined';
-    if (t.isTSUnionType(node)) {
-      return node.types.map((t) => this._getTypeString(t)).join(' | ');
-    }
-    if (t.isTSArrayType(node)) {
-      return `${this._getTypeString(node.elementType)}[]`;
-    }
-    if (t.isTSTypeReference(node) && t.isIdentifier(node.typeName)) {
-      return node.typeName.name;
-    }
-    if (t.isTSFunctionType(node)) {
-      return 'Function';
-    }
-    if (t.isTSTypeLiteral(node)) {
-      // Produce readable inline object type: { user: string; count: number }
-      const parts: string[] = [];
-      for (const member of node.members) {
-        if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
-          const opt = member.optional ? '?' : '';
-          const memberType =
-            member.typeAnnotation && t.isTSTypeAnnotation(member.typeAnnotation)
-              ? this._getTypeString(member.typeAnnotation.typeAnnotation)
-              : 'unknown';
-          parts.push(`${member.key.name}${opt}: ${memberType}`);
-        }
-      }
-      return parts.length > 0 ? `{ ${parts.join('; ')} }` : 'object';
-    }
-
-    return 'unknown';
+    return getTypeString(node);
   }
 
   /**

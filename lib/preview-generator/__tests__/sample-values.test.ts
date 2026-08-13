@@ -163,4 +163,50 @@ describe('generateSamplePropValues', () => {
     const result = generateSamplePropValues([prop({ name: 'children', type: 'ReactNode' })]);
     expect(result.unsatisfied).not.toContain('children');
   });
+
+  it('gives a REQUIRED ReactNode children prop a visible text placeholder', () => {
+    // A required `children: ReactNode` must render SOMETHING — otherwise buttons /
+    // containers render empty. We fabricate a placeholder string so the component
+    // has visible content. (Still never flagged as unsatisfied.)
+    const result = generateSamplePropValues([prop({ name: 'children', type: 'ReactNode', required: true })]);
+    expect(typeof result.values.children).toBe('string');
+    expect((result.values.children as string).length).toBeGreaterThan(0);
+    expect(result.unsatisfied).not.toContain('children');
+  });
+
+  it('gives a required ReactNode prop named other than `children` a placeholder too', () => {
+    const result = generateSamplePropValues([prop({ name: 'icon', type: 'ReactNode', required: true })]);
+    expect(typeof result.values.icon).toBe('string');
+    expect((result.values.icon as string).length).toBeGreaterThan(0);
+  });
+
+  it('does NOT fabricate a string for element-only React types (ReactElement / JSX.Element)', () => {
+    // A string is the wrong shape for code that does React.cloneElement(icon) or
+    // reads icon.props — only broad ReactNode safely accepts a text child.
+    for (const type of ['ReactElement', 'React.ReactElement', 'JSX.Element']) {
+      const result = generateSamplePropValues([prop({ name: 'icon', type, required: true })]);
+      expect(result.values.icon).toBeUndefined();
+      // Still ReactNode-ish, so still never flagged unsatisfied.
+      expect(result.unsatisfied).not.toContain('icon');
+    }
+  });
+
+  it('leaves an OPTIONAL ReactNode children prop unset (no placeholder)', () => {
+    // Optional children: keep as-is — undefined is renderable and the component
+    // is expected to handle its absence.
+    const result = generateSamplePropValues([prop({ name: 'children', type: 'ReactNode', required: false })]);
+    expect(result.values.children).toBeUndefined();
+    expect(result.unsatisfied).not.toContain('children');
+  });
+
+  it('gives a REQUIRED React.ReactNode children prop a text placeholder (qualified name)', () => {
+    // Regression guard: _getTypeString previously returned 'unknown' for
+    // TSQualifiedName nodes (React.ReactNode), so acceptsTextPlaceholder never
+    // fired. After the fix, 'React.ReactNode' is produced and lowercased to
+    // 'react.reactnode' which matches in acceptsTextPlaceholder.
+    const result = generateSamplePropValues([prop({ name: 'children', type: 'React.ReactNode', required: true })]);
+    expect(typeof result.values.children).toBe('string');
+    expect((result.values.children as string).length).toBeGreaterThan(0);
+    expect(result.unsatisfied).not.toContain('children');
+  });
 });

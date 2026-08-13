@@ -49,6 +49,17 @@ function isReactNodeType(type: string): boolean {
   );
 }
 
+/**
+ * True only for the BROAD `ReactNode` type, which accepts a bare string as a valid
+ * child. Element-only types (`ReactElement` / `JSX.Element`) are excluded: a string
+ * is the wrong shape for code that does `React.cloneElement(icon)` or reads
+ * `icon.props`, so we must NOT fabricate a text placeholder for those.
+ */
+function acceptsTextPlaceholder(type: string): boolean {
+  const t = type.toLowerCase().replace(/\s+/g, '');
+  return t === 'reactnode' || t === 'react.reactnode';
+}
+
 function isFunctionType(type: string): boolean {
   const t = type.trim();
   return t.includes('=>') || /^\([^)]*\)\s*:/.test(t) || t.toLowerCase() === 'function';
@@ -137,8 +148,18 @@ function valueForProp(prop: PropInfo): unknown | typeof UNSATISFIED {
   // an empty object is a reasonable best-effort that won't crash on read.
   if (type.startsWith('{') || lower === 'object' || lower.startsWith('record<')) return {};
 
-  // ReactNode: undefined is renderable; not a failure.
-  if (isReactNodeType(type)) return undefined;
+  // ReactNode: a REQUIRED broad `ReactNode` (e.g. `children: ReactNode` on a
+  // button/container) must render visible content — undefined leaves the component
+  // empty. Fabricate a readable text placeholder. Element-only types
+  // (ReactElement / JSX.Element) cannot take a string and are left undefined.
+  // Optional ReactNode stays undefined (renderable; the component handles absence).
+  // Either way ReactNode-ish props are never flagged as unsatisfied.
+  if (isReactNodeType(type)) {
+    if (prop.required && acceptsTextPlaceholder(type)) {
+      return prop.name === 'children' ? 'Sample' : `Sample ${prop.name}`;
+    }
+    return undefined;
+  }
 
   // Anything else (unresolved named type, unknown, any) — we cannot fabricate a
   // safe shape. Property access on undefined would crash, so refuse and flag.

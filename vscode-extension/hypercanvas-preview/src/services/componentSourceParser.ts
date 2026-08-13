@@ -13,6 +13,56 @@ const traverse = (_traverse as { default?: typeof _traverse }).default ?? _trave
 
 export const ALWAYS_OPTIONAL_PROP_NAMES = new Set(['className', 'children', 'ref', 'key', 'asChild']);
 
+/**
+ * Convert a TypeScript AST type node to a human-readable type string.
+ * Pure / no VS Code dependency — safe to import in tests.
+ *
+ * Handles qualified names (e.g. React.ReactNode → 'React.ReactNode') so that
+ * downstream consumers (sample-values acceptsTextPlaceholder) can recognise them.
+ */
+export function getTypeString(node: t.TSType): string {
+  if (t.isTSStringKeyword(node)) return 'string';
+  if (t.isTSNumberKeyword(node)) return 'number';
+  if (t.isTSBooleanKeyword(node)) return 'boolean';
+  if (t.isTSAnyKeyword(node)) return 'any';
+  if (t.isTSVoidKeyword(node)) return 'void';
+  if (t.isTSNullKeyword(node)) return 'null';
+  if (t.isTSUndefinedKeyword(node)) return 'undefined';
+  if (t.isTSUnionType(node)) {
+    return node.types.map((u) => getTypeString(u)).join(' | ');
+  }
+  if (t.isTSArrayType(node)) {
+    return `${getTypeString(node.elementType)}[]`;
+  }
+  if (t.isTSTypeReference(node)) {
+    if (t.isIdentifier(node.typeName)) return node.typeName.name;
+    if (t.isTSQualifiedName(node.typeName)) {
+      const left = node.typeName.left;
+      const right = node.typeName.right;
+      if (t.isIdentifier(left) && t.isIdentifier(right)) {
+        return `${left.name}.${right.name}`;
+      }
+    }
+  }
+  if (t.isTSFunctionType(node)) return 'Function';
+  if (t.isTSTypeLiteral(node)) {
+    // Produce readable inline object type: { user: string; count: number }
+    const parts: string[] = [];
+    for (const member of node.members) {
+      if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
+        const opt = member.optional ? '?' : '';
+        const memberType =
+          member.typeAnnotation && t.isTSTypeAnnotation(member.typeAnnotation)
+            ? getTypeString(member.typeAnnotation.typeAnnotation)
+            : 'unknown';
+        parts.push(`${member.key.name}${opt}: ${memberType}`);
+      }
+    }
+    return parts.length > 0 ? `{ ${parts.join('; ')} }` : 'object';
+  }
+  return 'unknown';
+}
+
 export function isForwardRefCall(init: t.Expression | null | undefined): init is t.CallExpression {
   if (!t.isCallExpression(init)) return false;
   const callee = init.callee;

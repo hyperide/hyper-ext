@@ -1,13 +1,19 @@
 /**
- * Unit tests for module-level parseComponentSource helper.
- * Tests forwardRef recognition, optional prop heuristics, and basename-based component name selection.
+ * Unit tests for module-level pure parser helpers.
+ * Covers parseComponentSource (forwardRef recognition, optional prop heuristics, basename
+ * component name selection) and getTypeString (TSQualifiedName handling for React.ReactNode).
  */
 
 import { describe, expect, it } from 'bun:test';
+import * as t from '@babel/types';
+import { parseCode } from '@lib/ast/parser';
+import _traverse, { type NodePath } from '@babel/traverse';
+
+const traverse = (_traverse as { default?: typeof _traverse }).default ?? _traverse;
 
 // Import directly from the pure parser — no vscode dependency, not affected by PanelRouter's
 // mock.module('../services/ComponentService', ...) which runs earlier in the test suite.
-import { parseComponentSource } from '../componentSourceParser';
+import { getTypeString, parseComponentSource } from '../componentSourceParser';
 
 // Minimal menubar.tsx-style source: React.forwardRef with {...props} rest,
 // plus sub-components using arrow functions with {...props} rest.
@@ -122,5 +128,51 @@ describe('parseComponentSource', () => {
       // title has no special treatment and no rest — stays required
       expect(titleProp?.required).toBe(true);
     });
+  });
+});
+
+describe('getTypeString', () => {
+  /**
+   * Helper: parse a TSPropertySignature from a minimal interface source and return
+   * its typeAnnotation.typeAnnotation node for use in getTypeString assertions.
+   */
+  function parseTypeNode(typeSrc: string): t.TSType {
+    const source = `interface P { children: ${typeSrc} }`;
+    const ast = parseCode(source);
+    let typeNode: t.TSType | null = null;
+    traverse(ast, {
+      TSPropertySignature(nodePath: NodePath<t.TSPropertySignature>) {
+        const ann = nodePath.node.typeAnnotation;
+        if (ann && t.isTSTypeAnnotation(ann)) {
+          typeNode = ann.typeAnnotation;
+        }
+      },
+    });
+    if (!typeNode) throw new Error(`Could not parse type node from: ${typeSrc}`);
+    return typeNode;
+  }
+
+  it('returns the identifier name for a simple TSTypeReference (ReactNode)', () => {
+    expect(getTypeString(parseTypeNode('ReactNode'))).toBe('ReactNode');
+  });
+
+  it('returns dot-joined name for a TSQualifiedName reference (React.ReactNode)', () => {
+    // This is the regression case: TSQualifiedName fell through to "unknown",
+    // so acceptsTextPlaceholder never fired for children: React.ReactNode.
+    expect(getTypeString(parseTypeNode('React.ReactNode'))).toBe('React.ReactNode');
+  });
+
+  it('returns dot-joined name for React.ReactElement', () => {
+    expect(getTypeString(parseTypeNode('React.ReactElement'))).toBe('React.ReactElement');
+  });
+
+  it('handles primitives', () => {
+    expect(getTypeString(parseTypeNode('string'))).toBe('string');
+    expect(getTypeString(parseTypeNode('number'))).toBe('number');
+    expect(getTypeString(parseTypeNode('boolean'))).toBe('boolean');
+  });
+
+  it('handles union types containing a qualified name', () => {
+    expect(getTypeString(parseTypeNode('React.ReactNode | undefined'))).toBe('React.ReactNode | undefined');
   });
 });
