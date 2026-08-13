@@ -6,6 +6,7 @@ import {
   detectSSRHooks,
   escapeRegex,
   extractComponentName,
+  extractDeclaredPropNames,
   scanSampleExports,
 } from '../scanner';
 
@@ -566,5 +567,146 @@ describe('escapeRegex', () => {
     expect(re.test('export default $Button')).toBe(true);
     // Without escaping, $ would match end-of-string
     expect(re.test('export default xButton')).toBe(false);
+  });
+});
+
+describe('extractDeclaredPropNames', () => {
+  it('returns destructured prop names for a function-declaration component', () => {
+    const source = `
+      export function Button({ variant, children, className }: ButtonProps) {
+        return <button className={className}>{children}</button>;
+      }
+    `;
+    expect(extractDeclaredPropNames(source, 'Button')).toEqual(['variant', 'children', 'className']);
+  });
+
+  it('ignores the rest element but keeps named props (HTMLAttributes-spread component)', () => {
+    const source = `
+      export function Button({ variant = 'primary', children, className = '', ...rest }: ButtonProps) {
+        return <button className={className} {...rest}>{children}</button>;
+      }
+    `;
+    expect(extractDeclaredPropNames(source, 'Button')).toEqual(['variant', 'children', 'className']);
+  });
+
+  it('returns declared names for an arrow-function component assigned to a const', () => {
+    const source = `
+      export const Card = ({ title, body }: CardProps) => <div><h2>{title}</h2><p>{body}</p></div>;
+    `;
+    expect(extractDeclaredPropNames(source, 'Card')).toEqual(['title', 'body']);
+  });
+
+  it('returns [] for a rest-only destructure (component wants nothing from the blob)', () => {
+    const source = `
+      export function Passthrough({ ...rest }) {
+        return <div {...rest} />;
+      }
+    `;
+    expect(extractDeclaredPropNames(source, 'Passthrough')).toEqual([]);
+  });
+
+  it('returns [] for an empty destructure', () => {
+    const source = `
+      export function Empty({}: Record<string, never>) {
+        return <div />;
+      }
+    `;
+    expect(extractDeclaredPropNames(source, 'Empty')).toEqual([]);
+  });
+
+  it('returns null for member-access props (function C(props) { props.store })', () => {
+    const source = `
+      export function Dashboard(props) {
+        return <div>{props.store.count}</div>;
+      }
+    `;
+    expect(extractDeclaredPropNames(source, 'Dashboard')).toBeNull();
+  });
+
+  it('returns null for a forwardRef-wrapped component', () => {
+    const source = `
+      import { forwardRef } from 'react';
+      export const Input = forwardRef(({ value }, ref) => <input ref={ref} value={value} />);
+    `;
+    expect(extractDeclaredPropNames(source, 'Input')).toBeNull();
+  });
+
+  it('returns null for a memo-wrapped component', () => {
+    const source = `
+      import { memo } from 'react';
+      export const Row = memo(({ label }) => <div>{label}</div>);
+    `;
+    expect(extractDeclaredPropNames(source, 'Row')).toBeNull();
+  });
+
+  it('returns null for a component with no parameters', () => {
+    const source = `
+      export function Logo() {
+        return <svg />;
+      }
+    `;
+    expect(extractDeclaredPropNames(source, 'Logo')).toBeNull();
+  });
+
+  it('returns null when the target component is not found', () => {
+    const source = `
+      export function Other({ a }) { return <div>{a}</div>; }
+    `;
+    expect(extractDeclaredPropNames(source, 'Missing')).toBeNull();
+  });
+
+  it('resolves a default-exported function declaration', () => {
+    const source = `
+      export default function Button({ variant, children }) {
+        return <button>{children}</button>;
+      }
+    `;
+    expect(extractDeclaredPropNames(source, 'Button')).toEqual(['variant', 'children']);
+  });
+
+  // HYP-465 adversarial regression: a file with a NAMED component AND an
+  // anonymous prop-spreading default. `extractComponentName` resolves "Card"
+  // (the named export), but `detectExportStyle` → 'default-anonymous', so the
+  // generated preview import binds to the ANONYMOUS DEFAULT, not Card. The
+  // scanned export MUST be the one the import binds to (the default), otherwise
+  // Card's declared props ([title,value,label]) become a false whitelist that
+  // lets those keys leak onto the host <div> the anonymous default spreads.
+  describe('exportStyle resolution (rendered export == scanned export)', () => {
+    it('scans the anonymous DEFAULT, not the divergent named component, for default-anonymous', () => {
+      const source = `export function Card({ title, value, label }) { return <span>{title}</span>; }
+export default function (props) { return <div {...props} />; }`;
+      // Rendered export is the anonymous default `function (props)` → member-access
+      // → null (full blob, the honest floor). It must NOT return Card's
+      // destructured [title,value,label].
+      expect(extractDeclaredPropNames(source, 'Card', 'default-anonymous')).toBeNull();
+    });
+
+    it('scans the anonymous DEFAULT destructure params, not the named component', () => {
+      const source = `export function Card({ title, value, label }) { return <span>{title}</span>; }
+export default function ({ foo, bar }) { return <div>{foo}{bar}</div>; }`;
+      expect(extractDeclaredPropNames(source, 'Card', 'default-anonymous')).toEqual(['foo', 'bar']);
+    });
+
+    it('resolves the named function referenced by `export default Identifier`', () => {
+      const source = `function Inner({ alpha, beta }) { return <div>{alpha}</div>; }
+export default Inner;`;
+      expect(extractDeclaredPropNames(source, 'Inner', 'default-anonymous')).toEqual(['alpha', 'beta']);
+    });
+
+    it('returns null for an HOC-wrapped anonymous default (export default memo(Card))', () => {
+      const source = `function Card({ title }) { return <div>{title}</div>; }
+export default memo(Card);`;
+      expect(extractDeclaredPropNames(source, 'Card', 'default-anonymous')).toBeNull();
+    });
+
+    it('keeps named-export behavior when exportStyle is named', () => {
+      const source = `export function Button({ variant, children }) { return <button>{children}</button>; }`;
+      expect(extractDeclaredPropNames(source, 'Button', 'named')).toEqual(['variant', 'children']);
+    });
+
+    it('keeps default-named behavior (name matches the bound default export)', () => {
+      const source = `export default function Button({ variant, children }) { return <button>{children}</button>; }`;
+      expect(extractDeclaredPropNames(source, 'Button', 'default-named')).toEqual(['variant', 'children']);
+    });
   });
 });

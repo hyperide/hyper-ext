@@ -37,6 +37,7 @@ import {
   detectSSRHooks,
   type ExportStyle,
   extractComponentName,
+  extractDeclaredPropNames,
   hasComponentExport,
   scanRenderableExportNames,
   scanSampleExports,
@@ -932,6 +933,22 @@ export class PreviewFileManager {
       }
     }
 
+    // HYP-465 — prop names the component statically destructures. Used by the
+    // generator to filter the fallback-props blob so undeclared keys don't leak
+    // onto host DOM nodes. `null` (unknown — member-access/HOC/no-params) maps to
+    // `undefined` here, which the generator treats as "don't filter".
+    let declaredPropNames: string[] | undefined;
+    try {
+      // Pass `exportStyle` so the scanned function == the export the generated
+      // import binds to. For `default-anonymous` the import renders the DEFAULT
+      // export, which can diverge from the same-named named export; scanning the
+      // wrong one whitelists props the rendered component never reads, leaking
+      // them onto host DOM nodes (HYP-465).
+      declaredPropNames = extractDeclaredPropNames(sourceCode, componentName, exportStyle) ?? undefined;
+    } catch {
+      declaredPropNames = undefined;
+    }
+
     return {
       componentPath,
       componentName,
@@ -941,6 +958,7 @@ export class PreviewFileManager {
       ...(isSSRRoute && { isSSRRoute: true }),
       ...(syntheticSampleDefault && { syntheticSampleDefault }),
       ...(detectedExports && detectedExports.length > 0 && { detectedExports }),
+      ...(declaredPropNames !== undefined && { declaredPropNames }),
     };
   }
 

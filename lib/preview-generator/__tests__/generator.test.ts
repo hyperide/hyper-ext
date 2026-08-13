@@ -261,6 +261,81 @@ describe('generatePreviewContent', () => {
     expect(content).toContain("import { Button, SampleDefault as ButtonSampleDefault } from './components/Button';");
   });
 
+  describe('HYP-465 — fallback-props filtering by declared prop names', () => {
+    it('emits declaredPropNamesMap and the filterFallback helper', () => {
+      const entries: PreviewComponentEntry[] = [
+        {
+          componentPath: 'packages/ui/Button.tsx',
+          componentName: 'Button',
+          exportStyle: 'named',
+          sampleExports: [],
+          importPath: './ui/Button',
+          declaredPropNames: ['variant', 'children', 'className'],
+        },
+      ];
+      const content = generatePreviewContent(entries);
+      expect(content).toContain('const declaredPropNamesMap: Record<string, string[]> = {');
+      expect(content).toContain('\'packages/ui/Button.tsx\': ["variant", "children", "className"],');
+      expect(content).toContain('function filterFallback(path: string): Record<string, unknown> {');
+      expect(content).toContain('if (!declared) return previewFallbackProps;');
+      // HYP-465 nit: own-property test, not `k in …`, so a declared prop named
+      // `toString`/`hasOwnProperty` can't pull Object.prototype's inherited fn.
+      expect(content).toContain('Object.prototype.hasOwnProperty.call(previewFallbackProps, k)');
+      expect(content).not.toContain('if (k in previewFallbackProps)');
+    });
+
+    it('spreads filterFallback(componentPath) — not the raw blob — at all three render sites', () => {
+      const entries: PreviewComponentEntry[] = [makeEntry('packages/ui/Button.tsx', 'Button')];
+      const content = generatePreviewContent(entries);
+      // single mode (generatedProps still spread LAST and unfiltered)
+      expect(content).toContain('<Component {...filterFallback(componentPath)} {...generatedProps} />');
+      // multi mode (no SampleComponent)
+      expect(content).toContain('<Component {...filterFallback(componentPath)} />');
+      // multi-merged (instance props still spread LAST and unfiltered)
+      expect(content).toContain('const mergedProps = { ...filterFallback(componentPath), ...props };');
+      // the raw blob must no longer be spread directly onto a Component
+      expect(content).not.toContain('<Component {...previewFallbackProps}');
+      expect(content).not.toContain('...previewFallbackProps, ...props');
+    });
+
+    it('omits a declaredPropNamesMap entry when prop names are unknown (no filtering)', () => {
+      // declaredPropNames undefined = member-access/HOC/no-params → absent from map → full blob
+      const entries: PreviewComponentEntry[] = [makeEntry('packages/ui/Dashboard.tsx', 'Dashboard')];
+      const content = generatePreviewContent(entries);
+      expect(content).not.toContain("'packages/ui/Dashboard.tsx': [");
+    });
+
+    it('emits an empty array for a rest-only / empty destructure', () => {
+      const entries: PreviewComponentEntry[] = [
+        {
+          componentPath: 'packages/ui/Passthrough.tsx',
+          componentName: 'Passthrough',
+          exportStyle: 'named',
+          sampleExports: [],
+          importPath: './ui/Passthrough',
+          declaredPropNames: [],
+        },
+      ];
+      const content = generatePreviewContent(entries);
+      expect(content).toContain("'packages/ui/Passthrough.tsx': [],");
+    });
+
+    it('keeps the generated file valid TS/TSX', () => {
+      const entries: PreviewComponentEntry[] = [
+        {
+          componentPath: 'packages/ui/Button.tsx',
+          componentName: 'Button',
+          exportStyle: 'named',
+          sampleExports: [],
+          importPath: './ui/Button',
+          declaredPropNames: ['variant', 'children', 'className'],
+        },
+      ];
+      const content = generatePreviewContent(entries);
+      expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
+    });
+  });
+
   it('should generate default import for default export with samples', () => {
     const entries: PreviewComponentEntry[] = [
       {
@@ -919,8 +994,9 @@ describe('generatePreviewContent — in-memory generated props (#210)', () => {
     const entries: PreviewComponentEntry[] = [makeEntry('src/components/Tweet.tsx', 'Tweet')];
     const content = generatePreviewContent(entries);
 
-    // Generated props are spread last → override the generic fallback props.
-    expect(content).toContain('<Component {...previewFallbackProps} {...generatedProps} />');
+    // Generated props are spread last → override the (now filtered) fallback props.
+    // HYP-465: the fallback blob is narrowed via filterFallback(componentPath).
+    expect(content).toContain('<Component {...filterFallback(componentPath)} {...generatedProps} />');
   });
 
   it('does NOT bake any generated prop VALUES into the generated file', () => {
@@ -948,7 +1024,8 @@ describe('generatePreviewContent — in-memory generated props (#210)', () => {
     const content = generatePreviewContent(entries, { ssrMock: { framework: 'remix' } });
 
     // Non-SSR fallback in the SSR-enabled body still merges generated props.
-    expect(content).toContain('<Component {...previewFallbackProps} {...generatedProps} />');
+    // HYP-465: the fallback blob is narrowed via filterFallback(componentPath).
+    expect(content).toContain('<Component {...filterFallback(componentPath)} {...generatedProps} />');
     expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
   });
 

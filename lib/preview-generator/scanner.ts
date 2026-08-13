@@ -210,6 +210,174 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
   return fileName.replace(/(\.[^.]+)+$/, '');
 }
 
+type ProgramNode = ReturnType<typeof parseSource>['program']['body'][number];
+type FunctionLikeNode = Extract<ProgramNode, { type: 'FunctionDeclaration' }>;
+type ParamNode = FunctionLikeNode['params'][number];
+type AssignmentPatternNode = Extract<ParamNode, { type: 'AssignmentPattern' }>;
+type PatternNode = ParamNode | AssignmentPatternNode['left'];
+
+/**
+ * Extract the prop names a component statically destructures from its first
+ * parameter.
+ *
+ * A prop a component DESTRUCTURES is one it consumes by name — it won't forward
+ * that key via `{...rest}` onto a host DOM node. An UNDECLARED key can only leak
+ * (spread into `{...rest}` → junk DOM attribute). Callers use this to filter the
+ * generic preview fallback-props blob down to keys the component actually reads.
+ *
+ * Semantics (the floor is "never under-provision"):
+ * - Returns the destructured key names when the first param is a statically
+ *   visible ObjectPattern (rest element is ignored).
+ * - Returns `[]` only for a genuine empty / rest-only destructure — the
+ *   component wants nothing from the blob.
+ * - Returns `null` ("unknown — do NOT filter, spread the full blob") when props
+ *   are not a statically-visible object-destructure: member-access
+ *   (`function C(props) { props.store }`), HOC / forwardRef / memo-wrapped, no
+ *   params, or the component can't be resolved.
+ */
+export function extractDeclaredPropNames(
+  sourceCode: string,
+  componentName: string,
+  exportStyle?: ExportStyle,
+): string[] | null {
+  const ast = parseSource(sourceCode);
+  // HYP-465 — the scanned function MUST be the one the generated preview import
+  // binds to (and thus the one that actually renders), not merely the export
+  // whose name matches `componentName`. For `default-anonymous`, the import
+  // binds to the DEFAULT export (`import Alias from '…'`), which may diverge
+  // from the same-named named export: e.g.
+  //   export function Card({ title, value, label }) { … }   // named
+  //   export default function (props) { return <div {...props} /> }  // rendered
+  // `extractComponentName` → "Card", but the rendered component is the anonymous
+  // default that spreads `props` onto a host <div>. Scanning Card here would
+  // whitelist [title,value,label] and let those keys leak onto that <div>.
+  // Resolve via the default export so scanned == rendered.
+  const fn =
+    exportStyle === 'default-anonymous'
+      ? findDefaultExportFunction(ast.program.body)
+      : findComponentFunction(ast.program.body, componentName);
+  if (!fn) return null;
+  return propNamesFromFirstParam(fn.params[0]);
+}
+
+/**
+ * Resolve `componentName` to its function/arrow node. Returns null when the
+ * binding is anything other than a plain function or arrow (e.g. an HOC call
+ * like `forwardRef(...)` / `memo(...)` / `styled(...)`), matching the
+ * "never under-provision" floor.
+ */
+function findComponentFunction(body: ProgramNode[], componentName: string): { params: ParamNode[] } | null {
+  for (const node of body) {
+    // export default function Name() {}
+    if (node.type === 'ExportDefaultDeclaration' && node.declaration.type === 'FunctionDeclaration') {
+      const decl = node.declaration;
+      if (!decl.id || decl.id.name === componentName) return { params: decl.params };
+    }
+
+    // export function Name() {}  /  function Name() {}
+    if (node.type === 'FunctionDeclaration' && node.id?.name === componentName) {
+      return { params: node.params };
+    }
+    if (
+      node.type === 'ExportNamedDeclaration' &&
+      node.declaration?.type === 'FunctionDeclaration' &&
+      node.declaration.id?.name === componentName
+    ) {
+      return { params: node.declaration.params };
+    }
+
+    // const Name = (...) => {}  /  const Name = function () {}  (with or without export)
+    const varDecl =
+      node.type === 'VariableDeclaration'
+        ? node
+        : node.type === 'ExportNamedDeclaration' && node.declaration?.type === 'VariableDeclaration'
+          ? node.declaration
+          : null;
+    if (varDecl) {
+      for (const d of varDecl.declarations) {
+        if (d.id.type !== 'Identifier' || d.id.name !== componentName) continue;
+        const init = d.init;
+        if (init?.type === 'ArrowFunctionExpression' || init?.type === 'FunctionExpression') {
+          return { params: init.params };
+        }
+        // CallExpression init (forwardRef/memo/styled/any HOC), Identifier
+        // re-assignment, or anything else → not a statically-visible
+        // destructure. Stop: never under-provision.
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve the function the DEFAULT export binds to — the export the generated
+ * preview import (`import Alias from '…'`) actually renders for
+ * `default-anonymous` files (HYP-465). Returns null (→ full blob, never
+ * under-provision) when the default is not a statically-visible function with a
+ * destructure-able first param:
+ *
+ * - `export default function (…) {}` / `export default function Name(…) {}`
+ *   → that function's params.
+ * - `export default Identifier` → resolve `Identifier` to its local
+ *   function/arrow declaration (the named function re-exported as default), then
+ *   use ITS params.
+ * - `export default memo(X)` / `forwardRef(…)` / any CallExpression / anything
+ *   else → null (HOC-wrapped; no statically-visible destructure).
+ */
+function findDefaultExportFunction(body: ProgramNode[]): { params: ParamNode[] } | null {
+  for (const node of body) {
+    if (node.type !== 'ExportDefaultDeclaration') continue;
+    const decl = node.declaration;
+
+    // export default function (…) {}  /  export default function Name(…) {}
+    if (decl.type === 'FunctionDeclaration') {
+      return { params: decl.params };
+    }
+
+    // export default Name; — resolve the referenced local function/arrow.
+    if (decl.type === 'Identifier') {
+      return findComponentFunction(body, decl.name);
+    }
+
+    // export default memo(X) / forwardRef(…) / styled(…) / arrow / anything else
+    // → not a statically-visible destructure.
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Collect destructured key names from a first parameter.
+ * - ObjectPattern → ObjectProperty Identifier key names (RestElement skipped) → [] when rest/empty only.
+ * - Identifier param (member-access props) → null.
+ * - undefined (no params) → null.
+ */
+function propNamesFromFirstParam(param: ParamNode | undefined): string[] | null {
+  if (!param) return null;
+
+  // `({ ... }: Props)` — Babel wraps the pattern in the param directly; a type
+  // annotation lives on the pattern, not a separate wrapper.
+  const pattern = unwrapPattern(param);
+  if (pattern?.type !== 'ObjectPattern') return null;
+
+  const names: string[] = [];
+  for (const prop of pattern.properties) {
+    if (prop.type === 'ObjectProperty' && prop.key.type === 'Identifier') {
+      names.push(prop.key.name);
+    }
+    // RestElement (`...rest`) is intentionally ignored — it forwards leftover
+    // keys, but we only want the names the component reads explicitly.
+  }
+  return names;
+}
+
+/** Strip an `AssignmentPattern` default wrapper (`{ ... } = {}`) to reach the pattern. */
+function unwrapPattern(param: ParamNode): PatternNode {
+  if (param.type === 'AssignmentPattern') return param.left;
+  return param;
+}
+
 type VariableDeclarationNode = ReturnType<typeof parseSource>['program']['body'][number];
 type VariableDeclaratorNode = Extract<
   Extract<VariableDeclarationNode, { type: 'ExportNamedDeclaration' }>['declaration'],

@@ -2358,3 +2358,64 @@ describe('*.samples.tsx — co-located sample render files', () => {
     expect(content).toContain("'src/components/Card.tsx'");
   });
 });
+
+/** Isolate the `declaredPropNamesMap` object literal from generated content. */
+function sliceDeclaredPropNamesMap(content: string): string {
+  const start = content.indexOf('const declaredPropNamesMap');
+  if (start === -1) return '';
+  const end = content.indexOf('};', start);
+  return content.slice(start, end === -1 ? undefined : end + 2);
+}
+
+describe('HYP-465 — default-anonymous prop leak (scanned export == rendered export)', () => {
+  // Adversarial repro: a file with a NAMED component AND an anonymous
+  // prop-spreading default. extractComponentName → "Card", detectExportStyle →
+  // 'default-anonymous', so the generated import `import Card from './Card'`
+  // RENDERS the anonymous default (`<div {...props} />`), NOT the named Card.
+  // The declaredPropNamesMap must therefore reflect the anonymous default's
+  // params (member-access → absent from map → full blob = the honest floor),
+  // NOT Card's [title,value,label]. If it whitelisted Card's props, the blob
+  // values for title/value/label would be filtered IN and spread onto the host
+  // <div> as junk attributes.
+  const DIVERGENT_DEFAULT_SOURCE = `export function Card({ title, value, label }) { return <span>{title}</span>; }
+export default function (props) { return <div {...props} />; }`;
+
+  it('does NOT whitelist the named component props for a divergent anonymous default', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Card.tsx', DIVERGENT_DEFAULT_SOURCE);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['src/components/Card.tsx']);
+
+    // The path must be ABSENT from declaredPropNamesMap (anonymous default is
+    // member-access → null → undefined → not emitted → filterFallback returns
+    // the full blob, which is the intended floor for a prop-spreading default).
+    // Scope to the declaredPropNamesMap block — componentExportsMap legitimately
+    // keys the same path with ["Card"], which is unrelated to prop filtering.
+    const declaredMapBlock = sliceDeclaredPropNamesMap(content);
+    expect(declaredMapBlock).not.toContain("'src/components/Card.tsx'");
+    // Specifically: Card's declared props must NOT become a whitelist entry.
+    expect(content).not.toContain('"title", "value", "label"');
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('whitelists the anonymous default destructure params, not the named component', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/components/Card.tsx',
+      `export function Card({ title, value, label }) { return <span>{title}</span>; }
+export default function ({ foo, bar }) { return <div>{foo}{bar}</div>; }`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['src/components/Card.tsx']);
+
+    // The whitelist must be the rendered default's destructure ([foo,bar]),
+    // not Card's [title,value,label].
+    expect(content).toContain('\'src/components/Card.tsx\': ["foo", "bar"]');
+    expect(content).not.toContain('"title", "value", "label"');
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+});

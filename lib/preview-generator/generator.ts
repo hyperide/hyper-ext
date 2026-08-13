@@ -22,7 +22,12 @@ import type { ExportStyle } from './scanner';
 // onto a DOM node via `...rest` (previously threw on value.constructor.name → blank).
 // Separate bump from v12 (already live for @ts-nocheck) so files generated at v12
 // without the proxy fix are forced to regenerate and pick up the DOM-safe traps.
-export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v13';
+// v13 -> v14: HYP-465 — fallback-props blob is now filtered per component via
+// `filterFallback`/`declaredPropNamesMap` so undeclared keys (store/state/theme/…)
+// stop leaking onto host DOM nodes as junk attributes via `{...rest}`. Bumped past
+// #305's v13 (both #305 and HYP-465 independently picked v13) so files generated at
+// v13 regenerate and pick up the per-component fallback filtering.
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v14';
 
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
@@ -50,6 +55,18 @@ export interface PreviewComponentEntry {
    * sample could be synthesized.
    */
   detectedExports?: string[];
+  /**
+   * Prop names the component statically destructures from its first parameter
+   * (HYP-465). Used to filter the generic `previewFallbackProps` blob down to
+   * keys the component actually consumes, so undeclared keys
+   * (store/state/theme/…) stop leaking onto host DOM nodes via `{...rest}`.
+   *
+   * `undefined` (absent) = "unknown — do NOT filter, spread the full blob":
+   * member-access props, HOC/forwardRef-wrapped, or no params. An empty array
+   * `[]` means a genuine empty / rest-only destructure (filter everything out).
+   * Populated by `buildEntry` from `extractDeclaredPropNames`.
+   */
+  declaredPropNames?: string[];
 }
 
 /**
@@ -310,6 +327,24 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
     const safeKey = entry.componentPath.replace(/'/g, "\\'");
     const exportsList = entry.detectedExports.map((n) => JSON.stringify(n)).join(', ');
     lines.push(`  '${safeKey}': [${exportsList}],`);
+  }
+  lines.push('};');
+  lines.push('');
+
+  // 4c. declaredPropNamesMap — HYP-465. For each component whose first param is a
+  //     statically-visible object-destructure, the list of prop names it consumes.
+  //     The runtime `filterFallback` helper uses this to narrow the generic
+  //     `previewFallbackProps` blob to declared keys, so undeclared keys
+  //     (store/state/theme/…) stop leaking onto host DOM nodes via `{...rest}`.
+  //     A path ABSENT from the map = unknown (member-access/HOC/no-params) → do
+  //     NOT filter, spread the full blob (never under-provision). Iterate ALL
+  //     entries so primitives dropped from the registry are covered too.
+  lines.push('const declaredPropNamesMap: Record<string, string[]> = {');
+  for (const entry of entries) {
+    if (entry.declaredPropNames === undefined) continue;
+    const safeKey = entry.componentPath.replace(/'/g, "\\'");
+    const namesList = entry.declaredPropNames.map((n) => JSON.stringify(n)).join(', ');
+    lines.push(`  '${safeKey}': [${namesList}],`);
   }
   lines.push('};');
   lines.push('');
@@ -675,6 +710,27 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push("  fetcher: { submit: () => {}, load: () => {}, data: undefined, state: 'idle' },");
   lines.push("  intl: { formatMessage: (m: { defaultMessage?: string }) => m?.defaultMessage ?? '', locale: 'en' },");
   lines.push('};');
+  lines.push('');
+
+  // 8b. filterFallback — HYP-465. Narrow `previewFallbackProps` to the keys the
+  //     component declares (destructures), so undeclared keys (store/state/theme/…)
+  //     don't leak onto host DOM nodes via `{...rest}`. A path absent from
+  //     `declaredPropNamesMap` = unknown (member-access/HOC/no-params) → return
+  //     the FULL blob (never under-provision).
+  lines.push('function filterFallback(path: string): Record<string, unknown> {');
+  lines.push('  const declared = declaredPropNamesMap[path];');
+  lines.push('  if (!declared) return previewFallbackProps;');
+  lines.push('  const out: Record<string, unknown> = {};');
+  lines.push('  for (const k of declared) {');
+  // Own-property test (not `k in …`): a component that declares a prop named
+  // `toString` / `hasOwnProperty` / `valueOf` must not pull Object.prototype's
+  // inherited function into the spread (HYP-465).
+  lines.push(
+    '    if (Object.prototype.hasOwnProperty.call(previewFallbackProps, k)) out[k] = previewFallbackProps[k];',
+  );
+  lines.push('  }');
+  lines.push('  return out;');
+  lines.push('}');
   lines.push('');
 
   // 9. SSR route set + RemixMockWrapper (only for Remix projects with SSR route components)
@@ -1058,11 +1114,11 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
   // stays pristine and values are recomputed/refreshed per selection. Precedence:
   // generated props win over the generic `previewFallbackProps` (matches multi-mode).
   const singleRender = hasSSR
-    ? `{SampleDefault ? <SampleDefault /> : ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...previewFallbackProps} {...generatedProps} />}`
-    : `{SampleDefault ? <SampleDefault /> : <Component {...previewFallbackProps} {...generatedProps} />}`;
+    ? `{SampleDefault ? <SampleDefault /> : ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...filterFallback(componentPath)} {...generatedProps} />}`
+    : `{SampleDefault ? <SampleDefault /> : <Component {...filterFallback(componentPath)} {...generatedProps} />}`;
   const multiRender = hasSSR
-    ? `{ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...previewFallbackProps} />}`
-    : `<Component {...previewFallbackProps} />`;
+    ? `{ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...filterFallback(componentPath)} />}`
+    : `<Component {...filterFallback(componentPath)} />`;
   const multiMergedRender = hasSSR
     ? `{ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...mergedProps} />}`
     : `<Component {...mergedProps} />`;
@@ -1121,7 +1177,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '        const { x = 0, y = 0, props } = instance;',
     '',
     '        if (props && Object.keys(props).length > 0 && Component) {',
-    '          const mergedProps = { ...previewFallbackProps, ...props };',
+    '          const mergedProps = { ...filterFallback(componentPath), ...props };',
     '          return (',
     '            <div key={id} data-canvas-instance-id={id}',
     "                 style={{ position: 'absolute', left: x, top: y }}>",
