@@ -223,6 +223,20 @@ export class DevServerManager {
     armedAt: number;
   } | null = null;
 
+  // Lifecycle serialization (HYP-52). start()/stop()/restart() must not interleave:
+  // a concurrent start()+stop() lets stop() capture a still-null _process (start has
+  // not spawned yet), skip its kill block, and return — then start() spawns a child
+  // that nobody tracks (orphan) while _waitForReady loops the full 90s. We chain every
+  // lifecycle op onto _lifecycleOp so each runs only after the previous one SETTLES.
+  private _lifecycleOp: Promise<unknown> = Promise.resolve();
+  // Belt-and-suspenders epoch token: bumped at the top of every _runStart and _runStop.
+  // An in-flight _runStart compares its captured gen against this after each await (and
+  // inside _waitForReady's poll); if a newer op bumped it, the start is superseded and
+  // bails instead of spawning into / polling for a server a concurrent stop just tore
+  // down. Closes the symmetric "stop kills, start keeps polling" hole even within a
+  // single queued op's await points.
+  private _generation = 0;
+
   constructor(projectPath: string) {
     this._projectPath = projectPath;
     this._outputChannel = vscode.window.createOutputChannel('HyperIDE Dev Server');
@@ -381,9 +395,27 @@ export class DevServerManager {
   }
 
   /**
-   * Start the dev server
+   * Start the dev server. PUBLIC entry — serializes onto the lifecycle queue so a
+   * concurrent stop()/restart() can never interleave with the spawn (HYP-52). The
+   * actual work lives in _runStart; internal callers (dependency-repair retry) must
+   * call _runStart directly to avoid deadlocking on the chain they are already part of.
    */
   async start(dependencyRepairAttempted = false): Promise<DevServerState> {
+    const run = this._lifecycleOp.then(
+      () => this._runStart(dependencyRepairAttempted),
+      () => this._runStart(dependencyRepairAttempted),
+    );
+    // Keep the chain alive but swallow rejection so one op's failure does not poison
+    // the next op. The public method returns the un-swallowed promise so the caller
+    // still sees the real error.
+    this._lifecycleOp = run.catch(() => {});
+    return run;
+  }
+
+  private async _runStart(dependencyRepairAttempted = false): Promise<DevServerState> {
+    // Layer 2 epoch: a later _runStop/_runStart bumps _generation; this snapshot lets
+    // each await below detect that it was superseded and bail before spawning/polling.
+    const gen = ++this._generation;
     await this._syncProjectPathWithWorkspace();
 
     if (this._status === 'running') {
@@ -449,6 +481,22 @@ export class DevServerManager {
       const startPort = configuredPort ?? projectInfo.defaultPort;
       this._port = await this._findFreePort(startPort);
 
+      // Pre-spawn supersede check (HYP-52): a stop()/restart() that bumped _generation
+      // while we awaited the async setup means this start is stale. No process exists
+      // yet, so just unwind (no proxy to stop) — never spawn a child a concurrent stop
+      // has already decided to tear down. (With Layer 1 the stop is queued AFTER us, so
+      // this rarely fires; kept as defense.)
+      //
+      // Transition to 'stopped' (a legal edge from 'starting') BEFORE returning: no
+      // child was spawned, so the child.on('exit') handler that normally resets _status
+      // never fires. Leaving _status in 'starting' would strand it there forever and the
+      // next start() would permanently no-op on the 'starting' guard above. The superseder
+      // is a stop/reroot, so 'stopped' is the correct coherent resting state.
+      if (gen !== this._generation) {
+        this.transition('stopped');
+        return this.getState();
+      }
+
       // Start preview proxy for script injection (error detection)
       const proxy = new PreviewProxy(this._port, this._projectPath);
       // Single source of truth for "are we serving" (HYP-370 Phase 4): the proxy
@@ -465,6 +513,22 @@ export class DevServerManager {
       }
       await proxy.start();
       console.log(`[HyperIDE] PreviewProxy started on port ${this._previewProxy.port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+
+      // Pre-spawn supersede check (HYP-52): if a concurrent stop()/restart() bumped the
+      // generation while proxy.start() awaited, abandon this start before spawning. A
+      // proxy now exists, so tear it down (_stopProxy) first; still no child to orphan
+      // because we have not reached spawn yet.
+      //
+      // Then transition to 'stopped' BEFORE returning (legal edge from 'starting'): with
+      // no child spawned, the child.on('exit') handler never runs to reset _status, so a
+      // bare return would strand it in 'starting' forever and wedge every later start()
+      // on the 'starting' guard. 'stopped' is the coherent terminal state for a start a
+      // concurrent stop/reroot superseded.
+      if (gen !== this._generation) {
+        this._stopProxy();
+        this.transition('stopped');
+        return this.getState();
+      }
 
       console.log(
         `[HyperIDE] DevServer: ${packageManager} run ${devScript} (port ${this._port}) in ${this._projectPath}`,
@@ -592,7 +656,9 @@ export class DevServerManager {
       // 90s: Remix/Next.js cold compile on a loaded Docker shard can take 60s+
       // before the port becomes accessible. 30s was too tight and caused
       // spurious "Server startup timeout" failures in CI.
-      await this._waitForReady(90_000);
+      // Pass `gen` so the poll bails immediately if a concurrent stop supersedes us —
+      // closes the "stop kills the child, start keeps polling for 90s" hole (HYP-52).
+      await this._waitForReady(90_000, gen);
 
       return this.getState();
     } catch (error) {
@@ -602,10 +668,13 @@ export class DevServerManager {
 
       if (!dependencyRepairAttempted && shouldRepairDependencies(errorMessage, this._logs)) {
         try {
-          await this.stop();
+          // Call the PRIVATE bodies, not the public queued start()/stop() — this catch
+          // runs INSIDE the already-dequeued _runStart, so re-entering the public
+          // methods would enqueue behind ourselves and deadlock (HYP-52).
+          await this._runStop();
           const packageManager = await detectPackageManager(this._projectPath);
           await this._repairDependencies(packageManager);
-          return this.start(true);
+          return this._runStart(true);
         } catch (repairError) {
           const repairMessage = repairError instanceof Error ? repairError.message : 'Unknown dependency repair error';
           this._outputChannel.appendLine(`[DevServer] Dependency repair failed: ${repairMessage}`);
@@ -619,9 +688,24 @@ export class DevServerManager {
   }
 
   /**
-   * Stop the dev server
+   * Stop the dev server. PUBLIC entry — serializes onto the lifecycle queue so it can
+   * never interleave with an in-flight start()'s spawn (HYP-52). Internal callers that
+   * already run inside a dequeued op (dependency-repair retry, _applyProjectPath, the
+   * _runStart sync) must call _runStop directly to avoid self-deadlock.
    */
   async stop(): Promise<void> {
+    const run = this._lifecycleOp.then(
+      () => this._runStop(),
+      () => this._runStop(),
+    );
+    this._lifecycleOp = run.catch(() => {});
+    return run;
+  }
+
+  private async _runStop(): Promise<void> {
+    // Bump the epoch: a stop must invalidate any in-flight _runStart's polling so it
+    // does not keep waiting on a server we are tearing down (HYP-52, Layer 2).
+    ++this._generation;
     // Capture to local — this._process may be nullified by the exit handler
     // between the guard and the async operations below
     const proc = this._process;
@@ -671,11 +755,22 @@ export class DevServerManager {
   }
 
   /**
-   * Restart the dev server
+   * Restart the dev server. Serialized as ONE atomic queue op (HYP-52) so no other
+   * start()/stop() can sneak between the internal stop and start — otherwise a stray
+   * start() dequeued in the gap would race the restart's own start.
    */
   async restart(): Promise<DevServerState> {
-    await this.stop();
-    return this.start();
+    const run = this._lifecycleOp.then(
+      () => this._runRestart(),
+      () => this._runRestart(),
+    );
+    this._lifecycleOp = run.catch(() => {});
+    return run;
+  }
+
+  private async _runRestart(): Promise<DevServerState> {
+    await this._runStop();
+    return this._runStart();
   }
 
   /**
@@ -686,6 +781,22 @@ export class DevServerManager {
    * for the new workspace.
    */
   async setProjectPath(projectPath: string): Promise<void> {
+    // PUBLIC entry — serialize onto the lifecycle queue (HYP-52). Its work calls
+    // _runStop, which mutates shared _process/_port/_previewProxy and bumps _generation;
+    // run off-queue it would race a queued _runStart/_runStop (and its ++_generation
+    // would supersede an in-flight start). The actual work lives in _runSetProjectPath;
+    // internal callers already inside a dequeued op (_syncProjectPathWithWorkspace at the
+    // top of _runStart) must reach _applyProjectPath DIRECTLY, never this queued method,
+    // or they would await the chain they are part of and self-deadlock.
+    const run = this._lifecycleOp.then(
+      () => this._runSetProjectPath(projectPath),
+      () => this._runSetProjectPath(projectPath),
+    );
+    this._lifecycleOp = run.catch(() => {});
+    return run;
+  }
+
+  private async _runSetProjectPath(projectPath: string): Promise<void> {
     // Explicit external set (e.g. monorepo sub-project reroot) pins the path so a later
     // start() won't sync it back to the workspace folder via _syncProjectPathWithWorkspace.
     this._projectPathPinned = true;
@@ -695,7 +806,12 @@ export class DevServerManager {
   /** Switch the project path and reset project-scoped state. Does not change the pin. */
   private async _applyProjectPath(projectPath: string): Promise<void> {
     if (projectPath === this._projectPath) return;
-    await this.stop();
+    // Call _runStop directly, NOT the public queued stop() (HYP-52). _applyProjectPath
+    // runs INSIDE a dequeued op from both callers — _runSetProjectPath (the public
+    // setProjectPath's queued body) and _syncProjectPathWithWorkspace at the TOP of
+    // _runStart — so enqueuing a stop() here would deadlock the op awaiting a stop queued
+    // behind itself.
+    await this._runStop();
     this._projectPath = projectPath;
     this._logs = [];
     this._hasErrors = false;
@@ -968,12 +1084,23 @@ export class DevServerManager {
   }
 
   /**
-   * Wait for server to be ready
+   * Wait for server to be ready.
+   *
+   * `gen` (optional) is the epoch snapshot captured by the calling _runStart. When
+   * passed, the poll bails the moment a concurrent _runStop/_runStart bumps
+   * _generation past it — this is the symmetric half of the HYP-52 fix: without it a
+   * stop could kill the child while this loop kept polling the (now dead) port for the
+   * full timeout. The public waitForReady() passes no gen, so that caller is unaffected
+   * (it only supersede-checks when a gen is explicitly provided).
    */
-  private async _waitForReady(timeout: number): Promise<void> {
+  private async _waitForReady(timeout: number, gen?: number): Promise<void> {
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeout) {
+      if (gen !== undefined && gen !== this._generation) {
+        throw new Error('Server start superseded');
+      }
+
       if (this._status === 'running') {
         return;
       }

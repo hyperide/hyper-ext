@@ -999,4 +999,299 @@ describe('DevServerManager', () => {
       expect(await waitForDeath(pid)).toBe(true);
     });
   });
+
+  // HYP-52: start()/stop()/restart() were UNSERIALIZED. A concurrent start()+stop()
+  // let stop() capture a still-null _process (start had not spawned yet), skip its
+  // kill block, and return — then start() spawned a child nobody tracked (orphan)
+  // while _waitForReady looped the full 90s (PI-10-21 timed out at 131s). The fix is
+  // a single-slot operation queue (_lifecycleOp) so each op runs only after the
+  // previous SETTLES, plus a generation/epoch token so an in-flight start bails when
+  // a concurrent stop supersedes it. These tests exercise the REAL queue + gen logic.
+  describe('lifecycle serialization (#52)', () => {
+    // Promise we can resolve from the test to gate a stubbed _runStart/_runStop.
+    function deferred<T = void>() {
+      let resolve!: (value: T) => void;
+      let reject!: (err: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    }
+
+    type Privates = {
+      _runStart: (dep?: boolean) => Promise<unknown>;
+      _runStop: () => Promise<void>;
+      _waitForReady: (timeout: number, gen?: number) => Promise<void>;
+      _generation: number;
+      _status: DevServerStatus;
+      _port: number | null;
+      _process: unknown;
+    };
+
+    it('runs stop() AFTER start() settles — stop sees the real process, never a null one', async () => {
+      // The core fix. Stub the private bodies to record call order and gate on a
+      // deferred so we control exactly when start "finishes". If unserialized, stop
+      // would begin while start is still in-flight (the #52 race).
+      const order: string[] = [];
+      const startGate = deferred();
+      const priv = manager as unknown as Privates;
+
+      priv._runStart = mock(async () => {
+        order.push('start:begin');
+        await startGate.promise;
+        order.push('start:end');
+        return manager.getState();
+      });
+      priv._runStop = mock(async () => {
+        order.push('stop:begin');
+        order.push('stop:end');
+      });
+
+      const startPromise = manager.start();
+      const stopPromise = manager.stop();
+
+      // stop is queued behind start — it must NOT have begun yet.
+      await Promise.resolve();
+      expect(order).toEqual(['start:begin']);
+
+      startGate.resolve();
+      await Promise.all([startPromise, stopPromise]);
+
+      // start fully settles BEFORE stop begins — the serialization guarantee.
+      expect(order).toEqual(['start:begin', 'start:end', 'stop:begin', 'stop:end']);
+    });
+
+    it('a failing op does not poison the chain — the next op still runs', async () => {
+      const order: string[] = [];
+      const priv = manager as unknown as Privates;
+
+      priv._runStart = mock(async () => {
+        order.push('start');
+        throw new Error('boom');
+      });
+      priv._runStop = mock(async () => {
+        order.push('stop');
+      });
+
+      // First op rejects; swallow at the call site so the test itself does not throw.
+      const startPromise = manager.start().catch(() => {});
+      const stopPromise = manager.stop();
+
+      await Promise.all([startPromise, stopPromise]);
+
+      // The .catch(() => {}) on _lifecycleOp kept the chain alive: stop still ran.
+      expect(order).toEqual(['start', 'stop']);
+    });
+
+    it('the public start() promise still rejects when _runStart rejects (error not swallowed for the caller)', async () => {
+      const priv = manager as unknown as Privates;
+      priv._runStart = mock(async () => {
+        throw new Error('start failed');
+      });
+
+      // _lifecycleOp swallows the rejection to protect the NEXT op, but the promise
+      // returned to THIS caller must still reject with the real error.
+      await expect(manager.start()).rejects.toThrow('start failed');
+    });
+
+    it('a rejecting op does not wedge the queue — a same-type follow-up still runs', async () => {
+      // Two stop()s where the FIRST _runStop rejects. The chain stores the SWALLOWED
+      // `run.catch(() => {})` as _lifecycleOp, so the second op chains off a resolved
+      // link and runs regardless of the first's failure. (The .then(f, r) form's
+      // rejected handler is belt-and-suspenders for the very first link.) _runStop is
+      // dispatched by a counter because the chain reads `this._runStop` lazily at
+      // execution time — a single mock would run for both slots (a harness quirk).
+      const order: string[] = [];
+      const priv = manager as unknown as Privates;
+      let call = 0;
+      priv._runStop = mock(async () => {
+        call += 1;
+        if (call === 1) {
+          order.push('stop1');
+          throw new Error('stop1 failed');
+        }
+        order.push('stop2');
+      });
+
+      const firstStop = manager.stop().catch(() => {});
+      const secondStop = manager.stop();
+
+      await Promise.all([firstStop, secondStop]);
+      // First op rejected; the chain's .catch kept it alive and the second op ran.
+      expect(order).toEqual(['stop1', 'stop2']);
+    });
+
+    it('_waitForReady bails immediately when the generation is superseded (no 90s loop)', async () => {
+      // The symmetric half of the fix: a concurrent stop bumps _generation, so an
+      // in-flight start's poll must throw "superseded" at once instead of looping the
+      // full timeout polling a port the stop just tore down.
+      const priv = manager as unknown as Privates;
+      priv._status = 'starting';
+      priv._port = 5173;
+      const gen = priv._generation;
+
+      // Simulate a concurrent _runStop bumping the epoch.
+      priv._generation = gen + 1;
+
+      // Pass a generous timeout — if the bail did not fire this would hang ~30s.
+      // It must reject promptly instead.
+      const start = Date.now();
+      await expect(priv._waitForReady(30_000, gen)).rejects.toThrow('superseded');
+      expect(Date.now() - start).toBeLessThan(2_000);
+    });
+
+    it('_waitForReady with NO gen (public waitForReady path) is unaffected by generation', async () => {
+      // The public waitForReady() calls _waitForReady(timeout) with no gen, so a stale
+      // gen value must NOT make it bail. It returns once status is running.
+      const priv = manager as unknown as Privates;
+      priv._status = 'running';
+      priv._generation = 999; // a value that would "supersede" any captured gen
+      await expect(priv._waitForReady(5_000)).resolves.toBeUndefined();
+    });
+
+    it('no orphan: with serialization, stop() sees the process start recorded and kills it', async () => {
+      // The #52 contract at the unit level. We stub _runStart to spawn a FAKE child and
+      // record it on _process (mirroring `this._process = child` in production). Because
+      // stop() is serialized AFTER start, the real _runStop runs once _process is set,
+      // captures the fake child, and kills it (SIGTERM) — the child is reaped, NOT
+      // orphaned. (The full real-spawn proof is the e2e PI-10-21; this is the
+      // serialization-level guarantee that makes the orphan impossible.)
+      const killed: string[] = [];
+      const fakeChild = {
+        pid: 4242,
+        killed: false,
+        kill: mock((signal: string) => {
+          killed.push(signal);
+          fakeChild.killed = true;
+          return true;
+        }),
+        once: mock((event: string, cb: () => void) => {
+          // Resolve the exit wait on the next tick so _runStop's promise settles.
+          if (event === 'exit') queueMicrotask(cb);
+          return fakeChild;
+        }),
+      };
+      const priv = manager as unknown as Privates;
+
+      priv._runStart = mock(async () => {
+        // Mirror production: transition to starting and record the spawned child.
+        priv._status = 'starting';
+        priv._process = fakeChild;
+        priv._port = 5173;
+        return manager.getState();
+      });
+
+      // Concurrent start + stop — exactly the #52 scenario.
+      const startPromise = manager.start();
+      const stopPromise = manager.stop();
+      await Promise.all([startPromise, stopPromise]);
+
+      // stop ran AFTER start recorded the pid, so it killed the child instead of
+      // skipping a null process — no orphan.
+      expect(fakeChild.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(killed).toContain('SIGTERM');
+      expect(priv._process).toBeNull();
+    });
+
+    // P0 regression (review follow-up): the pre-spawn supersede branches in _runStart
+    // used to `return this.getState()` WITHOUT leaving 'starting'. No child was spawned,
+    // so child.on('exit') — the only thing that resets _status to 'stopped' — never
+    // fired, stranding _status in 'starting' FOREVER. The next start() then hit the
+    // `if (this._status === 'starting') return` guard and permanently no-opped: the dev
+    // server could never start again. The fix transitions to 'stopped' before returning.
+    it('pre-spawn supersede leaves _status terminal (stopped), not stranded in starting — feature not wedged', async () => {
+      // Drive the REAL _runStart (not a stub) into its first pre-spawn supersede branch:
+      // make _findFreePort bump _generation mid-flight (mirroring a concurrent _runStop
+      // landing while we await port selection), so the `gen !== this._generation` check
+      // right after it fires. We use a real temp project with a `dev` script so the
+      // ProjectDetector calls before _findFreePort resolve instead of throwing into the
+      // catch (which would never reach the supersede branch).
+      const fs = await import('node:fs/promises');
+      const os = await import('node:os');
+      const path = await import('node:path');
+      const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'hyp52-supersede-'));
+      await fs.writeFile(path.join(tmp, 'package.json'), JSON.stringify({ name: 'x', scripts: { dev: 'vite' } }));
+
+      const supersedeManager = new DevServerManager(tmp);
+      const priv = supersedeManager as unknown as Privates & {
+        _findFreePort: (start: number) => Promise<number>;
+        _syncProjectPathWithWorkspace: () => Promise<void>;
+      };
+
+      // Keep the path stable (no workspace sync side effects).
+      priv._syncProjectPathWithWorkspace = mock(async () => {});
+      // The supersede trigger: bump the epoch the way a concurrent _runStop would, at the
+      // exact await point _runStart re-checks gen against.
+      priv._findFreePort = mock(async () => {
+        priv._generation += 1; // concurrent stop superseded us
+        return 5173;
+      });
+
+      await priv._runStart();
+
+      // The real branch ran: status is the coherent terminal 'stopped', NOT stranded in
+      // 'starting'. Pre-fix this asserted 'starting' and the manager was wedged.
+      expect(priv._status).toBe('stopped');
+      expect(priv._status).not.toBe('starting');
+
+      // And the manager is NOT wedged: a subsequent _runStart can proceed PAST the
+      // 'starting' guard (it reaches our stubbed _findFreePort again rather than
+      // early-returning). Pre-fix, _status==='starting' made this an instant no-op.
+      const reached: string[] = [];
+      priv._findFreePort = mock(async () => {
+        reached.push('findFreePort');
+        // Force the supersede again so this second run also unwinds cleanly (we only
+        // care that it got past the starting-guard, which a wedged manager never would).
+        priv._generation += 1;
+        return 5173;
+      });
+      await priv._runStart();
+      expect(reached).toEqual(['findFreePort']);
+
+      supersedeManager.dispose();
+      await fs.rm(tmp, { recursive: true, force: true });
+    });
+
+    // P1 serialization (review follow-up): the public setProjectPath() used to run
+    // _applyProjectPath → _runStop OFF the queue, racing queued _runStart/_runStop and
+    // mutating shared _process/_port/_previewProxy/_generation with no serialization
+    // (its ++_generation in _runStop superseded in-flight queued starts — the realistic
+    // P0 trigger). The fix enqueues setProjectPath's work via _runSetProjectPath. Here we
+    // assert it now serializes AFTER an in-flight queued start. Pre-fix the order was
+    // ["setProjectPath:begin","setProjectPath:end","start:begin","start:end"] (it ran
+    // immediately, concurrently); post-fix start must fully settle first.
+    it('setProjectPath serializes onto the lifecycle queue — it waits for an in-flight start to settle', async () => {
+      const order: string[] = [];
+      const startGate = deferred();
+      const priv = manager as unknown as Privates & {
+        _runSetProjectPath: (p: string) => Promise<void>;
+      };
+
+      priv._runStart = mock(async () => {
+        order.push('start:begin');
+        await startGate.promise;
+        order.push('start:end');
+        return manager.getState();
+      });
+      // Stub the queued body so we observe ordering without touching real _runStop.
+      priv._runSetProjectPath = mock(async () => {
+        order.push('setProjectPath:begin');
+        order.push('setProjectPath:end');
+      });
+
+      const startPromise = manager.start();
+      const setPromise = manager.setProjectPath('/other');
+
+      // setProjectPath is queued behind the in-flight start — it must NOT have begun.
+      await Promise.resolve();
+      expect(order).toEqual(['start:begin']);
+
+      startGate.resolve();
+      await Promise.all([startPromise, setPromise]);
+
+      // start fully settles BEFORE setProjectPath begins — the serialization guarantee.
+      expect(order).toEqual(['start:begin', 'start:end', 'setProjectPath:begin', 'setProjectPath:end']);
+    });
+  });
 });
