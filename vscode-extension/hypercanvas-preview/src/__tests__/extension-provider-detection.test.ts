@@ -186,7 +186,7 @@ if (new URLSearchParams(location.search).get("component") && location.pathname.i
     const CanvasPreviewComp = m.default;
     if (CanvasPreviewComp)
       createRoot(document.getElementById("root")!).render(<CanvasPreviewComp />);
-  }).catch(() => {});
+  }).catch(err => { console.error('[HyperIDE] __canvas_preview__ failed to load:', err); });
 } else {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

@@ -1350,8 +1350,21 @@ export class PreviewFileManager {
               ),
             ]),
           );
-          // .catch() with empty handler suppresses the unhandled rejection warning in Vite
-          // when __canvas_preview__ temporarily fails to load (e.g. during regeneration).
+          // .catch() logs failures so dynamic-import errors (e.g. 404 during regeneration,
+          // syntax errors in __canvas_preview__) are visible in the browser console instead of
+          // being silently swallowed. The handler still suppresses the unhandled-rejection
+          // warning in Vite (having ANY catch achieves that).
+          const catchCallback = b.arrowFunctionExpression(
+            [b.identifier('err')],
+            b.blockStatement([
+              b.expressionStatement(
+                b.callExpression(b.memberExpression(b.identifier('console'), b.identifier('error')), [
+                  b.stringLiteral('[HyperIDE] __canvas_preview__ failed to load:'),
+                  b.identifier('err'),
+                ]),
+              ),
+            ]),
+          );
           const importThenCatch = b.callExpression(
             b.memberExpression(
               b.callExpression(
@@ -1360,7 +1373,7 @@ export class PreviewFileManager {
               ),
               b.identifier('catch'),
             ),
-            [b.arrowFunctionExpression([], b.blockStatement([]))],
+            [catchCallback],
           );
           previewConsequent = b.blockStatement([b.expressionStatement(importThenCatch)]);
         }

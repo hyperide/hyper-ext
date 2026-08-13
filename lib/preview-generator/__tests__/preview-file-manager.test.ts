@@ -2272,8 +2272,11 @@ describe('PreviewFileManager.patchEntryFile', () => {
     expect(patched).toContain('CanvasPreviewComp');
     // Uses JSX (<CanvasPreviewComp />) — no React.createElement needed, works with auto JSX runtime
     expect(patched).toContain('<CanvasPreviewComp');
-    // Defensive: .catch() fallback renders original app if __canvas_preview__ fails to load
+    // .catch() must log failures via console.error so import errors are visible in the browser
+    // console (extension captures it) instead of being silently swallowed (#37).
     expect(patched).toContain('.catch(');
+    expect(patched).toContain('console.error');
+    expect(patched).toContain('[HyperIDE] __canvas_preview__ failed to load:');
   });
 
   it('revertEntryFile restores original bootstrap code', async () => {
@@ -2863,7 +2866,7 @@ if (new URLSearchParams(location.search).get("component") && location.pathname.i
   import("./__canvas_preview__").then(m => {
     var CanvasPreviewComp = m.default;
     if (CanvasPreviewComp) createRoot(rootEl).render(<CanvasPreviewComp />);
-  }).catch(() => {});
+  }).catch(err => { console.error('[HyperIDE] __canvas_preview__ failed to load:', err); });
 } else {
   createRoot(rootEl).render(
     <StrictMode>
