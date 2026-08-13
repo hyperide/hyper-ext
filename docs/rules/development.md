@@ -48,7 +48,9 @@ CLI: `linear issue create --team HYP --title "..." --description "..." --no-inte
 1. `bunx knip` — убрать неиспользуемые экспорты / зависимости / файлы.
 2. Self-review — TODO/FIXME, dead code, дубли, конвенции, comment hygiene
    (не осталось ли висящих JSDoc от удалённого кода).
-3. `codex exec review --uncommitted` — дождаться до конца, прочитать findings.
+3. Ревью — обязательный тандем, оба перед коммитом:
+   - `advisor()` — сильный ревьюер (только главный агент, не сабагенты).
+   - `codex exec review --uncommitted` — дождаться до конца, прочитать findings.
 4. Убедиться, что для новой логики есть тесты.
 5. `/commit` — полный чеклист (Linear lookup → commit → пост-коммит).
    **Коммитим через `/commit`, не напрямую `git commit`.**
