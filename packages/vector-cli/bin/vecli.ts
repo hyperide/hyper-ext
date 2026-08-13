@@ -108,13 +108,9 @@ async function main(): Promise<void> {
       process.exit(1);
     }
   } else {
-    // TUI mode placeholder
-    console.log('vecli — Interactive TUI mode (coming soon)');
-    console.log('');
-    console.log('For now, use batch mode:');
-    console.log('  vecli \'rect(100,50).fill("#f00").svg()\'');
-    console.log('  vecli -e script.js');
-    console.log('  vecli --help');
+    // Interactive TUI mode. Dynamic import keeps ink/react off the batch hot path.
+    const { startTui } = await import('../src/tui/index');
+    await startTui({ canvasWidth, canvasHeight });
   }
 }
 

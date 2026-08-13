@@ -9,7 +9,13 @@
   "main": "src/context.ts",
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
+    "ink": "^5",
+    "ink-text-input": "^6",
+    "react": "18.3.1",
     "vector-engine": "workspace:*",
     "vector-wasm": "workspace:*"
+  },
+  "devDependencies": {
+    "ink-testing-library": "^4"
   }
 }

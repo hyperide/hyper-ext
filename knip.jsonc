@@ -87,8 +87,10 @@
     "packages/*": {
       // Each package's entry (src/index.ts or src/context.ts via `main`, bin/vecli.ts
       // via `bin`) is inferred from its own package.json. Only declare test files.
-      "entry": ["**/*.test.ts"],
-      "project": "src/**/*.ts",
+      // .tsx is included for vector-cli's ink TUI components (src/tui/*.tsx) and their
+      // ink-testing-library specs (test/*.test.tsx).
+      "entry": ["**/*.test.{ts,tsx}"],
+      "project": "src/**/*.{ts,tsx}",
       // vector-cli declares vector-wasm (workspace:*) but doesn't import it from its own
       // src/. It's a runtime requirement reached transitively: vector-cli -> vector-engine
       // -> `import { MockPathOps } from 'vector-wasm'` (register-all.ts, a value import).

@@ -17,7 +17,7 @@ function briefHelp(): string {
   return `vecli — Vector Engine CLI
 
 Usage:
-  vecli                              Interactive TUI mode (coming soon)
+  vecli                              Interactive TUI mode (input + live preview)
   vecli 'expression'                 Evaluate inline expression
   vecli -e script.js                 Execute script file
   echo 'expr' | vecli               Pipe stdin
