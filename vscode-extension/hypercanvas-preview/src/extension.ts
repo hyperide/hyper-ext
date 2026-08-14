@@ -48,6 +48,7 @@ import {
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
+import { NoFolderViewProvider } from './NoFolderViewProvider';
 import { PanelRouter } from './PanelRouter';
 import { PostEditDiagnosticWatcher } from './services/PostEditDiagnosticWatcher';
 import {
@@ -134,6 +135,49 @@ let activeModeManagerRef: PreviewModeManager | null = null;
 let isDeactivating = false;
 let _prevDiagnosticSinkPath: string | undefined;
 let _diagnosticCaptureActive = false;
+
+// Every webview `id` HyperIDE declares under `contributes.views` in package.json
+// (currently: hypercanvas-explorer -> explorerView, hypercanvas-inspector ->
+// inspectorView + aiChatView, hypercanvas-preview-container -> logsView). Exported
+// so a test can assert this list still covers every declared view id — any new
+// view added to package.json without a matching entry here would silently
+// reintroduce the HYP-1237 infinite-spinner bug for that view.
+export const NO_FOLDER_VIEW_TYPES = [
+  LeftPanelProvider.viewType,
+  RightPanelProvider.viewType,
+  AIChatPanelProvider.viewType,
+  LogsPanelProvider.viewType,
+];
+
+/**
+ * Registers empty-state providers for every HyperIDE webview view when
+ * `activate()` runs with no workspace folder open (HYP-1237). Without this,
+ * `activate()` returned before registering ANY `WebviewViewProvider` — the
+ * views are still declared in package.json's `contributes.views`, so VS Code
+ * renders the activity-bar container and waits forever for a provider to
+ * resolve them: a permanent loading spinner, no error, no timeout. The rest
+ * of `activate()` (StateHub, PanelRouter, DevServerManager, PreviewPanel,
+ * command registration, …) all assume a non-null `workspaceRoot` and are not
+ * safe to run without one, so this deliberately does NOT attempt to run them
+ * — it only makes the views resolve to a real "no folder" empty state.
+ *
+ * Once a folder is added to the window (`onDidChangeWorkspaceFolders`), the
+ * window is reloaded so `activate()` re-runs from scratch with a workspace
+ * root and the full extension (including these views' real providers)
+ * initializes normally.
+ */
+export function registerNoFolderViews(context: vscode.ExtensionContext): void {
+  for (const viewType of NO_FOLDER_VIEW_TYPES) {
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider(viewType, new NoFolderViewProvider()));
+  }
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      if (getWorkspaceRoot()) {
+        void vscode.commands.executeCommand('workbench.action.reloadWindow');
+      }
+    }),
+  );
+}
 
 export function activate(context: vscode.ExtensionContext) {
   const activationStartedAt = Date.now();
@@ -354,6 +398,7 @@ export function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = getWorkspaceRoot();
   if (!workspaceRoot) {
     console.log('[HyperIDE] No workspace folder open');
+    registerNoFolderViews(context);
     return;
   }
 
