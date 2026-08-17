@@ -397,6 +397,18 @@ export class PreviewProxy {
             'content-type': 'text/html; charset=utf-8',
             'cache-control': 'no-cache, no-store, must-revalidate',
           });
+          // codeql[js/reflected-xss] -- proxyPath is escaped before it reaches this sink, in
+          // two independent contexts, both in PreviewAssetResponses.ts (HYP-1275):
+          // 1. Visible page text: escapeHtml HTML-entity-escapes &<>"'.
+          // 2. Inline <script> postMessage payload: stringifyForInlineScript first
+          //    JSON.stringify()s the payload -- which already escapes '"'/'\'/control chars,
+          //    closing string-literal breakout -- then separately replaces <,>,&,U+2028,U+2029
+          //    with JS \uXXXX escapes, closing </script> breakout and line-terminator issues.
+          // Verified: neither escaped output can contain a raw HTML/script-breaking character,
+          // and the JS escapes round-trip to the exact original string on the receiving end
+          // (regression tests: PreviewAssetResponses.test.ts). CodeQL doesn't recognize this
+          // custom character-class replace as a sanitizer barrier (only known sanitizer-library
+          // calls), hence the false-positive flag.
           clientRes.end(buildDevServerUnreachableHtml(proxyPath, proxyRes.statusCode, this._targetPort));
         }
         return;

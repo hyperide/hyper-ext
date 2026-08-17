@@ -176,13 +176,48 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char] ?? char);
 }
 
+// HYP-1275: characters that hand parser control back to the browser once this JSON is
+// embedded inline inside a <script> element (as an argument to postMessage, decoded by the
+// JS engine -- JSON.parse only applies on the *test* side). Escaped as JS escape sequences,
+// not HTML entities, so the decoded value is still the exact original character (unlike
+// &lt;-style entities, which would corrupt a query string's `&` separators). U+2028/U+2029
+// are included for parity with the standard "safe JSON-in-<script>" pattern
+// (`serialize-javascript`, Rails' `json_escape`); modern engines permit them unescaped in
+// string literals, but this keeps the escaping complete.
+//
+// The U+2028/U+2029 keys are built via String.fromCharCode rather than written as literal
+// characters in this source file: those two code points are themselves line/paragraph
+// separators, so embedding them literally risks a text tool (formatter, diff viewer, a
+// line-splitting regex) treating this single source line as more than one line.
+const LINE_SEPARATOR = String.fromCharCode(0x2028);
+const PARAGRAPH_SEPARATOR = String.fromCharCode(0x2029);
+
+const INLINE_SCRIPT_ESCAPE_MAP: Record<string, string> = {
+  '<': '\\u003C',
+  '>': '\\u003E',
+  '&': '\\u0026',
+  [LINE_SEPARATOR]: '\\u2028',
+  [PARAGRAPH_SEPARATOR]: '\\u2029',
+};
+// The character class is derived from this map's own keys so the two can never drift out
+// of sync -- each key is escaped for its position inside `[...]` (not general regex
+// escaping) so this stays safe even if a future key were itself a class metacharacter
+// (`]`, `^`, `-`, `\`).
+function escapeForCharClass(char: string): string {
+  return char.replace(/[\]\\^-]/g, '\\$&');
+}
+const INLINE_SCRIPT_UNSAFE_CHARS = new RegExp(
+  `[${Object.keys(INLINE_SCRIPT_ESCAPE_MAP).map(escapeForCharClass).join('')}]`,
+  'g',
+);
+
 function stringifyForInlineScript(payload: {
   type: 'hypercanvas:devServerUnreachable';
   proxyPath: string;
   statusCode: number | null;
   targetPort: number;
 }): string {
-  return JSON.stringify(payload).replace(/<\//g, '<\\/');
+  return JSON.stringify(payload).replace(INLINE_SCRIPT_UNSAFE_CHARS, (char) => INLINE_SCRIPT_ESCAPE_MAP[char] ?? char);
 }
 
 /**

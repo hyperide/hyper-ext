@@ -164,10 +164,22 @@ describe('shouldShowDevServerUnreachable (HYP-903 — dev server with no /test-p
 });
 
 describe('buildDevServerUnreachableHtml (HYP-903)', () => {
-  function extractDevServerUnreachablePayload(html: string): Record<string, unknown> {
-    const match = html.match(/window\.parent\.postMessage\((\{[\s\S]*?\}), '\*'\);/);
+  // HYP-1275: anchored on the trailing `"targetPort":<digits>}` rather than a lazy
+  // `\{[\s\S]*?\}` match. `targetPort` is always the payload's last field and is never
+  // attacker-controlled (it's the extension's own numeric port, not derived from
+  // proxyPath), so this can't be tricked into stopping early by a proxyPath value that
+  // contains a literal `}` or `, '*');` -- both of which JSON.stringify leaves unescaped
+  // inside a string value, and only proxyPath is attacker-influenceable.
+  function extractAnnouncePayloadSegment(html: string): string {
+    const match = html.match(
+      /window\.parent\.postMessage\((\{"type":"hypercanvas:devServerUnreachable"[\s\S]*?"targetPort":\d+\}), '\*'\);/,
+    );
     if (!match) throw new Error('No dev-server-unreachable postMessage payload found');
-    return JSON.parse(match[1]);
+    return match[1];
+  }
+
+  function extractDevServerUnreachablePayload(html: string): Record<string, unknown> {
+    return JSON.parse(extractAnnouncePayloadSegment(html));
   }
 
   it('renders the target port, status, and requested path into a visible HTML page', () => {
@@ -221,5 +233,47 @@ describe('buildDevServerUnreachableHtml (HYP-903)', () => {
 
     expect(extractDevServerUnreachablePayload(html).proxyPath).toBe('/test-preview?</script><script>alert(1)</script>');
     expect(html.match(/<\/script>/gi)).toHaveLength(1);
+  });
+
+  // HYP-1275: CodeQL reflected-XSS regression guard. The announce payload embeds the raw
+  // (non-HTML-escaped) proxyPath inline inside a <script> element via JSON.stringify. An
+  // earlier version only replaced `</` sequences, which left a bare `<script>` (no leading
+  // slash) -- and any other `<`/`>`/`&` character -- verbatim in the emitted script text.
+  // These tests fail if stringifyForInlineScript's escaping regresses to that narrower form.
+  it('never emits a raw "<", ">", or "&" character inside the announce payload segment', () => {
+    const dangerousPath = '/test-preview?<script>alert(document.cookie)</script>&x=<img src=1 onerror=alert(2)>';
+    const html = buildDevServerUnreachableHtml(dangerousPath, 404, 3000);
+
+    expect(extractAnnouncePayloadSegment(html)).not.toMatch(/[<>&]/);
+  });
+
+  it('preserves the exact original proxyPath through the JS-escaped announce payload', () => {
+    const dangerousPath = '/test-preview?<script>alert(document.cookie)</script>&x=<img src=1 onerror=alert(2)>';
+    const html = buildDevServerUnreachableHtml(dangerousPath, 404, 3000);
+
+    expect(extractDevServerUnreachablePayload(html).proxyPath).toBe(dangerousPath);
+  });
+
+  it('does not leak a bare (non-slash) <script> tag from the proxy path into the response', () => {
+    // A bare `<script>` with no leading `/` was NOT covered by the old `</`-only replace --
+    // this is the exact gap CodeQL's reflected-XSS query flagged.
+    const html = buildDevServerUnreachableHtml('/test-preview?<script>alert(1)</script>', 404, 3000);
+
+    expect(html).not.toContain('<script>alert(1)');
+  });
+
+  it('escapes U+2028/U+2029 (JS string-literal terminators in older engines) inside the announce payload', () => {
+    // Built via String.fromCharCode rather than a literal escape in this source file, same
+    // reasoning as the production code: these code points are themselves line/paragraph
+    // separators and could confuse a text tool reading this test file.
+    const lineSeparator = String.fromCharCode(0x2028);
+    const paragraphSeparator = String.fromCharCode(0x2029);
+    const dangerousPath = `/test-preview?a=${lineSeparator}${paragraphSeparator}b`;
+    const html = buildDevServerUnreachableHtml(dangerousPath, 404, 3000);
+    const payloadSegment = extractAnnouncePayloadSegment(html);
+
+    expect(payloadSegment.includes(lineSeparator)).toBe(false);
+    expect(payloadSegment.includes(paragraphSeparator)).toBe(false);
+    expect(extractDevServerUnreachablePayload(html).proxyPath).toBe(dangerousPath);
   });
 });
