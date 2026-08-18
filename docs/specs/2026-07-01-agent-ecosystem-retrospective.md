@@ -2444,8 +2444,147 @@ IDs; the tg-cli smoke-test-leak + `"%0"` template bug; the telemetry spec-commen
 (OD-1/2/3, redaction, priority ordering); ArgoCD root-cause; the public-mirror "354 commits behind /
 baseline `6acb3d30`"; and the Tailscale spec-web mirror URLs (`:8444`/`:8445`).
 
+## 13.6 Status update — 2026-08-18 (five weeks post-ratification)
+
+Sections 13.1–13.5 above are a frozen point-in-time resume log from the day after this spec was
+written (2026-07-02) and were never updated since — this section is the first update since
+ratification (2026-07-12). It cross-references five things a 2026-08-18 session found/fixed
+against this spec's own catalogued findings, with real ticket/PR citations re-verified this date
+against git/GitHub/Linear **except where noted inline** (item 3 flags an unresolved citation
+mismatch; item 5 explicitly could not re-derive two PR numbers; item 6's central claim rests on a
+single weak-negative GitHub code search, not a repo-clone-verified absence) — and closes with the
+next actionable item per this spec's own priority ordering (§5) — **among items this pass could
+verify**; it does NOT re-audit full Phase-0/1 completion (item 6 says so explicitly), so this is a
+next-verified-unblocked-item claim, not a re-ratified phase reordering. **This section's
+recommendation supersedes the footer's "Next step" line below** (Phase 0 is no longer the stated
+near-term action pending that audit; see
+item 6).
+
+**(1) A real command-injection vulnerability, closed — a new guard-quality finding class this
+spec's original audit did not catalogue.** [HYP-1260](https://linear.app/glide-vc/issue/HYP-1260):
+`agent-tools`' `ci/ship/ship.sh` built its `SHIP_IMAGE_UPLOAD_CMD` uploader invocation via bash
+string substitution into `eval`, so a screenshot path containing a literal double-quote could break
+out of the quoting and inject shell syntax. Fixed and **merged** same-day: `agent-tools` PR
+[#387](https://github.com/alex-mextner/agent-tools/pull/387) (`fix(ship): close eval-injection in
+upload_png's SHIP_IMAGE_UPLOAD_CMD`). The original guard audit (§3.2, G-1..G-13) inventoried
+*whether* guards fire, not whether a guard's own implementation is itself an injection surface —
+this is a distinct defect class. Recorded here as **G-14 (candidate)** — "a guard/tooling
+implementation can itself be an injection surface" — so a future audit of §3.2 can reference it by
+id instead of re-discovering it as prose; §3.2's own G-1..G-13 list is left unedited per the
+frozen-section convention, this is a forward pointer only. **Note this is NOT the same file/finding
+as G-9** ("designed-but-dead enforcement assets in agent-tools") even though both touch
+`agent-tools`: G-9's text (§3.2) is specifically about a commit-msg lint fragment, pre-push
+test-suite fragments, and 11 of 15 CI gate kits sitting unwired; `ci/ship/ship.sh` is wired and
+live (this repo's own shim exports
+`SHIP_IMAGE_UPLOAD_CMD` per AGENTS.md's HYP-1252 passage) — the opposite of "designed-but-dead."
+G-14 is a genuinely new, thematically-adjacent defect class (a live guard whose OWN implementation
+is an injection surface), not a second instance of G-9; the two share only the file, not the
+finding.
+
+**(2) A tg-cli escalation-format gate bug, found and fix proposed, not yet merged — direct
+evidence for §5.2.5/§8.5 (tg communication).** A subagent reported (relayed via Telegram) that the
+`--tag question|decision` escalation-format gate rejected realistic decision-request content (a
+real file path, a multi-row table, a multi-item recommendation list) while only the tool's own toy
+template passed. Root cause: `hasWallOfText` split the body on literal `\n` only, so a
+fully-structured Rich Message assembled as one continuous source string (no literal newline
+between `<h3>`/`<table>`/`<ul>` blocks) was scored as one giant "line" and tripped the
+`WALL_LINE_CHARS` threshold the moment the content was realistic. Fix proposed in `tg-cli` PR
+[#262](https://github.com/alex-mextner/tg-cli/pull/262) (`fix(escalation-format): stop wall-of-text
+check from newline-formatting hazing`, fixes `tg-cli`#261) — **OPEN, not yet merged** as of
+2026-08-18. This is exactly the class of friction §4.1/Finding B calls a bypass-economy driver: a
+gate that misfires on legitimate content trains agents to route around it, not through it.
+
+**(3) HYP-1256 citation mismatch — flagged, not force-fit.** A same-session report described a
+"Linear-ticket-closure gap fixed as HYP-1256." Linear shows HYP-1256 is in fact "e2e: Remix
+console-capture postMessage bridge test times out" (an e2e infra bug, unrelated to ticket-closure
+tooling, already Done with visual/log proof attached) — re-verified via `linear issue view
+HYP-1256` on 2026-08-18. Rather than repeat an unverified citation into this spec (the exact
+failure mode §8.1 diagnoses — "closing tickets bypasses the CLI's gates" — would be compounded by
+a spec that also cites tickets without checking them), this section records the mismatch and
+leaves **§8.1's underlying diagnosis unchanged and still open**: ticket-closing still bypasses
+`task done`'s on-close gates when closed via the Linear UI/API directly, and the 5.2.3-item-9 fix
+(route closes through `task done`; webhook/sweep flags closes that bypassed it) has **no evidence
+of being implemented** as of this pass. Per this section's own append-only convention (§13.1–13.5
+are a frozen snapshot; this update follows the same rule), if a successor session later identifies
+the correct ticket for whatever closure-gap fix was actually intended, it should **append a new
+dated amendment** (a §13.7 or a follow-up bullet under a later status update) rather than edit this
+paragraph in place — editing it would silently erase the 2026-08-18 record of the mismatch, which
+is the citation-hygiene evidence this paragraph exists to preserve.
+
+**(4) The orchestrator-vs-subagent `gh ship` policy question, resolved — closes part of
+G-11/5.2.3-item-5.** [HYP-1271](https://linear.app/glide-vc/issue/HYP-1271) ("Document
+orchestrator-vs-subagent gh ship policy in AGENTS.md") is **Done**, merged via `hyper-saas` PR
+[#726](https://github.com/hyperide/hyper-saas/pull/726). `AGENTS-CORE.md`'s "PR Merge Discipline"
+section now states explicitly that the orchestrator never invokes `gh` directly (including `gh
+ship`) and names the enforcing mechanism (the `orchestrator-stays-thin` hook in `agent-tools`,
+PR [#212](https://github.com/alex-mextner/agent-tools/pull/212)). **This closes only the narrower
+"ship policy = report-don't-merge" SUB-CASE of G-11, not G-11's spec'd remedy itself.** G-11's own
+text (5.2.3 item 5) calls for the standing contract (ticket ref, review policy, ship policy, handoff
+fields) to be **mechanically injected at the revived `pre-agent` bridge point into every subagent
+dispatch** — replacing the 12+ MEMORY.md entries that currently only beg orchestrators to remember.
+What landed here is prose in the canonical rules file plus one orchestrator-side hook for one rule
+(ship policy) — per this spec's own §4.1 doctrine, prose is the decaying enforcement form G-11 exists
+to retire, not the mechanized one. The pre-agent contract-injection mechanism itself remains
+unimplemented. **Not fully closed**: a follow-up,
+[HYP-1272](https://linear.app/glide-vc/issue/HYP-1272) ("AGENTS.md: orchestrator-stays-thin hook
+conflicts with documented orchestrator-run read-only `gh` calls"), is still **open/todo** — several
+runbooks in this repo (the CronCreate PR-check reminder template, `.claude/commands/pr.md`,
+`full-vibe.md`, `result-report.md`, `runners.md`) still instruct the orchestrator to run `gh`
+inline and have not been reconciled with the resolved policy.
+
+**(5) Review-quorum-skip recurrence — live evidence G-2 is still open, PR numbers not
+independently re-verified in this pass.** The originating session reported two PRs where the
+review-quorum gate was skipped before merge. `agent-tools` PR
+[#225](https://github.com/alex-mextner/agent-tools/pull/225) ("Guard-B, self-merge-authority")
+shows a review-quorum preflight mechanism does exist in code, so this is a **gap in an existing
+guard, not an absent one** — consistent with Finding B's diagnosis (guard bugs/friction, not model
+laziness). This section could not, in the time available, independently re-derive which two PR
+numbers the incidents refer to; flagging the gap honestly rather than citing unverified PR numbers.
+Net effect: **G-2 (the bypass economy) is confirmed still open**, roughly five weeks after Phase 1
+was scoped to close it (2026-07-12 ratification → 2026-08-18, 37 days); 5.2.3-item-10 (review-pool
+health surfacing) is a DIFFERENT concern (pool seats dying silently) that this incident's evidence
+(a skipped review-quorum gate) does not itself confirm or refute, and is left OUT of scope here.
+
+**(6) Next actionable, unblocked item per this spec's own priority ordering (§5).** Phase 0 (§5.1)
+is long past its "days" window and Phase 1 (§5.2, "~2 weeks", due ~2026-07-26) is roughly three
+weeks overdue as of 2026-08-18, so nothing here
+re-derives full Phase-0/1 completion status — that is a separate, larger audit. Within what this
+pass **did** verify: **5.2.3 item 3, "Escape-hatch audit sink (G-8)"** — every `ALLOW_*`/`*_SKIP`
+override should append `{ts, session, hatch, command, reason}` to `overrides.log`, surface in `rig
+status`, and land in a weekly tg digest — has **no hit found** in `agent-tools` as of 2026-08-18
+via `gh api search/code` for `overrides.log` (0 hits). **Caveat this section's own preamble
+requires: GitHub code search only indexes default branches, can lag recent pushes, and is weak
+negative evidence** — this is "not found by one search," not a repo-clone-verified absence; a
+successor picking this up should `grep` a fresh clone of `agent-tools` before filing a ticket, in
+case the search index is stale or the sink landed under a different name. With that caveat, G-8 has
+no stated dependency on any other Phase-1/2 item, so it is unblocked if confirmed missing on THAT
+axis — it has not been checked against the separately-gated Open Decisions (Section 11), and at
+least one plausibly bears on G-8's design: `overrides.log` records the full `{command}` string per
+the item-6 spec above, and surfacing that in `rig status` + a weekly tg digest is a secret-leak
+surface if override command lines carry tokens/paths — implementation should respect whatever the
+pending redaction decision settles, not assume it's moot. It would also make PAST hatch-mediated
+bypasses of this kind auditable from `rig status` instead of a
+same-day manual dig — **conditional on this recurrence actually having gone through an
+`ALLOW_*`/`*_SKIP` hatch invocation, which finding (5) explicitly could not confirm**; finding (5)
+instead frames the review-quorum skips as "a gap in an existing guard, not an absent one" (a guard
+bug, per Finding B), and `overrides.log` only records explicit hatch invocations — if these
+specific skips were guard-bug-mediated rather than hatch-mediated, G-8 would not have recorded them
+either. G-8 is still next in priority order and worth building regardless, but it is not
+established here as *the* fix for this specific recurrence. Recommended next step: re-confirm via a
+fresh clone, then file/pick up the ticket for G-8 in `agent-tools` and implement
+`overrides.log` + the `rig status` surfacing, then re-run the same review-quorum-skip check against
+its output instead of manual reconstruction.
+
 ---
 
-_End of spec. Next step per tg#5608: CTO review (suggested via `review spec-web`), then Open
-Decisions #1–#7, then Phase 0 execution under normal ticket/PR discipline. Live resume point for
-the successor session: §13._
+_End of spec. Original next step per tg#5608 (2026-07-02): CTO review (suggested via `review
+spec-web`), then Open Decisions #1–#7, then Phase 0 execution under normal ticket/PR discipline —
+**superseded by §13.6 item (6) as of 2026-08-18**: CTO review + ratification already happened
+(2026-07-12), Phase 0/1 are weeks past their windows, and the concrete next action is now
+"re-confirm and, if still missing, implement the G-8 escape-hatch audit sink," not Phase 0
+execution. **Open Decisions #1–#7 (Section 11) are NOT superseded and remain open and
+individually CTO-gated** — the item-(6) supersession only replaces the STRATEGY-EXECUTION step of
+the old chain (CTO review, then Phase 0), it does not touch the separately-gated decisions; per the
+header status line, ratifying the strategy never resolved them. Live resume point for the successor
+session: §13, now including §13.6 (2026-08-18 status update — read that first, it supersedes the
+staleness of §13.1–13.5 without deleting them)._
