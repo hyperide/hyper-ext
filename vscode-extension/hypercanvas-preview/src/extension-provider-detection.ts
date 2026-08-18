@@ -496,17 +496,64 @@ export async function detectSSRMockConfig(root: string): Promise<SSRMockConfig |
   }
 }
 
-async function detectFrontendRoot(root: string): Promise<string> {
+// Ordered from most- to least-conventional entry filename. `main` is checked
+// across ALL module scripts before `index`/`app` are considered at all — this
+// stops an unrelated module script that happens to be named e.g. `app.js`
+// (an analytics/vendor bundle living outside the real frontend dir) from
+// outranking the actual `main.tsx` entry just because it appears earlier in
+// the document (HYP-1034 review finding). Only when no `main.*` entry exists
+// anywhere do we fall back to the less-conventional `index`/`app` names —
+// this repo's own entry (`/client/App.tsx`) is exactly that case.
+//
+// Known residual limitation (accepted, not chased further): this is a
+// best-effort regex sniff of index.html, not a module-graph analysis. A
+// pathological multi-entry-script HTML file could still fool this — e.g. a
+// non-entry script named `main.js` in one dir shadowing the real
+// `index`/`app`-named entry in another (cross-tier), or an earlier non-entry
+// script that ALSO happens to be named `app`/`index` shadowing the real
+// entry within the SAME tier (same-tier — document order decides, and there
+// is no signal here to tell a decoy from the real mount site without
+// actually parsing which script calls `createRoot(...).render()`). Real
+// projects have exactly one entry script, which this handles correctly.
+const ENTRY_FILENAME_PATTERNS = [
+  /\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/i,
+  /\bsrc=["']\/([^/"']+)\/(?:index|app)\.[jt]sx?["']/i,
+];
+
+// The captured segment is later joined onto `root` for filesystem reads, so a
+// `../main.tsx` (or, on Windows, a `..\` segment) src would escape the
+// project root by one level — reject exactly `.`/`..` and any embedded
+// backslash. Deliberately an exact-equality check, not a `.includes('..')`
+// substring check, so a legitimately-named dir like `..cache` isn't dropped.
+function isSafeDirSegment(dir: string): boolean {
+  return dir !== '.' && dir !== '..' && !dir.includes('\\');
+}
+
+export async function detectFrontendRoot(root: string): Promise<string> {
   try {
     const html = await readFile(join(root, 'index.html'), 'utf-8'); // nosemgrep: path-join-resolve-traversal
     // HTML tag names are case-insensitive — match `<SCRIPT>`/`<Script>` too
     // (CodeQL js/bad-tag-filter). Regex HTML parsing is a smell; this only
     // sniffs the module entry script to detect the frontend root dir.
-    for (const scriptTag of html.matchAll(/<script\b([^>]*)>/gi)) {
-      const attrs = scriptTag[1];
-      if (!/\btype=["']module["']/i.test(attrs)) continue;
-      const srcMatch = attrs.match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/i);
-      if (srcMatch && srcMatch[1] !== 'src') return srcMatch[1];
+    const moduleScriptAttrs = [...html.matchAll(/<script\b([^>]*)>/gi)]
+      .map((m) => m[1])
+      .filter((attrs) => /\btype=["']module["']/i.test(attrs));
+
+    for (const pattern of ENTRY_FILENAME_PATTERNS) {
+      // Within a tier, a non-`src` match wins immediately (it's the whole
+      // reason this function exists — detecting a non-default root). A
+      // `src` match in this tier is remembered but NOT returned right away,
+      // so a later non-`src` entry of the SAME conventional filename (e.g.
+      // `/client/main.tsx` after `/src/main.tsx`) still wins, matching the
+      // original single-pattern behavior per tier.
+      let sawDefaultMatch = false;
+      for (const attrs of moduleScriptAttrs) {
+        const dir = attrs.match(pattern)?.[1];
+        if (!dir || !isSafeDirSegment(dir)) continue;
+        if (dir !== 'src') return dir;
+        sawDefaultMatch = true;
+      }
+      if (sawDefaultMatch) return 'src';
     }
   } catch {
     /* no index.html */

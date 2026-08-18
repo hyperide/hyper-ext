@@ -25,7 +25,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { parse as babelParse } from '@babel/parser';
-import { detectPreviewProviders, walkAst } from '../extension-provider-detection';
+import { detectFrontendRoot, detectPreviewProviders, walkAst } from '../extension-provider-detection';
 
 async function writeProject(files: Record<string, string>): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'provider-detect-'));
@@ -645,5 +645,180 @@ describe('walkAst', () => {
       }
     });
     expect(seen).toEqual(['Outer']);
+  });
+});
+
+// HYP-1034: detectFrontendRoot had zero tests despite being the single point of
+// truth for locating a project's frontend source directory. This repo's own
+// index.html (`<script type="module" src="/client/App.tsx">`) is the exact
+// non-default case the function exists to handle — but the entry file is
+// `App.tsx`, not `main.tsx`, which the original regex hardcoded to match.
+describe('detectFrontendRoot — frontend source dir from index.html module script (HYP-1034)', () => {
+  const roots: string[] = [];
+
+  beforeEach(() => {
+    roots.length = 0;
+  });
+
+  afterEach(async () => {
+    for (const r of roots) await fs.rm(r, { recursive: true, force: true });
+  });
+
+  it('detects the default `src` root when index.html points at /src/main.tsx', async () => {
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>`,
+      'src/main.tsx': `export {};`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('src');
+  });
+
+  it("detects a non-standard `client` root whose entry is App.tsx, not main.tsx — this repo's own layout", async () => {
+    // Regression case: hyperide's own index.html has
+    // `<script type="module" src="/client/App.tsx">`. The original regex only
+    // matched `main.[jt]sx?`, so this returned the 'src' fallback instead of
+    // 'client' — misdirecting preview generation for its own frontend root.
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/client/App.tsx"></script></body></html>`,
+      'client/App.tsx': `export {};`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('client');
+  });
+
+  it('ignores an earlier non-entry module script when detecting the frontend root', async () => {
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/vendor/polyfill.js"></script><script type="module" src="/client/App.tsx"></script></body></html>`,
+      'vendor/polyfill.js': `export {};`,
+      'client/App.tsx': `export {};`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('client');
+  });
+
+  it("prefers the conventional `main.*` entry over an earlier module script that is coincidentally named `app.js` (review regression)", async () => {
+    // Review counterexample: a non-entry module script (e.g. an analytics/
+    // vendor bundle) that happens to be named app.js and lives outside the
+    // real frontend dir must NOT outrank the actual main.tsx entry just
+    // because it appears first in the document. `main.*` is checked across
+    // ALL module scripts before `index`/`app` names are considered at all.
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/assets/app.js"></script><script type="module" src="/src/main.tsx"></script></body></html>`,
+      'assets/app.js': `export {};`,
+      'src/main.tsx': `export {};`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('src');
+  });
+
+  it('prefers a LATER non-`src` `main.tsx` over an EARLIER `/src/main.tsx` (same-tier default-vs-non-default precedence)', async () => {
+    // Review finding: within the `main.*` tier, a `src`-dir match must not
+    // win outright just for appearing first — a later non-`src` main.tsx
+    // (the actual non-default root this function exists to detect) still
+    // takes precedence, matching the original single-pattern behavior.
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/src/main.tsx"></script><script type="module" src="/client/main.tsx"></script></body></html>`,
+      'src/main.tsx': `export {};`,
+      'client/main.tsx': `export {};`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('client');
+  });
+
+  it('detects a non-standard root whose entry is index.tsx (the other recognized non-main name)', async () => {
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/app/index.tsx"></script></body></html>`,
+      'app/index.tsx': `export {};`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('app');
+  });
+
+  it('detects the default `src` root for a lone /src/index.tsx entry (tier-2 default-dir sanity)', async () => {
+    // Basic tier-2 coverage independent of the non-default `client`/`app`
+    // cases above: a single, real `index.tsx` entry under `src` (no `main.*`
+    // anywhere) must still resolve to the 'src' default.
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/src/index.tsx"></script></body></html>`,
+      'src/index.tsx': `export {};`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('src');
+  });
+
+  it('rejects an exact `.` directory segment the same way as `..`', async () => {
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/./main.tsx"></script></body></html>`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('src');
+  });
+
+  it('rejects a directory segment containing a backslash (Windows-style traversal)', async () => {
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/foo\\bar/main.tsx"></script></body></html>`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('src');
+  });
+
+  it('rejects a `..`/`.` directory segment instead of returning a path that would escape the project root', async () => {
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/../main.tsx"></script></body></html>`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('src');
+  });
+
+  it('skips an unsafe `..` segment and still resolves a valid LATER entry, rather than bailing out entirely', async () => {
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/../main.tsx"></script><script type="module" src="/client/main.tsx"></script></body></html>`,
+      'client/main.tsx': `export {};`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('client');
+  });
+
+  it('does NOT over-reject a legitimately-named dir that merely contains ".." as a substring (e.g. `..cache`)', async () => {
+    // isSafeDirSegment must reject only the exact `.`/`..` traversal
+    // segments, not any segment containing ".." as a substring — a real
+    // (if unusual) directory name like `..cache` is a single path segment
+    // and does not escape the project root when joined onto it.
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script type="module" src="/..cache/main.tsx"></script></body></html>`,
+      '..cache/main.tsx': `export {};`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('..cache');
+  });
+
+  it('falls back to `src` when index.html is missing entirely', async () => {
+    const root = await writeProject({
+      'src/main.tsx': `export {};`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('src');
+  });
+
+  it('falls back to `src` when index.html exists but has no matching module script tag', async () => {
+    const root = await writeProject({
+      'index.html': `<!doctype html><html><body><div id="root"></div><script src="/legacy.js"></script></body></html>`,
+    });
+    roots.push(root);
+
+    expect(await detectFrontendRoot(root)).toBe('src');
   });
 });
