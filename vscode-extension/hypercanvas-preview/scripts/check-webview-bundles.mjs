@@ -17,8 +17,10 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { checkBrowserBundleCoverage, extractBrowserOutfiles } from './lib/esbuild-browser-outfiles.mjs';
 
-const outDir = join(dirname(dirname(fileURLToPath(import.meta.url))), 'out');
+const extensionDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const outDir = join(extensionDir, 'out');
 
 // Every browser (platform:'browser') webview bundle. These run in a webview with
 // no Node runtime — any of the patterns below crashes them at load.
@@ -28,6 +30,9 @@ const BROWSER_BUNDLES = [
   'webview-right.js',
   'webview-preview-panel.js',
   'webview-ai-chat.js',
+  'iframe-interaction.js',
+  'iframe-error-detection.js',
+  'iframe-console-capture.js',
 ];
 
 // Forbidden tokens. `process.X` access (other than `typeof process`) throws when
@@ -52,6 +57,22 @@ const ALLOWLIST = [
   // `tailwindcss/colors` import. It's a JSON string, never evaluated as code.
   '--define:process.env.CSS_TRANSFORMER_WASM=false',
 ];
+
+// Self-check (HYP-1030): BROWSER_BUNDLES above must be a superset of every
+// platform:'browser' esbuild.js context, so a newly-added browser bundle can't
+// silently ship unscanned. See checkBrowserBundleCoverage's doc comment for the
+// exact failure modes this catches (and the one it deliberately doesn't).
+const esbuildJsPath = join(extensionDir, 'esbuild.js');
+if (!existsSync(esbuildJsPath)) {
+  console.error(`✗ esbuild.js not found at ${esbuildJsPath} — can't verify BROWSER_BUNDLES coverage.`);
+  process.exit(1);
+}
+const esbuildSource = readFileSync(esbuildJsPath, 'utf-8');
+const coverage = checkBrowserBundleCoverage(extractBrowserOutfiles(esbuildSource), BROWSER_BUNDLES);
+if (!coverage.ok) {
+  console.error(`✗ ${coverage.message}`);
+  process.exit(1);
+}
 
 let failed = false;
 for (const bundle of BROWSER_BUNDLES) {
