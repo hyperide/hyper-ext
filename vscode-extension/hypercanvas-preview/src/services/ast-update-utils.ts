@@ -307,11 +307,30 @@ async function runStyleWriteExclusive(
     aliasMap: deps.getAliasMap?.(resolvedPath) ?? {},
   });
 
+  const runRetarget = (displayName: string, definition?: { filePath: string; line: number }) =>
+    retargetNonForwardingWrite(
+      {
+        elementId: input.elementId,
+        styles: input.styles,
+        state: input.state,
+        displayName,
+        // HYP-990 M2 — structured facts for the AI-fix diagnosis: where the component is DEFINED (to add
+        // forwarding) and the CALL SITE where the edit was attempted.
+        definition,
+        callSite: result.element.loc ? { filePath: resolvedPath, line: result.element.loc.start.line } : undefined,
+        ast,
+        result,
+        resolvedPath,
+      },
+      deps,
+      contentBeforeWrite,
+    );
+
   if (forwardCheck.kind !== 'not-forwarding') {
     // HYP-1162 (main) needs `elementId` on DirectCandidateInput to address the live-preview verify
     // RPC; HYP-990 (this branch) needs the `result2`/ExclusiveOutcome wrapping for the saga's
     // relock loop. Both must be threaded through the same call.
-    const result2 = await writeDirectCandidate(
+    const direct = await writeDirectCandidate(
       {
         elementId: input.elementId,
         styles: input.styles,
@@ -325,27 +344,28 @@ async function runStyleWriteExclusive(
       deps,
       contentBeforeWrite,
     );
-    return { kind: 'done', result: result2 };
+    // HYP-995 — the upfront check admitted the component (it forwards SOME channel), but the planner
+    // routed this edit to a channel writing a prop the component doesn't forward (e.g. an inline
+    // `style={{}}` write onto `<Card>` that forwards only `className`). The shared executor refused it
+    // rather than writing dead code; route that refusal into the SAME M1 verify-and-retry / warn+rollback
+    // path a fully-non-forwarding target takes — so a dimensional edit warns + rolls back, never a dead prop.
+    if ('deadPropWrite' in direct) {
+      return {
+        kind: 'done',
+        result: await runRetarget(direct.deadPropWrite.componentName, direct.deadPropWrite.definition),
+      };
+    }
+    return { kind: 'done', result: direct };
   }
 
-  const retargetResult = await retargetNonForwardingWrite(
-    {
-      elementId: input.elementId,
-      styles: input.styles,
-      state: input.state,
-      displayName: forwardCheck.displayName,
-      // HYP-990 M2 — structured facts for the AI-fix diagnosis: where the component is DEFINED (to add
-      // forwarding) and the CALL SITE where the edit was attempted.
-      definition: forwardCheck.definition,
-      callSite: result.element.loc ? { filePath: resolvedPath, line: result.element.loc.start.line } : undefined,
-      ast,
-      result,
-      resolvedPath,
-    },
-    deps,
-    contentBeforeWrite,
-  );
-  return { kind: 'done', result: retargetResult };
+  return { kind: 'done', result: await runRetarget(forwardCheck.displayName, forwardCheck.definition) };
+}
+
+/** HYP-995 — signal from {@link writeDirectCandidate} that the shared executor REFUSED the direct write
+ *  because the chosen channel would land a prop the target custom component doesn't forward. Carries the
+ *  component identity so the caller can route into the M1 retarget path. */
+interface DeadPropWriteSignal {
+  deadPropWrite: { componentName: string; definition?: { filePath: string; line: number } };
 }
 
 /** HYP-990 C1 — process-wide per-resolved-path lock serializing the non-forwarding style-write saga.
@@ -400,7 +420,7 @@ async function writeDirectCandidate(
   input: DirectCandidateInput,
   deps: UpdateStylesDeps,
   contentBeforeWrite: string | undefined,
-): Promise<UpdateStylesResult> {
+): Promise<UpdateStylesResult | DeadPropWriteSignal> {
   const cssProperties = Object.keys(input.styles);
   // HYP-987 P1 #3 — verify addresses the iframe by its PRE-re-root id (threaded per call), same
   // as the non-forwarding path; both ids coincide outside a monorepo sub-project.
@@ -434,9 +454,24 @@ async function writeDirectCandidate(
       runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'vscode' },
       projectRoot: deps.workspaceRoot,
       additionalProjectRoots: deps.additionalWorkspaceRoot ? [deps.additionalWorkspaceRoot] : undefined,
+      // HYP-995 — thread the alias map so the shared dead-prop guard resolves an alias-imported
+      // component (`@/components/Card`) exactly like the upfront forward-detector above does.
+      aliasMap: deps.getAliasMap?.(input.resolvedPath),
     },
   });
-  if (writeResult.success === false) return { success: false, error: writeResult.error };
+  if (writeResult.success === false) {
+    // HYP-995 — a channel-specific dead-prop refusal (not a real write failure): surface the signal so
+    // the caller routes it into the M1 retarget path instead of returning a bare error to the user.
+    if (writeResult.nonForwarding) {
+      return {
+        deadPropWrite: {
+          componentName: writeResult.nonForwarding.componentName,
+          definition: writeResult.nonForwarding.definition,
+        },
+      };
+    }
+    return { success: false, error: writeResult.error };
+  }
 
   for (const mutatedFile of writeResult.mutatedFiles) {
     if (isJsxSourceFile(mutatedFile)) await deps.updateNodeMap(mutatedFile);

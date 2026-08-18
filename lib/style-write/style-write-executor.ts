@@ -23,6 +23,7 @@ import { generateTailwindClasses } from '@lib/tailwind/generator';
 import { removeConflictingClasses } from '@lib/tailwind/parser';
 import type { ClassNameLocation as LegacyClassNameLocation } from '@lib/types';
 import postcss, { type AtRule, type Declaration, type Root, type Rule } from 'postcss';
+import { forwardsProp, resolveComponentForwarding } from './component-forwarding';
 import { createDefaultStyleWriteManager } from './default-style-write-manager';
 import {
   createCssModuleSourceOwnersFromReferences,
@@ -118,6 +119,13 @@ export interface ExecuteStyleWriteRequestInput {
   projectDefaultCssSystem?: CssSystemId;
   /** See `StyleWriteExecutorOptions.additionalProjectRoots`. */
   additionalProjectRoots?: string[];
+  /**
+   * HYP-995 — tsconfig path-alias map for the importer file's project, threaded so the dead-prop
+   * forwarding guard resolves an alias-imported component (`@/components/Card`) the same way the
+   * extension's upfront forward-detector does. Absent → relative-only resolution (an alias-imported
+   * component then reads as `unknown` and is never refused — no regression, just no guard for it).
+   */
+  aliasMap?: Record<string, string>;
 }
 
 interface ElementRefPosition {
@@ -706,6 +714,30 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
     runtimeThemeContext: input.runtimeThemeContext,
   });
 
+  // Build the resolved-system plan UP FRONT (pure, no mutation) so EVERY channel this write will touch
+  // is preflighted for dead-prop forwarding BEFORE the first file mutation. A mixed write splits into an
+  // inexpressible-inline part (writes `style`) and a resolved-system part (writes `style`/`className`);
+  // checking them AFTER the inline write already landed would leave a partial mutation behind a
+  // "nothing written" refusal (only the transaction's rollback would undo it — the executor must be
+  // correct without relying on it). Codex review P1.
+  const systemPlan = Object.keys(expressible).length > 0 ? await manager.createPlan(context) : null;
+
+  // HYP-995 preflight — REFUSE a dead component-prop write before ANY mutation. The planner routed one
+  // or more channels to a prop (`style` / `className`) the target custom component does NOT forward to
+  // the DOM: writing it would be dead code (DOM unchanged) AND a TypeScript error (the prop isn't on the
+  // component's props type). Return a structured refusal so the extension routes it into M1
+  // verify-and-retry and SaaS surfaces a warning — neither writes the dead prop. Fail-open on
+  // `native`/`unknown` targets (see forwardsProp): only a resolved custom component with a definite
+  // missing-prop verdict is refused. The component is resolved once and every required prop is checked.
+  const requiredProps: ReadonlySet<'style' | 'className'> = new Set(
+    [
+      ...(inexpressibleKeys.length > 0 ? (['style'] as const) : []),
+      ...(systemPlan ? [requiredForwardedProp(systemPlan)] : []),
+    ].filter((p): p is 'style' | 'className' => p !== null),
+  );
+  const dead = await refusalForUnforwardedProps(input, requiredProps);
+  if (dead) return dead;
+
   // Land the inexpressible properties inline FIRST, on the original (un-reformatted) element
   // position. The subsequent system write re-reads from the fileIO and only touches className, so the
   // inline style survives. Doing inline first avoids resolving the element against a position the
@@ -728,9 +760,8 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
   // requested property was inexpressible there (avoid an empty-class no-op) — the inline write above
   // already landed everything.
   let result: StyleWriteResult;
-  if (Object.keys(expressible).length > 0) {
-    const plan = await manager.createPlan(context);
-    result = await manager.execute(plan);
+  if (systemPlan) {
+    result = await manager.execute(systemPlan);
   } else {
     // Every requested property was inexpressible in the resolved system and landed inline above; no
     // system plan was executed. The inline write is the whole write.
@@ -751,6 +782,57 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
   }));
   const mutatedFiles = [...new Set([...inlineMutatedFiles, ...(result.mutatedFiles ?? [])])];
   return { success: true, plan: result.plan, mutatedFiles, landedOn };
+}
+
+/**
+ * The prop a plan's write channel physically sets on the TARGET JSX element, when that prop must be
+ * forwarded by a custom component for the write to reach the DOM. `scriptReactStyleRule` sets an inline
+ * `style={{}}`; `elementClass` sets `className`. The other forms don't set a prop on this element:
+ * `cssStyleRule` writes to a CSS file, `scriptNativeStyleRule` writes a styled-components template, and
+ * `adapterKnownElementProp` (Tamagui) targets external components (resolver → unknown → never refused).
+ */
+function requiredForwardedProp(plan: StyleWritePlan): 'style' | 'className' | null {
+  switch (plan.sourceForm) {
+    case 'scriptReactStyleRule':
+      return 'style';
+    case 'elementClass':
+      return 'className';
+    default:
+      return null;
+  }
+}
+
+/**
+ * HYP-995 — refuse the write when ANY channel it will touch lands a prop the target custom component
+ * doesn't forward. Resolves the component ONCE and checks every required prop. Returns the structured
+ * `nonForwarding` refusal (nothing has been written), or null to proceed. Fail-open: `native`/`unknown`
+ * targets, a `...rest` spread, or an empty required-prop set all return null. When both `style` and
+ * `className` are unforwarded, `style` is reported first (deterministic order).
+ */
+async function refusalForUnforwardedProps(
+  input: ExecuteStyleWriteRequestInput,
+  requiredProps: ReadonlySet<'style' | 'className'>,
+): Promise<StyleWriteResult | null> {
+  if (requiredProps.size === 0) return null;
+  const facts = await resolveComponentForwarding({
+    ast: input.ast,
+    filePath: input.sourceFilePath,
+    element: input.element,
+    fileIO: input.fileIO ?? new NodeFileIO(),
+    aliasMap: input.aliasMap,
+  });
+  if (facts.kind !== 'custom') return null;
+  const missing = (['style', 'className'] as const).find((p) => requiredProps.has(p) && !forwardsProp(facts, p));
+  if (!missing) return null;
+  return {
+    success: false,
+    error: `<${facts.displayName}> does not forward the "${missing}" prop to the DOM — the style edit would be dead code.`,
+    nonForwarding: {
+      componentName: facts.displayName,
+      requiredProp: missing,
+      ...(facts.definition ? { definition: facts.definition } : {}),
+    },
+  };
 }
 
 /**

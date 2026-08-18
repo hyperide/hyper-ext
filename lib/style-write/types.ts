@@ -269,6 +269,22 @@ export type StyleWriteResult =
       success: false;
       plan?: StyleWritePlan;
       error: string;
+      /**
+       * HYP-995 — set when the write was REFUSED (nothing written) because the chosen channel would
+       * land a prop the target custom component doesn't forward to the DOM (e.g. an inline `style={{}}`
+       * write onto `<Card>` whose props are `{ title, children }`). A dead write with no rollback and a
+       * TypeScript error is the bug this refusal prevents. The extension maps this into its M1
+       * verify-and-retry / warn+rollback path; SaaS surfaces it as a "could not apply" warning. Absent
+       * for any other failure (parse error, missing element, I/O).
+       */
+      nonForwarding?: {
+        /** Display name of the non-forwarding component (dotted for member tags). */
+        componentName: string;
+        /** The prop the chosen write channel targets but the component doesn't forward. */
+        requiredProp: 'style' | 'className';
+        /** Where the component is DEFINED (1-based line), when the resolver pinpointed it. */
+        definition?: { filePath: string; line: number };
+      };
     };
 
 // --- Framework Adapter Interfaces ---
