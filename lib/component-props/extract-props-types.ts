@@ -400,9 +400,16 @@ function resolveImportPath(
 }
 
 /**
- * Find and load tsconfig.json from project
+ * Find and load tsconfig.json from project.
+ *
+ * Exported for reuse by `lib/style-read/forward-detect-type.ts` (HYP-1229 A1 forward-detector's
+ * type/LSP corroboration step) — same tsconfig-discovery need, kept single-source rather than
+ * re-implementing the `ts.findConfigFile` lookup a second time. That module deliberately does
+ * NOT call `extractComponentPropsTypes` itself (its `getProperties()` call collapses a union
+ * props type to properties common to every arm — exactly the regression A1's revised plan
+ * exists to avoid); it does its own narrower per-arm type walk, reusing only this config loader.
  */
-function findAndLoadTsConfig(filePath: string): ts.CompilerOptions {
+export function findAndLoadTsConfig(filePath: string): ts.CompilerOptions {
   const configPath = ts.findConfigFile(path.dirname(filePath), ts.sys.fileExists, 'tsconfig.json');
 
   if (configPath) {

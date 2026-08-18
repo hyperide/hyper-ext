@@ -699,7 +699,7 @@ describe('detectFrontendRoot — frontend source dir from index.html module scri
     expect(await detectFrontendRoot(root)).toBe('client');
   });
 
-  it("prefers the conventional `main.*` entry over an earlier module script that is coincidentally named `app.js` (review regression)", async () => {
+  it('prefers the conventional `main.*` entry over an earlier module script that is coincidentally named `app.js` (review regression)', async () => {
     // Review counterexample: a non-entry module script (e.g. an analytics/
     // vendor bundle) that happens to be named app.js and lives outside the
     // real frontend dir must NOT outrank the actual main.tsx entry just

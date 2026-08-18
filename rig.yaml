@@ -41,6 +41,16 @@ agent_hooks:
   target: ~/.claude/hooks
   target_kind: claude-code
   all: true
+  # Enforce the worktree-only workflow: main is for merge/pull/read-only ONLY, all authoring
+  # happens in a separate `git worktree add` tree. Read by worktree-only-writes (pre-write,
+  # blocks Edit/Write on the default branch) AND pin-primary-worktree (pre-bash, blocks
+  # `git checkout`/`switch` moving the PRIMARY checkout off the default branch — the piece
+  # that was actually missing when this got flipped on, agent-tools#182). Was documented as
+  # already set here (agent-tools AGENTS.md/README said so) but never actually was — that gap
+  # is exactly why an accidental branch switch in the shared main checkout went unblocked
+  # (Alex tg#6462/tg#6477, 2026-07-04). No re-apply needed: both hooks self-read this key at
+  # fire time. Escape hatch: RIG_ALLOW_MAIN_EDIT=1.
+  worktree_only: true
 
 # ── Global git-hook dispatcher — one entry point, runs in every repo. Supersedes the
 # stand-alone lefthook wiring (the dispatcher composes the same hooks globally). ─────────

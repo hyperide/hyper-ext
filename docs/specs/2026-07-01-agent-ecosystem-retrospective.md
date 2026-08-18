@@ -2467,7 +2467,7 @@ string substitution into `eval`, so a screenshot path containing a literal doubl
 out of the quoting and inject shell syntax. Fixed and **merged** same-day: `agent-tools` PR
 [#387](https://github.com/alex-mextner/agent-tools/pull/387) (`fix(ship): close eval-injection in
 upload_png's SHIP_IMAGE_UPLOAD_CMD`). The original guard audit (§3.2, G-1..G-13) inventoried
-*whether* guards fire, not whether a guard's own implementation is itself an injection surface —
+_whether_ guards fire, not whether a guard's own implementation is itself an injection surface —
 this is a distinct defect class. Recorded here as **G-14 (candidate)** — "a guard/tooling
 implementation can itself be an injection surface" — so a future audit of §3.2 can reference it by
 id instead of re-discovering it as prose; §3.2's own G-1..G-13 list is left unedited per the
@@ -2570,7 +2570,7 @@ instead frames the review-quorum skips as "a gap in an existing guard, not an ab
 bug, per Finding B), and `overrides.log` only records explicit hatch invocations — if these
 specific skips were guard-bug-mediated rather than hatch-mediated, G-8 would not have recorded them
 either. G-8 is still next in priority order and worth building regardless, but it is not
-established here as *the* fix for this specific recurrence. Recommended next step: re-confirm via a
+established here as _the_ fix for this specific recurrence. Recommended next step: re-confirm via a
 fresh clone, then file/pick up the ticket for G-8 in `agent-tools` and implement
 `overrides.log` + the `rig status` surfacing, then re-run the same review-quorum-skip check against
 its output instead of manual reconstruction.

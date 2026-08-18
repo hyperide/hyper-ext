@@ -297,7 +297,10 @@ export class AstBridge {
     try {
       resolvedFilePath = this._resolvePath(m.filePath);
     } catch (error) {
-      console.warn(`[AstBridge] _schedulePostEditDiagnosticCheck: path rejected by containment check: ${m.filePath}`, error);
+      console.warn(
+        `[AstBridge] _schedulePostEditDiagnosticCheck: path rejected by containment check: ${m.filePath}`,
+        error,
+      );
       return;
     }
     void this._postEditWatcher?.checkAfterEdit(baseline, resolvedFilePath, elementId, m.filePath, message.type);

@@ -7,6 +7,8 @@
  * Architecture: https://hyperide.github.io/reports/style-write-unification
  */
 
+import * as fsSync from 'node:fs';
+import * as nodePath from 'node:path';
 import * as t from '@babel/types';
 import { getCssModuleClassReferences, getCssModuleImportBindings } from '@lib/ast/css-module-references';
 import type { FileIO } from '@lib/ast/file-io';
@@ -18,12 +20,15 @@ import {
 } from '@lib/ast/mutator';
 import { parseCode } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
+import { buildAliasMapFromTsconfig } from '@lib/ast/tsconfig-alias-map';
 import { analyzeJSXChildren, getChildrenLocation, getJSXTagName } from '@lib/ast/traverser';
 import type { NodeMapService } from '@lib/element-tracing/node-map-service';
 import { createDefaultStyleReadManager } from '@lib/style-read/default-style-read-manager';
+import { detectForwarding } from '@lib/style-read/forward-detect';
 import type {
   ClassNameExpressionFacts,
   CssSystemId,
+  ElementForwardDetection,
   ElementStyleFacts,
   ProjectStyleCapabilities,
   RuntimeThemeContext,
@@ -74,6 +79,9 @@ export class StyleReadService {
   private _additionalWorkspaceRoot?: string;
   private _fileIO: FileIO;
   private _nodeMapService: NodeMapService;
+  // HYP-1229 A1 forward-detector — tsconfig path-alias map, cached per tsconfig directory so
+  // repeated reads in the same project don't re-parse the config. Mirrors AstService._loadAliasMap.
+  private readonly _aliasMapCache = new Map<string, Record<string, string>>();
   private _styleReadManager: StyleReadManager;
   // package.json doesn't change during a session — cache detection result after first read
   private _cachedI18nLibrary: ReturnType<typeof detectI18nPackage> | undefined = undefined;
@@ -94,6 +102,44 @@ export class StyleReadService {
   /** See `_additionalWorkspaceRoot`. Set `null` to narrow back to just `_workspaceRoot`. */
   setAdditionalWorkspaceRoot(root: string | null): void {
     this._additionalWorkspaceRoot = root ?? undefined;
+  }
+
+  /**
+   * Build the tsconfig path-alias map for the project owning `importerFilePath`, for the A1
+   * forward-detector's cross-file component resolution. Walks up from the importer's directory
+   * to the workspace root, using the nearest `tsconfig.json` that declares `compilerOptions.paths`
+   * — mirrors `AstService._loadAliasMap` (kept as a separate small copy rather than shared: each
+   * service owns its own per-instance cache, and the two callers' failure modes differ enough
+   * that a shared helper would need its own FileIO threading for no real benefit here).
+   */
+  private _loadAliasMap(importerFilePath: string): Record<string, string> {
+    const root = this._workspaceRoot;
+    let dir = nodePath.dirname(importerFilePath);
+
+    // Path-SEGMENT containment (`dir === root` or `dir` starts with `root + sep`), not a bare
+    // string prefix — `startsWith(root)` alone would also admit a sibling directory that merely
+    // shares `root` as a text prefix (e.g. root `/ws/app` matching dir `/ws/app-2`).
+    while (dir === root || dir.startsWith(root + nodePath.sep)) {
+      const cached = this._aliasMapCache.get(dir);
+      if (cached) return cached;
+
+      try {
+        const source = fsSync.readFileSync(nodePath.join(dir, 'tsconfig.json'), 'utf8');
+        const map = buildAliasMapFromTsconfig(source, dir);
+        if (Object.keys(map).length > 0) {
+          this._aliasMapCache.set(dir, map);
+          return map;
+        }
+      } catch {
+        // No tsconfig here (or no paths) — keep walking up.
+      }
+
+      const parent = nodePath.dirname(dir);
+      if (parent === dir || dir === root) break;
+      dir = parent;
+    }
+
+    return {};
   }
 
   /** Resolve + validate `filePath` against `_workspaceRoot` (widened by `_additionalWorkspaceRoot`). */
@@ -202,13 +248,30 @@ export class StyleReadService {
 
       // Get children location for "Go to code" navigation
       const childrenLoc = getChildrenLocation(element);
+      const elementFacts = await buildElementFacts({
+        tagName,
+        classNameExpression,
+        styleAttribute,
+        ast,
+        filePath,
+        element,
+        fileIO: this._fileIO,
+        aliasMap: this._loadAliasMap(filePath),
+        // HYP-1229 review finding — this is the INTERACTIVE read path (fires on every element
+        // selection/hover), not the discrete write-path pre-check. Type corroboration only fires
+        // when the AST trace is `low`, but that's the COMMON case (opaque hooks, intermediate
+        // reassignment) and `ts.createProgram` is an uncached 300ms-2s cold build per
+        // forward-detect-type.ts's own header — unconditionally allowing it here would stall
+        // selection on an ambiguous custom component. Skip it until a shared LanguageService
+        // cache lands (tracked follow-up); the AST trace alone still resolves the common
+        // high-confidence cases (native tags, direct/deep attribute forwarding, rest-spread,
+        // asChild/Slot, styled-components) correctly — only the LOW-confidence tail loses the
+        // type-corroboration upgrade here, and low never blocks (admitted as probable).
+        skipTypeCorroboration: true,
+      });
       const styleReadResult = await this._styleReadManager.read({
         projectCapabilities: buildProjectCapabilities({ classNameExpression, styleAttribute }),
-        elementFacts: buildElementFacts({
-          tagName,
-          classNameExpression,
-          styleAttribute,
-        }),
+        elementFacts,
         runtimeThemeContext: DEFAULT_RUNTIME_THEME_CONTEXT,
         computedStyle: {},
         fiberTrace: {
@@ -744,12 +807,26 @@ function buildProjectCapabilities(input: {
   };
 }
 
-function buildElementFacts(input: {
+async function buildElementFacts(input: {
   tagName: string;
   classNameExpression?: ClassNameExpressionFacts;
   styleAttribute?: StyleAttributeFacts;
-}): ElementStyleFacts {
+  ast: t.File;
+  filePath: string;
+  element: t.JSXElement;
+  fileIO: FileIO;
+  aliasMap: Record<string, string>;
+  skipTypeCorroboration?: boolean;
+}): Promise<ElementStyleFacts> {
   const elementCssSystems = getCssSystems(input);
+  const forwardDetection = await detectForwarding({
+    ast: input.ast,
+    filePath: input.filePath,
+    element: input.element,
+    fileIO: input.fileIO,
+    aliasMap: input.aliasMap,
+    skipTypeCorroboration: input.skipTypeCorroboration,
+  });
 
   return {
     elementCssSystems,
@@ -759,15 +836,28 @@ function buildElementFacts(input: {
     classNameExpression: input.classNameExpression,
     styleAttribute: input.styleAttribute,
     componentFacts: { intrinsicElement: input.tagName },
-    componentPropSurface: {
-      acceptsClassName: true,
-      acceptsStyle: true,
-      acceptsCssProp: false,
-      acceptsSxProp: false,
-      recursivePropsSchemaAvailable: false,
-      styleLikeProps: [],
-      semanticProps: [],
-    },
+    forwardDetection,
+    componentPropSurface: projectPropSurface(forwardDetection),
+  };
+}
+
+/**
+ * Projects the richer `ForwardDetectionResults` down to the plain-boolean shape the already-wired
+ * L0-L3 stylability ladder reads (`lib/style-write/stylability-ladder.ts`) — `true` unless A1
+ * found a HIGH-CONFIDENCE negative for that channel (per HYP-1229 plan §2/§6: low confidence
+ * never blocks, it's admitted as `probable` and left for a future B1 runtime verify to arbitrate).
+ */
+function projectPropSurface(detection: ElementForwardDetection): NonNullable<ElementStyleFacts['componentPropSurface']> {
+  const classNameExcluded = detection.className.confidence === 'high' && !detection.className.forwardsClassName;
+  const styleExcluded = detection.style.confidence === 'high' && !detection.style.forwardsStyle;
+  return {
+    acceptsClassName: !classNameExcluded,
+    acceptsStyle: !styleExcluded,
+    acceptsCssProp: false,
+    acceptsSxProp: false,
+    recursivePropsSchemaAvailable: false,
+    styleLikeProps: [],
+    semanticProps: [],
   };
 }
 
