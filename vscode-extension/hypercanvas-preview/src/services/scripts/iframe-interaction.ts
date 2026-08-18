@@ -25,8 +25,16 @@ import {
 import type { OverlayElementResolver } from '@shared/canvas-interaction/types';
 import { type Fiber, getFiberFromDOM } from '@shared/element-tracing/fiber-internals';
 import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
-import { scrollIntoViewCenterSmooth, extractComputedStyle, extractComputedStyleForProperties } from './dom-utils';
 import { setupReadabilityReporting } from './iframe-readability';
+import {
+  scrollIntoViewCenterSmooth,
+  extractComputedStyle,
+  extractComputedStyleForProperties,
+  markerWrapperChild,
+  NO_ELEMENT_ROOT_SENTINEL,
+  resolveMarkerWrapper,
+  WRITE_MARKER_VERIFY_PREFIX,
+} from './dom-utils';
 import { parseSourceRef, buildMapUrl, isViteSourceUrl } from './source-map-utils';
 import { sendOverlayRects } from './iframe-overlay';
 import { handleScreenshotRequest } from './iframe-screenshot';
@@ -1199,12 +1207,36 @@ window.addEventListener('message', (event: MessageEvent) => {
     const elementId = msg.elementId as string;
     const itemIndex = (msg.itemIndex as number | null | undefined) ?? null;
     const cssProperties = Array.isArray(msg.cssProperties) ? (msg.cssProperties as string[]) : [];
-    const el = findElementsByRef(elementId, itemIndex)[0] ?? null;
+    // HYP-990 (M2) — a `hc-writeid:<marker>` id addresses the write-scoped wrapper's child directly
+    // (querySelector), bypassing the fuzzy nodeRef lookup that could mis-select the injected wrapper.
+    // Deliberately NO fallback nodeRef: a fallback would fuzzy-resolve to the wrapper itself → a
+    // false-positive "landed" (codex full panel). Three outcomes (Opus): wrapper ABSENT (HMR not
+    // applied) → null (host retries, and all-null classifies `unverifiable-silent` — the NAME is
+    // historical; the §9.4 confidence × verifiability matrix now decides keep-vs-rollback and, for
+    // `exact` confidence, ALWAYS reports it, never silently); wrapper PRESENT but no element child
+    // (text/fragment/portal) → a NO_ELEMENT_ROOT sentinel snapshot (host classifies
+    // `unverifiable-report` — same `unverifiable` matrix column, same disposition as the case above);
+    // wrapper present with a child → the child's computed style.
+    let computedStyle: Record<string, string> | null;
+    if (elementId.startsWith(WRITE_MARKER_VERIFY_PREFIX)) {
+      const wrapper = resolveMarkerWrapper(elementId.slice(WRITE_MARKER_VERIFY_PREFIX.length));
+      if (!wrapper) {
+        computedStyle = null; // wrapper not in DOM yet
+      } else {
+        const child = markerWrapperChild(wrapper);
+        computedStyle = child
+          ? extractComputedStyleForProperties(child, cssProperties)
+          : { [NO_ELEMENT_ROOT_SENTINEL]: '1' }; // wrapper present, no element root
+      }
+    } else {
+      const el = findElementsByRef(elementId, itemIndex)[0] ?? null;
+      computedStyle = el ? extractComputedStyleForProperties(el, cssProperties) : null;
+    }
     window.parent.postMessage(
       {
         type: 'hypercanvas:computedStyleSnapshotResult',
         requestId: msg.requestId,
-        computedStyle: el ? extractComputedStyleForProperties(el, cssProperties) : null,
+        computedStyle,
       },
       '*',
     );

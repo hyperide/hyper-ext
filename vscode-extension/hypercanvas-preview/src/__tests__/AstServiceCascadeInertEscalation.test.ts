@@ -243,6 +243,45 @@ describe('AstService HYP-1162 cascade-inert utility escalation', () => {
     expect(result.skipUndoTracking).toBe(true);
   });
 
+  it('C3 shared with the auto-wrap path: a backgroundColor write on an element that ALREADY has its own background-image escalates too (self-cover, not just child-cover)', async () => {
+    // HYP-990's C3 fail-closed guard (verifyLanded) treats a non-`none` backgroundImage on the
+    // READ element as proof the effectiveBackgroundColor read is untrustworthy — originally
+    // written for the auto-wrap path (an opaque image on the WRAPPED CHILD hides the WRAPPER's
+    // color). `writeDirectCandidate` (HYP-1162, this file) shares the same `verifyLanded`, so
+    // the same guard also fires here — and it is CORRECT to: `computeEffectiveBackgroundColor`
+    // (shared/utils/effective-background.ts) reads the edited element's OWN backgroundColor
+    // layer first and never accounts for that SAME element's own backgroundImage — so a
+    // pre-existing image on h2 itself hides the new color exactly as the CSS spec says
+    // (background-image paints over background-color on one element), even though the color
+    // proof would otherwise report "changed". Escalating to an inline override is the right
+    // outcome, and the class write is never rolled back (a false positive costs only a
+    // redundant inline duplicate, never a lost edit — see the file header / HYP-1162 doc).
+    const fileIO = new InMemoryFileIO({ [PAGE_PATH]: PAGE_SOURCE });
+    const service = tailwindService(fileIO);
+    service.setVerifyComputedStyleProvider(async () => ({
+      // effectiveBackgroundColor DOES "change" (proves nothing about visibility)…
+      effectiveBackgroundColor: 'rgb(255, 0, 170)',
+      // …but the element's own background-image is present and opaque, so C3 refuses to trust it.
+      backgroundImage: 'linear-gradient(rgb(1, 2, 3), rgb(4, 5, 6))',
+    }));
+    const nodeRef = h2RefFor(PAGE_SOURCE, 'src/app/org-settings/OrgSettingsPage.tsx');
+
+    const result = await service.updateStyles(
+      'src/app/org-settings/OrgSettingsPage.tsx',
+      nodeRef,
+      { backgroundColor: '#ff00aa' },
+      undefined,
+      nodeRef,
+    );
+
+    expect(result).toEqual(expect.objectContaining({ success: true }));
+    const written = fileIO.content(PAGE_PATH);
+    // The class write stays (never rolled back)…
+    expect(written).toContain('backgroundColor: "#ff00aa"');
+    // …AND the escalation adds the inline override, the only write that beats the covering image.
+    expect(written).toContain('style={{');
+  });
+
   it('re-applies the edit after an external revert (git checkout) instead of no-oping on a stale AST cache', async () => {
     const fileIO = new InMemoryFileIO({ [PAGE_PATH]: PAGE_SOURCE });
     const service = tailwindService(fileIO);

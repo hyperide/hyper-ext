@@ -5,6 +5,14 @@
 
 export interface FileIO {
   readFile(absolutePath: string): Promise<string>;
+  /**
+   * Read directly from DISK, bypassing any editor document/buffer cache. Optional — implementations
+   * with no separate dirty-buffer (Node, in-memory) can omit it and callers fall back to
+   * {@link readFile}. Used by undo-snapshot capture (HYP-990): after a disk write whose dirty-buffer
+   * sync may have failed, `readFile` could return the stale buffer (before === after even though disk
+   * changed → non-undoable); reading disk reflects the real change.
+   */
+  readFileFromDisk?(absolutePath: string): Promise<string>;
   writeFile(absolutePath: string, content: string): Promise<void>;
   /** Check if file exists (throws if not) */
   access(absolutePath: string): Promise<void>;

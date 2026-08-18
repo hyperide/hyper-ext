@@ -19,6 +19,14 @@ export interface AstOperationResult {
    * unset so it still gets a proper undo entry.
    */
   skipUndoTracking?: boolean;
+  /**
+   * HYP-990 P1 (codex full panel) — an authoritative undo snapshot of the mutated file, captured
+   * INSIDE the operation's per-path serialization lock (before + after). `_withUndoTracking` prefers
+   * this over its own pre-lock `readFile`, which races two overlapping same-file edits (both read the
+   * pre-edit content before either locks, so the second's undo would erase the first). Present when
+   * the op mutated `path`; `before === after` means it changed nothing there (no entry recorded).
+   */
+  undoSnapshot?: { path: string; before: string; after: string };
 }
 
 export interface UpdateStylesResult extends AstOperationResult {

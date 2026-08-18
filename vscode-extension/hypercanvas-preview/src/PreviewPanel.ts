@@ -1669,17 +1669,22 @@ export class PreviewPanel {
   }
   /**
    * Run the native VS Code undo fallback: focus the previewed document (if
-   * open), invoke bare `'undo'`, save THAT SAME document if it's left dirty,
+   * open), invoke `'default:undo'`, save THAT SAME document if it's left dirty,
    * then reveal the preview panel — only when one exists (`panel?.reveal()`;
    * this fallback also runs with no panel open, see `undo()`). The save
    * target is the document `_focusPreviewedDocumentIfOpen` actually resolved
    * — not a re-read of `vscode.window.activeTextEditor` after the native
    * command, which isn't guaranteed to still be that document, and which
    * would be an unrelated editor entirely when nothing was found to focus.
+   *
+   * `default:undo`, NOT `'undo'` (codex full panel P1, master-spec-adjacent AGENTS-CORE rule):
+   * Cmd+Z is bound to `hypercanvas.canvasUndo`, which calls this method's caller (`undo()`), so the
+   * plain `'undo'` command RECURSES back into that same handler instead of falling through to VS
+   * Code's native undo.
    */
   private async _nativeUndoFallback(panel: vscode.WebviewPanel | undefined): Promise<void> {
     const focusedDocument = await this._focusPreviewedDocumentIfOpen();
-    await vscode.commands.executeCommand('undo');
+    await vscode.commands.executeCommand('default:undo');
     if (focusedDocument?.isDirty) {
       await focusedDocument.save();
     }
@@ -1701,14 +1706,25 @@ export class PreviewPanel {
   public async undo(): Promise<void> {
     console.log('[PreviewPanel] undo() called (keybinding command)');
     const panel = this._panel;
-    // Captured BEFORE calling undo(): its boolean return is ambiguous — `false`
-    // also means "already in progress" or "the snapshot write failed", neither
-    // of which is "nothing to undo". Falling back to native history in those
-    // cases would revert unrelated editor content instead (Codex P1 follow-up).
-    const stackWasEmpty = !this._panelRouter.astBridge.canUndo();
-    const handled = await this._panelRouter.astBridge.undo(panel);
-    console.log(`[PreviewPanel] undo: astBridge.undo returned ${handled}`);
-    if (!handled && stackWasEmpty) {
+    // Do NOT early-return on `!panel` here — the content-based canvas undo stack lives
+    // independently of `this._panel` and must be tried first even with no panel open
+    // (see this method's doc comment; `astBridge.undo(panel)` accepts `panel === undefined`).
+    // A `!panel` early return would silently discard valid canvas history and undo unrelated
+    // native editor content instead (Codex P1, PR #673). The recursion hazard c25b1396 fixed
+    // (`'undo'` re-triggering the `hypercanvas.canvasUndo` keybinding) is handled below instead,
+    // inside `_nativeUndoFallback`, which now always runs via the `result === 'empty'` branch.
+    const result = await this._panelRouter.astBridge.undo(panel);
+    // [PreviewPanel] undo: astBridge.undo returned <result> — 'undone' | 'empty' | 'busy'.
+    if (result === 'busy') {
+      // A style-write saga (verify window) is in flight, or the undo write failed (codex full panel
+      // P1-1). The canvas stack OWNS this Cmd+Z — DEFER it (no-op). Falling through to native undo +
+      // save here would undo AND save unrelated text in the active editor. Do not bump styleVersion or
+      // re-emit selection either; nothing changed.
+      return;
+    }
+    if (result === 'empty') {
+      // `_nativeUndoFallback` uses `default:undo`, NOT `'undo'` (codex full panel P1,
+      // master-spec-adjacent AGENTS-CORE rule) — see its own doc comment for the recursion hazard.
       await this._nativeUndoFallback(panel);
     }
     // Always bump styleVersion to refresh inspector — both canvas stack and native undo paths
@@ -1722,7 +1738,10 @@ export class PreviewPanel {
    *
    * Same content-based-stack-first ordering as `undo()` — `astBridge.redo(panel)`
    * is tried whether or not a panel is open, since the redo stack also
-   * survives panel disposal.
+   * survives panel disposal. Same tri-state as `undo()` too (`RedoResult`,
+   * HYP-990 M2 review round): `'busy'` (a saga is in flight, possibly on an
+   * unrelated file) always defers — never native redo, that would replay/save
+   * unrelated dirty editor content.
    *
    * No native redo fallback when a panel IS present and canvas redo is
    * unhandled: applyEdit() syncs populate VS Code's native undo stack,
@@ -1742,13 +1761,21 @@ export class PreviewPanel {
   public async redo(): Promise<void> {
     console.log('[PreviewPanel] redo() called (keybinding command)');
     const panel = this._panel;
-    // See undo()'s matching comment — captured before the call for the same reason.
-    const stackWasEmpty = !this._panelRouter.astBridge.canRedo();
-    const handled = await this._panelRouter.astBridge.redo(panel);
-    console.log(`[PreviewPanel] redo: astBridge.redo returned ${handled}`);
-    if (!handled && stackWasEmpty && !panel) {
+    const result = await this._panelRouter.astBridge.redo(panel);
+    // [PreviewPanel] redo: astBridge.redo returned <result> — 'redone' | 'empty' | 'busy'.
+    if (result === 'busy') {
+      // Mirrors undo()'s busy branch (HYP-990 M2 review round): a style-write saga is in flight
+      // (possibly on an unrelated file — the busy gate is process-wide), or the redo write failed.
+      // The canvas stack OWNS this Cmd+Shift+Z — DEFER it (no-op). Falling through to native redo +
+      // save here would redo/save unrelated dirty text in the active editor.
+      return;
+    }
+    if (result === 'empty' && !panel) {
       const focusedDocument = await this._focusPreviewedDocumentIfOpen();
-      await vscode.commands.executeCommand('redo');
+      // `default:redo`, NOT `'redo'` (same recursion hazard as `undo()`/`_nativeUndoFallback` above):
+      // Cmd+Shift+Z is bound to `hypercanvas.canvasRedo`, which calls this method, so the plain
+      // `'redo'` command would recurse back into this handler instead of reaching VS Code's native redo.
+      await vscode.commands.executeCommand('default:redo');
       // Save THAT SAME document if left dirty — matches `_nativeUndoFallback`'s
       // behavior/gating (see its doc comment for why this isn't a re-read of
       // `activeTextEditor`). Without this, a redone edit in this no-panel

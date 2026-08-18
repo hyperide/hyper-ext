@@ -3,14 +3,25 @@
 # Routes `task new` to Linear team HYP (CTO decision #4136.4). GitHub Issues are DISABLED on this
 # repo, so the default `github-issues` backend hits a disabled endpoint (HTTP 410) and ticket
 # creation fails. This routing previously lived in rig.yaml's top-level `task:` block, but rig-cli's
-# schema is closed at the top level and rejects any key it does not own — `task` raised
-# "unknown top-level key: task" (exit 2), blocking `rig status` / `rig apply` on this repo.
+# schema was closed at the top level and rejected any key it did not own — `task` raised
+# "unknown top-level key: task" (exit 2), blocking `rig status` / `rig apply` on this repo. rig-cli
+# now supports a `task:` block (alex-mextner/rig-cli#276) — migrating this file's content back into
+# rig.yaml is possible but is a separate, optional follow-up, not bundled into this change.
 #
 # task-cli's cascade (tasklib/config.py: defaults → ~/.config global → rig.yaml `task:` →
 # this task.yaml → --config) reads this native file with HIGHER precedence than rig.yaml, so the
 # resolved backend is identical to the old rig.yaml block. Native shape uses task-cli's own nesting
 # (`linear.team`), not the rig flat shorthand (`team`).
+#
+# linear.attachment_mode (tg#11652, alex-mextner/task-cli#90): explicitly pinned to `link` so this
+# repo's default doesn't silently flip when task-cli's OWN default changes to `native`. `link`
+# matches this repo's already-shipped behavior (HYP-1248): a screenshot is never re-uploaded
+# through Linear's attachment API — the ticket only links out to the PR's `#screenshots` section,
+# because a raw uploads.linear.app pasted-image URL is session-scoped and 401s for a non-browser
+# viewer (HYP-1237). `native` mode (task-cli's new default for every OTHER repo) uploads the bytes
+# through Linear's real authenticated API instead — see task-cli PR #90 for the "no 401" fix.
 version: 1
 backend: linear
 linear:
   team: HYP
+  attachment_mode: link

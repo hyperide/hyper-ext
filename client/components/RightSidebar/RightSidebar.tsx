@@ -24,6 +24,7 @@ import { useNodePodLocaleKeys } from '@/lib/platform/hooks/useNodePodLocaleKeys'
 import { useNodePodRuntimeStore } from '@/lib/platform/nodepod/nodepodRuntimeStore';
 import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
+import { buildStyleAutoFixPrompt } from '@shared/style-forwarding/autofix-prompt';
 import type { StyleForwardingWarning } from '@shared/types/style-forwarding-warning';
 import type { StyleSourceTab } from '@lib/style-read/types';
 import { uiKitToDefaultCssSystem } from '@lib/style-write/ui-kit-default-system';
@@ -543,34 +544,46 @@ export default function RightSidebar({
   // (which waits on an HMR round-trip), this fires immediately with the RPC response.
   const handleNonForwardingComponent = useCallback(
     (warning: StyleForwardingWarning) => {
-      // The write was rolled back / never applied, but the inspector inputs were set optimistically
-      // before syncStyleChange. Re-read from the source of truth so they revert to the real baseline
-      // — same idiom as handleSyncError above (bumping styleRefreshKey), otherwise the controls keep
-      // showing a value that isn't in the file.
-      setStyleRefreshKey((k) => k + 1);
+      // The write was rolled back / never applied, so the inspector inputs (set optimistically before
+      // syncStyleChange) must revert to the real baseline (bumping styleRefreshKey) — otherwise the
+      // controls show a value that isn't in the file. EXCEPTION (codex full panel): a `kept` edit WAS
+      // applied (an unverifiable keep-report), so the optimistic value is correct — do NOT revert it.
+      if (!warning.kept) setStyleRefreshKey((k) => k + 1);
+      // CTO tg#9122 (review, Opus #3) — when the host already presented the warning natively (VS Code
+      // showWarningMessage), we must NOT render a duplicate custom card here; the native toast IS the
+      // presentation. (The optimistic Inspector value was reverted just above ONLY for a rolled-back
+      // write — `!warning.kept`; a `kept` native warning correctly leaves the applied value in place.)
+      // Dismiss BOTH the transient sync toast AND any standing persistent warning (review, Fable #6 —
+      // otherwise a prior non-native warning's Infinity toast would linger stale alongside the native one).
+      if (warning.presentedNatively) {
+        syncToastRef.current?.dismiss();
+        syncToastRef.current = null;
+        warningToastRef.current?.dismiss();
+        warningToastRef.current = null;
+        return;
+      }
       // Dismiss the transient "Applying styles..." toast (its own ref) AND any prior warning, then
       // raise a PERSISTENT warning in warningToastRef (duration: Infinity) so the imminent
       // handleSyncEnd — which only clears syncToastRef — cannot dismiss it (HYP-987 P1 #8).
       syncToastRef.current?.dismiss();
       syncToastRef.current = null;
       warningToastRef.current?.dismiss();
+      // CTO tg#9122/#9125 — SaaS presents this through the app's STANDARD toast (not a custom card):
+      // a SHORT title, the full reasoning available inline as the description (the wide SaaS toast can
+      // show it — the narrow VS Code case is handled host-side via the native notification; there the
+      // warning arrives flagged `presentedNatively` and is early-returned above, so this toast is
+      // never rendered), and an "Auto fix via AI" action that always hands the AI the COMPLETE
+      // structured diagnosis. Never truncated.
       warningToastRef.current = toast({
         duration: Infinity,
-        title: 'Style could not be applied',
+        title: warning.shortMessage ?? 'Style could not be applied',
         description: warning.message,
-        // HYP-987 Milestone 1 — the persistent warning carries an "Auto fix via AI" affordance.
-        // The AI is instructed to first DIAGNOSE why the edit didn't visibly land, then either
-        // propose the best way to make it apply and ask the user to confirm, or offer to revert.
-        // (Milestone 2 will turn this into a structured inspect->propose->confirm/cancel flow;
-        // the button + diagnostic prompt is the Milestone 1 affordance.)
         action: (
           <ToastAction
             altText="Auto fix via AI"
             onClick={() =>
               openAIChat({
-                prompt: `A style change I made in the visual editor did not visibly apply on <${warning.componentName}>${
-                  componentPath ? ` (in ${componentPath})` : ''
-                }, and the editor rolled it back.\n\nReason detected: ${warning.message}\n\nPlease:\n1. Inspect WHY it didn't apply (the component doesn't forward className/style to a DOM node, an opaque root covers an inserted wrapper, or the wrong element was targeted).\n2. Then EITHER propose the best way to make this style actually render — e.g. forward style/className through <${warning.componentName}> to its root DOM element, or target a native DOM element inside it — and ask me to confirm the approach, OR offer to leave the change reverted.\nDon't apply anything until I confirm the approach.`,
+                prompt: buildStyleAutoFixPrompt(warning, componentPath ? { componentPath } : undefined),
                 forceNewChat: true,
               })
             }

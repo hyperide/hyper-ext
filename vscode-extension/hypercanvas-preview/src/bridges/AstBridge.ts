@@ -18,7 +18,8 @@ import type {
 import { AstService } from '../services/AstService';
 import type { ErrorSnapshot, PostEditDiagnosticWatcher } from '../services/PostEditDiagnosticWatcher';
 import type { NodeRef } from '@shared/element-tracing/types';
-import { UndoRedoService } from '../services/UndoRedoService';
+import type { StyleForwardingWarning } from '@shared/types/style-forwarding-warning';
+import { UndoRedoService, type RedoResult, type UndoResult } from '../services/UndoRedoService';
 import type { AstMessage, AstResponse } from '../types';
 import { VSCodeFileIO } from '../vscode-file-io';
 import { resolveWorkspacePath } from '../services/workspace-path';
@@ -79,6 +80,22 @@ export class AstBridge {
    * public direct-call paths that don't wire it keep working unchanged.
    */
   private _postEditWatcher?: PostEditDiagnosticWatcher;
+
+  /**
+   * CTO tg#9122/#9125 — host presenter for the non-forwarding style warning. When set, a warning is
+   * routed to the extension host (which shows the NATIVE `vscode.window.showWarningMessage` toast +
+   * "Details"/"Auto fix via AI" actions). The warning STILL travels to the webview, but flagged
+   * `presentedNatively`, so the webview reverts its optimistic Inspector value yet renders no
+   * duplicate card. Absent (tests / no host) → the warning stays in the response un-flagged and the
+   * webview renders its own toast. Fire-and-forget: this callback returns immediately (the native
+   * toast awaits user clicks); it must not be relied on to signal success — see the guard below.
+   */
+  private _onStyleForwardingWarning: ((warning: StyleForwardingWarning) => boolean) | null = null;
+
+  /** Wire the host-native presenter for the non-forwarding style warning (see field doc). */
+  setOnStyleForwardingWarning(handler: (warning: StyleForwardingWarning) => boolean): void {
+    this._onStyleForwardingWarning = handler;
+  }
 
   /**
    * @param astService Optional pre-built AstService. Production passes nothing
@@ -149,7 +166,14 @@ export class AstBridge {
     this._additionalWorkspaceRoot = root ?? undefined;
   }
 
-  async handleMessage(message: AstMessage, targetWebview?: vscode.Webview, verifyElementId?: string): Promise<void> {
+  async handleMessage(
+    message: AstMessage,
+    targetWebview?: vscode.Webview,
+    verifyElementId?: string,
+    // HYP-990 M2 §9.4 — the selected occurrence index at a repeated `.map()` JSX site, threaded
+    // per call (mirrors `verifyElementId`) for the confidence × verifiability matrix.
+    itemIndex?: number | null,
+  ): Promise<void> {
     // Path re-rooting for monorepo sub-projects happens upstream in
     // PanelRouter.routeMessage (the single ingress for ast:/editor:/styles:),
     // so `message` already carries repo-relative paths here. The public
@@ -168,7 +192,7 @@ export class AstBridge {
     try {
       switch (message.type) {
         case 'ast:updateStyles':
-          response = await this._handleUpdateStyles(message, verifyElementId);
+          response = await this._handleUpdateStyles(message, verifyElementId, itemIndex);
           break;
 
         case 'ast:updateProps':
@@ -332,22 +356,37 @@ export class AstBridge {
     // entry from before the new edit. beginTracking() must always run first.
     this._undoRedoService.beginTracking();
     try {
-      let contentBefore: string;
+      // Pre-read for the LEGACY fallback tracking only. Its failure (file not on disk yet) must NOT
+      // discard a successful op's authoritative undoSnapshot (codex full panel #9) — so we do not
+      // early-return here; we run the operation and inspect its result first.
+      let contentBefore: string | undefined;
       try {
         contentBefore = await this._fileIO.readFile(absolutePath);
       } catch {
-        // File doesn't exist yet — run operation without undo tracking.
-        // Redo was already cleared by beginTracking() above.
-        console.warn(`[AstBridge] _withUndoTracking: cannot read file for undo tracking: ${absolutePath}`);
-        return await operation();
+        console.warn(`[AstBridge] _withUndoTracking: cannot pre-read file for undo tracking: ${absolutePath}`);
+        contentBefore = undefined;
       }
       const result = await operation();
       if (result.success) {
         // HYP-987 P1 (codex) — the op took a warn-and-roll-back path and does NOT own the final
         // content (a concurrent edit may have landed in the verify window and been preserved by
         // the CAS rollback). Recording an undo entry here would let Undo erase that concurrent
-        // edit. Skip tracking entirely for this op.
+        // edit. Skip tracking entirely for this op. Checked FIRST (Opus #6) so a "skip" can never be
+        // overridden by a snapshot, even if a future path sets both.
         if (result.skipUndoTracking) return result;
+        // HYP-990 P1 (codex full panel) — prefer the AUTHORITATIVE undo snapshot the operation
+        // captured INSIDE its per-path serialization lock. `contentBefore` read above is BEFORE the
+        // lock, so two overlapping same-file edits both read the pre-edit content and the second's
+        // undo would erase the first. The lock-captured before/after has no such race — and is used
+        // even when the pre-read failed.
+        if (result.undoSnapshot) {
+          const { path: snapPath, before, after } = result.undoSnapshot;
+          if (before !== after) this._undoRedoService.recordEdit(snapPath, before, after);
+          return result;
+        }
+        // The legacy fallback below needs the pre-read; if it failed, skip tracking rather than
+        // recording against an undefined baseline.
+        if (contentBefore === undefined) return result;
         // For cross-file writes (e.g. twitter: requested App.tsx but wrote to Feed.tsx),
         // the operation returns resolvedPath pointing to the actual mutated file.
         const actualPath = result.resolvedPath ?? absolutePath;
@@ -487,22 +526,24 @@ export class AstBridge {
   }
 
   /** `panel` is optional — the content-based stack lives in UndoRedoService, not the panel. */
-  async undo(panel?: vscode.WebviewPanel): Promise<boolean> {
+  async undo(panel?: vscode.WebviewPanel): Promise<UndoResult> {
     return this._undoRedoService.undo(panel);
   }
 
-  async redo(panel?: vscode.WebviewPanel): Promise<boolean> {
+  async redo(panel?: vscode.WebviewPanel): Promise<RedoResult> {
     return this._undoRedoService.redo(panel);
   }
 
   /**
    * Whether the content-based undo/redo stack currently has an entry.
-   * Callers deciding whether to fall back to VS Code's native undo/redo
-   * MUST check this BEFORE calling `undo()`/`redo()`, not just inspect their
-   * boolean return value: `false` from `undo()`/`redo()` is ambiguous — it
-   * also means "already in progress" or "the snapshot write failed", neither
-   * of which means "nothing to undo/redo". Falling back to native history in
-   * those cases can revert unrelated editor content (Codex P1, PR #673 follow-up).
+   * `undo()`/`redo()` both now return a tri-state (`UndoResult`/`RedoResult`:
+   * `'undone'|'redone'` / `'empty'` / `'busy'`, HYP-990) that self-reports
+   * "in progress"/"write failed" as `'busy'`, distinct from a genuinely
+   * `'empty'` stack — callers should route off THAT return value, not this
+   * getter, to decide whether a native undo/redo fallback is safe (falling
+   * back on `'busy'` can revert/replay unrelated editor content — Codex P1,
+   * PR #673 follow-up). `canUndo()`/`canRedo()` remain useful as a pre-call
+   * inspection (e.g. UI enablement), just not as the busy/empty decision.
    */
   canUndo(): boolean {
     return this._undoRedoService.canUndo();
@@ -555,6 +596,7 @@ export class AstBridge {
   private async _handleUpdateStyles(
     message: Extract<AstMessage, { type: 'ast:updateStyles' }>,
     verifyElementId?: string,
+    itemIndex?: number | null,
   ): Promise<AstResponse> {
     _dbgBridge(
       `[AstBridge._handleUpdateStyles] filePath=${message.filePath} elementId=${message.elementId} styles=${JSON.stringify(message.styles)}`,
@@ -574,8 +616,38 @@ export class AstBridge {
         // HYP-987 P1 #3 — the iframe-relative id for the write-verify RPC, threaded per call
         // (not baked into a shared-mutable provider) so overlapping edits can't race.
         verifyElementId,
+        // HYP-990 M2 §9.4 — threaded per call for the confidence × verifiability matrix.
+        itemIndex,
       ),
     );
+
+    // CTO tg#9122/#9125 — when a host presenter is wired, present the warning as the NATIVE VS Code
+    // notification (no custom in-Inspector card). The warning still travels to the webview, FLAGGED
+    // `presentedNatively`, so the webview reverts its optimistic Inspector value (the write was rolled
+    // back) but does NOT render its own toast — keeping the Inspector in sync without a duplicate card
+    // (review, Opus #3). The warning (with full structured diagnosis) is produced host-side, so the
+    // host has everything it needs to present natively AND to hand the complete context to the AI flow.
+    // The `presentedNatively` flag is set ONLY when the presenter returns a synchronous `true`
+    // ACK that it accepted the warning for native presentation (codex full panel — the flag must not
+    // be claimed merely because a callback is wired). A presenter that can't present (returns falsy) or
+    // throws synchronously falls back to the webview toast. (An async rejection of the fire-and-forget
+    // presenter is still a residual: showWarningMessage does not reject in practice, and the presenter
+    // logs it — see extension.ts; a fully-robust confirm handshake is deferred to HYP-1004.)
+    let hostPresentedWarning = false;
+    if (result.success && result.warning && this._onStyleForwardingWarning) {
+      try {
+        hostPresentedWarning = this._onStyleForwardingWarning(result.warning) === true;
+      } catch (err) {
+        console.error('[AstBridge] style-forwarding warning presenter threw:', err);
+      }
+    }
+
+    const responseWarning =
+      result.success && result.warning
+        ? hostPresentedWarning
+          ? { ...result.warning, presentedNatively: true }
+          : result.warning
+        : undefined;
 
     return {
       type: 'ast:response',
@@ -584,7 +656,7 @@ export class AstBridge {
       // (`{ className }`) is unchanged — never `{ className, warning: undefined }`.
       success: result.success,
       data: result.success
-        ? { className: result.className, ...(result.warning ? { warning: result.warning } : {}) }
+        ? { className: result.className, ...(responseWarning ? { warning: responseWarning } : {}) }
         : undefined,
       error: result.error,
     };

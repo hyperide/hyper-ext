@@ -179,6 +179,90 @@ describe('AstBridge', () => {
     );
   });
 
+  it('CTO tg#9122 — routes a style-forwarding warning to the host presenter and flags it presentedNatively', async () => {
+    const warning = {
+      componentName: 'HostRoutePage',
+      shortMessage: "Style could not be applied — <HostRoutePage> doesn't forward this prop to the DOM.",
+      message: 'full detail',
+      diagnosis: { reason: 'wrap-not-visible', componentName: 'HostRoutePage', editedProperties: ['backgroundColor'] },
+    };
+    mockAstService.updateStyles.mockImplementationOnce(() =>
+      Promise.resolve({ success: true, resolvedPath: 'f.tsx', warning, skipUndoTracking: true }),
+    );
+    const presented: unknown[] = [];
+    bridge.setOnStyleForwardingWarning((w) => {
+      presented.push(w);
+      return true; // ACK: presented natively
+    });
+
+    const wv = createMockWebview();
+    await bridge.handleMessage(
+      {
+        type: 'ast:updateStyles',
+        requestId: 'rw',
+        filePath: 'f.tsx',
+        elementId: 'e1',
+        styles: { backgroundColor: '#000' },
+      } as never,
+      wv as never,
+    );
+
+    // Presented natively by the host…
+    expect(presented).toEqual([warning]);
+    // …and still sent to the webview FLAGGED presentedNatively (revert optimistic value, no toast).
+    const resp = wv.messages[0] as { data?: { warning?: { presentedNatively?: boolean } } };
+    expect(resp.data?.warning?.presentedNatively).toBe(true);
+  });
+
+  it('CTO tg#9122 — a throwing presenter falls back to the webview toast (warning kept, not flagged native)', async () => {
+    const warning = { componentName: 'HostRoutePage', shortMessage: 'short', message: 'full detail' };
+    mockAstService.updateStyles.mockImplementationOnce(() =>
+      Promise.resolve({ success: true, resolvedPath: 'f.tsx', warning, skipUndoTracking: true }),
+    );
+    bridge.setOnStyleForwardingWarning(() => {
+      throw new Error('presenter boom');
+    });
+    const wv = createMockWebview();
+    // Must NOT reject — the webview requestId must still resolve.
+    await bridge.handleMessage(
+      {
+        type: 'ast:updateStyles',
+        requestId: 'rw3',
+        filePath: 'f.tsx',
+        elementId: 'e1',
+        styles: { backgroundColor: '#000' },
+      } as never,
+      wv as never,
+    );
+    const resp = wv.messages[0] as { data?: { warning?: { presentedNatively?: boolean } } };
+    expect(resp.data?.warning).toEqual(warning);
+    expect(resp.data?.warning?.presentedNatively).toBeUndefined();
+  });
+
+  it('keeps the warning in the response when NO host presenter is wired (SaaS-style / tests)', async () => {
+    const warning = {
+      componentName: 'HostRoutePage',
+      shortMessage: 'short',
+      message: 'full detail',
+    };
+    mockAstService.updateStyles.mockImplementationOnce(() =>
+      Promise.resolve({ success: true, resolvedPath: 'f.tsx', warning, skipUndoTracking: true }),
+    );
+    const wv = createMockWebview();
+    await bridge.handleMessage(
+      {
+        type: 'ast:updateStyles',
+        requestId: 'rw2',
+        filePath: 'f.tsx',
+        elementId: 'e1',
+        styles: { backgroundColor: '#000' },
+      } as never,
+      wv as never,
+    );
+    const resp = wv.messages[0] as { data?: { warning?: unknown } };
+    expect(resp.data?.warning).toEqual(warning);
+  });
+
   it('passes selected source tab ID and live domClasses through ast:updateStyles', async () => {
     const wv = createMockWebview();
     await bridge.handleMessage(
@@ -206,6 +290,9 @@ describe('AstBridge', () => {
       undefined,
       // HYP-987 P1 #3: 9th arg is verifyElementId (iframe-relative id threaded per call); absent
       // here because this direct handleMessage call passes no verifyElementId.
+      undefined,
+      // HYP-990 M2 §9.4: 10th arg is itemIndex (repeated-.map()-site occurrence, threaded per
+      // call); absent here because this direct handleMessage call passes no itemIndex.
       undefined,
     );
   });
@@ -368,8 +455,145 @@ describe('AstBridge', () => {
       );
       // Real UndoRedoService should now have an entry
       const panel = { reveal: mock(() => {}) } as never;
-      const canUndo = await bridge.undo(panel);
-      expect(canUndo).toBe(true);
+      const undoResult = await bridge.undo(panel);
+      expect(undoResult).toBe('undone');
+    });
+
+    it('HYP-990 P1 (codex) — prefers the lock-captured undoSnapshot over its own pre-lock read', async () => {
+      // The op reports a lock-captured snapshot (before !== after) while the file reads report NO
+      // change. The undo entry must come from the snapshot (→ undoable), proving the racy pre-lock
+      // read is NOT used: two overlapping same-file edits each carry their OWN captured before/after.
+      setupFileSnapshotsForPath('/workspace/f.tsx', 'same', 'same');
+      mockAstService.updateStyles.mockImplementationOnce(() =>
+        Promise.resolve({
+          success: true,
+          resolvedPath: '/workspace/f.tsx',
+          undoSnapshot: { path: '/workspace/f.tsx', before: 'LOCK_BEFORE', after: 'LOCK_AFTER' },
+        }),
+      );
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-snap1',
+          filePath: '/workspace/f.tsx',
+          elementId: 'e1',
+          styles: {},
+        } as never,
+        wv as never,
+      );
+      const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe('undone');
+    });
+
+    it('HYP-990 P1-1 (codex) — undo DURING an in-flight saga returns "busy", never "empty" (no native undo)', async () => {
+      // Populate the undo stack with a completed edit (so the result cannot be "empty" for stack reasons).
+      setupFileSnapshotsForPath('/workspace/f.tsx', 'orig', 'edited');
+      await bridge.handleMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-busy0',
+          filePath: '/workspace/f.tsx',
+          elementId: 'e1',
+          styles: {},
+        } as never,
+        createMockWebview() as never,
+      );
+      // Now start a SECOND edit that hangs (tracking held open — the verify window), and call undo
+      // while it's in flight. It must report "busy" (defer) — NOT "empty" (which the caller would turn
+      // into native undo + save of unrelated editor text).
+      let releaseHang: () => void = () => {};
+      mockAstService.updateStyles.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseHang = () => resolve({ success: true, resolvedPath: '/workspace/f.tsx' });
+          }),
+      );
+      const inFlight = bridge.handleMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-busy1',
+          filePath: '/workspace/f.tsx',
+          elementId: 'e1',
+          styles: {},
+        } as never,
+        createMockWebview() as never,
+      );
+      const panel = { reveal: mock(() => {}) } as never;
+      const duringSaga = await bridge.undo(panel);
+      expect(duringSaga).toBe('busy');
+      releaseHang();
+      await inFlight;
+    });
+
+    it('HYP-990 M2 review round (GLM-cc/GLM/Fable) — redo DURING an in-flight saga returns "busy", never "empty" (no native redo)', async () => {
+      // Populate the redo stack with one entry: record + undo a completed edit.
+      setupFileSnapshotsForPath('/workspace/f.tsx', 'orig', 'edited');
+      await bridge.handleMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-rbusy0',
+          filePath: '/workspace/f.tsx',
+          elementId: 'e1',
+          styles: {},
+        } as never,
+        createMockWebview() as never,
+      );
+      const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe('undone');
+      expect(bridge.canRedo()).toBe(true);
+
+      // Now start an edit to a DIFFERENT file that hangs (tracking held open — the verify window),
+      // and call redo while it's in flight. The busy gate is process-wide (not per-path), so it must
+      // report "busy" (defer) — NOT "empty", which the caller would turn into native
+      // `default:redo` + save of unrelated dirty editor content (the exact regression this test guards).
+      let releaseHang: () => void = () => {};
+      mockAstService.updateStyles.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseHang = () => resolve({ success: true, resolvedPath: '/workspace/other.tsx' });
+          }),
+      );
+      const inFlight = bridge.handleMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-rbusy1',
+          filePath: '/workspace/other.tsx',
+          elementId: 'e1',
+          styles: {},
+        } as never,
+        createMockWebview() as never,
+      );
+      const duringSaga = await bridge.redo(panel);
+      expect(duringSaga).toBe('busy');
+      releaseHang();
+      await inFlight;
+    });
+
+    it('HYP-990 P1 (codex) — an undoSnapshot with before === after records NO entry (even if file reads differ)', async () => {
+      // The snapshot says nothing changed; the (racy) file reads say it did. The snapshot must win →
+      // no undo entry, so a no-op op can never absorb a concurrent edit's bytes.
+      setupFileSnapshotsForPath('/workspace/g.tsx', 'before', 'after');
+      mockAstService.updateStyles.mockImplementationOnce(() =>
+        Promise.resolve({
+          success: true,
+          resolvedPath: '/workspace/g.tsx',
+          undoSnapshot: { path: '/workspace/g.tsx', before: 'X', after: 'X' },
+        }),
+      );
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-snap2',
+          filePath: '/workspace/g.tsx',
+          elementId: 'e1',
+          styles: {},
+        } as never,
+        wv as never,
+      );
+      const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe('empty');
     });
 
     it('does not enable undo on failed operation', async () => {
@@ -388,8 +612,8 @@ describe('AstBridge', () => {
         wv as never,
       );
       const panel = { reveal: mock(() => {}) } as never;
-      const canUndo = await bridge.undo(panel);
-      expect(canUndo).toBe(false);
+      const undoResult = await bridge.undo(panel);
+      expect(undoResult).toBe('empty');
     });
 
     // HYP-1012 review round 1 P1 (codex): _withUndoTracking previously read the raw untrusted
@@ -419,7 +643,7 @@ describe('AstBridge', () => {
       expect(response).toBeUndefined(); // handleMessage posts via webview, doesn't return
       const panel = { reveal: mock(() => {}) } as never;
       // Ran untracked (no contentBefore snapshot was ever captured) — nothing to undo.
-      expect(await bridge.undo(panel)).toBe(false);
+      expect(await bridge.undo(panel)).toBe('empty');
     });
   });
 
@@ -431,7 +655,7 @@ describe('AstBridge', () => {
       expect(mockAstService.deleteElements).toHaveBeenCalledWith('/workspace/comp.tsx', ['e1']);
       expect(result.success).toBe(true);
       const panel = { reveal: mock(() => {}) } as never;
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
     });
 
     it('deleteElements with multiple elements records single undo entry', async () => {
@@ -443,9 +667,9 @@ describe('AstBridge', () => {
       await bridge.deleteElements('/workspace/comp.tsx', ['e1', 'e2', 'e3']);
       const panel = { reveal: mock(() => {}) } as never;
       // Content-based: single undo entry captures the entire before/after diff
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
       // Second undo should fail — only one snapshot entry
-      expect(await bridge.undo(panel)).toBe(false);
+      expect(await bridge.undo(panel)).toBe('empty');
     });
 
     it('deleteElements does not enable undo on failure', async () => {
@@ -453,7 +677,7 @@ describe('AstBridge', () => {
       setupFileSnapshotsForPath('/workspace/comp.tsx', 'before', 'before');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
-      expect(await bridge.undo(panel)).toBe(false);
+      expect(await bridge.undo(panel)).toBe('empty');
     });
 
     it('deleteElements multi-file batch records a single atomic undo entry', async () => {
@@ -479,9 +703,9 @@ describe('AstBridge', () => {
       const panel = { reveal: mock(() => {}) } as never;
 
       // Single atomic undo restores all modified cross-file paths in one press
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
       // No more entries — the whole delete is one undoable action
-      expect(await bridge.undo(panel)).toBe(false);
+      expect(await bridge.undo(panel)).toBe('empty');
     });
 
     it('duplicateElement delegates and enables undo', async () => {
@@ -490,7 +714,7 @@ describe('AstBridge', () => {
       expect(mockAstService.duplicateElement).toHaveBeenCalledWith('/workspace/comp.tsx', 'e1');
       expect(result.success).toBe(true);
       const panel = { reveal: mock(() => {}) } as never;
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
     });
 
     it('wrapElement delegates and enables undo', async () => {
@@ -499,7 +723,7 @@ describe('AstBridge', () => {
       expect(mockAstService.wrapElement).toHaveBeenCalledWith('/workspace/comp.tsx', 'e1', 'div');
       expect(result.success).toBe(true);
       const panel = { reveal: mock(() => {}) } as never;
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
     });
 
     it('pasteElement delegates and enables undo', async () => {
@@ -508,7 +732,7 @@ describe('AstBridge', () => {
       expect(mockAstService.pasteElement).toHaveBeenCalledWith('/workspace/comp.tsx', 'target-1', '<div />');
       expect(result.success).toBe(true);
       const panel = { reveal: mock(() => {}) } as never;
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
     });
   });
 
@@ -519,7 +743,7 @@ describe('AstBridge', () => {
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
       const result = await bridge.undo(panel);
-      expect(result).toBe(true);
+      expect(result).toBe('undone');
       expect(vscode.workspace.fs.writeFile).toHaveBeenCalled();
       expect(vscode.workspace.applyEdit).toHaveBeenCalled();
     });
@@ -532,7 +756,7 @@ describe('AstBridge', () => {
       await bridge.undo(panel);
       (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mockClear();
       const result = await bridge.redo(panel);
-      expect(result).toBe(true);
+      expect(result).toBe('redone');
       expect(vscode.workspace.fs.writeFile).toHaveBeenCalled();
     });
 
@@ -543,11 +767,11 @@ describe('AstBridge', () => {
       const panel = { reveal: mock(() => {}) } as never;
 
       // Undo should work
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
       // Redo should work — this is the key fix!
-      expect(await bridge.redo(panel)).toBe(true);
+      expect(await bridge.redo(panel)).toBe('redone');
       // Undo again should work (entry moved back to undo stack)
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
     });
 
     it('deleteElements: dirty main file not added to batchEdits on cross-file delete', async () => {
@@ -569,7 +793,7 @@ describe('AstBridge', () => {
 
       // Undo should work — child.tsx was modified
       const panel = { reveal: mock(() => {}) } as never;
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
 
       // comp.tsx must NOT have been written (only child.tsx was in batchEdits)
       const writeCalls = (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mock.calls;
@@ -577,7 +801,7 @@ describe('AstBridge', () => {
       expect(wroteToComp).toBe(false);
 
       // No second undo entry
-      expect(await bridge.undo(panel)).toBe(false);
+      expect(await bridge.undo(panel)).toBe('empty');
     });
 
     it('deleteElements: stale dirty buffer for cross-file xAfter does not prevent undo entry', async () => {
@@ -600,7 +824,7 @@ describe('AstBridge', () => {
 
       // xAfter reads disk (not stale buffer), so child.tsx IS in batchEdits
       const panel = { reveal: mock(() => {}) } as never;
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
     });
   });
 
@@ -734,8 +958,8 @@ describe('AstBridge', () => {
       );
 
       const panel = { reveal: mock(() => {}) } as never;
-      expect(await bridge.undo(panel)).toBe(true);
-      expect(await bridge.undo(panel)).toBe(false);
+      expect(await bridge.undo(panel)).toBe('undone');
+      expect(await bridge.undo(panel)).toBe('empty');
     });
 
     it('cross-file move records single atomic batch undo across both files', async () => {
@@ -775,14 +999,14 @@ describe('AstBridge', () => {
       const panel = { reveal: mock(() => {}) } as never;
       (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mockClear();
       // One Cmd+Z restores both files atomically.
-      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe('undone');
       const writePaths = (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mock.calls.map(
         ([uri]) => (uri as vscode.Uri).fsPath,
       );
       expect(writePaths).toContain('/workspace/Source.tsx');
       expect(writePaths).toContain('/workspace/Target.tsx');
       // No further entry — the cross-file move is one undoable batch.
-      expect(await bridge.undo(panel)).toBe(false);
+      expect(await bridge.undo(panel)).toBe('empty');
     });
 
     it('returns success: false when AstService.moveElement throws', async () => {

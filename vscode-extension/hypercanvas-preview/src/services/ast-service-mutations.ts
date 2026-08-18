@@ -59,6 +59,9 @@ export async function updateStylesWrapper(
   domClasses: string | undefined,
   probeDriving: ColorProbeCandidate[] | undefined,
   verifyElementId?: string,
+  // HYP-990 M2 §9.4 — the selected occurrence index at a repeated `.map()` JSX site, threaded per
+  // call (same pattern as `verifyElementId`) so `ast-update-utils` can classify write confidence.
+  itemIndex?: number | null,
 ): Promise<UpdateStylesResult> {
   try {
     const result = await updateStyles(filePath, elementId, styles, state, nodeRef, selectedSourceTabId, domClasses, {
@@ -73,6 +76,7 @@ export async function updateStylesWrapper(
       verifyComputedStyle: deps.verifyComputedStyle,
       verifyPollBudget: deps.verifyPollBudget,
       verifyElementId,
+      itemIndex,
     });
     return result;
   } catch (error) {

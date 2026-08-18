@@ -327,6 +327,26 @@ describe('TailwindStyleAdapter', () => {
     expect(result.warning).toContain("doesn't forward");
   });
 
+  it('HYP-990 (codex full panel) — a KEPT (unverifiable) warning reports applied:true, not a failure', async () => {
+    const adapter = getStyleAdapter('tailwind');
+    const mockAstService = {
+      // A keep-report: the wrapper WAS applied but could not be verified. MCP must not report failure,
+      // or an agent would retry a source change that already landed.
+      updateStyles: async () => ({
+        success: true,
+        warning: { componentName: 'Icon', kept: true, message: 'applied but could not verify' },
+      }),
+      updateProps: async () => ({ success: true }),
+    };
+    const result = await adapter.applyStyles(mockAstService as unknown as AstService, 'src/App.tsx', 'elem-1', {
+      'bg-red-500': '',
+    });
+    expect(result.success).toBe(true);
+    expect(result.applied).toBe(true);
+    expect(result.result).toContain('applied');
+    expect(result.warning).toContain('could not verify');
+  });
+
   it('should normalize Tailwind prefix inputs', async () => {
     const adapter = getStyleAdapter('tailwind');
     let capturedStyles: Record<string, string> = {};

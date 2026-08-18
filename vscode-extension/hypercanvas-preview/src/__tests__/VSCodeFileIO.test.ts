@@ -77,20 +77,38 @@ describe('VSCodeFileIO', () => {
       expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
     });
 
-    it('does not throw when applyEdit fails on sync', async () => {
+    it('does NOT throw when the dirty-buffer applyEdit sync fails — disk is written, failure is logged', async () => {
+      // The disk write already succeeded; a failed buffer sync must NOT throw (Opus #1: throwing
+      // mid-saga leaves wrapper/marker debris and can hang the webview). The non-undoable hazard it
+      // guards against is closed elsewhere (undo snapshots read disk via readFileFromDisk).
       vscode.workspace.textDocuments.push({
         getText: () => 'old content',
         positionAt: (o: number) => new vscode.Position(0, o),
         isDirty: true,
         uri: vscode.Uri.file('/test/file.tsx'),
       } as unknown as vscode.TextDocument);
-      (vscode.workspace.applyEdit as ReturnType<typeof mock>).mockImplementation(() =>
-        Promise.reject(new Error('fail')),
-      );
+      (vscode.workspace.applyEdit as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(false));
 
       await fileIO.writeFile('/test/file.tsx', 'new content');
-
       expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('readFileFromDisk', () => {
+    it('reads DISK even when a DIRTY open TextDocument exists (bypasses the buffer — Opus)', async () => {
+      // This is the method the undo snapshot uses so a failed dirty-buffer sync can't feed it the
+      // stale buffer (before === after → non-undoable). It must ignore the dirty document entirely.
+      vscode.workspace.textDocuments.push({
+        uri: vscode.Uri.file('/test/file.tsx'),
+        isDirty: true,
+        getText: () => 'stale dirty buffer',
+      } as unknown as vscode.TextDocument);
+      (vscode.workspace.fs.readFile as ReturnType<typeof mock>).mockReturnValue(
+        Promise.resolve(new TextEncoder().encode('actual disk content')),
+      );
+
+      const result = await fileIO.readFileFromDisk('/test/file.tsx');
+      expect(result).toBe('actual disk content');
     });
   });
 

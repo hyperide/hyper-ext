@@ -77,7 +77,7 @@ export function OrgSettingsPage() {
 }
 
 describe('AstService HYP-901 style-write verify-and-retry', () => {
-  it('auto-wraps a non-forwarding custom component instead of writing a dead prop, no verify wired (HYP-901)', async () => {
+  it('auto-wraps a non-forwarding custom component instead of writing a dead prop, no verify wired (HYP-901/§9.4)', async () => {
     const { orgSettingsPath, fileIO } = hostRoutePageFixture();
     const service = new AstService('/workspace', fileIO);
     const nodeRef = syntheticRefFor(fileIO.content(orgSettingsPath), 'src/app/org-settings/OrgSettingsPage.tsx');
@@ -93,13 +93,18 @@ describe('AstService HYP-901 style-write verify-and-retry', () => {
     expect(result).toEqual(expect.objectContaining({ success: true }));
     if (!result.success) throw new Error('expected success');
     // The value is NOT written as a dead `style` prop on <HostRoutePage> — it's wrapped in a
-    // <div> that actually forwards to the DOM, and no warning fires (best-effort keep, since the
-    // static check alone is already strictly better than the dead prop it replaces).
+    // <div> that actually forwards to the DOM (best-effort keep, strictly better than the dead prop).
     const written = fileIO.content(orgSettingsPath);
     expect(written).toContain('backgroundColor: "#ff00aa"');
     expect(written).toContain('<HostRoutePage onBack={() => {}} title="Org settings">');
     expect(written.indexOf('<div')).toBeLessThan(written.indexOf('<HostRoutePage'));
-    expect(result.warning).toBeUndefined();
+    // With NO verify provider the BEFORE snapshot is unavailable (no live preview) → `unverifiable`.
+    // §9.4's `exact + unverifiable = keep + report` cell: KEPT (write target already trusted), but the
+    // keep is NEVER silent — reversing the earlier "keep silently for §9.3 slow-build" reading, which
+    // conflated §9.3 (governs classifying a slow settle as `unverifiable`, not a false `not-landed`)
+    // with §9.4's separate keep/rollback decision.
+    expect(result.warning?.kept).toBe(true);
+    expect(result.warning?.diagnosis?.reason).toBe('kept-unverified');
   });
 
   it('keeps the auto-wrap silently when live-preview verify confirms it landed (HYP-901)', async () => {
@@ -111,7 +116,11 @@ describe('AstService HYP-901 style-write verify-and-retry', () => {
     service.setVerifyComputedStyleProvider(async (_elementId, cssProperties) => {
       writesObserved += 1;
       const landed = writesObserved > 1;
-      return Object.fromEntries(cssProperties.map((prop) => [prop, landed ? 'rgb(255, 0, 170)' : 'rgba(0, 0, 0, 0)']));
+      return {
+        ...Object.fromEntries(cssProperties.map((prop) => [prop, landed ? 'rgb(255, 0, 170)' : 'rgba(0, 0, 0, 0)'])),
+        // HYP-990 C3 — no covering image, so the effectiveBackgroundColor proof is trustworthy.
+        backgroundImage: 'none',
+      };
     });
     const nodeRef = syntheticRefFor(fileIO.content(orgSettingsPath), 'src/app/org-settings/OrgSettingsPage.tsx');
 
@@ -145,6 +154,10 @@ describe('AstService HYP-901 style-write verify-and-retry', () => {
       for (const prop of cssProperties) snap[prop] = 'rgba(0, 0, 0, 0)';
       // The painted-through background stays the opaque root's grey — the wrapper never shows.
       snap.effectiveBackgroundColor = 'rgb(30, 30, 30)';
+      // The cover here is an opaque SOLID COLOR root, not an image — report the C3 field so this
+      // exercises the intended `no-effect` (real color-walk no-change) path, not the distinct
+      // `proof-unavailable` (missing-field, fail-closed) path a real provider never triggers.
+      snap.backgroundImage = 'none';
       return snap;
     });
     const nodeRef = syntheticRefFor(fileIO.content(orgSettingsPath), 'src/app/org-settings/OrgSettingsPage.tsx');
@@ -176,6 +189,7 @@ describe('AstService HYP-901 style-write verify-and-retry', () => {
       const snap: Record<string, string> = {};
       for (const prop of cssProperties) snap[prop] = 'rgba(0, 0, 0, 0)'; // own bg transparent throughout
       snap.effectiveBackgroundColor = calls > 1 ? 'rgb(255, 0, 170)' : 'rgb(255, 255, 255)';
+      snap.backgroundImage = 'none'; // HYP-990 C3 — no covering image; proof trustworthy.
       return snap;
     });
     const nodeRef = syntheticRefFor(fileIO.content(orgSettingsPath), 'src/app/org-settings/OrgSettingsPage.tsx');
@@ -297,6 +311,7 @@ describe('AstService HYP-901 style-write verify-and-retry', () => {
       const snap: Record<string, string> = {};
       for (const prop of cssProperties) snap[prop] = 'rgba(0, 0, 0, 0)';
       snap.effectiveBackgroundColor = 'rgb(30, 30, 30)'; // never lands → rollback attempted
+      snap.backgroundImage = 'none'; // no covering image — exercise `no-effect`, not `proof-unavailable`
       return snap;
     });
     const nodeRef = syntheticRefFor(fileIO.content(orgSettingsPath), 'src/app/org-settings/OrgSettingsPage.tsx');
@@ -335,6 +350,7 @@ describe('AstService HYP-901 style-write verify-and-retry', () => {
       // color DOES change after the wrap (inherited); effectiveBackgroundColor stays grey (covered).
       snap.color = calls > 1 ? 'rgb(255, 0, 0)' : 'rgb(0, 0, 0)';
       snap.effectiveBackgroundColor = 'rgb(30, 30, 30)';
+      snap.backgroundImage = 'none'; // no covering image — exercise `no-effect`, not `proof-unavailable`
       return snap;
     });
     const nodeRef = syntheticRefFor(fileIO.content(orgSettingsPath), 'src/app/org-settings/OrgSettingsPage.tsx');
@@ -438,10 +454,11 @@ describe('AstService HYP-901 style-write verify-and-retry', () => {
     expect(result.skipUndoTracking).toBe(true);
   });
 
-  it('HYP-987 P1 #3 — the verify RPC is addressed by verifyElementId, not the re-rooted elementId', async () => {
-    // In a monorepo the AST write uses the re-rooted id but the iframe's findElementsByRef only
-    // knows the pre-re-root id, threaded as verifyElementId. Assert the provider receives THAT,
-    // never the write-side elementId — else the verify resolves nothing and silently no-ops.
+  it('HYP-987 P1 #3 / HYP-990 C2 — before-snapshot uses verifyElementId; after-verify uses the write-scoped marker, never the re-rooted elementId', async () => {
+    // BEFORE the wrap, the verify reads the child via the pre-re-root iframe id (verifyElementId) —
+    // in a monorepo the write-side re-rooted id resolves nothing in the iframe. AFTER the wrap,
+    // HYP-990 C2 addresses the write-scoped marker (`hc-writeid:<n>`) so a post-reprint fuzzy nodeRef
+    // lookup can't mis-select the injected wrapper. Neither read ever uses the write-side nodeRef.
     const { orgSettingsPath, fileIO } = hostRoutePageFixture();
     const service = new AstService('/workspace', fileIO);
     const seenIds: string[] = [];
@@ -467,18 +484,26 @@ describe('AstService HYP-901 style-write verify-and-retry', () => {
       IFRAME_ID,
     );
 
-    expect(seenIds.length).toBeGreaterThan(0);
-    expect(seenIds.every((id) => id === IFRAME_ID)).toBe(true);
+    expect(seenIds.length).toBeGreaterThan(1);
+    // First read = the pre-write before-snapshot, addressed by the pre-re-root iframe id.
+    expect(seenIds[0]).toBe(IFRAME_ID);
+    // Every subsequent read = the post-wrap verify, addressed by the write-scoped marker (HYP-990 C2).
+    expect(seenIds.slice(1).every((id) => id.startsWith('hc-writeid:'))).toBe(true);
+    // The write-side (re-rooted) nodeRef is never used for verification.
     expect(seenIds).not.toContain(nodeRef);
   });
 
   it('falls back to the last-resort warning and restores the file when even the auto-wrap does not verify as landed (HYP-901)', async () => {
     const { orgSettingsPath, orgSettingsSource, fileIO } = hostRoutePageFixture();
     const service = new AstService('/workspace', fileIO);
-    // Verify provider always reports the SAME (unchanged) value — nothing ever "lands".
-    service.setVerifyComputedStyleProvider(async (_elementId, cssProperties) =>
-      Object.fromEntries(cssProperties.map((prop) => [prop, 'rgba(0, 0, 0, 0)'])),
-    );
+    // Verify provider always reports the SAME (unchanged) value — nothing ever "lands". Reports
+    // `backgroundImage: 'none'` so this exercises the intended `no-effect` verified-no-change path,
+    // not the distinct `proof-unavailable` (missing-field, fail-closed) path a real provider never
+    // triggers.
+    service.setVerifyComputedStyleProvider(async (_elementId, cssProperties) => ({
+      ...Object.fromEntries(cssProperties.map((prop) => [prop, 'rgba(0, 0, 0, 0)'])),
+      backgroundImage: 'none',
+    }));
     const nodeRef = syntheticRefFor(fileIO.content(orgSettingsPath), 'src/app/org-settings/OrgSettingsPage.tsx');
 
     const result = await service.updateStyles(

@@ -54,7 +54,19 @@ export class VSCodeFileIO implements FileIO {
       const edit = new vscode.WorkspaceEdit();
       const fullRange = new vscode.Range(openDoc.positionAt(0), openDoc.positionAt(openDoc.getText().length));
       edit.replace(uri, fullRange, content);
-      await Promise.resolve(vscode.workspace.applyEdit(edit)).catch(() => {});
+      // If the dirty-buffer sync does not apply (false or rejection), the DISK already holds the new
+      // content but the open BUFFER stays stale. We LOG it but do NOT throw here (codex full panel P1-2
+      // + Opus #1): throwing mid-saga leaves the wrapper/marker on disk with no rollback handler and can
+      // hang the webview requestId. The real hazard — an undo snapshot reading before === after off the
+      // stale buffer while disk changed — is instead closed at the source: the undo snapshot reads DISK
+      // (`readFileFromDisk`), not the buffer, so it always reflects the actual on-disk change.
+      const applied = await Promise.resolve(vscode.workspace.applyEdit(edit)).then(
+        (ok) => ok,
+        () => false,
+      );
+      if (!applied) {
+        console.warn(`[VSCodeFileIO] writeFile: dirty-buffer sync did not apply for ${absolutePath} (disk written)`);
+      }
     }
   }
 

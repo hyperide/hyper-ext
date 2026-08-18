@@ -32,6 +32,7 @@ import type { FileIO } from '@lib/ast/file-io';
 import { resolveMasterComponent } from '@lib/ast/master-component-resolver';
 import { parseCode } from '@lib/ast/parser';
 import { describeJsxName, jsxOpeningTagName } from './ast-utils';
+import type { StyleForwardingReason } from '@shared/types/style-forwarding-warning';
 
 export interface StyleForwardCheckInput {
   /** Parsed AST of the file containing the JSX usage (already parsed by the caller). */
@@ -58,34 +59,102 @@ export interface StyleForwardCheckInput {
 export type StyleForwardCheckResult =
   | { kind: 'forwards' }
   | { kind: 'unknown' }
-  | { kind: 'not-forwarding'; displayName: string };
+  | {
+      kind: 'not-forwarding';
+      displayName: string;
+      /** HYP-990 M2 — where the non-forwarding component is DEFINED (1-based line), when the resolver
+       *  pinpointed it. Fed to the "Auto fix via AI" diagnosis so the AI knows the file to add
+       *  forwarding to. Absent for an inline / unpinpointable declaration. */
+      definition?: { filePath: string; line: number };
+    };
 
 export async function checkStyleForwarding(input: StyleForwardCheckInput): Promise<StyleForwardCheckResult> {
   const tagName = jsxOpeningTagName(input.element.openingElement.name);
   if (!tagName || !isCustomComponentTag(tagName)) return { kind: 'forwards' };
 
-  const params = await locateComponentParams(input, tagName);
-  if (!params) return { kind: 'unknown' };
-  if (componentForwardsStyleProps(params)) return { kind: 'forwards' };
+  const located = await locateComponentParams(input, tagName);
+  if (!located) return { kind: 'unknown' };
+  if (componentForwardsStyleProps(located.params)) return { kind: 'forwards' };
 
-  return { kind: 'not-forwarding', displayName: describeJsxName(input.element) };
+  return {
+    kind: 'not-forwarding',
+    displayName: describeJsxName(input.element),
+    ...(located.definition ? { definition: located.definition } : {}),
+  };
 }
 
-/** Human-facing last-resort message — used only once every retry candidate is exhausted. */
-export function buildNonForwardingWarningMessage(displayName: string): string {
-  return (
-    `Style change could not be applied — the custom component (\`<${displayName}>\`) doesn't forward this ` +
-    `prop to the DOM and no safe wrapper could be inserted automatically. Consider targeting a native DOM ` +
-    `element instead.`
-  );
+/** Human-facing last-resort message — used only once every retry candidate is exhausted. Shown as the
+ *  full "Details" text behind the standard notification (CTO tg#9125). REASON-AWARE (codex full panel):
+ *  the generic "no wrapper could be inserted" is inaccurate for `wrap-not-visible` (a wrapper WAS
+ *  inserted but covered) and for the pseudo-state / non-verifiable-property cases. */
+export function buildNonForwardingWarningMessage(displayName: string, reason?: StyleForwardingReason): string {
+  const tag = `\`<${displayName}>\``;
+  switch (reason) {
+    case 'wrap-not-visible':
+      return (
+        `Style change could not be applied — ${tag} doesn't forward this prop to the DOM, and a wrapper ` +
+        `was inserted around it but stayed hidden (an opaque root or background-image on the component ` +
+        `covers it). Consider forwarding style/className to its root DOM element, or targeting a native ` +
+        `DOM element inside it.`
+      );
+    case 'pseudo-state-not-wrappable':
+      return (
+        `Style change could not be applied — this is a pseudo-state edit (e.g. :hover/:focus) on ${tag}, ` +
+        `which a wrapper's inline style cannot express, and the component doesn't forward this prop to the ` +
+        `DOM. Consider forwarding className to its root DOM element.`
+      );
+    case 'property-not-verifiable':
+      return (
+        `Style change could not be applied — ${tag} doesn't forward this prop to the DOM, and this property ` +
+        `cannot be reliably applied via an inserted wrapper. Consider forwarding style/className to its root ` +
+        `DOM element, or targeting a native DOM element inside it.`
+      );
+    case 'wrap-had-no-effect':
+      return (
+        `Style change could not be applied — ${tag} doesn't forward this prop to the DOM, and a wrapper was ` +
+        `inserted but the value did not change what's rendered (the component overrides it on its own root). ` +
+        `Consider forwarding style/className to its root DOM element, or targeting a native DOM element inside it.`
+      );
+    case 'kept-unverified':
+      return (
+        `Style change was applied to ${tag} via an inserted wrapper, but it could not be verified as visible ` +
+        `(no live preview, or the component renders no DOM element to read). If it doesn't look right, use ` +
+        `"Auto fix via AI" to forward style/className to its root DOM element.`
+      );
+    case 'probable-unverifiable':
+      return (
+        `Style change could not be applied — ${tag} doesn't forward this prop to the DOM, and a wrapper was ` +
+        `inserted around a REPEATED list item, so its visibility could not be reliably confirmed for the ` +
+        `specific item you edited; it was rolled back rather than kept unconfirmed. Consider forwarding ` +
+        `style/className to its root DOM element, or targeting a native DOM element inside it.`
+      );
+    default:
+      return (
+        `Style change could not be applied — the custom component (${tag}) doesn't forward this prop to the ` +
+        `DOM and no safe wrapper could be inserted automatically. Consider targeting a native DOM element ` +
+        `instead.`
+      );
+  }
+}
+
+/** SHORT one-line message for the platform's standard notification toast (CTO tg#9125). */
+export function buildNonForwardingShortMessage(displayName: string): string {
+  return `Style could not be applied — <${displayName}> doesn't forward this prop to the DOM.`;
 }
 
 function isCustomComponentTag(tagName: string): boolean {
   return /^[A-Z]/.test(tagName);
 }
 
+/** The outer function params of `tagName`'s resolved declaration, plus its DEFINITION location (when
+ *  pinpointed) for the HYP-990 M2 AI-fix diagnosis. */
+interface LocatedComponent {
+  params: t.Node[];
+  definition?: { filePath: string; line: number };
+}
+
 /** Resolve `tagName`'s declaration (same-file or imported) and return its outer function's params. */
-async function locateComponentParams(input: StyleForwardCheckInput, tagName: string): Promise<t.Node[] | null> {
+async function locateComponentParams(input: StyleForwardCheckInput, tagName: string): Promise<LocatedComponent | null> {
   let importerSource: string;
   try {
     importerSource = await input.fileIO.readFile(input.filePath);
@@ -102,7 +171,13 @@ async function locateComponentParams(input: StyleForwardCheckInput, tagName: str
   });
 
   if (resolution.kind === 'inline') {
-    return findComponentParams(input.ast, { kind: 'byName', name: tagName });
+    const found = findComponentParams(input.ast, { kind: 'byName', name: tagName });
+    if (!found) return null;
+    // Same-file component IS pinpointed — carry its definition location (codex full panel).
+    return {
+      params: found.params,
+      ...(found.line !== null ? { definition: { filePath: input.filePath, line: found.line } } : {}),
+    };
   }
   if (resolution.kind !== 'local' || !resolution.pinpointed) {
     // 'host' (shouldn't reach here), 'external', 'not-found', or a barrel landing that
@@ -114,12 +189,14 @@ async function locateComponentParams(input: StyleForwardCheckInput, tagName: str
     const targetSource =
       resolution.filePath === input.filePath ? importerSource : await input.fileIO.readFile(resolution.filePath);
     const targetAst = parseCode(targetSource);
-    return findComponentParams(targetAst, {
+    const found = findComponentParams(targetAst, {
       kind: 'byLocation',
       line: resolution.line,
       column: resolution.column,
       name: resolution.componentName || null,
     });
+    if (!found) return null;
+    return { params: found.params, definition: { filePath: resolution.filePath, line: resolution.line } };
   } catch {
     return null;
   }
@@ -138,16 +215,25 @@ type ComponentDeclMatch =
   | { kind: 'byLocation'; line: number; column: number; name: string | null }
   | { kind: 'byName'; name: string };
 
-/** Find a top-level component declaration's function params, by name (same-file) or by line (resolved import). */
-function findComponentParams(ast: t.File, match: ComponentDeclMatch): t.Node[] | null {
+/** A matched top-level component declaration: its outer function params and its 1-based declaration
+ *  line (for the inline `componentDefinition`, codex full panel — same-file components were previously
+ *  losing their location despite being pinpointed). */
+interface MatchedDeclaration {
+  params: t.Node[];
+  line: number | null;
+}
+
+/** Find a top-level component declaration's function params + line, by name (same-file) or by line
+ *  (resolved import). */
+function findComponentParams(ast: t.File, match: ComponentDeclMatch): MatchedDeclaration | null {
   for (const node of ast.program.body) {
-    const params = paramsFromTopLevelStatement(node, match);
-    if (params) return params;
+    const found = paramsFromTopLevelStatement(node, match);
+    if (found) return found;
   }
   return null;
 }
 
-function paramsFromTopLevelStatement(node: t.Statement, match: ComponentDeclMatch): t.Node[] | null {
+function paramsFromTopLevelStatement(node: t.Statement, match: ComponentDeclMatch): MatchedDeclaration | null {
   if (t.isExportDefaultDeclaration(node)) return paramsFromDeclarationLike(node.declaration, match, node.loc);
   if (t.isExportNamedDeclaration(node) && node.declaration) {
     return paramsFromDeclarationLike(node.declaration, match, node.loc);
@@ -159,19 +245,20 @@ function paramsFromDeclarationLike(
   node: t.Node | null | undefined,
   match: ComponentDeclMatch,
   fallbackLoc?: t.SourceLocation | null,
-): t.Node[] | null {
+): MatchedDeclaration | null {
   if (!node) return null;
 
   if (t.isFunctionDeclaration(node) || t.isFunctionExpression(node) || t.isArrowFunctionExpression(node)) {
-    return declMatches(node, node.type === 'FunctionDeclaration' ? node.id?.name : undefined, match, fallbackLoc)
-      ? node.params
-      : null;
+    if (!declMatches(node, node.type === 'FunctionDeclaration' ? node.id?.name : undefined, match, fallbackLoc)) {
+      return null;
+    }
+    return { params: node.params, line: (node.loc ?? fallbackLoc)?.start.line ?? null };
   }
   if (t.isVariableDeclaration(node)) {
     for (const d of node.declarations) {
       if (!t.isIdentifier(d.id) || !declMatches(d, d.id.name, match, fallbackLoc)) continue;
       const fn = unwrapToFunction(d.init);
-      if (fn) return fn.params;
+      if (fn) return { params: fn.params, line: (d.loc ?? node.loc ?? fallbackLoc)?.start.line ?? null };
     }
   }
   return null;

@@ -63,7 +63,11 @@ export function Page() {
   return <Box title="x" />;
 }
 `;
-    expect(await classifyTag(source, 'Box')).toEqual({ kind: 'not-forwarding', displayName: 'Box' });
+    const result = await classifyTag(source, 'Box');
+    // HYP-990 (codex full panel) — a same-file (inline) component IS pinpointed, so it now carries a
+    // definition location (line 1 here); the classification + display name are unchanged.
+    expect(result).toEqual(expect.objectContaining({ kind: 'not-forwarding', displayName: 'Box' }));
+    expect(result.kind === 'not-forwarding' && result.definition?.line).toBe(1);
   });
 });
 
@@ -90,7 +94,10 @@ export function Page() {
     const fileIO = new InMemoryFileIO({ [importerPath]: importerSource, [widgetsPath]: widgetsSource });
 
     const result = await checkStyleForwarding({ ast, filePath: importerPath, element, fileIO, aliasMap: {} });
-    expect(result).toEqual({ kind: 'not-forwarding', displayName: 'Drop' });
+    // HYP-990 M2 — the not-forwarding result now also pinpoints the component definition (for the
+    // AI-fix diagnosis); the classification + display name are unchanged.
+    expect(result).toEqual(expect.objectContaining({ kind: 'not-forwarding', displayName: 'Drop' }));
+    expect(result.kind === 'not-forwarding' && result.definition?.filePath).toBe(widgetsPath);
   });
 
   it('still classifies a same-line sibling that DOES forward as forwarding', async () => {
@@ -155,33 +162,43 @@ describe('extractComputedStyleForProperties — HYP-987 P1 #2 custom properties 
 describe('unwrapStyleWrapper — HYP-987 P1 (codex) surgical-rollback safety', () => {
   const STYLES = { backgroundColor: '#ff00aa' };
 
-  it('unwraps a unique wrapper, replacing it with its child', () => {
-    const ast = parseCode(`export const P = () => <div style={{ backgroundColor: "#ff00aa" }}><Card /></div>;\n`);
+  it('unwraps a unique OWNED wrapper (data-hc-autowrap), replacing it with its child', () => {
+    const ast = parseCode(
+      `export const P = () => <div data-hc-autowrap style={{ backgroundColor: "#ff00aa" }}><Card /></div>;\n`,
+    );
     expect(unwrapStyleWrapper(ast, STYLES, 'Card')).toBe('removed');
     const code = generate(ast).code;
     expect(code).not.toContain('backgroundColor');
     expect(code).toContain('<Card');
   });
 
-  it('refuses to unwrap when two identical wrappers are ambiguous', () => {
+  it('refuses to unwrap when two identical OWNED wrappers are ambiguous', () => {
     const ast = parseCode(
-      `export const P = () => <><div style={{ backgroundColor: "#ff00aa" }}><Card /></div><div style={{ backgroundColor: "#ff00aa" }}><Card /></div></>;\n`,
+      `export const P = () => <><div data-hc-autowrap style={{ backgroundColor: "#ff00aa" }}><Card /></div><div data-hc-autowrap style={{ backgroundColor: "#ff00aa" }}><Card /></div></>;\n`,
     );
     // Cannot tell which one THIS op created → leave both untouched rather than unwrap the wrong one.
     expect(unwrapStyleWrapper(ast, STYLES, 'Card')).toBe('ambiguous');
   });
 
-  it('refuses to unwrap a div that also holds sibling content (not ours — would lose it)', () => {
+  it('NEVER unwraps a user div with the same style but NO ownership marker (codex full panel)', () => {
+    const ast = parseCode(`export const P = () => <div style={{ backgroundColor: "#ff00aa" }}><Card /></div>;\n`);
+    // No data-hc-autowrap → this is user JSX, must not be removed.
+    expect(unwrapStyleWrapper(ast, STYLES, 'Card')).toBe('absent');
+    expect(generate(ast).code).toContain('backgroundColor');
+  });
+
+  it('refuses to unwrap an OWNED div that also holds sibling content (not our single-child shape)', () => {
     const ast = parseCode(
-      `export const P = () => <div style={{ backgroundColor: "#ff00aa" }}>KEEP ME<Card /></div>;\n`,
+      `export const P = () => <div data-hc-autowrap style={{ backgroundColor: "#ff00aa" }}>KEEP ME<Card /></div>;\n`,
     );
-    // Our wrapper only ever has a single element child; a div with text + element is user code.
     expect(unwrapStyleWrapper(ast, STYLES, 'Card')).toBe('absent');
     expect(generate(ast).code).toContain('KEEP ME');
   });
 
   it('reports ABSENT when the style object does not match (our wrapper is not present)', () => {
-    const ast = parseCode(`export const P = () => <div style={{ backgroundColor: "#000000" }}><Card /></div>;\n`);
+    const ast = parseCode(
+      `export const P = () => <div data-hc-autowrap style={{ backgroundColor: "#000000" }}><Card /></div>;\n`,
+    );
     expect(unwrapStyleWrapper(ast, STYLES, 'Card')).toBe('absent');
   });
 });
@@ -214,12 +231,14 @@ describe('applyWrapCandidate — style object key quoting', () => {
     );
     if (!found) throw new Error('no <Widget> element in fixture');
 
-    applyWrapCandidate(found as FindElementResult, { '--brand': '#ffffff', backgroundColor: '#000000' });
+    applyWrapCandidate(found as FindElementResult, { '--brand': '#ffffff', backgroundColor: '#000000' }, 'w1');
 
     const code = generate(ast).code;
     // `--brand` is not a valid identifier — it must be a quoted string key, never `--brand: …`.
     expect(code).toContain('"--brand": "#ffffff"');
     expect(code).toContain('backgroundColor: "#000000"');
     expect(code).toContain('<div');
+    // HYP-990 C2 — the wrapper carries the write-scoped marker.
+    expect(code).toContain('data-hc-writeid="w1"');
   });
 });

@@ -30,6 +30,8 @@ import type { RouteSuggestion } from '@lib/preview-generator/route-heuristics';
 import type { SharedEditorState } from '@lib/types';
 import { shouldRetryWithAppWrapper } from '@shared/components/preview-chrome/app-mode-fallback';
 import * as vscode from 'vscode';
+import { buildStyleAutoFixPrompt } from '@shared/style-forwarding/autofix-prompt';
+import type { StyleForwardingWarning } from '@shared/types/style-forwarding-warning';
 import { runAppModeActivation } from './webview-preview-panel/app-mode-activation';
 import { resetPreviewToAppShell } from './webview-preview-panel/reset-to-app-shell';
 import { createLivenessGuard, runGuardedStartupSweep } from './startup-sweep';
@@ -104,6 +106,42 @@ let previewPanel: PreviewPanel | null = null;
 let devServerManager: DevServerManager | null = null;
 let logsProvider: LogsPanelProvider | null = null;
 let aiChatProvider: AIChatPanelProvider | null = null;
+
+/**
+ * CTO tg#9122/#9125 — present the non-forwarding style warning through the NATIVE VS Code
+ * notification (a standard bottom-right toast), NOT a custom in-Inspector card. The toast stays SHORT;
+ * "Details" reveals the full reasoning (a modal), and "Auto fix via AI" hands the AI the COMPLETE
+ * structured diagnosis via `buildStyleAutoFixPrompt` (never truncated to the short toast text).
+ */
+async function presentStyleForwardingWarning(warning: StyleForwardingWarning): Promise<void> {
+  const DETAILS = 'Details';
+  const AUTO_FIX = 'Auto fix via AI';
+  const openAutoFix = () => aiChatProvider?.sendAIPrompt(buildStyleAutoFixPrompt(warning));
+  // The "Auto fix via AI" action needs `aiChatProvider`; `showWarningMessage` + the "Details" modal do
+  // NOT (review, Fable round-G — the caller previously gated the WHOLE native presentation on
+  // `aiChatProvider` being wired, so a momentarily-unwired provider silently lost the notification
+  // entirely instead of presenting without the AI action). Include the button only when it can act.
+  const buttons = aiChatProvider ? [DETAILS, AUTO_FIX] : [DETAILS];
+
+  // Never let this async presenter REJECT (review, Fable): AstBridge already flagged the response
+  // `presentedNatively` (fire-and-forget — it can't await this, which awaits user clicks), so an
+  // unhandled rejection here would leave the user with no notification at all. A VS Code
+  // `showWarningMessage` rejecting is practically unheard of, but guard it and log rather than lose it.
+  try {
+    const shortMessage = warning.shortMessage ?? 'Style could not be applied';
+    const picked = await vscode.window.showWarningMessage(shortMessage, ...buttons);
+    if (picked === AUTO_FIX) {
+      openAutoFix();
+    } else if (picked === DETAILS) {
+      // Full reasoning behind the "Details" action — a modal so the long text is fully readable, with
+      // the same "Auto fix via AI" affordance so the user can act straight from it.
+      const next = await vscode.window.showInformationMessage(warning.message, { modal: true }, ...buttons.slice(1));
+      if (next === AUTO_FIX) openAutoFix();
+    }
+  } catch (err) {
+    console.error('[extension] presentStyleForwardingWarning failed:', err);
+  }
+}
 let leftPanelProvider: LeftPanelProvider | null = null;
 let rightPanelProvider: RightPanelProvider | null = null;
 let stateHub: StateHub | null = null;
@@ -510,6 +548,21 @@ export function activate(context: vscode.ExtensionContext) {
   // Wire ai:openChat from any panel → AI Chat panel
   panelRouter.setOnOpenAIChat((prompt) => {
     aiChatProvider?.sendAIPrompt(prompt);
+  });
+
+  // CTO tg#9122/#9125 — present the non-forwarding style warning as the NATIVE VS Code notification
+  // (a short toast + "Details" + "Auto fix via AI"), NOT a custom in-Inspector card. The AI-fix flow
+  // always receives the COMPLETE structured diagnosis.
+  panelRouter.setOnStyleForwardingWarning((warning) => {
+    // Always ACK (→ present natively, suppress the webview toast): `showWarningMessage` + the
+    // "Details" modal need no AI provider — only the "Auto fix via AI" button does, and
+    // `presentStyleForwardingWarning` already omits that button when `aiChatProvider` is unset
+    // (review, Fable round-G — gating the WHOLE native presentation on the AI provider silently lost
+    // the notification entirely instead of presenting it without the AI action).
+    void presentStyleForwardingWarning(warning).catch((err) =>
+      console.error('[extension] style-forwarding warning presenter rejected:', err),
+    );
+    return true;
   });
 
   // Wire ai:openChat from Logs panel → AI Chat panel

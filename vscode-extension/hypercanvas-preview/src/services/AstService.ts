@@ -505,6 +505,9 @@ export class AstService {
     domClasses?: string,
     probeDriving?: ColorProbeCandidate[],
     verifyElementId?: string,
+    // HYP-990 M2 §9.4 — the selected occurrence index at a repeated `.map()` JSX site, threaded
+    // per call (mirrors `verifyElementId`) for the confidence × verifiability matrix.
+    itemIndex?: number | null,
   ): Promise<UpdateStylesResult> {
     dbg(
       `[AstService.updateStyles] filePath=${filePath} elementId=${elementId} nodeRef=${nodeRef} effectiveNodeRef=${nodeRef ?? elementId} styles=${JSON.stringify(styles)}`,
@@ -521,6 +524,7 @@ export class AstService {
       domClasses,
       probeDriving,
       verifyElementId,
+      itemIndex,
     );
   }
 

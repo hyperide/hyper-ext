@@ -44,6 +44,7 @@ import * as t from '@babel/types';
 import type { FindElementResult } from '@lib/types';
 import { findAllJSXElements } from '@lib/ast/traverser';
 import { jsxOpeningTagName } from './ast-utils';
+import { AUTOWRAP_OWNER_ATTR, WRITE_MARKER_ATTR } from './style-verify-marker';
 
 /**
  * Properties whose landing on the injected wrapper is OBSERVABLE from the wrapped child, so the
@@ -154,13 +155,24 @@ export function isWrapEligible(result: FindElementResult): boolean {
 }
 
 /**
- * Wrap `result`'s element in a transparent `<div style={...}>`, mutating the AST in place. Wraps
- * a CLONE of the original node (not the node object itself — see the file header for why) and
- * builds the `style` object directly rather than through the generic JSON-round-trip attribute
- * builder. Caller is responsible for re-printing/writing the AST and for having already checked
- * {@link isWrapEligible} + {@link hasOnlyVisualProperties}.
+ * Wrap `result`'s element in a transparent `<div data-hc-writeid={writeMarker} style={...}>`,
+ * mutating the AST in place. Wraps a CLONE of the original node (not the node object itself — see the
+ * file header for why) and builds the `style` object directly rather than through the generic
+ * JSON-round-trip attribute builder. `writeMarker` is the HYP-990 write-scoped sentinel
+ * ({@link WRITE_MARKER_ATTR}) the runtime verify addresses and rollback keys on. Caller is
+ * responsible for re-printing/writing the AST and for having already checked {@link isWrapEligible} +
+ * {@link hasOnlyChildVerifiableProperties}.
  */
-export function applyWrapCandidate(result: FindElementResult, styles: Record<string, string>): boolean {
+export function applyWrapCandidate(
+  result: FindElementResult,
+  styles: Record<string, string>,
+  writeMarker: string,
+): boolean {
+  // Persistent ownership marker (kept across writes) + transient per-write verify marker (stripped
+  // after a keep). The ownership marker lets a later edit recognise THIS as our auto-wrap and never
+  // mistake a user's `<div style={{…}}>` for ours (review, Opus/Fable).
+  const ownerAttr = t.jsxAttribute(t.jsxIdentifier(AUTOWRAP_OWNER_ATTR), null);
+  const markerAttr = t.jsxAttribute(t.jsxIdentifier(WRITE_MARKER_ATTR), t.stringLiteral(writeMarker));
   const styleAttr = t.jsxAttribute(
     t.jsxIdentifier('style'),
     t.jsxExpressionContainer(buildStyleObjectExpression(styles)),
@@ -170,13 +182,241 @@ export function applyWrapCandidate(result: FindElementResult, styles: Record<str
   // function exists to avoid (see file header). Stripping loc forces a full fresh reprint.
   const clonedElement = t.cloneNode(result.element, true, true) as t.JSXElement;
   const wrapper = t.jsxElement(
-    t.jsxOpeningElement(t.jsxIdentifier('div'), [styleAttr]),
+    t.jsxOpeningElement(t.jsxIdentifier('div'), [ownerAttr, markerAttr, styleAttr]),
     t.jsxClosingElement(t.jsxIdentifier('div')),
     [clonedElement],
     false,
   );
   result.path.replaceWith(wrapper);
   return true;
+}
+
+/**
+ * HYP-990 — find the unique auto-wrap `<div>` carrying `data-hc-writeid="<writeMarker>"` and return
+ * its path. Because the marker is per-write unique, this is unambiguous even when the file contains a
+ * structurally-identical user-authored `<div style={sameBg}>` (which the M1 structure-only
+ * {@link unwrapStyleWrapper} could not tell apart). Returns null when no wrapper carries the marker.
+ */
+function findWrapperByMarker(ast: t.File, writeMarker: string): ReturnType<typeof findAllJSXElements>[number] | null {
+  for (const match of findAllJSXElements(ast)) {
+    if (wrapperMarkerValue(match.element) === writeMarker) return match;
+  }
+  return null;
+}
+
+/** The `data-hc-writeid` string value on `element`'s opening tag, or null if it carries none. Accepts
+ *  BOTH the string-literal form (`data-hc-writeid="m"`) we write AND the expression-container form a
+ *  formatter might rewrite it to (`data-hc-writeid={"m"}`, Opus), so the marker is never left
+ *  un-strippable and committed. */
+function wrapperMarkerValue(element: t.JSXElement): string | null {
+  for (const attr of element.openingElement.attributes) {
+    if (!t.isJSXAttribute(attr) || !t.isJSXIdentifier(attr.name) || attr.name.name !== WRITE_MARKER_ATTR) continue;
+    if (t.isStringLiteral(attr.value)) return attr.value.value;
+    if (t.isJSXExpressionContainer(attr.value) && t.isStringLiteral(attr.value.expression)) {
+      return attr.value.expression.value;
+    }
+  }
+  return null;
+}
+
+/**
+ * HYP-990 — surgical rollback keyed on the write-scoped marker (master spec §8.1 property 3). Removes
+ * ONLY the `<div data-hc-writeid="<writeMarker>">` wrapper this write inserted, replacing it with its
+ * wrapped element child, and leaves every unrelated edit in the file intact. Precise by construction
+ * (the marker is unique), so — unlike {@link unwrapStyleWrapper} — it cannot mistake a pre-existing
+ * identical user wrapper for ours.
+ *  - `removed` — the marked wrapper was found and unwrapped (AST mutated).
+ *  - `absent`  — no wrapper carries the marker (a concurrent edit removed it, or it was already
+ *    stripped/kept). Nothing to write.
+ */
+export function unwrapByMarker(ast: t.File, writeMarker: string): 'removed' | 'absent' {
+  const match = findWrapperByMarker(ast, writeMarker);
+  if (!match) return 'absent';
+  const child = match.element.children.find((c): c is t.JSXElement => t.isJSXElement(c));
+  if (!child) {
+    // The marked wrapper IS present but its element child is gone (an unreachable edge under the C1
+    // lock — a formatter would have to turn `<Child/>` into a non-element). Report `absent` so the
+    // caller does NOT claim a clean `removed`. The rollback then leaves the file UNTOUCHED and the
+    // whole warn/rollback exit skips undo tracking (to protect any foreign formatter output) — so the
+    // leftover is a transparent, not-visible wrapper, the documented lesser evil (see
+    // `surgicallyRollBack`), NOT an undoable edit.
+    return 'absent';
+  }
+  match.path.replaceWith(child);
+  return 'removed';
+}
+
+/**
+ * HYP-990 — on a VERIFIED-KEEP, strip the transient `data-hc-writeid` marker attribute from our
+ * wrapper, leaving the clean `<div style={...}>` in committed source (the marker must never persist).
+ *  - `stripped` — the marker attribute was found and removed (AST mutated).
+ *  - `absent`   — no wrapper carries the marker (nothing to strip).
+ */
+export function stripWrapperMarker(ast: t.File, writeMarker: string): 'stripped' | 'absent' {
+  const match = findWrapperByMarker(ast, writeMarker);
+  if (!match) return 'absent';
+  const opening = match.element.openingElement;
+  const next = opening.attributes.filter(
+    (attr) => !(t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === WRITE_MARKER_ATTR),
+  );
+  if (next.length === opening.attributes.length) return 'absent';
+  opening.attributes = next;
+  return 'stripped';
+}
+
+/**
+ * HYP-990 (M2) anti-nesting — when the target element is ALREADY the sole child of one of our bare
+ * `<div style={...}>` auto-wraps (a prior verified-keep, whose transient marker was stripped), a
+ * second style edit must UPDATE that wrapper in place, never insert a SECOND wrapper around it
+ * (master spec §9.1 "cannot nest wrappers"). Returns the enclosing wrapper element + its current
+ * inline styles (captured for rollback) when the parent is exactly our shape, else null.
+ *
+ * "Our shape" (the whole safety argument for touching it in place): a `<div>` that MUST carry the
+ * persistent `data-hc-autowrap` ownership marker, plus a `style={{…string-literals…}}` object and
+ * (optionally) the transient `data-hc-writeid` marker — and NOTHING else — with the target as its
+ * single meaningful child. The required ownership marker is what guarantees a user's own
+ * `<div style={{…}}>` is never mistaken for ours.
+ *
+ * ACCEPTED RISK (Opus). Wrappers written by M1 (before this change added the ownership marker) are
+ * bare `<div style>` with NO `data-hc-autowrap`, so they are indistinguishable from user JSX and are
+ * NOT recognised here — a second edit on an M1-wrapped component nests a new marked wrapper inside the
+ * M1 one. We deliberately do NOT loosen the gate to also match a bare single-child `<div style>`,
+ * because that is exactly the user-div-mutation hazard the ownership marker closes; a nested
+ * transparent wrapper is the lesser evil. Migration of pre-M2 wrappers is out of scope (HYP-1011).
+ */
+export function describeEnclosingAutoWrap(
+  result: FindElementResult,
+): { wrapper: t.JSXElement; priorStyles: Record<string, string> } | null {
+  const parent = result.path.parent;
+  if (!t.isJSXElement(parent) || jsxOpeningTagName(parent.openingElement.name) !== 'div') return null;
+
+  const priorStyles = bareStyleWrapperStyles(parent.openingElement);
+  if (!priorStyles) return null;
+
+  const meaningful = parent.children.filter((c) => !(t.isJSXText(c) && c.value.trim() === ''));
+  if (meaningful.length !== 1 || meaningful[0] !== result.element) return null;
+  return { wrapper: parent, priorStyles };
+}
+
+/**
+ * The inline `style` map of a `<div>` opening tag IFF it is one of OUR auto-wraps — it MUST carry the
+ * persistent `data-hc-autowrap` ownership marker, plus a string-literal `style` object and
+ * (optionally) the transient write marker, and nothing else. A user-authored `<div style={{…}}>`
+ * (which never carries the ownership marker) returns null, so update-in-place never mutates a user's
+ * own element (review, Opus/Fable).
+ */
+function bareStyleWrapperStyles(opening: t.JSXOpeningElement): Record<string, string> | null {
+  let styleObj: t.ObjectExpression | null = null;
+  let hasOwnerMarker = false;
+  for (const attr of opening.attributes) {
+    if (!t.isJSXAttribute(attr) || !t.isJSXIdentifier(attr.name)) return null;
+    if (attr.name.name === AUTOWRAP_OWNER_ATTR) {
+      hasOwnerMarker = true;
+      continue;
+    }
+    if (attr.name.name === WRITE_MARKER_ATTR) continue;
+    if (attr.name.name !== 'style') return null;
+    if (!t.isJSXExpressionContainer(attr.value) || !t.isObjectExpression(attr.value.expression)) return null;
+    styleObj = attr.value.expression;
+  }
+  if (!hasOwnerMarker || !styleObj) return null;
+  const styles: Record<string, string> = {};
+  for (const prop of styleObj.properties) {
+    if (!t.isObjectProperty(prop)) return null;
+    const key = t.isIdentifier(prop.key) ? prop.key.name : t.isStringLiteral(prop.key) ? prop.key.value : null;
+    if (key === null || !t.isStringLiteral(prop.value)) return null;
+    styles[key] = prop.value.value;
+  }
+  return styles;
+}
+
+/**
+ * HYP-990 (M2) — set an enclosing auto-wrap's inline `style` to `styles` and (re)stamp the
+ * write-scoped `marker` on it, so the update-in-place path verifies through the same marker as a
+ * fresh wrap. Mutates `wrapper` in place.
+ */
+export function updateExistingWrap(wrapper: t.JSXElement, styles: Record<string, string>, writeMarker: string): void {
+  const opening = wrapper.openingElement;
+  const nonStyleNonMarker = opening.attributes.filter(
+    (attr) =>
+      !(
+        t.isJSXAttribute(attr) &&
+        t.isJSXIdentifier(attr.name) &&
+        (attr.name.name === 'style' || attr.name.name === WRITE_MARKER_ATTR)
+      ),
+  );
+  opening.attributes = [
+    ...nonStyleNonMarker,
+    t.jsxAttribute(t.jsxIdentifier(WRITE_MARKER_ATTR), t.stringLiteral(writeMarker)),
+    t.jsxAttribute(t.jsxIdentifier('style'), t.jsxExpressionContainer(buildStyleObjectExpression(styles))),
+  ];
+}
+
+/**
+ * HYP-990 (M2) — rollback for the update-in-place path: restore the marked wrapper's inline `style`
+ * to `priorStyles` and strip the transient marker (leaving the wrapper exactly as it was before this
+ * edit). Marker-precise, so a pre-existing identical user wrapper is never touched.
+ *  - `restored` — the marked wrapper was found and its style reverted.
+ *  - `absent`   — no wrapper carries the marker (nothing to restore).
+ */
+export function restoreWrapStyleByMarker(
+  ast: t.File,
+  writeMarker: string,
+  priorStyles: Record<string, string>,
+): 'restored' | 'absent' {
+  const match = findWrapperByMarker(ast, writeMarker);
+  if (!match) return 'absent';
+  updateExistingWrap(match.element, priorStyles, writeMarker);
+  stripWrapperMarker(ast, writeMarker);
+  return 'restored';
+}
+
+/**
+ * HYP-990 (Opus) — STRUCTURAL fallback for the update-in-place rollback when the transient write
+ * marker was dropped (e.g. a formatter). Finds the UNIQUE owned auto-wrap (`data-hc-autowrap`) whose
+ * single meaningful child is a `childTag` element and restores its inline `style` to `priorStyles`,
+ * stripping any leftover write marker. Keyed on the PERSISTENT ownership marker, so a user's own
+ * `<div style>` is never touched; ambiguous (>1 match) or absent → `'absent'` (leave untouched, never
+ * guess). Without this, a marker-dropped update-in-place rollback would leave the MERGED (new) styles
+ * applied while the warning claims "could not apply" — an actually-applied, unremovable edit.
+ */
+export function restoreOwnedWrapStyle(
+  ast: t.File,
+  childTag: string,
+  priorStyles: Record<string, string>,
+): 'restored' | 'absent' {
+  const matches = findAllJSXElements(ast).filter(({ element }) => isOwnedAutoWrapOf(element, childTag));
+  if (matches.length !== 1) return 'absent';
+  const wrapper = matches[0].element;
+  const opening = wrapper.openingElement;
+  // Keep the ownership marker, drop style + any leftover write marker, then set style to priorStyles.
+  const kept = opening.attributes.filter(
+    (attr) =>
+      !(
+        t.isJSXAttribute(attr) &&
+        t.isJSXIdentifier(attr.name) &&
+        (attr.name.name === 'style' || attr.name.name === WRITE_MARKER_ATTR)
+      ),
+  );
+  opening.attributes = [
+    ...kept,
+    t.jsxAttribute(t.jsxIdentifier('style'), t.jsxExpressionContainer(buildStyleObjectExpression(priorStyles))),
+  ];
+  return 'restored';
+}
+
+/** True when `element` is one of OUR owned auto-wraps (`data-hc-autowrap`) whose single meaningful
+ *  child is a `childTag` element. */
+function isOwnedAutoWrapOf(element: t.JSXElement, childTag: string): boolean {
+  if (jsxOpeningTagName(element.openingElement.name) !== 'div') return false;
+  const hasOwner = element.openingElement.attributes.some(
+    (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === AUTOWRAP_OWNER_ATTR,
+  );
+  if (!hasOwner) return false;
+  const meaningful = element.children.filter((c) => !(t.isJSXText(c) && c.value.trim() === ''));
+  if (meaningful.length !== 1) return false;
+  const only = meaningful[0];
+  return t.isJSXElement(only) && jsxOpeningTagName(only.openingElement.name) === childTag;
 }
 
 /**
@@ -217,16 +457,29 @@ export function unwrapStyleWrapper(ast: t.File, styles: Record<string, string>, 
   return 'removed';
 }
 
-/** True when `element` is exactly the `<div style={styles}>` wrapper we inserted around a `childTag`. */
+/** True when `element` is exactly the `<div data-hc-autowrap style={styles}>` wrapper we inserted
+ *  around a `childTag`. This is the STRUCTURAL fallback used only when the transient WRITE marker was
+ *  dropped — but it MUST still require the persistent `data-hc-autowrap` OWNERSHIP marker (codex full
+ *  panel): without that gate, a bare user-authored `<div style={sameStyles}><Widget/></div>` would
+ *  match and be unwrapped, silently removing the user's own JSX. */
 function isOurWrapperDiv(element: t.JSXElement, styles: Record<string, string>, childTag: string): boolean {
   const opening = element.openingElement;
   if (jsxOpeningTagName(opening.name) !== 'div') return false;
-  // Our wrapper carries exactly one attribute: the style object.
-  if (opening.attributes.length !== 1) return false;
-  const attr = opening.attributes[0];
-  if (!t.isJSXAttribute(attr) || !t.isJSXIdentifier(attr.name) || attr.name.name !== 'style') return false;
-  if (!t.isJSXExpressionContainer(attr.value) || !t.isObjectExpression(attr.value.expression)) return false;
-  if (!styleObjectMatches(attr.value.expression, styles)) return false;
+  let styleObj: t.ObjectExpression | null = null;
+  let hasOwnerMarker = false;
+  for (const attr of opening.attributes) {
+    if (!t.isJSXAttribute(attr) || !t.isJSXIdentifier(attr.name)) return false;
+    if (attr.name.name === AUTOWRAP_OWNER_ATTR) {
+      hasOwnerMarker = true;
+      continue;
+    }
+    if (attr.name.name === WRITE_MARKER_ATTR) continue;
+    if (attr.name.name !== 'style') return false;
+    if (!t.isJSXExpressionContainer(attr.value) || !t.isObjectExpression(attr.value.expression)) return false;
+    styleObj = attr.value.expression;
+  }
+  // The ownership marker is REQUIRED — never unwrap a user's own `<div style>` (codex full panel).
+  if (!hasOwnerMarker || !styleObj || !styleObjectMatches(styleObj, styles)) return false;
   // ...wrapping EXACTLY the one element we wrapped, with no other meaningful children. HYP-987 P1
   // (codex): `applyWrapCandidate` only ever creates a single-element child, so a `<div style>` that
   // also holds text or an expression (`<div style={…}>KEEP ME<Card/></div>`) is NOT ours — unwrapping

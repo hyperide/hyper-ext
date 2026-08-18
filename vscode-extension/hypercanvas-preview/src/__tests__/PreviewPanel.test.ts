@@ -1178,10 +1178,16 @@ describe('PreviewPanel off-screen webview guard (HYP-363)', () => {
  *
  * Background: when the content-based canvas undo stack is empty,
  * PreviewPanel.undo()/redo() fall back to VS Code's native undo/redo. Commit
- * 24d012913 (2026-04-07) proved that 'default:undo'/'default:redo' are NOT
- * valid executable command ids (they only exist for keybinding `when`-clause
- * overriding) and reverted the fallback to the bare 'undo'/'redo' command ids
- * — these tests pin that decision so it is never silently flipped back.
+ * 24d012913 (2026-04-07) tried 'default:undo'/'default:redo' and reverted to
+ * bare 'undo'/'redo', believing the `default:` ids were not executable. HYP-990
+ * (commit c25b1396) established the opposite and current understanding: Cmd+Z /
+ * Cmd+Shift+Z are bound to `hypercanvas.canvasUndo`/`hypercanvas.canvasRedo`,
+ * which call these same methods — so the bare `'undo'`/`'redo'` command RECURSES
+ * back into this same handler instead of reaching VS Code's actual native
+ * undo/redo (see AGENTS-CORE's "executeCommand('undo') recurses with keybinding
+ * overrides" rule). `default:undo`/`default:redo` IS the valid, executable
+ * command id that bypasses the keybinding override — these tests now pin THAT
+ * decision instead.
  *
  * The real bug this ticket fixes: the fallback never explicitly focused the
  * previewed document before asking VS Code to undo. When the preview webview
@@ -1217,8 +1223,11 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
     const reveal = mock();
     const astBridge = {
       setSubProjectPrefix: mock(() => {}),
-      undo: astBridgeOverrides.undo ?? mock(() => Promise.resolve(false)),
-      redo: astBridgeOverrides.redo ?? mock(() => Promise.resolve(false)),
+      // undo() and redo() both return a tri-state ('undone'/'redone'/'empty'/'busy', HYP-990 —
+      // redo() was symmetrized with undo() in a later review round; see UndoRedoService's own
+      // doc comment on redo()).
+      undo: astBridgeOverrides.undo ?? mock(() => Promise.resolve('empty')),
+      redo: astBridgeOverrides.redo ?? mock(() => Promise.resolve('empty')),
       // Default to "stack empty" — matches the default undo/redo mocks above.
       // Callers exercising the busy/failed-but-non-empty distinction override
       // this explicitly (see the "false does not mean empty" regression tests).
@@ -1244,26 +1253,26 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
     return { panel, reveal, astBridge };
   }
 
-  it('undo(): no panel — falls back to bare "undo", never the invalid "default:undo"', async () => {
+  it('undo(): no panel — falls back to "default:undo", never the recursion-hazard bare "undo"', async () => {
     const stateHub = createStateHub();
     const { panel } = createFallbackPanel(stateHub);
     Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
 
     await panel.undo();
 
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('undo');
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('default:undo');
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('default:undo');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('undo');
   });
 
-  it('redo(): no panel — falls back to bare "redo", never the invalid "default:redo"', async () => {
+  it('redo(): no panel — falls back to "default:redo", never the recursion-hazard bare "redo"', async () => {
     const stateHub = createStateHub();
     const { panel } = createFallbackPanel(stateHub);
     Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
 
     await panel.redo();
 
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('redo');
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('default:redo');
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('default:redo');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('redo');
   });
 
   it('undo(): empty canvas stack — focuses the dirtied previewed document before native undo, then reveals the panel', async () => {
@@ -1294,9 +1303,9 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
     await panel.undo();
 
     // The dirtied source document must be focused BEFORE the native undo
-    // command runs — otherwise 'undo' has no focused editor to act on and
-    // silently does nothing (the HYP-1026 bug).
-    expect(callOrder).toEqual(['showTextDocument', 'executeCommand:undo']);
+    // command runs — otherwise 'default:undo' has no focused editor to act on
+    // and silently does nothing (the HYP-1026 bug).
+    expect(callOrder).toEqual(['showTextDocument', 'executeCommand:default:undo']);
     expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
       dirtyDoc,
       expect.objectContaining({ preserveFocus: false, viewColumn: vscode.ViewColumn.One }),
@@ -1469,20 +1478,20 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
     await panel.undo();
 
     expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('undo');
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('default:undo');
     expect(reveal).toHaveBeenCalled();
   });
 
   it('undo(): canvas stack handled the edit — never focuses a document or reveals the panel (native fallback is fully skipped)', async () => {
     const stateHub = createStateHub();
-    const { panel, reveal } = createFallbackPanel(stateHub, { undo: mock(() => Promise.resolve(true)) });
+    const { panel, reveal } = createFallbackPanel(stateHub, { undo: mock(() => Promise.resolve('undone')) });
     Object.assign(panel as PreviewPanel & { _currentComponent: string | undefined }, {
       _currentComponent: 'src/App.tsx',
     });
 
     await panel.undo();
 
-    // handled === true means the content-based canvas stack reverted the
+    // result === 'undone' means the content-based canvas stack reverted the
     // file itself — the native-fallback branch (focus/executeCommand/reveal)
     // must not run at all.
     expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
@@ -1531,7 +1540,7 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
     await panel.undo();
 
     expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('undo');
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('default:undo');
     expect(reveal).toHaveBeenCalled();
   });
 
@@ -1569,12 +1578,12 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
 
     await panel.undo();
 
-    expect(callOrder).toEqual(['showTextDocument', 'executeCommand:undo']);
+    expect(callOrder).toEqual(['showTextDocument', 'executeCommand:default:undo']);
   });
 
   it('undo(): no panel, but the content-based canvas stack still has a handleable entry — restores it via astBridge, never touches native undo (no-panel-undo bypass regression)', async () => {
     const stateHub = createStateHub();
-    const undo = mock(() => Promise.resolve(true));
+    const undo = mock(() => Promise.resolve('undone'));
     const { panel } = createFallbackPanel(stateHub, { undo });
     Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
 
@@ -1591,7 +1600,7 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
 
   it('redo(): no panel, but the content-based canvas stack still has a handleable entry — restores it via astBridge, never touches native redo (no-panel-redo bypass regression)', async () => {
     const stateHub = createStateHub();
-    const redo = mock(() => Promise.resolve(true));
+    const redo = mock(() => Promise.resolve('redone'));
     const { panel } = createFallbackPanel(stateHub, { redo });
     Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
 
@@ -1615,7 +1624,11 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
     // this document — reintroducing the HYP-1026 no-op on those hosts.
     Object.assign(vscode.workspace, {
       workspaceFolders: [
-        { uri: vscode.Uri.from({ scheme: 'vscode-remote', authority: 'ssh-remote', path: '/workspace' }), name: 'workspace', index: 0 },
+        {
+          uri: vscode.Uri.from({ scheme: 'vscode-remote', authority: 'ssh-remote', path: '/workspace' }),
+          name: 'workspace',
+          index: 0,
+        },
       ],
     });
     const remoteDoc = {
@@ -1627,17 +1640,20 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
 
     await panel.undo();
 
-    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(remoteDoc, expect.objectContaining({ preserveFocus: false }));
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
+      remoteDoc,
+      expect.objectContaining({ preserveFocus: false }),
+    );
     expect(reveal).toHaveBeenCalled();
   });
 
-  it('undo(): astBridge.undo() returns false because a snapshot write FAILED (stack was non-empty) — does NOT fall back to native undo ("false" ≠ "empty" regression)', async () => {
+  it('undo(): astBridge.undo() returns "busy" because a snapshot write FAILED (stack was non-empty) — does NOT fall back to native undo ("busy" ≠ "empty" regression)', async () => {
     const stateHub = createStateHub();
-    // canUndo() reports a real, non-empty stack; undo() itself returns false
+    // canUndo() reports a real, non-empty stack; undo() itself returns 'busy'
     // because the underlying content write failed (UndoRedoService.undo()
-    // returns false in that case too, not only when the stack is empty).
+    // returns 'busy' in that case too, not only when a saga is genuinely in flight).
     const { panel, reveal } = createFallbackPanel(stateHub, {
-      undo: mock(() => Promise.resolve(false)),
+      undo: mock(() => Promise.resolve('busy')),
       canUndo: mock(() => true),
     });
 
@@ -1650,18 +1666,18 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
     expect(reveal).not.toHaveBeenCalled();
   });
 
-  it('redo(): astBridge.redo() returns false because it is already IN PROGRESS (stack was non-empty), with no panel — does NOT fall back to native redo ("false" ≠ "empty" regression)', async () => {
+  it('redo(): astBridge.redo() returns "busy" (a saga is in flight, or a snapshot write failed — stack was non-empty), with no panel — does NOT fall back to native redo ("busy" ≠ "empty" regression)', async () => {
     const stateHub = createStateHub();
     const { panel } = createFallbackPanel(stateHub, {
-      redo: mock(() => Promise.resolve(false)),
+      redo: mock(() => Promise.resolve('busy')),
       canRedo: mock(() => true),
     });
     Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
 
     await panel.redo();
 
-    // A concurrent in-progress redo returning false must not be treated as
-    // "nothing to redo" — native redo would replay unrelated editor history.
+    // A busy redo (in-flight saga, possibly on an unrelated file) must not be treated as
+    // "nothing to redo" — native redo would replay/save unrelated editor content.
     expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
     expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
   });
@@ -1698,11 +1714,14 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
 
     await panel.undo();
 
-    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(realDoc, expect.objectContaining({ preserveFocus: false }));
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
+      realDoc,
+      expect.objectContaining({ preserveFocus: false }),
+    );
     expect(reveal).toHaveBeenCalled();
   });
 
-  it('redo(): no panel, empty canvas stack — native redo left the FOCUSED previewed document dirty — saves it, matching undo()\'s behavior (redo/undo save-parity regression)', async () => {
+  it("redo(): no panel, empty canvas stack — native redo left the FOCUSED previewed document dirty — saves it, matching undo()'s behavior (redo/undo save-parity regression)", async () => {
     const stateHub = createStateHub();
     const { panel } = createFallbackPanel(stateHub);
     Object.assign(panel as PreviewPanel & { _panel: unknown; _currentComponent: string | undefined }, {
@@ -1714,7 +1733,11 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
     // and focused (`_currentComponent` set + a matching open document) — not
     // merely on `activeTextEditor` being dirty, which could be an unrelated
     // editor the user already had open (see the NEXT test).
-    const dirtyDoc = { uri: vscode.Uri.file('/workspace/src/App.tsx'), isDirty: true, save: mock(() => Promise.resolve(true)) };
+    const dirtyDoc = {
+      uri: vscode.Uri.file('/workspace/src/App.tsx'),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
     Object.assign(vscode.workspace, { textDocuments: [dirtyDoc] });
     (vscode.window.showTextDocument as ReturnType<typeof mock>).mockImplementation(() =>
       Promise.resolve({ document: dirtyDoc }),
@@ -1736,7 +1759,11 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
     // No `_currentComponent` set — nothing was found/focused by this undo/redo
     // at all. `activeTextEditor` here is whatever the user already had open
     // for unrelated reasons.
-    const unrelatedDirtyDoc = { uri: vscode.Uri.file('/workspace/src/Unrelated.tsx'), isDirty: true, save: mock(() => Promise.resolve(true)) };
+    const unrelatedDirtyDoc = {
+      uri: vscode.Uri.file('/workspace/src/Unrelated.tsx'),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
     Object.assign(vscode.window, { activeTextEditor: { document: unrelatedDirtyDoc } });
 
     await panel.redo();
@@ -1748,7 +1775,11 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
     const stateHub = createStateHub();
     const { panel, reveal } = createFallbackPanel(stateHub);
     // No `_currentComponent` set — the focus step is a no-op.
-    const unrelatedDirtyDoc = { uri: vscode.Uri.file('/workspace/src/Unrelated.tsx'), isDirty: true, save: mock(() => Promise.resolve(true)) };
+    const unrelatedDirtyDoc = {
+      uri: vscode.Uri.file('/workspace/src/Unrelated.tsx'),
+      isDirty: true,
+      save: mock(() => Promise.resolve(true)),
+    };
     Object.assign(vscode.window, { activeTextEditor: { document: unrelatedDirtyDoc } });
 
     await panel.undo();
@@ -1777,7 +1808,102 @@ describe('PreviewPanel native undo/redo fallback (HYP-1026)', () => {
 
     await panel.undo();
 
-    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(realDoc, expect.objectContaining({ preserveFocus: false }));
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
+      realDoc,
+      expect.objectContaining({ preserveFocus: false }),
+    );
     expect(reveal).toHaveBeenCalled();
+  });
+});
+
+// HYP-990 round-G (Fable): the `default:undo`/`default:redo` recursion fix and the tri-state
+// UndoResult busy/empty routing had no test — this is the ONE place that contract is consumed.
+// Cmd+Z/Cmd+Shift+Z are bound to hypercanvas.canvasUndo/canvasRedo (which call these methods), so a
+// plain `executeCommand('undo'/'redo')` fallback recurses back into this same handler instead of
+// reaching VS Code's real native undo/redo.
+describe('PreviewPanel.undo()/redo() — default:undo/default:redo, busy/empty routing', () => {
+  function buildUndoRedoPanel(astBridgeOverrides: { undo?: unknown; redo?: unknown } = {}) {
+    const stateHub = {
+      state: { currentComponent: null, insertTargetId: null, selectedIds: [] },
+      applyUpdate: mock(),
+    };
+    Object.assign(vscode.workspace, {
+      workspaceFolders: [{ uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 }],
+    });
+    const panel = new PreviewPanel(
+      vscode.Uri.file('/extension'),
+      '/workspace',
+      stateHub as unknown as StateHub,
+      {
+        astBridge: {
+          undo: astBridgeOverrides.undo ?? mock(() => Promise.resolve('empty')),
+          redo: astBridgeOverrides.redo ?? mock(() => Promise.resolve('empty')),
+          // Neither undo() nor redo() reads canUndo()/canRedo() at all — both route purely off
+          // their own tri-state return value. These mocks are inert stubs kept only for the
+          // astBridge shape; they don't affect any assertion in this describe block.
+          canUndo: mock(() => false),
+          canRedo: mock(() => false),
+        },
+      } as unknown as PanelRouter,
+      {} as vscode.ExtensionContext,
+    );
+    Object.assign(panel as PreviewPanel & { _panel: unknown }, {
+      _panel: { reveal: mock(), webview: { postMessage: mock(() => Promise.resolve(true)) } },
+    });
+    return { panel };
+  }
+
+  it("undo() falls back to 'default:undo' (never plain 'undo') when the canvas stack is empty", async () => {
+    const { panel } = buildUndoRedoPanel({ undo: mock(() => Promise.resolve('empty')) });
+
+    await panel.undo();
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('default:undo');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('undo');
+  });
+
+  it("undo() defers (no native fallback at all) when the canvas stack reports 'busy'", async () => {
+    const { panel } = buildUndoRedoPanel({ undo: mock(() => Promise.resolve('busy')) });
+
+    await panel.undo();
+
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it("undo() does NOT native-fallback when the canvas stack reports 'undone'", async () => {
+    const { panel } = buildUndoRedoPanel({ undo: mock(() => Promise.resolve('undone')) });
+
+    await panel.undo();
+
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it("redo() falls back to 'default:redo' (never plain 'redo') when there is no panel", async () => {
+    const { panel } = buildUndoRedoPanel();
+    Object.assign(panel as PreviewPanel & { _panel: unknown }, { _panel: undefined });
+
+    await panel.redo();
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('default:redo');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('redo');
+  });
+
+  // HYP-990 M2 review round (GLM-cc/GLM/Fable): redo() previously stayed a plain boolean and had
+  // no busy/empty routing test in this file at all — the exact contract undo() is pinned against
+  // just above. A saga-in-flight redo() call (busy) must defer, never fall through to native redo.
+  it("redo() defers (no native fallback at all) when the canvas stack reports 'busy'", async () => {
+    const { panel } = buildUndoRedoPanel({ redo: mock(() => Promise.resolve('busy')) });
+
+    await panel.redo();
+
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it("redo() does NOT native-fallback when the canvas stack reports 'redone'", async () => {
+    const { panel } = buildUndoRedoPanel({ redo: mock(() => Promise.resolve('redone')) });
+
+    await panel.redo();
+
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
   });
 });

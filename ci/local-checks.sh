@@ -22,6 +22,14 @@
 #   security-scan.yml / Trivy scan    → trivy fs --scanners vuln --severity CRITICAL,HIGH
 #                                       --skip-dirs cloned-projects,node_modules,docs,templates
 #                                       (exit 10)
+#   ci/ship/ship.test.sh               → SHIP_IMAGE_UPLOAD_CMD wiring contract (HYP-1252) —
+#                                       run here as an EXTRA billing-block-path pin, but its
+#                                       primary gate is its own dedicated normal-CI workflow
+#                                       (.github/workflows/ship-image-upload-test.yml), which
+#                                       runs it on every PR/push regardless of billing status.
+#                                       Pins ci/ship/ship.sh's env-export/warn/self-exec-guard
+#                                       logic and gh-attach-image.sh's --url-only/--repo flags
+#                                       so they can't silently drift back to a no-op (exit 11)
 #
 # Missing security tooling (gitleaks / semgrep / trivy) is a HARD FAIL (exit 9), never
 # a silent skip: this script is gh ship's billing-block merge gate, and an "advertised
@@ -245,6 +253,12 @@ LEFTOVER_BASE="${LEFTOVER_BASE:-origin/main}" \
   LEFTOVER_HEAD="${LEFTOVER_HEAD:-HEAD}" \
   bash "$ROOT/ci/leftover-grep/leftover-grep.sh" \
   || { echo "[local-checks] FAIL: leftover-grep (focused tests, debugger, merge markers, untracked TODOs, console.log)"; exit 5; }
+
+echo "[local-checks] ── ship-image-upload wiring (ci/ship/ship.test.sh) ────────"
+# Fast, self-contained (no network/build deps) — pins the SHIP_IMAGE_UPLOAD_CMD wiring
+# contract (HYP-1252) so it can't silently drift back to the pre-1252 no-op state.
+bash "$ROOT/ci/ship/ship.test.sh" \
+  || { echo "[local-checks] FAIL: ci/ship/ship.test.sh — SHIP_IMAGE_UPLOAD_CMD wiring regressed"; exit 11; }
 
 echo "[local-checks] ── Dependency audit ──────────────────────────────────────"
 # Mirrors the 'bun audit --audit-level=high' step from security-scan.yml.

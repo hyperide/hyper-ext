@@ -298,11 +298,22 @@ class TailwindStyleAdapter implements StyleAdapter {
     // rolled back (non-forwarding component, no safe wrapper landed). Report `applied:false` +
     // the warning so the MCP handler surfaces it as an error, DISTINCT from advisory warnings
     // (arbitrary/raw colors below) which accompany a write that DID apply.
-    if (result.warning) {
+    // HYP-990 (codex full panel) — a `kept` warning is a keep-report: the edit WAS applied (an
+    // unverifiable wrapper remains), so report `applied:true` with an advisory, NOT a failure, or an
+    // MCP agent would wrongly retry a source change that already landed.
+    if (result.warning && !result.warning.kept) {
       return {
         success: true,
         applied: false,
         result: 'Style change was not applied.',
+        warning: result.warning.message,
+      };
+    }
+    if (result.warning?.kept) {
+      return {
+        success: true,
+        applied: true,
+        result: 'Style change applied (could not verify it is visible).',
         warning: result.warning.message,
       };
     }

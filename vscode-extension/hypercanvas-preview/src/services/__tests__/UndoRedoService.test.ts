@@ -143,17 +143,17 @@ describe('UndoRedoService', () => {
     });
   });
 
-  describe('undo/redo returns false on empty stacks', () => {
-    it('undo returns false when no edits recorded', async () => {
+  describe('undo/redo return "empty" on empty stacks', () => {
+    it('undo returns empty when no edits recorded', async () => {
       const svc = new UndoRedoService(workspaceRoot);
       const panel = { reveal: () => {} } as never;
-      expect(await svc.undo(panel)).toBe(false);
+      expect(await svc.undo(panel)).toBe('empty');
     });
 
-    it('redo returns false when no undo performed', async () => {
+    it('redo returns empty when no undo performed', async () => {
       const svc = new UndoRedoService(workspaceRoot);
       const panel = { reveal: () => {} } as never;
-      expect(await svc.redo(panel)).toBe(false);
+      expect(await svc.redo(panel)).toBe('empty');
     });
   });
 
@@ -173,7 +173,7 @@ describe('UndoRedoService', () => {
       const svc = new UndoRedoService(workspaceRoot);
       svc.recordEdit('/workspace/a.tsx', 'before', 'after');
 
-      expect(await svc.undo({ reveal: mock(() => {}) } as vscode.WebviewPanel)).toBe(true);
+      expect(await svc.undo({ reveal: mock(() => {}) } as vscode.WebviewPanel)).toBe('undone');
 
       expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
       const [, content] = (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mock.calls[0] as [
@@ -199,7 +199,7 @@ describe('UndoRedoService', () => {
       const svc = new UndoRedoService(workspaceRoot);
       svc.recordEdit('/workspace/a.tsx', 'before', 'after');
 
-      expect(await svc.undo({ reveal: mock(() => {}) } as vscode.WebviewPanel)).toBe(true);
+      expect(await svc.undo({ reveal: mock(() => {}) } as vscode.WebviewPanel)).toBe('undone');
 
       expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
       expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
@@ -221,7 +221,7 @@ describe('UndoRedoService', () => {
     it('has an empty redo stack the instant tracking begins, even if redo had entries a moment earlier', async () => {
       const svc = new UndoRedoService(workspaceRoot);
       svc.recordEdit('/workspace/a.tsx', 'v1', 'v2');
-      expect(await svc.undo({ reveal: mock(() => {}) } as vscode.WebviewPanel)).toBe(true);
+      expect(await svc.undo({ reveal: mock(() => {}) } as vscode.WebviewPanel)).toBe('undone');
       // Redo stack now has one entry from the undo above.
       expect(svc.canRedo()).toBe(true);
 
@@ -269,13 +269,13 @@ describe('UndoRedoService', () => {
       // must see the stack as still non-empty — never a false "empty".
       expect(svc.canUndo()).toBe(true);
       const secondUndoHandled = await svc.undo(panel);
-      // The second call is correctly rejected as "busy" (_inProgress), not
-      // "handled" — its caller's stackWasEmpty-gated native fallback must
-      // NOT fire, because canUndo() (read above) correctly reported true.
-      expect(secondUndoHandled).toBe(false);
+      // The second call is correctly rejected as "busy" (_inProgress) — DISTINCT from "empty"
+      // (HYP-990's tri-state UndoResult) — never "empty", because canUndo() (read above) correctly
+      // reported true, so the caller must DEFER rather than fall through to a native undo.
+      expect(secondUndoHandled).toBe('busy');
 
       releaseFirstWrite?.();
-      expect(await firstUndo).toBe(true);
+      expect(await firstUndo).toBe('undone');
       // Only after the first call fully completes does the stack become
       // genuinely empty.
       expect(svc.canUndo()).toBe(false);

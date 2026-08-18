@@ -3,6 +3,9 @@
  */
 
 import { computeEffectiveBackgroundColor } from '@shared/utils/effective-background';
+import { NO_ELEMENT_ROOT_SENTINEL, WRITE_MARKER_ATTR, WRITE_MARKER_VERIFY_PREFIX } from '../style-verify-marker';
+
+export { NO_ELEMENT_ROOT_SENTINEL, WRITE_MARKER_VERIFY_PREFIX };
 
 const COMPUTED_STYLE_PROPS = [
   'backgroundColor',
@@ -90,7 +93,10 @@ const CSS_CUSTOM_PROPERTY = /^--[a-zA-Z0-9_-]+$/;
  * covers the wrapper (the HostRoutePage repro) — so it correctly distinguishes a wrap that became
  * visible from one that was covered, where the child's own `backgroundColor` cannot.
  */
-export function extractComputedStyleForProperties(el: HTMLElement, cssProperties: string[]): Record<string, string> {
+export function extractComputedStyleForProperties(el: Element, cssProperties: string[]): Record<string, string> {
+  // `Element`, not `HTMLElement` (codex full panel): an SVG-root component's wrapper child is an
+  // `SVGElement`; `getComputedStyle`/`effectiveBackgroundColor` work on any `Element`, so an SVG root
+  // is verified rather than silently kept.
   const cs = window.getComputedStyle(el);
   const result: Record<string, string> = Object.create(null);
   for (const prop of cssProperties) {
@@ -102,5 +108,34 @@ export function extractComputedStyleForProperties(el: HTMLElement, cssProperties
     result[prop] = cs.getPropertyValue(prop.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`));
   }
   result.effectiveBackgroundColor = computeEffectiveBackgroundColor(el);
+  // HYP-990 (M2) — ALWAYS report the read element's own `background-image`. The auto-wrap verify
+  // judges a `backgroundColor` wrap by `effectiveBackgroundColor`, which walks ancestor
+  // background-COLORS only and is BLIND to an image/gradient painted on the covering child root. A
+  // child with a transparent background-color but an opaque gradient would let the wrapper's colour
+  // "change" `effectiveBackgroundColor` while the gradient visually hides it — a false landed. The
+  // host reads this field and fails such a wrap CLOSED (rollback + warn) rather than keeping it.
+  result.backgroundImage = cs.backgroundImage;
   return result;
+}
+
+/**
+ * HYP-990 (M2) — resolve the auto-wrap `<div data-hc-writeid="<markerValue>">`. Returns the WRAPPER
+ * element (or null if it is not in the DOM yet — HMR not applied). The caller distinguishes "wrapper
+ * absent" (retry — not rendered yet) from "wrapper present but no element child" (a text/fragment
+ * component → the verify reports `null` = unverifiable → keep-report, never a false verified-keep).
+ */
+export function resolveMarkerWrapper(markerValue: string): Element | null {
+  return document.querySelector(`[${WRITE_MARKER_ATTR}="${cssAttrEscape(markerValue)}"]`);
+}
+
+/** The wrapper's first ELEMENT child (the wrapped component's rendered root), or null. Returns any
+ *  `Element` — including an `SVGElement` root (codex full panel) — so SVG components are verifiable. */
+export function markerWrapperChild(wrapper: Element): Element | null {
+  return wrapper.firstElementChild;
+}
+
+/** Escape a marker value for safe use inside a `[attr="…"]` selector (markers are host-generated
+ *  ids, but escape defensively so a stray quote can never break the selector). */
+function cssAttrEscape(value: string): string {
+  return value.replace(/["\\]/g, '\\$&');
 }

@@ -16,6 +16,7 @@ import { extractTamaguiTokens, isTamaguiProject, nodeTamaguiFsHost } from '@lib/
 import { generateTailwindClasses, getConflictingPrefixes } from '@lib/tailwind/generator';
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
 import type { I18nLibrary } from '@shared/i18n-text/types';
+import type { StyleForwardingWarning } from '@shared/types/style-forwarding-warning';
 import * as vscode from 'vscode';
 import { AstBridge } from './bridges/AstBridge';
 import {
@@ -75,6 +76,8 @@ export class PanelRouter {
    */
   private _lastScanMonorepoRoot: string | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
+  /** Host presenter for the non-forwarding style warning, re-applied across bridge rebuilds. */
+  private _onStyleForwardingWarning?: (warning: StyleForwardingWarning) => boolean;
   /**
    * Fetches the LIVE applied className of an element from the preview iframe (HYP-544).
    * The color write originates in the right-panel webview, which has no preview iframe of
@@ -411,6 +414,13 @@ export class PanelRouter {
       const rawElementId = (rawMessage as { elementId?: unknown }).elementId;
       const probeElementId = typeof rawElementId === 'string' && rawElementId ? rawElementId : null;
 
+      // Item index of the selected occurrence at a repeated JSX site (.map() row), keyed by the
+      // iframe-relative id (same space as the raw elementId). Computed unconditionally (not only
+      // when a live-className/color-probe provider is wired) — HYP-990 M2 §9.4 threads this to
+      // AstService.updateStyles for the confidence × verifiability matrix's write-confidence
+      // classification, independent of whether those providers exist.
+      const itemIndex = probeElementId ? (this._stateHub.state.selectedItemIndices?.[probeElementId] ?? null) : null;
+
       // HYP-544: live write-time className RPC for color writes. When the inspector
       // (right-panel webview, no preview iframe of its own) sends ast:updateStyles with
       // an empty domClasses, fetch the element's LIVE applied className from the
@@ -419,10 +429,6 @@ export class PanelRouter {
       // blocks the write.
       if (type === 'ast:updateStyles' && (this._liveClassNameProvider || this._colorProbeProvider)) {
         const styleMsg = message as Extract<AstMessage, { type: 'ast:updateStyles' }>;
-        // Item index of the selected occurrence at a repeated JSX site (.map() row), keyed by the
-        // iframe-relative id (same space as the raw elementId). Lets the iframe anchor on the
-        // element the user is editing, not always the first.
-        const itemIndex = probeElementId ? (this._stateHub.state.selectedItemIndices?.[probeElementId] ?? null) : null;
 
         if (!styleMsg.domClasses && this._liveClassNameProvider) {
           if (probeElementId) {
@@ -463,7 +469,12 @@ export class PanelRouter {
       // findElementsByRef only knows the pre-re-root id), so a re-rooted lookup would resolve
       // nothing in a monorepo and the verify would silently no-op. Mirrors the live-className path.
       const verifyElementId = type === 'ast:updateStyles' && probeElementId ? probeElementId : undefined;
-      await this._astBridge.handleMessage(message as AstMessage, webview, verifyElementId);
+      await this._astBridge.handleMessage(
+        message as AstMessage,
+        webview,
+        verifyElementId,
+        type === 'ast:updateStyles' ? itemIndex : undefined,
+      );
       return true;
     }
 
@@ -903,6 +914,18 @@ export class PanelRouter {
   }
 
   /**
+   * Wire the host presenter for the non-forwarding style warning (native VS Code notification, CTO
+   * tg#9122). Stored on the ROUTER, not the current bridge, and re-applied whenever
+   * `_ensureCurrentWorkspace` rebuilds the bridge on a workspace-root change — otherwise a
+   * workspace switch would silently drop the native presenter and warnings would revert to the
+   * in-webview toast (codex full panel).
+   */
+  setOnStyleForwardingWarning(callback: (warning: StyleForwardingWarning) => boolean): void {
+    this._onStyleForwardingWarning = callback;
+    this._astBridge.setOnStyleForwardingWarning(callback);
+  }
+
+  /**
    * Wire the live write-time className provider (HYP-544). The extension host backs this
    * with `previewPanel.requestLiveClassName(elementId)` — a request/response round-trip to
    * the preview-panel iframe (same promise+timeout shape as takeScreenshot). Called before
@@ -1054,6 +1077,9 @@ export class PanelRouter {
     // wrong-system class (codex P2 / Fable review). The freshly-built AstBridge above already defaults
     // to undefined; this explicit clear documents the cross-workspace-reset intent.
     this._astBridge.astService.setProjectDefaultCssSystem(undefined);
+    // Re-apply the native-warning presenter to the rebuilt bridge (codex full panel — otherwise a
+    // workspace switch silently drops it and warnings revert to the in-webview toast).
+    if (this._onStyleForwardingWarning) this._astBridge.setOnStyleForwardingWarning(this._onStyleForwardingWarning);
     this._componentService = this._createComponentService(workspaceRoot);
     this._styleReadService = this._createStyleReadService(workspaceRoot);
     // Drop the OLD workspace's monorepo write boundary — a create against the new

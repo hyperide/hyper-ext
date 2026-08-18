@@ -24,6 +24,24 @@ export interface UndoEntry {
   files: FileEdit[];
 }
 
+/**
+ * Result of {@link UndoRedoService.undo} (codex full panel P1-1):
+ *  - `undone` — the canvas undo stack handled it (a file was reverted). Caller does NOT native-undo.
+ *  - `empty`  — the canvas stack is empty. Caller MAY fall through to native `executeCommand('undo')`.
+ *  - `busy`   — a style-write saga (or another undo/redo) is in flight, OR the undo write failed. The
+ *               canvas stack owned this action, so the caller must DEFER (no-op), NEVER native-undo.
+ */
+export type UndoResult = 'undone' | 'empty' | 'busy';
+
+/**
+ * Result of {@link UndoRedoService.redo} — mirrors {@link UndoResult}'s semantics:
+ *  - `redone` — the canvas redo stack handled it.
+ *  - `empty`  — the canvas stack is empty. Caller MAY fall through to native `executeCommand('default:redo')`.
+ *  - `busy`   — a style-write saga (or another undo/redo) is in flight, OR the redo write failed. The
+ *               caller must DEFER (no-op), NEVER native-redo (HYP-990 M2 review round).
+ */
+export type RedoResult = 'redone' | 'empty' | 'busy';
+
 export class UndoRedoService {
   private _undoStack: UndoEntry[] = [];
   private _redoStack: UndoEntry[] = [];
@@ -116,11 +134,19 @@ export class UndoRedoService {
    * closed) still get the content-based stack tried first — `panel?.reveal()`
    * is a no-op rather than a crash in that case (HYP-1026 follow-up).
    */
-  async undo(panel?: vscode.WebviewPanel): Promise<boolean> {
+  async undo(panel?: vscode.WebviewPanel): Promise<UndoResult> {
     console.log(
-      `[UndoRedoService] undo() called — canUndo=${this.canUndo()}, inProgress=${this._inProgress}, undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
+      `[UndoRedoService] undo() called — canUndo=${this.canUndo()}, inProgress=${this._inProgress}, tracking=${this._trackingCount}, undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
     );
-    if (this._inProgress || !this.canUndo()) return false;
+    // BUSY is DISTINCT from EMPTY (codex full panel P1-1). Any tracked AST op — a style-write saga
+    // (across its multi-second verify window), a delete/duplicate/paste — holds tracking open; if Undo
+    // ran mid-op it could replace the file while the op is still resolving. The caller must DEFER
+    // (no-op) on `busy`, NOT fall through to native `executeCommand('undo')` + save (which the old
+    // boolean `false` return conflated with an empty stack, so Cmd+Z mid-op undid+saved unrelated text).
+    // (A deterministic write FAILURE below also returns `busy`; if that ever persists, Cmd+Z is a
+    // silent no-op until the failure clears — surfacing/retry is a follow-up, HYP-1011.)
+    if (this._inProgress || this._trackingCount > 0) return 'busy';
+    if (!this.canUndo()) return 'empty';
     this._inProgress = true;
     try {
       const entry = this._undoStack[this._undoStack.length - 1];
@@ -151,18 +177,34 @@ export class UndoRedoService {
         );
       }
       panel?.reveal();
-      return success;
+      // A write FAILURE is still `busy`, NOT `empty`: the canvas stack OWNED this undo (an entry
+      // existed), so the caller must NOT fall through to native undo — that would undo unrelated
+      // editor text. The entry is kept (not popped) so a later retry can re-attempt it.
+      return success ? 'undone' : 'busy';
     } finally {
       this._inProgress = false;
     }
   }
 
-  /** See the `undo()` doc comment above — `panel` is optional for the same reason. */
-  async redo(panel?: vscode.WebviewPanel): Promise<boolean> {
+  /** See the `undo()` doc comment above — `panel` is optional for the same reason.
+   *
+   * redo() now mirrors undo()'s tri-state (`RedoResult`) — a review round on HYP-990 M2 (GLM-cc/GLM/Fable,
+   * independently) found the previous plain-boolean version carried the SAME busy/empty conflation the
+   * undo tri-state exists to close, just unfixed on this side: `PreviewPanel.redo()`'s no-panel branch
+   * falls through to native `executeCommand('default:redo')` + save whenever `redo()` returns falsy. With
+   * a plain boolean, a mid-saga call (blocked because `_trackingCount > 0`, i.e. genuinely "busy") was
+   * indistinguishable from a truly empty redo stack ("empty") — so it fired the native fallback and saved
+   * the ACTIVE editor's unrelated dirty content while another file's style-write saga was still verifying.
+   * `busy` now defers (no-op, same as undo); only `empty` may fall through to native redo.
+   */
+  async redo(panel?: vscode.WebviewPanel): Promise<RedoResult> {
     console.log(
-      `[UndoRedoService] redo() called — canRedo=${this.canRedo()}, inProgress=${this._inProgress}, undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
+      `[UndoRedoService] redo() called — canRedo=${this.canRedo()}, inProgress=${this._inProgress}, tracking=${this._trackingCount}, undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
     );
-    if (this._inProgress || !this.canRedo()) return false;
+    // Mirrors undo()'s busy gate: a tracked op — on this file or any other, since the mutation lock
+    // is per-path but this gate is process-wide — must defer redo rather than race the in-flight write.
+    if (this._inProgress || this._trackingCount > 0) return 'busy';
+    if (!this.canRedo()) return 'empty';
     this._inProgress = true;
     try {
       const entry = this._redoStack[this._redoStack.length - 1];
@@ -193,7 +235,9 @@ export class UndoRedoService {
         );
       }
       panel?.reveal();
-      return success;
+      // Same reasoning as undo(): a write FAILURE is still `busy`, NOT `empty` — the entry is kept
+      // (not popped) so the caller must not fall through to native redo on an entry the canvas stack owns.
+      return success ? 'redone' : 'busy';
     } finally {
       this._inProgress = false;
     }
