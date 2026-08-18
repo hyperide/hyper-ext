@@ -109,6 +109,51 @@ export function probeHttp(port: number): Promise<boolean> {
 }
 
 /**
+ * Which loopback family actually answers a TCP connect on `port`, probing BOTH
+ * numeric literals in parallel — first success wins, null when neither answers
+ * (HYP-1185). probeOpen tells you THAT something listens; this tells you WHERE,
+ * for callers that must then CONNECT to the backend: a 'localhost' hostname
+ * resolve picks one family per the OS resolver, which can disagree with the
+ * family the dev server bound (bun-spawned vite binds ::1-only while Node's
+ * http stack tries 127.0.0.1 — verified live in the docker container, where
+ * even Node 20's default Happy Eyeballs did not fall back).
+ */
+export function probeOpenHosts(port: number): Promise<'127.0.0.1' | '::1' | null> {
+  const connectOne = (host: '127.0.0.1' | '::1'): Promise<'127.0.0.1' | '::1' | null> =>
+    new Promise((resolve) => {
+      const socket = new net.Socket();
+      let settled = false;
+      const finish = (winner: '127.0.0.1' | '::1' | null): void => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        resolve(winner);
+      };
+      socket.setTimeout(PROBE_TIMEOUT_MS);
+      socket.once('connect', () => finish(host));
+      socket.once('error', () => finish(null));
+      socket.once('timeout', () => finish(null));
+      socket.connect(port, host);
+    });
+
+  // First success wins; a slow/hung family never holds the answer the other
+  // family already gave (same discipline as probeHttp).
+  return new Promise((resolve) => {
+    let pending = LOOPBACK_HOSTS.length;
+    for (const host of LOOPBACK_HOSTS) {
+      void connectOne(host).then((winner) => {
+        if (winner !== null) {
+          resolve(winner);
+          return;
+        }
+        pending -= 1;
+        if (pending === 0) resolve(null);
+      });
+    }
+  });
+}
+
+/**
  * Listen on a loopback host and resolve the bound port. Shared address-
  * extraction plumbing for the MCP proxy and preview proxy; `host` defaults to
  * the IPv4 loopback. Binds ONLY the given loopback host — never the unspecified

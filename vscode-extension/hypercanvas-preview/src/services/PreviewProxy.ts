@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as net from 'node:net';
 import * as path from 'node:path';
-import { listenLoopback } from './netProbe';
+import { listenLoopback, probeOpenHosts } from './netProbe';
 import {
   buildDevServerUnreachableHtml,
   getPreviewAssetContentType,
@@ -106,6 +106,18 @@ export class PreviewProxy {
   private _isServing: () => boolean = () => true;
   private _sockets = new Set<net.Socket>();
 
+  // HYP-1185: notified once per request when the backend port refuses the
+  // connection AND the retry ladder is exhausted — i.e. the backend is dead,
+  // not merely slow. DevServerManager turns this into a bounded fresh-spawn
+  // recovery instead of proxying a dead port forever (the preview wedge:
+  // manager `running`, iframe on about:blank, 502 loop with no state change).
+  private _onBackendRefused: (() => void) | null = null;
+
+  // The loopback literal that actually answers for _targetPort (HYP-1185) —
+  // see _targetHostForRequest. null = unresolved (first request, or the last
+  // connection was refused and the family must be re-probed).
+  private _targetHost: string | null = null;
+
   get isIsolatedMode(): boolean {
     return this._isIsolatedMode;
   }
@@ -118,6 +130,16 @@ export class PreviewProxy {
    */
   setIsServing(isServing: () => boolean): void {
     this._isServing = isServing;
+  }
+
+  /**
+   * Inject the terminal-backend-refused callback (HYP-1185). Fires when a
+   * request's error is ECONNREFUSED and no retry remains — the observable
+   * signature of a dead backend port. Transient refused connections during a
+   * dev-server cold boot never reach it (the retry ladder absorbs those).
+   */
+  setOnBackendRefused(onBackendRefused: (() => void) | null): void {
+    this._onBackendRefused = onBackendRefused;
   }
 
   constructor(targetPort: number, projectRoot?: string) {
@@ -136,6 +158,9 @@ export class PreviewProxy {
   /** Update the target port when the dev server self-assigns a different port than requested. */
   setTargetPort(port: number): void {
     this._targetPort = port;
+    // The cached loopback family described the OLD port's listener — re-probe
+    // for the new one rather than risk proxying a stranger on <oldFamily>:<newPort>.
+    this._targetHost = null;
     console.log(`[PreviewProxy] Target port updated to ${port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
   }
 
@@ -181,7 +206,7 @@ export class PreviewProxy {
     this._isRemixProject = await this._detectRemixProject();
 
     this._server = http.createServer((req, res) => {
-      this._handleHttp(req, res);
+      void this._handleHttp(req, res).catch(() => {});
     });
 
     // WebSocket upgrade
@@ -224,6 +249,25 @@ export class PreviewProxy {
   }
 
   /**
+   * The loopback literal to dial for the backend (HYP-1185). 'localhost' is
+   * resolver-dependent: a bun-spawned vite binds ::1-only while this Node
+   * process tries 127.0.0.1 (and Node 20's default Happy Eyeballs does NOT
+   * rescue it — verified in-container). So the family is probed explicitly
+   * (both literals, first answer wins) and cached; a refused connection
+   * invalidates the cache so a backend that re-bound on the other family is
+   * rediscovered by the next request. While NOTHING answers (dev server still
+   * booting), fall back to the historic 'localhost' behavior and do NOT cache —
+   * the cold-boot retry ladder semantics are unchanged.
+   */
+  private async _targetHostForRequest(): Promise<string> {
+    if (this._targetHost !== null) return this._targetHost;
+    const winner = await probeOpenHosts(this._targetPort);
+    if (winner === null) return 'localhost';
+    this._targetHost = winner;
+    return winner;
+  }
+
+  /**
    * Handle HTTP requests: proxy to target, inject script into HTML.
    * Retries up to 5 times for /test-preview 404/503 to handle dev server FSWatch lag.
    *
@@ -232,12 +276,12 @@ export class PreviewProxy {
    * `proxyPath` itself is untouched so every client-visible check (isolated-mode
    * script swap, chrome-detection injection) still keys off the ORIGINAL request path.
    */
-  private _handleHttp(
+  private async _handleHttp(
     clientReq: http.IncomingMessage,
     clientRes: http.ServerResponse,
     retryCount = 0,
     rootFallbackAttempted = false,
-  ): void {
+  ): Promise<void> {
     if (!this._isServing()) {
       clientRes.writeHead(503);
       clientRes.end();
@@ -263,8 +307,18 @@ export class PreviewProxy {
     delete forwardHeaders.origin;
     delete forwardHeaders.referer;
 
+    // HYP-1185 root cause (docker r7, runtime-verified): a bun-spawned vite
+    // binds 'localhost' to ::1 ONLY, while this extension host's Node resolves
+    // 'localhost' to 127.0.0.1 and gets ECONNREFUSED forever — even with
+    // Node 20's default autoSelectFamily (verified in-container: v6-only server
+    // + http.get('localhost') → ECONNREFUSED 127.0.0.1). The backend address
+    // must be resolved by PROBING BOTH numeric loopback literals, exactly like
+    // netProbe's probeOpen/probeHttp do for the liveness probes. The Host header
+    // below stays 'localhost' regardless of the chosen family, so Vite's
+    // allowedHosts check is unaffected.
+    const targetHost = await this._targetHostForRequest();
     const options: http.RequestOptions = {
-      hostname: 'localhost',
+      hostname: targetHost,
       port: this._targetPort,
       path: upstreamPath,
       method: clientReq.method,
@@ -303,7 +357,10 @@ export class PreviewProxy {
         // already-fallen-back request from `/` back to the original dead `/test-preview` path
         // if `/` itself 504s. Dormant today (testPreviewRetryBudget is always > 5), but this
         // parameter must be threaded through every retry branch, not just the one that sets it.
-        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted), delay);
+        setTimeout(
+          () => void this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted).catch(() => {}),
+          delay,
+        );
         return;
       }
 
@@ -349,7 +406,10 @@ export class PreviewProxy {
         proxyRes.resume(); // drain response
         if (!clientRes.destroyed && !clientRes.headersSent) {
           const delay = Math.min(200 * 1.7 ** retryCount, 4000);
-          setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted), delay);
+          setTimeout(
+            () => void this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted).catch(() => {}),
+            delay,
+          );
         }
         return;
       }
@@ -369,7 +429,7 @@ export class PreviewProxy {
         proxyRes.resume();
         // clientRes.destroyed, not clientReq.destroyed — see the HYP-903 note above.
         if (!clientRes.destroyed && !clientRes.headersSent) {
-          this._handleHttp(clientReq, clientRes, retryCount, true);
+          void this._handleHttp(clientReq, clientRes, retryCount, true).catch(() => {});
         }
         return;
       }
@@ -425,7 +485,10 @@ export class PreviewProxy {
         proxyRes.resume();
         // clientRes.destroyed, not clientReq.destroyed — see the HYP-903 note above.
         if (!clientRes.destroyed && !clientRes.headersSent) {
-          setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted), 200);
+          setTimeout(
+            () => void this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted).catch(() => {}),
+            200,
+          );
         }
         return;
       }
@@ -521,6 +584,12 @@ export class PreviewProxy {
     proxyReq.on('error', (err) => {
       // codeql[js/log-injection] -- extension-host console diagnostic; local proxy socket error message, no log-consumer trust boundary
       console.error('[PreviewProxy] HTTP proxy error:', err.message);
+      // A refused connection may mean the backend re-bound on the OTHER loopback
+      // family (HYP-1185) — invalidate the cached family so the next attempt
+      // re-probes both literals instead of hammering the dead one.
+      if ((err as NodeJS.ErrnoException).code === 'ECONNREFUSED') {
+        this._targetHost = null;
+      }
       // Retry GET requests on socket errors (ECONNRESET, socket hang up, ECONNREFUSED).
       // Vite's keep-alive pool can drop a connection immediately after the initial HTML
       // response; subsequent @vite/client and module fetches hit the stale socket and
@@ -531,8 +600,24 @@ export class PreviewProxy {
         const retryDelay = 300 * (retryCount + 1);
         // codeql[js/log-injection] -- extension-host console diagnostic; proxyPath is the user's own preview request path, no log-consumer trust boundary
         console.log(`[PreviewProxy] socket error on GET, retry ${retryCount + 1}/5 in ${retryDelay}ms: ${proxyPath}`);
-        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted), retryDelay);
+        setTimeout(
+          () => void this._handleHttp(clientReq, clientRes, retryCount + 1, rootFallbackAttempted).catch(() => {}),
+          retryDelay,
+        );
         return;
+      }
+      // Terminal failure: ECONNREFUSED with the GET retry ladder exhausted means
+      // the backend is GONE, not slow (HYP-1185). Notify the owner so a dead
+      // backend becomes a dev-server restart instead of an infinite 502 loop.
+      // Fired once per request; the manager dedupes the storm itself.
+      // GET-only by design: non-GET requests skip the retry ladder (bodies are
+      // consumed after the first attempt), so a single TRANSIENT refusal — e.g.
+      // a vite self-restart after a config edit — would otherwise fire this on
+      // first failure and burn a recovery attempt against a backend that was
+      // about to come back. The wedged loop is always GETs (iframe document +
+      // assets), so gating loses no wedge coverage.
+      if (clientReq.method === 'GET' && (err as NodeJS.ErrnoException).code === 'ECONNREFUSED') {
+        this._onBackendRefused?.();
       }
       if (!clientRes.headersSent) {
         clientRes.writeHead(502);
@@ -578,39 +663,63 @@ export class PreviewProxy {
 
     // Snapshot port before async ops — setTargetPort() may race with net.connect callback
     const targetPort = this._targetPort;
-    const targetSocket = net.connect(targetPort, 'localhost', () => {
-      // Forward the original HTTP upgrade request to target
-      const requestLine = `${req.method} ${req.url} HTTP/1.1\r\n`;
-      const headers = Object.entries(req.headers)
-        .filter(([key]) => key !== 'host')
-        .map(([key, val]) => `${key}: ${val}`)
-        .join('\r\n');
-
-      const hostHeader = `host: 127.0.0.1:${targetPort}`;
-      targetSocket.write(`${requestLine}${hostHeader}\r\n${headers}\r\n\r\n`);
-
-      if (head.length > 0) {
-        targetSocket.write(head);
-      }
-
-      // Bidirectional pipe
-      targetSocket.pipe(clientSocket);
-      clientSocket.pipe(targetSocket);
-    });
-
+    // Register the CLIENT socket's tracking + error handler SYNCHRONOUSLY: the
+    // family probe below is async, and a client error landing in that window
+    // must not become an uncaught 'error' event (review finding).
     this._trackSocket(clientSocket);
-    this._trackSocket(targetSocket);
-
-    targetSocket.on('error', (err) => {
-      if (this._isServing()) {
-        console.error('[PreviewProxy] WS proxy error:', err.message);
-      }
-      clientSocket.destroy();
-    });
-
+    let targetSocket: net.Socket | null = null;
     clientSocket.on('error', () => {
-      targetSocket.destroy();
+      targetSocket?.destroy();
     });
+
+    // Resolve the backend's loopback family explicitly (HYP-1185, same root
+    // cause as the HTTP path) — an IPv6-only vite must not strand the HMR
+    // socket.
+    const connectTo = (host: string): void => {
+      if (clientSocket.destroyed) return;
+      targetSocket = net.connect({ port: targetPort, host }, () => {
+        // Forward the original HTTP upgrade request to target
+        const requestLine = `${req.method} ${req.url} HTTP/1.1\r\n`;
+        const headers = Object.entries(req.headers)
+          .filter(([key]) => key !== 'host')
+          .map(([key, val]) => `${key}: ${val}`)
+          .join('\r\n');
+
+        const hostHeader = `host: 127.0.0.1:${targetPort}`;
+        targetSocket!.write(`${requestLine}${hostHeader}\r\n${headers}\r\n\r\n`);
+
+        if (head.length > 0) {
+          targetSocket!.write(head);
+        }
+
+        // Bidirectional pipe
+        targetSocket!.pipe(clientSocket);
+        clientSocket.pipe(targetSocket!);
+      });
+
+      this._trackSocket(targetSocket);
+
+      targetSocket.on('error', (err) => {
+        // A refused HMR socket may mean the backend re-bound on the other
+        // loopback family — drop the cache so the next upgrade re-probes.
+        if ((err as NodeJS.ErrnoException).code === 'ECONNREFUSED') {
+          this._targetHost = null;
+        }
+        if (this._isServing()) {
+          console.error('[PreviewProxy] WS proxy error:', err.message);
+        }
+        clientSocket.destroy();
+      });
+    };
+
+    if (this._targetHost !== null) {
+      connectTo(this._targetHost);
+    } else {
+      void probeOpenHosts(targetPort).then((winner) => {
+        if (winner !== null) this._targetHost = winner;
+        connectTo(winner ?? 'localhost');
+      });
+    }
   }
 
   private _trackSocket(socket: net.Socket): void {

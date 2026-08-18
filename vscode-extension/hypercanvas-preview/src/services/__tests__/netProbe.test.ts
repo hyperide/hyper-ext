@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import * as http from 'node:http';
 import * as net from 'node:net';
-import { findFreePort, probeHttp, probeOpen } from '../netProbe';
+import { findFreePort, probeHttp, probeOpen, probeOpenHosts } from '../netProbe';
 
 /**
  * Open a listening server bound to a specific host and resolve once it is
@@ -112,5 +112,47 @@ describe('netProbe', () => {
       expect(free).not.toBe(occupied);
       expect(await probeOpen(occupied)).toBe(true);
     });
+  });
+});
+
+describe('probeOpenHosts (HYP-1185 dual-family resolution)', () => {
+  it('returns 127.0.0.1 for an IPv4-only listener', async () => {
+    const server = net.createServer();
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const addr = server.address();
+    const port = addr && typeof addr === 'object' ? addr.port : 0;
+    try {
+      expect(await probeOpenHosts(port)).toBe('127.0.0.1');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('returns ::1 for an IPv6-only listener', async () => {
+    const server = net.createServer();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '::1', resolve);
+      });
+    } catch {
+      return; // host without IPv6
+    }
+    const addr = server.address();
+    const port = addr && typeof addr === 'object' ? addr.port : 0;
+    try {
+      expect(await probeOpenHosts(port)).toBe('::1');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('returns null when nothing listens on either family', async () => {
+    const server = net.createServer();
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const addr = server.address();
+    const port = addr && typeof addr === 'object' ? addr.port : 0;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    expect(await probeOpenHosts(port)).toBe(null);
   });
 });

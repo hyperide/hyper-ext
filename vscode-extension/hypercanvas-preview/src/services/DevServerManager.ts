@@ -97,6 +97,18 @@ const HMR_STALENESS_RESTART_CAP = 3;
 /** Episode window: if the last staleness-restart was older than this, start a fresh episode. */
 const HMR_STALENESS_EPISODE_WINDOW_MS = 60_000;
 
+/** Cap: recovery restarts for a dead backend (HYP-1185) inside the window before a terminal error. */
+const BACKEND_RECOVERY_RESTART_CAP = 3;
+/**
+ * Window for backend-refused recovery attempts (HYP-1185). Unlike the HMR
+ * episode budget, this is NOT cleared on `running`: the wedge failure mode is a
+ * restart that REACHES `running` (fresh vite boots) yet still leaves the proxy
+ * targeting a dead port, so a `running`-cleared budget would loop restarts
+ * forever. A healthy server simply never fires the callback, so the budget is
+ * only spent on genuine dead-backend episodes.
+ */
+const BACKEND_RECOVERY_WINDOW_MS = 10 * 60 * 1000;
+
 // Explicit dev-server lifecycle edges (HYP-370 Phase 2). The DevServerStatus enum
 // (types.ts) is the de facto state; this table makes it a guarded machine instead of
 // a passively-set field. Idempotent self-loops (to === from) are handled by transition()
@@ -144,6 +156,27 @@ export function appendScriptCliArgs(command: { args: string[] }, packageManager:
  */
 export function devScriptDeclaresPort(script: string): boolean {
   return /--port[=\s]+\d/.test(script) || /(?:^|\s)-p[=\s]+\d/.test(script);
+}
+
+/**
+ * The port a recorded dev-server command pins via CLI flag, if any (HYP-1185).
+ *
+ * The orphan registry records the SPAWNED command line (e.g. "bun run dev
+ * --port 11100" — the injected flag included). Attach-first adoption uses this
+ * to cross-check identity: a record whose pinned port differs from the port
+ * that currently answers HTTP describes a DIFFERENT server than the one we
+ * would proxy, so it must be abandoned (reaped) instead of adopted. Returns
+ * null when the command pins no port (auto-detected servers) — adoption then
+ * relies on the HTTP probe alone, exactly as before.
+ */
+export function devServerRecordPinnedPort(command: string): number | null {
+  // Same flag surface as devScriptDeclaresPort (--port / -p, `=` or whitespace
+  // separator) — keep the two in sync. The (?!\d) boundary stops a 6+-digit
+  // run ("--port 655350") from silently parsing as its first 5 digits.
+  const match = /(?:--port|(?:^|\s)-p)[=\s]+(\d{1,5})(?!\d)/.exec(command);
+  if (!match) return null;
+  const port = Number.parseInt(match[1], 10);
+  return port > 0 && port <= 65535 ? port : null;
 }
 
 /**
@@ -650,6 +683,19 @@ export class DevServerManager {
   // transition so a recovery restart re-arms auto-restart for future staleness.
   private _hmrStalenessGaveUp = false;
 
+  // Backend-refused recovery state (HYP-1185). The proxy reports a terminal
+  // ECONNREFUSED (dead backend port) via setOnBackendRefused; the manager
+  // answers with a bounded fresh-spawn restart. _backendRecoveryInFlight
+  // absorbs the 502 storm (every inflight iframe request fires the callback);
+  // _backendRecoveryAttempts timestamps bound the loop across restarts — see
+  // BACKEND_RECOVERY_WINDOW_MS for why a `running` transition must NOT refund it.
+  private _backendRecoveryInFlight = false;
+  private _backendRecoveryAttempts: number[] = [];
+  // Confirmation delay before a recovery restart — see _handleBackendRefused.
+  // Instance field (not a const) so tests can shrink it.
+  private _backendRecoveryConfirmMs = 3000;
+  private _backendRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Recompile gate — webpack-only. Armed by PreviewModeManager BEFORE it AST-rewrites
   // the entry file. Forces _waitForReady() / consumers to wait for a FRESH
   // "compiled successfully" message that arrives AFTER the patch was written, instead
@@ -848,6 +894,10 @@ export class DevServerManager {
     // so behavior is preserved (stop()/exit short-circuits; the process-error
     // path, which does not call _stopProxy, keeps serving as before).
     proxy.setIsServing(() => this._previewProxy === proxy);
+    // HYP-1185: a terminal ECONNREFUSED (retry ladder exhausted) means the
+    // backend port is dead while we believe we're serving — recover instead of
+    // 502-looping forever.
+    proxy.setOnBackendRefused(() => this._handleBackendRefused(proxy));
     this._previewProxy = proxy;
     // Apply isolated mode that may have been set before proxy was created
     // (PreviewModeManager.startWatching() fires before dev server starts)
@@ -932,6 +982,11 @@ export class DevServerManager {
    * call _runStart directly to avoid deadlocking on the chain they are already part of.
    */
   async start(dependencyRepairAttempted = false): Promise<DevServerState> {
+    // HYP-1185: a manual start is the user's recovery from a terminal
+    // backend-refused give-up — refund the recovery budget so the NEXT
+    // dead-backend episode gets its own restarts instead of jumping straight
+    // to `error` on a stale, exhausted window.
+    this._backendRecoveryAttempts = [];
     const run = this._lifecycleOp.then(
       () => this._runStart(dependencyRepairAttempted),
       () => this._runStart(dependencyRepairAttempted),
@@ -1041,7 +1096,21 @@ export class DevServerManager {
       // picks a FREE port — the safe pre-attach-first behavior.
       if (await this._probeHttpServer(startPort)) {
         const owned = findLiveOwnedDevServer(this._projectPath, this._orphanBaseDir);
-        if (owned) {
+        // HYP-1185 stale-identity guard: pid-liveness is not port-liveness. The
+        // record only vouches for the server ITS command line describes — when
+        // that command pins a port, the pinned port must BE the one answering.
+        // A mismatch means the answering server is not the recorded one (a
+        // recycled pid, a wrapper that outlived its vite child, another
+        // session's server): adopting it would proxy a stranger and hand stop()
+        // the wrong teardown handle. Abandon the record — fall through to the
+        // reap below, which kills the recorded group and clears the record —
+        // and spawn fresh.
+        const ownedPinnedPort = owned ? devServerRecordPinnedPort(owned.command) : null;
+        if (owned && ownedPinnedPort !== null && ownedPinnedPort !== startPort) {
+          this._outputChannel.appendLine(
+            `[DevServer] Orphan record (pid ${owned.pid}) pins port ${ownedPinnedPort} but port ${startPort} is the one answering — stale identity, abandoning the record and starting fresh`,
+          );
+        } else if (owned) {
           // Same supersede discipline as the spawn path: a concurrent stop that
           // bumped the generation during the probe abandons this start.
           if (gen !== this._generation) {
@@ -1079,10 +1148,11 @@ export class DevServerManager {
           this._adoptedRecord = owned;
           this.transition('running');
           return this.getState();
+        } else {
+          this._outputChannel.appendLine(
+            `[DevServer] Port ${startPort} answers HTTP but is not a dev server we started for this project — spawning on a free port instead`,
+          );
         }
-        this._outputChannel.appendLine(
-          `[DevServer] Port ${startPort} answers HTTP but is not a dev server we started for this project — spawning on a free port instead`,
-        );
       }
 
       // Reap our own orphaned dev servers from previous sessions BEFORE picking
@@ -1524,6 +1594,8 @@ export class DevServerManager {
    * start() dequeued in the gap would race the restart's own start.
    */
   async restart(): Promise<DevServerState> {
+    // Same refund as start() (HYP-1185) — a manual restart re-arms recovery.
+    this._backendRecoveryAttempts = [];
     const run = this._lifecycleOp.then(
       () => this._runRestart(),
       () => this._runRestart(),
@@ -1594,6 +1666,12 @@ export class DevServerManager {
    * Dispose resources
    */
   dispose(): void {
+    // A pending backend-refused confirm must not fire past teardown.
+    if (this._backendRecoveryTimer !== null) {
+      clearTimeout(this._backendRecoveryTimer);
+      this._backendRecoveryTimer = null;
+      this._backendRecoveryInFlight = false;
+    }
     // Chain _outputChannel.dispose() after stop() so the async stop() path
     // (process exit handler, stdout/stderr callbacks) doesn't call appendLine
     // on an already-disposed channel.
@@ -1738,6 +1816,127 @@ export class DevServerManager {
     // Fire-and-forget via the public queue so this does not deadlock a concurrent
     // lifecycle op and unhandled rejections are not surfaced to the process.
     void this.restart().catch(() => {});
+  }
+
+  /**
+   * Backend-refused recovery (HYP-1185). The preview proxy reports a terminal
+   * ECONNREFUSED — the retry ladder exhausted against a backend port that
+   * refuses every connection while this manager believes it is `running`
+   * (observed in the nightly container wedge: proxy alive, vite port dead,
+   * iframe on about:blank, ~4.6s 502 loop with no state change ever).
+   *
+   * The answer is a real state change, not more proxying: restart with a FRESH
+   * dev server (restart() → _runStop kills the owned/adopted process group and
+   * clears its registry record, then _runStart re-probes and spawns on a
+   * verified-free port). Bounded by BACKEND_RECOVERY_RESTART_CAP per
+   * BACKEND_RECOVERY_WINDOW_MS; past the cap the manager transitions to
+   * `error` so the loop ends in a surfaced terminal state.
+   *
+   * Guards:
+   *  - stale proxy: a restart/stop swapped _previewProxy — late error events
+   *    from the old proxy must not schedule another recovery;
+   *  - status !== 'running': 'starting' tolerates refused connections during
+   *    a cold boot (the ladder absorbs them); 'error'/'stopped' are terminal;
+   *  - in-flight: the wedged iframe fires a STORM of terminal errors (one per
+   *    inflight request); one recovery restart absorbs all of them.
+   *
+   * Restart is enqueued onto the lifecycle queue (_scheduleBackendRecoveryRestart)
+   * rather than calling _runRestart() directly: this callback fires from a proxy
+   * socket event, outside any dequeued lifecycle op, and must not interleave with
+   * an in-flight stop/start (same discipline as _maybeRestartOnStaleness).
+   */
+  private _handleBackendRefused(proxy: PreviewProxy): void {
+    if (this._previewProxy !== proxy) return;
+    if (this._status !== 'running') return;
+    if (this._backendRecoveryInFlight) return;
+    this._backendRecoveryInFlight = true;
+    // Confirm before restarting (docker repro finding): a terminal-refused can
+    // also arrive from an in-flight retry ladder while the extension host is
+    // being torn down (crash/recovery tests) — restarting THERE spawns a fresh
+    // dev server into a dying host and leaves an orphan contending with the
+    // next instance's bring-up. The wedge's dead backend stays dead for
+    // minutes; teardown dies with the host — so a short delay + re-probe +
+    // generation/status re-check separates them.
+    const gen = this._generation;
+    this._backendRecoveryTimer = setTimeout(() => {
+      this._backendRecoveryTimer = null;
+      this._confirmBackendRefused(proxy, gen).catch(() => {
+        this._backendRecoveryInFlight = false;
+      });
+    }, this._backendRecoveryConfirmMs);
+  }
+
+  private async _confirmBackendRefused(proxy: PreviewProxy, gen: number): Promise<void> {
+    // The in-flight guard spans confirm + restart: released here when we bail
+    // without scheduling, by the scheduled op's finally otherwise.
+    let scheduled = false;
+    try {
+      if (this._previewProxy !== proxy) return; // stopped/replaced meanwhile
+      if (this._status !== 'running') return; // stopping/stopped meanwhile
+      if (this._generation !== gen) return; // a lifecycle op moved on meanwhile
+      const port = this._port;
+      if (port !== null && (await this._probeHttpServer(port))) return; // transient — backend is back
+      if (this._previewProxy !== proxy || this._status !== 'running' || this._generation !== gen) return;
+
+      const now = Date.now();
+      this._backendRecoveryAttempts = this._backendRecoveryAttempts.filter(
+        (at) => now - at < BACKEND_RECOVERY_WINDOW_MS,
+      );
+      if (this._backendRecoveryAttempts.length >= BACKEND_RECOVERY_RESTART_CAP) {
+        this._outputChannel.appendLine(
+          `[DevServer] Backend keeps refusing connections after ${BACKEND_RECOVERY_RESTART_CAP} restarts — giving up`,
+        );
+        // Stop the proxy so the wedged 502 loop actually ENDS (the iframe's next
+        // navigation fails fast against a closed port instead of looping on 502s),
+        // then surface the terminal state. Same off-queue discipline as the child
+        // exit handler, which also calls _stopProxy from a Node event.
+        this._stopProxy();
+        this.transition(
+          'error',
+          'Dev server is refusing connections and automatic restarts did not recover it. Try restarting it manually.',
+        );
+        return;
+      }
+
+      this._backendRecoveryAttempts.push(now);
+      const attempt = this._backendRecoveryAttempts.length;
+      this._outputChannel.appendLine(
+        `[DevServer] Preview backend on port ${this._port ?? '?'} refuses connections — restarting with a fresh dev server (attempt ${attempt}/${BACKEND_RECOVERY_RESTART_CAP})`,
+      );
+      scheduled = true;
+      this._scheduleBackendRecoveryRestart();
+    } finally {
+      if (!scheduled) this._backendRecoveryInFlight = false;
+    }
+  }
+
+  /**
+   * Enqueue the recovery restart as ONE lifecycle op carrying the scheduling
+   * generation. Dequeue-time revalidation in _runBackendRecoveryRestart is what
+   * keeps a user stop()/reroot queued between schedule and execution from being
+   * undone: the recovery must never resurrect a server a queued stop just turned
+   * off (review finding — the schedule-time `running` check alone cannot see a
+   * stop that lands afterwards).
+   */
+  private _scheduleBackendRecoveryRestart(): void {
+    const gen = this._generation;
+    const run = this._lifecycleOp.then(
+      () => this._runBackendRecoveryRestart(gen),
+      () => this._runBackendRecoveryRestart(gen),
+    );
+    this._lifecycleOp = run.catch(() => {});
+    void run
+      .catch(() => {})
+      .finally(() => {
+        this._backendRecoveryInFlight = false;
+      });
+  }
+
+  private async _runBackendRecoveryRestart(expectedGen: number): Promise<void> {
+    // A stop()/reroot/start queued between schedule and execution bumped
+    // _generation (or left `running`) — that decision wins; abort the recovery.
+    if (this._generation !== expectedGen || this._status !== 'running') return;
+    await this._runRestart();
   }
 
   private _isRecompileReadyMessage(text: string): boolean {
@@ -2197,6 +2396,11 @@ export class DevServerManager {
    * blocking the fresh start that follows.
    */
   private _reapOrphanPid(pid: number): void {
+    // Never signal our own process group: a record whose pid was recycled onto
+    // THIS extension host must not turn a fresh start's reap into suicide —
+    // same guard _stopAdoptedServer has (observed live: a unit test recording
+    // process.pid died by exactly this path).
+    if (pid === process.pid) return;
     this._killPidGroup(pid, 'SIGTERM');
     setTimeout(() => {
       this._killPidGroup(pid, 'SIGKILL');
