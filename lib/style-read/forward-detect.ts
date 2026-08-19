@@ -54,6 +54,7 @@ import {
   channelBindingReferencedAnywhere,
   traceChannelForward,
 } from './forward-detect-trace';
+import type { ComponentPropSurfaceFacts } from './types';
 
 /** @public — see the file header; the spec §9.2a canonical interface, unchanged verbatim. */
 export interface ForwardDetectorResult {
@@ -170,6 +171,32 @@ function buildResults(classNameOutcome: ChannelOutcome, styleOutcome: ChannelOut
   return {
     className: { ...shared, confidence: classNameOutcome.confidence, excludedReason: classNameOutcome.excludedReason },
     style: { ...shared, confidence: styleOutcome.confidence, excludedReason: styleOutcome.excludedReason },
+  };
+}
+
+/**
+ * Projects the richer `ForwardDetectionResults` down to the plain-boolean shape the already-wired
+ * L0-L3 stylability ladder reads (`lib/style-write/stylability-ladder.ts`) — `true` unless A1 found
+ * a HIGH-CONFIDENCE negative for that channel (per HYP-1229 plan §2/§6: low confidence never blocks,
+ * it's admitted as `probable` and left for a future B1 runtime verify to arbitrate).
+ *
+ * Shared (HYP-1280 parity) — both StyleReadService.ts (VS Code extension) and the SaaS server-side
+ * read route project the SAME detection output the SAME way, so `componentPropSurface` never drifts
+ * per platform. The non-forwarding fields (`acceptsCssProp`/`acceptsSxProp`/`recursivePropsSchemaAvailable`/
+ * `styleLikeProps`/`semanticProps`) are outside A1's scope (className/style only) and always default —
+ * a real value there requires an adapter-specific prop-mapper facts source neither caller has yet.
+ */
+export function projectForwardDetectionToPropSurface(detection: ForwardDetectionResults): ComponentPropSurfaceFacts {
+  const classNameExcluded = detection.className.confidence === 'high' && !detection.className.forwardsClassName;
+  const styleExcluded = detection.style.confidence === 'high' && !detection.style.forwardsStyle;
+  return {
+    acceptsClassName: !classNameExcluded,
+    acceptsStyle: !styleExcluded,
+    acceptsCssProp: false,
+    acceptsSxProp: false,
+    recursivePropsSchemaAvailable: false,
+    styleLikeProps: [],
+    semanticProps: [],
   };
 }
 

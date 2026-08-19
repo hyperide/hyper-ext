@@ -24,11 +24,10 @@ import { buildAliasMapFromTsconfig } from '@lib/ast/tsconfig-alias-map';
 import { analyzeJSXChildren, getChildrenLocation, getJSXTagName } from '@lib/ast/traverser';
 import type { NodeMapService } from '@lib/element-tracing/node-map-service';
 import { createDefaultStyleReadManager } from '@lib/style-read/default-style-read-manager';
-import { detectForwarding } from '@lib/style-read/forward-detect';
+import { detectForwarding, projectForwardDetectionToPropSurface } from '@lib/style-read/forward-detect';
 import type {
   ClassNameExpressionFacts,
   CssSystemId,
-  ElementForwardDetection,
   ElementStyleFacts,
   ProjectStyleCapabilities,
   RuntimeThemeContext,
@@ -837,27 +836,7 @@ async function buildElementFacts(input: {
     styleAttribute: input.styleAttribute,
     componentFacts: { intrinsicElement: input.tagName },
     forwardDetection,
-    componentPropSurface: projectPropSurface(forwardDetection),
-  };
-}
-
-/**
- * Projects the richer `ForwardDetectionResults` down to the plain-boolean shape the already-wired
- * L0-L3 stylability ladder reads (`lib/style-write/stylability-ladder.ts`) — `true` unless A1
- * found a HIGH-CONFIDENCE negative for that channel (per HYP-1229 plan §2/§6: low confidence
- * never blocks, it's admitted as `probable` and left for a future B1 runtime verify to arbitrate).
- */
-function projectPropSurface(detection: ElementForwardDetection): NonNullable<ElementStyleFacts['componentPropSurface']> {
-  const classNameExcluded = detection.className.confidence === 'high' && !detection.className.forwardsClassName;
-  const styleExcluded = detection.style.confidence === 'high' && !detection.style.forwardsStyle;
-  return {
-    acceptsClassName: !classNameExcluded,
-    acceptsStyle: !styleExcluded,
-    acceptsCssProp: false,
-    acceptsSxProp: false,
-    recursivePropsSchemaAvailable: false,
-    styleLikeProps: [],
-    semanticProps: [],
+    componentPropSurface: projectForwardDetectionToPropSurface(forwardDetection),
   };
 }
 

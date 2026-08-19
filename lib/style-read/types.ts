@@ -5,7 +5,7 @@
  * Assumptions: types are platform-independent — no VS Code or browser imports
  */
 
-import type { ForwardDetectorResult } from './forward-detect';
+import type { ForwardDetectionResults } from './forward-detect';
 
 // --- CSS System Identity ---
 
@@ -503,20 +503,6 @@ export interface ElementThemeFacts {
   tokenUsages: ThemeTokenUsage[];
 }
 
-/**
- * A1 forward-detector output (HYP-1229; `lib/style-read/forward-detect.ts`) — per-channel
- * evidence for whether `className`/`style` actually reach this element's DOM, richer than the
- * plain-boolean `componentPropSurface` projection below (which `buildElementFacts` derives from
- * this — `true` unless a high-confidence negative). Kept as a SIBLING field rather than
- * retrofitted onto `ComponentPropSurfaceFacts` because that struct has no confidence dimension
- * and is already consumed by the staged L0-L3 stylability ladder (`lib/style-write/stylability-
- * ladder.ts`) — the future A2 planner reads this richer field directly instead.
- */
-export interface ElementForwardDetection {
-  className: ForwardDetectorResult;
-  style: ForwardDetectorResult;
-}
-
 export interface ElementStyleFacts {
   elementCssSystems: CssSystemId[];
   elementUiKits: UiKitId[];
@@ -526,7 +512,19 @@ export interface ElementStyleFacts {
   styleAttribute?: StyleAttributeFacts;
   componentFacts?: ComponentFacts;
   componentPropSurface?: ComponentPropSurfaceFacts;
-  forwardDetection?: ElementForwardDetection;
+  /**
+   * A1 forward-detector output (HYP-1229; `lib/style-read/forward-detect.ts`) — per-channel
+   * evidence for whether `className`/`style` actually reach this element's DOM, richer than the
+   * plain-boolean `componentPropSurface` above (which `buildElementFacts` /
+   * `projectForwardDetectionToPropSurface` derive from this — `true` unless a high-confidence
+   * negative). Kept as a SIBLING field rather than retrofitted onto `ComponentPropSurfaceFacts`
+   * because that struct has no confidence dimension and is already consumed by the staged L0-L3
+   * stylability ladder (`lib/style-write/stylability-ladder.ts`) — the future A2 planner reads
+   * this richer field directly instead. `ForwardDetectionResults` (not a locally-duplicated
+   * interface, HYP-1280 cleanup) is `detectForwarding`'s own return type — the single source of
+   * this shape.
+   */
+  forwardDetection?: ForwardDetectionResults;
   themeFacts?: ElementThemeFacts;
 }
 

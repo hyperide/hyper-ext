@@ -8,7 +8,7 @@
  * Mode is auto-detected: if engine is provided, uses browser path.
  */
 
-import type { StyleReadResult } from '@lib/style-read/types';
+import type { ComponentPropSurfaceFacts, StyleReadResult } from '@lib/style-read/types';
 import type { SelectedElementRuntimeStyle } from '@lib/types';
 import type { I18nBindingResult } from '@shared/i18n-text/types';
 import { normalizeComputedColor } from '@shared/utils/color';
@@ -22,7 +22,8 @@ import type { ParsedTailwindStyles } from '@/lib/canvas-engine/utils/tailwindPar
 import { parseTailwindClasses } from '@/lib/canvas-engine/utils/tailwindParser';
 import { getElementFromIframe } from '@/lib/dom-utils';
 import { getActiveTracer } from '@/lib/element-tracing/active-tracer';
-import { findAstNodeBySourceLoc } from '@/lib/element-tracing/id-bridge';
+import { findAstNodeBySourceLoc, getElementLocByUuid, resolveUuidToNodeRef } from '@/lib/element-tracing/id-bridge';
+import { authFetch } from '@/utils/authFetch';
 import type { CanvasAdapter, MessageOfType } from '../types';
 
 // ============================================================================
@@ -48,6 +49,18 @@ export interface ElementStyleData {
   i18nText?: I18nBindingResult;
   /** All available i18n keys from the locale file (VS Code only; populated after i18nText arrives) */
   availableKeys?: string[];
+  /**
+   * A1 forward-detector facts (HYP-1229/HYP-1280) — per-channel evidence for whether this element
+   * actually forwards `className`/`style` to the DOM. Browser/SaaS mode ONLY: fetched async via
+   * GET /api/element-forwarding (the browser read path has no other server round-trip for this),
+   * never blocking the rest of the synchronous browser style read. VS Code mode leaves this field
+   * undefined — the ext-host computes the same facts internally (`StyleReadService.
+   * buildElementFacts`'s `forwardDetection`) but does not currently serialize them onto the
+   * `styles:response` RPC payload, so there is nothing for this hook to surface there yet (a
+   * follow-up would extend `ElementStyleReadResult` to carry it). Read this field only in
+   * browser/SaaS-aware code paths until that lands.
+   */
+  componentPropSurface?: ComponentPropSurfaceFacts;
 }
 
 export interface UseElementStyleDataOptions {
@@ -367,6 +380,36 @@ export function readBrowserElementStyle(
 const RPC_TIMEOUT = 10_000;
 
 /**
+ * Fetch A1 forward-detector facts (HYP-1280) for one browser-mode element via the SaaS server
+ * route. Best-effort: a failed/aborted fetch, a non-2xx status (every failure the route can
+ * produce goes through the global error middleware as a non-2xx — see
+ * server/routes/readElementForwarding.ts's `ReadElementForwardingResponse` doc comment; there is
+ * no `success: false` 200 shape to check for), or an unexpected body resolves to `null` and the
+ * caller just leaves `componentPropSurface` unset — fail-open, matching the write path's own
+ * `unknown` verdict never refusing a write on an unresolved guess.
+ */
+export async function fetchComponentPropSurface(
+  filePath: string,
+  nodeRef: string,
+  elementLoc: { line: number; column: number } | undefined,
+  signal: AbortSignal,
+): Promise<ComponentPropSurfaceFacts | null> {
+  const params = new URLSearchParams({ filePath, nodeRef });
+  if (elementLoc) {
+    params.set('elementLocLine', String(elementLoc.line));
+    params.set('elementLocColumn', String(elementLoc.column));
+  }
+  try {
+    const res = await authFetch(`/api/element-forwarding?${params.toString()}`, { signal });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { success: true; componentPropSurface: ComponentPropSurfaceFacts };
+    return body.componentPropSurface ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Read element style data from either engine+DOM (browser) or RPC (VS Code).
  *
  * Browser mode: synchronously reads AST structure from engine + DOM element from iframe.
@@ -392,6 +435,10 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
 
   // Available i18n keys (fetched separately after i18nText arrives)
   const [availableKeys, setAvailableKeys] = useState<string[] | undefined>(undefined);
+
+  // A1 forward-detector facts (HYP-1280, browser/SaaS mode only — VS Code computes these
+  // internally in StyleReadService, no separate client-side fetch needed there).
+  const [componentPropSurface, setComponentPropSurface] = useState<ComponentPropSurfaceFacts | undefined>(undefined);
 
   // Track latest RPC request to ignore stale responses (VS Code mode only)
   const latestRequestRef = useRef<string | null>(null);
@@ -541,6 +588,31 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
     activeLocale,
   ]);
 
+  // Fetch A1 forward-detector facts for the selected element (HYP-1280, browser/SaaS mode only).
+  // Async and non-blocking — the synchronous browser style read above already returned; this
+  // fills in componentPropSurface once the server route resolves, or leaves it unset on failure.
+  useEffect(() => {
+    setComponentPropSurface(undefined);
+    if (!engine || !styleAdapter || !elementId || !componentPath) return;
+
+    const nodeRef = resolveUuidToNodeRef(elementId, engine);
+    const elementLoc = getElementLocByUuid(elementId, engine) ?? undefined;
+    // resolveUuidToNodeRef's own contract falls back to the input id (already guarded truthy
+    // above) on any resolution failure, so this can't fire today — kept as an explicit guard
+    // rather than trusting that contract silently, in case a future change to that helper starts
+    // returning '' (review round 3 flagged the missing guard even though it traced to a false
+    // positive under the CURRENT contract).
+    if (!nodeRef && !elementLoc) return;
+    const controller = new AbortController();
+    fetchComponentPropSurface(componentPath, nodeRef, elementLoc, controller.signal).then((facts) => {
+      if (!controller.signal.aborted && facts) setComponentPropSurface(facts);
+    });
+    return () => controller.abort();
+    // refreshKey mirrors the main read effect's re-read trigger (post-write / external-edit):
+    // a code edit can change a component's forwarding shape, or shift its line/col and invalidate
+    // the nodeRef/elementLoc the facts were fetched with, so this must re-fetch on the same signal.
+  }, [elementId, componentPath, engine, styleAdapter, refreshKey]);
+
   // Fetch available i18n keys after i18nText arrives (VS Code mode only)
   useEffect(() => {
     // Always clear before re-fetching: when the user switches between two i18n
@@ -581,15 +653,19 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
   // Apply runtime style merge reactively — updates whenever runtimeStyle changes
   // without triggering a new RPC. Only fills fields that Tailwind parsing left empty.
   const data = useMemo(() => {
-    if (!classData.parsedStyles && !availableKeys) {
+    if (!classData.parsedStyles && !availableKeys && !componentPropSurface) {
       if (!runtimeStyle) return classData;
     }
-    const base = availableKeys !== undefined ? { ...classData, availableKeys } : classData;
+    const base = {
+      ...classData,
+      ...(availableKeys !== undefined ? { availableKeys } : {}),
+      ...(componentPropSurface !== undefined ? { componentPropSurface } : {}),
+    };
     if (!base.parsedStyles || !runtimeStyle) return base;
     const merged = mergeRuntimeStyle(base.parsedStyles, runtimeStyle, elementId, itemIndex);
     if (merged === base.parsedStyles) return base;
     return { ...base, parsedStyles: merged };
-  }, [classData, availableKeys, runtimeStyle, elementId, itemIndex]);
+  }, [classData, availableKeys, componentPropSurface, runtimeStyle, elementId, itemIndex]);
 
   return data;
 }
