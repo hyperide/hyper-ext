@@ -4,11 +4,38 @@ All notable changes to HyperCanvas Preview are documented here.
 
 ## [Unreleased]
 
-### Features
-
-- **Guided "New component" flow in the Explorer, on both platforms (ext + SaaS)** — the Pages/Components "+" affordance (now also shown in the VS Code extension) opens one dialog with a plain-language type picker (Building block / Section / Page), a name field with live validation and collision detection, and an auto-picked target folder; on success the file is written from a shared Tailwind-first template and the component opens in the canvas preview. Templates, naming validation, target-dir resolution, and the contained exclusive file write live in `shared/component-create/` and run in BOTH hosts — the SaaS `POST /api/create-component` route and the extension host's `component:create` message — so the platforms stay at parity. Monorepo-aware: the page fallback derives from the active sub-project, and the extension honors the scanned monorepo ancestor root for sibling-sub-project writes (HYP-1184)
+## [0.1.74] — 2026-08-19
 
 ### Bug fixes
+
+- **Preview no longer 502-loops forever after the dev server dies mid-session** — the proxy now detects the terminal backend refusal and the extension does one bounded auto-restart (capped at 3 recoveries per 10 minutes), instead of hanging on a blank iframe indefinitely (HYP-1185, #708)
+- **HyperIDE sidebar views (Explorer/Inspector/AI Chat/Logs) no longer get stuck loading forever when no folder is open** — opening a single file with no folder now shows a proper empty state with an "Open Folder" button, and the real views take over automatically once a folder is added (HYP-1237, #721)
+- **Hyper Explorer activity-bar icon no longer renders undersized** — fixed the icon's viewBox on both shipped copies of the asset; it was rendering 35-45% smaller than the built-in VS Code icons next to it (HYP-1238, #720)
+- **Elements tree now resolves the correct root component for files whose primary export isn't textually first** (e.g. shadcn `ui/*.tsx` files) — root-JSX resolution is now export-aware instead of assuming document order (HYP-1223, #732)
+- **Second consecutive Fill color pick no longer gets stuck on a `cn()+concat` className** — picking a second Fill color in a row on an element whose className is built with `cn(...) + ' literal'` used to leave the className on the first color while a duplicate inline style silently carried the second (HYP-1222, #731)
+- **Dimensional style edits on non-forwarding custom components are now refused with a warning instead of writing a dead, invisible prop** — padding/margin/border-radius/width edits on a component that doesn't forward that prop to a DOM element no longer produce a silent no-op plus a TypeScript error (HYP-995, #730)
+- **Style-write auto-wrap on non-forwarding components now follows the full confidence/verifiability decision matrix** — writes that can't be verified are either kept-and-reported or rolled back per a documented table, never silently kept as if nothing needed attention (HYP-990, #665)
+- **Style-read forwarding detection replaced with a real per-channel detector** — className/style forwarding facts are now derived from an AST render-body trace plus shadcn/Radix `asChild`/`Slot` and styled-components recognizers, instead of a hardcoded "always forwards" assumption; this is what makes the HYP-995/HYP-990 fixes above trustworthy (HYP-1229, #719)
+- **Frontend-root detection no longer misdetects non-`src/main.tsx` project layouts** (e.g. this repo's own `client/App.tsx` layout), and closes a path-traversal edge case in the same function (HYP-1034, #674)
+
+### Security
+
+- **Closed reflected-XSS in the preview-proxy inline-script payload** — a request-derived proxy path was embedded unescaped inside an inline `<script>` in the dev-server-unreachable error page; a crafted URL could inject script into that page. Fixed by escaping `<`, `>`, `&`, and line-separator characters as JS `\uXXXX` sequences (HYP-1275, #727)
+
+## [0.1.73] — 2026-08-13
+
+### Bug fixes
+
+- **Hardened dev-server bun-install against Windows timeout-orphans and corrupted-cache failures** — on Windows, `killProcessTree` previously sent a bare SIGKILL to the cmd.exe wrapper while the real installer child kept running and wrote to already-closed stdout/stderr; retry now also bypasses a corrupted package-manager cache instead of looping forever on the same broken tarball (HYP-1188, #715)
+- **Corrected the DEVELOPMENT.md link path in README** — the link had 404'd since March (HYP-1192, #712)
+
+## [0.1.72] — 2026-08-07
+
+### Features
+
+- **Guided "New component" flow in the Explorer, on both platforms (ext + SaaS)** — the Pages/Components "+" affordance (now also shown in the VS Code extension) opens one dialog with a plain-language type picker (Building block / Section / Page), a name field with live validation and collision detection, and an auto-picked target folder; on success the file is written from a shared Tailwind-first template and the component opens in the canvas preview. Templates, naming validation, target-dir resolution, and the contained exclusive file write live in `shared/component-create/` and run in BOTH hosts — the SaaS `POST /api/create-component` route and the extension host's `component:create` message — so the platforms stay at parity. Monorepo-aware: the page fallback derives from the active sub-project, and the extension honors the scanned monorepo ancestor root for sibling-sub-project writes (HYP-1184, #705)
+
+_Note: this release also carried a large batch of dev-server, style-write, security-hardening, and diagnostics fixes (0.1.71→0.1.72 spans ~45 commits). Unlike the 0.1.73/0.1.74 entries above (fully reconstructed from their PRs while cutting 0.1.74), that full batch isn't reconstructed here — 45 commits is out of scope for a same-PR backfill. Tracked as HYP-1297 for a full backfill._
 
 ## [0.1.71] — 2026-07-15
 
