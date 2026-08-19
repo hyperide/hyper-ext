@@ -1248,7 +1248,16 @@ The path has six internal branches, evaluated in order:
    cascade — it writes an inline `style={{}}` override **instead of** appending a className, because a
    `twMerge` wrap on a color the class doesn't actually drive is a no-op. This branch runs _before_
    the literal-className branch so a probe-positive non-Tailwind driver never wastes a class append.
-   **WORKS** (executor + probe tests).
+   **WORKS** (executor + probe tests). **[HYP-1222](https://linear.app/glide-vc/issue/HYP-1222) fix (`c922e59a`/#731):** an `inline-style`-kind
+   driving candidate now ALSO keeps an EXISTING same-group static className token in sync
+   (`replaceExistingConflictingClass`, replace-only, never appends/injects — single-property writes
+   only, per a review-caught cross-property injection risk), instead of leaving it permanently stale.
+   Root cause was HYP-1162's cascade-inert escalation duplicating a className write into a
+   companion inline-style override on a slow-HMR false-negative, after which the empirical probe
+   correctly (but until this fix, one-sidedly) kept redirecting every subsequent same-property edit
+   through the inline branch forever. Follow-up gaps (same-file const-binding className shape still
+   stale-forever; silent best-effort failure has no diagnostic) tracked as
+   [HYP-1292](https://linear.app/glide-vc/issue/HYP-1292), not yet fixed.
 
 3. **Static string className → `removeConflictingClasses` + append (`:224`).** For a plain string
    literal className, the writer removes the conflicting same-group tokens for the edited properties
