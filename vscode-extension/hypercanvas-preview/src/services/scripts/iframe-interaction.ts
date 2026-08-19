@@ -14,7 +14,7 @@ import {
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { normalizeEventTarget } from '@shared/canvas-interaction/normalize-event-target';
 import type { NodeMapLookup } from '@shared/canvas-interaction/keyboard-handler';
-import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
+import { resolveCallSiteSource } from '@shared/canvas-interaction/resolve-source';
 import { collectDomSiblingRects } from '@shared/canvas-interaction/spacing-guides';
 import {
   computeEffectiveRef,
@@ -60,7 +60,6 @@ import {
   makeSelectionGraceCacheState,
   serializeSelectionGraceCache,
 } from './selection-grace-cache';
-import { getItemIndexFromDOM } from './iframe-utils';
 import { detectColorCandidates, probeDrivingCandidates, type ColorCandidate } from './iframe-color-probe';
 import {
   clientInternalFrames,
@@ -78,6 +77,7 @@ import {
   mapOwnFiberSource,
   resolveSourceIndexFiberSource,
 } from './iframe-resolver';
+import { createPendingClickRetry } from './iframe-pending-click-retry';
 type DevToolsHook = {
   supportsFiber?: boolean;
   renderers?: Map<number, unknown>;
@@ -161,6 +161,15 @@ const pendingClientFetches = new Set<string>();
  * Mirrors `pendingClickTimestamp` (already boxed for the same reason). This SAME object is
  * passed as `ctx.pendingClickElement` below so writer and reader share one reference. (HYP-971)
  */
+// These three `const`s MUST stay declared above `createPendingClickRetry({...})` (below,
+// search "Wires the injected deps"): that call reads all three as VALUES at module-evaluation
+// time (not lazily inside a function body, unlike the pre-extraction `retryPendingClick`), so
+// declaring any of them later would throw a TDZ `ReferenceError` at iframe-script load. Raised
+// in 3 separate review rounds on HYP-1220 PR #717 despite this comment already existing near
+// the construction call — repeating the warning here, at the declaration site itself, since
+// that is where a future edit moving these lines would actually need to see it. Verified empty
+// of load-time errors by evaluating the real esbuild-built bundle under a stubbed DOM (see the
+// PR description / commit message for the exact repro).
 const pendingClickElementRef: { current: HTMLElement | null } = { current: null };
 const pendingClickTimestamp = { value: 0 };
 const PENDING_CLICK_TTL_MS = 5000;
@@ -297,43 +306,48 @@ function warmClientSourceMaps(): void {
     node = walker.nextNode();
   }
 }
+// Wires the injected deps for `retryPendingClick` below. `warmServerChunkFrames` /
+// `warmFiberChunkFrames` are `function` DECLARATIONS defined later in this file (not
+// `const`/arrow bindings) — those are fully hoisted with their bodies by JS, so reading
+// them as values here, before their textual declaration, is safe (no TDZ). `renderedComponentPath`
+// is a `let` reassigned on `hypercanvas:setActiveComponent` (below), so it is wrapped in a
+// getter instead of captured by value, keeping the walk's `renderedFile` argument live.
+const pendingClickRetry = createPendingClickRetry({
+  pendingClickElement: pendingClickElementRef,
+  pendingClickTimestamp,
+  ttlMs: PENDING_CLICK_TTL_MS,
+  renderedComponentPath: () => renderedComponentPath,
+  resolveSource: (fiber) => resolveViaClientSourceMap(fiber) ?? resolveViaServerSourceMap(fiber),
+  mapOwnFiberSource,
+  warmServerChunkFrames,
+  warmFiberChunkFrames,
+  onResolved: ({ element, source, itemIndex }) => {
+    const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
+    window.parent.postMessage(
+      {
+        type: 'hypercanvas:elementClick',
+        elementId: syntheticRef,
+        itemIndex,
+        source,
+        computedStyle: extractComputedStyle(element),
+        computedStyleSeq: ++elementClickSeq,
+      },
+      '*',
+    );
+  },
+});
 /**
  * Retry the most recent pending click after source maps finish warming.
  * Posts hypercanvas:elementClick to the parent webview if the resolution succeeds.
- * Called from warmClientChunk and serverSourceMapResult when new locations are cached.
+ * Called from warmClientChunk and serverSourceMapResult when new locations are cached, AND
+ * by `pendingClickRetry`'s own TTL fallback timer when a warm-retry no-ops (Codex P2,
+ * HYP-1220 PR #717 — see `iframe-pending-click-retry.ts` for the full rationale: without the
+ * fallback timer, a click that resolves to a non-editable/synthetic source with every frame
+ * already cached would never get another callback, leaving it pending forever and silently
+ * blocking `onEmptyClick`'s guard).
  */
 function retryPendingClick(): void {
-  const pending = pendingClickElementRef.current;
-  if (!pending) return;
-  if (Date.now() - pendingClickTimestamp.value > PENDING_CLICK_TTL_MS) {
-    pendingClickElementRef.current = null;
-    return;
-  }
-  const fiber = getFiberFromDOM(pending);
-  if (!fiber) {
-    pendingClickElementRef.current = null;
-    return;
-  }
-  let source = resolveViaClientSourceMap(fiber) ?? resolveViaServerSourceMap(fiber);
-  if (!source) return; // still warming — keep pending
-  const element = pending;
-  pendingClickElementRef.current = null;
-  const directItemIndex = getItemIndexFromDOM(element);
-  const target = resolveCallSiteTarget(source, fiber, renderedComponentPath, directItemIndex, mapOwnFiberSource);
-  source = target.source;
-  const itemIndex = target.itemIndex;
-  const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
-  window.parent.postMessage(
-    {
-      type: 'hypercanvas:elementClick',
-      elementId: syntheticRef,
-      itemIndex,
-      source,
-      computedStyle: extractComputedStyle(element),
-      computedStyleSeq: ++elementClickSeq,
-    },
-    '*',
-  );
+  pendingClickRetry.retry();
 }
 /** In-flight server-side resolve keys — prevents duplicate requests. */
 const pendingServerRequests = new Set<string>();
@@ -531,6 +545,10 @@ const iframeResolver = createIframeResolver({
   pendingClickTimestamp: pendingClickTimestamp,
   warmServerChunkFrames,
   warmFiberChunkFrames,
+  // Closes the SAME stuck-pending-ref gap (Codex P2, HYP-1220 PR #717) for resolveClickLocal's
+  // own initial deferral, not just the warm-retry path in iframe-pending-click-retry.ts — see
+  // that field's doc on ResolverContext for why the still-synthetic defer needs this.
+  armPendingClickFallback: pendingClickRetry.armFallback,
 });
 const selectionGraceCache = makeSelectionGraceCacheState();
 const dragHandlerCtx: DragHandlerContext = {

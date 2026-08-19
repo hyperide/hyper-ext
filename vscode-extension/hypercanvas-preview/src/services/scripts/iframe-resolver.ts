@@ -17,6 +17,7 @@ import {
   clientSourceMapCache,
   extractClientChunkFrames,
   hasUnresolvedServerFrames,
+  resolveOwnCallSiteSourceMap,
   resolveOwnClientSourceMap,
   resolveOwnServerSourceMap,
   resolveViaClientSourceMap,
@@ -38,6 +39,29 @@ export interface ResolverContext {
   pendingClickTimestamp: { value: number };
   warmServerChunkFrames: (fiber: Fiber) => void;
   warmFiberChunkFrames: (fiber: Fiber) => void;
+  /**
+   * Arms the host's TTL-bound fallback timer (`iframe-pending-click-retry.ts`) for whatever
+   * was just written into `pendingClickElement`. Optional so existing test fixtures that build
+   * a bare `ResolverContext` don't all need updating; production ALWAYS passes it (wired in
+   * iframe-interaction.ts to `pendingClickRetry.armFallback`, verified by the
+   * "iframe-interaction.ts wires armPendingClickFallback into createIframeResolver" parity
+   * test in iframe-resolver.test.ts).
+   *
+   * `deferToWarmRetry` below calls this on EVERY defer:
+   *  - The `coldCallSite`-gated call site (non-editable guard) is ALREADY provably safe without
+   *    it — `coldCallSite` only becomes true when a real uncached frame was found, guaranteeing
+   *    a future warm-completion callback. Arming here is defense-in-depth only.
+   *  - The unconditional still-synthetic guard a few lines below it is, by direct code-reading
+   *    (traced in iframe-resolver.test.ts's "defers on a COLD non-editable call-site ancestor"
+   *    test comment), actually UNREACHABLE in production: `isEditableSourcePath` already
+   *    excludes any synthetic path internally, so the preceding non-editable guard always
+   *    catches a synthetic result first. If a future change to `isEditableSourcePath` or
+   *    `resolveCallSiteTarget` ever makes it reachable, arming here means it is ALREADY
+   *    protected against the Codex P2 (HYP-1220 PR #717) stuck-pending-ref bug rather than
+   *    needing a second fix pass. Safe to call redundantly either way: `armFallback` dedupes
+   *    against an already-armed timer.
+   */
+  armPendingClickFallback?: () => void;
 }
 
 /**
@@ -51,9 +75,17 @@ export interface ResolverContext {
  * not found" (HYP-970; same class HYP-49 already guards for the decorative drag path).
  * Returns null when the source map is still cold, so resolveCallSiteTarget keeps its own
  * `parseDebugStack` fallback / warm-retry rather than committing a compiled position.
+ *
+ * Uses `resolveOwnCallSiteSourceMap` (NOT `resolveOwnServerSourceMap` /
+ * `resolveOwnClientSourceMap`), which does not hide a synthetic-preview hit as
+ * "still cold". Hiding synthetic here defeated `resolveCallSiteTarget`'s own
+ * `isSyntheticPreviewPath` boundary check and let the ancestor walk continue
+ * past the `__canvas_preview__.tsx` wrapper to whatever rendered it (the
+ * project's `main.tsx` entry, itself editable) — HYP-1220, a regression of
+ * HYP-424/HYP-429. See `resolveOwnCallSiteSourceMap`'s doc for the full trace.
  */
 export function mapOwnFiberSource(fiber: Fiber): SourceLocation | null {
-  return resolveOwnServerSourceMap(fiber) ?? resolveOwnClientSourceMap(fiber).resolved ?? null;
+  return resolveOwnCallSiteSourceMap(fiber) ?? null;
 }
 
 /** True when the fiber has an OWN client chunk frame whose source map is not yet fetched (cold),
@@ -70,7 +102,9 @@ function hasUnresolvedOwnClientFrame(fiber: Fiber): boolean {
 /**
  * OWN-fiber call-site mapper that distinguishes the "no location" states `mapOwnFiberSource`
  * collapses to null (HYP-970 / Codex P1):
- *   - a mapped hit → return it.
+ *   - a mapped hit (including a hit that resolves to the synthetic preview wrapper — see
+ *     `resolveOwnCallSiteSourceMap`'s doc, HYP-1220) → return it as-is, so
+ *     `resolveCallSiteTarget`'s walk can detect the wrapper boundary itself.
  *   - a definitive mapped-MISS (client `resolved === null`, or all own frames cached) → return
  *     null WITHOUT flagging cold, so the caller keeps walking to the next mappable ancestor.
  *   - genuinely COLD (an own client OR server frame is not yet fetched) → kick off warming for
@@ -88,10 +122,8 @@ function mapOrWarmCallSite(
   warmFiber: (f: Fiber) => void,
   cold?: { value: boolean },
 ): SourceLocation | null {
-  const server = resolveOwnServerSourceMap(fiber);
-  if (server) return server;
-  const own = resolveOwnClientSourceMap(fiber);
-  if (own.resolved !== undefined) return own.resolved; // mapped hit, or definitive client null-miss
+  const own = resolveOwnCallSiteSourceMap(fiber);
+  if (own !== undefined) return own; // mapped hit (incl. synthetic) or definitive miss
   warmServer(fiber);
   warmFiber(fiber);
   if (cold && (hasUnresolvedOwnClientFrame(fiber) || hasUnresolvedServerFrames(fiber))) {
@@ -149,7 +181,24 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
         }
       }
       if (loc) {
-        return resolveCallSiteSource(loc, fiber, ctx.renderedComponentPath, mapFiberSource);
+        const resolved = resolveCallSiteSource(loc, fiber, ctx.renderedComponentPath, mapFiberSource);
+        // Fresh-quorum finding (HYP-1220 follow-up): resolveViaClientSourceMap/resolveViaServerSourceMap
+        // now legitimately return a synthetic __canvas_preview__.tsx location (pre-fix they always
+        // climbed past it) — `loc` above can be that synthetic hit. resolveCallSiteSource's own
+        // recoverNonSyntheticSourceLocation tries to recover the real rendered component from the
+        // fiber tree, but when recovery fails (e.g. `renderedComponentPath` not yet set, or the
+        // rendered file isn't reachable in the fiber tree) it keeps the synthetic location as a
+        // "retry sentinel" (see resolve-source.ts's own doc). `resolveClickLocal` treats that
+        // sentinel safely (its `!isEditableSourcePath` guard rejects synthetic and returns null
+        // without committing), but the click-handler.ts FALLBACK path — called when
+        // resolveClickLocal returns null — and every drag-path consumer call `getSourceLocation`
+        // directly with NO synthetic guard of their own, so without this check the sentinel would
+        // be committed as a real click/drag target: `src/__canvas_preview__.tsx` is a real on-disk
+        // generated file, so AstService resolves it and an inspector style write there is silently
+        // clobbered on the next preview regen. Suppress it here — mirroring the HYP-974 compiled-seed
+        // suppression above — so every `getSourceLocation` caller sees "no source" instead.
+        if (isSyntheticPreviewPath(resolved.fileName)) return null;
+        return resolved;
       }
       return loc;
     },
@@ -230,6 +279,10 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
         ctx.warmFiberChunkFrames(f);
         ctx.pendingClickElement.current = element;
         ctx.pendingClickTimestamp.value = Date.now();
+        // Guarantee TTL-bound cleanup even if the warm calls above turn out to be no-ops
+        // (every relevant frame already cached — see `armPendingClickFallback`'s doc on
+        // `ResolverContext` for why the still-synthetic call site below needs this).
+        ctx.armPendingClickFallback?.();
       };
       if (fiber !== null) {
         // React 19: getSourceLocationFromDOM (findNearestSourceLocation → parseDebugStack) hands
@@ -285,6 +338,9 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
             if (hasPending) {
               ctx.pendingClickElement.current = element;
               ctx.pendingClickTimestamp.value = Date.now();
+              // Already gated on a genuinely uncached frame above (`hasPending`), so a real
+              // future callback is guaranteed — this is defense-in-depth, not the primary fix.
+              ctx.armPendingClickFallback?.();
             }
           }
         }
