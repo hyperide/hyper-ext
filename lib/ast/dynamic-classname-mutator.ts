@@ -780,6 +780,50 @@ function replaceConflictingInStaticLiterals(
 }
 
 /**
+ * HYP-1222: replace a same-group class ALREADY present in a static className literal, in place —
+ * and ONLY that. Unlike {@link modifyDynamicClassName}'s normal write path, this never falls back
+ * to appending/wrapping when no conflicting literal is found; a caller with nothing to replace gets
+ * a no-op (`false`), not an injected class the source never had. Built for the probe-driven
+ * inline-style-override redirect (style-write-executor.ts `executeTailwindPlan`): that redirect
+ * fires when the empirical color-probe finds a literal inline style genuinely driving the color —
+ * commonly a same-group Tailwind class the tool itself duplicated into an inline override moments
+ * earlier (HYP-1162's cascade-inert escalation). Keeping that class in sync is desirable; injecting
+ * a brand-new class on an element that never had one for this property is not (it would silently
+ * pollute a hand-authored `style={{...}}` element's className on every future edit).
+ *
+ * Handles both a plain string literal (`className="p-2 bg-blue-500"`) and a dynamic expression
+ * (`className={cn(...) + ' bg-blue-500'}`) via {@link replaceConflictingInStaticLiterals}.
+ */
+export function replaceExistingConflictingClass(
+  element: t.JSXElement,
+  newClasses: string,
+  changedStyleKeys: string[],
+  state?: string,
+): boolean {
+  const attr = getAttribute(element, 'className');
+  if (!attr) return false;
+
+  if (t.isStringLiteral(attr)) {
+    const { preserved, removed } = removeConflictingClasses(attr.value, changedStyleKeys, state);
+    if (removed.length === 0) return false;
+    attr.value = [preserved, newClasses].filter(Boolean).join(' ').trim();
+    return true;
+  }
+
+  if (t.isJSXExpressionContainer(attr) && !t.isJSXEmptyExpression(attr.expression)) {
+    const { handledConflict } = replaceConflictingInStaticLiterals(
+      attr.expression as t.Expression,
+      newClasses,
+      changedStyleKeys,
+      state,
+    );
+    return handledConflict;
+  }
+
+  return false;
+}
+
+/**
  * HYP-544: the same-property classes the LIVE applied className (from the DOM) carries for the changed
  * properties. `domClasses` is the authoritative "what is applied right now". The caller diffs this set
  * against the classes the static rewrite stripped — whatever remains came from an OPAQUE source (an

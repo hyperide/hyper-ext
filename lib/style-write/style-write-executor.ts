@@ -10,7 +10,11 @@ import path from 'node:path';
 import * as t from '@babel/types';
 import { getCssModuleClassReferences, getCssModuleImportBindings } from '@lib/ast/css-module-references';
 import type { BindingLiteralRewrite, MutatorWriteHints } from '@lib/ast/dynamic-classname-mutator';
-import { detectClassNameType, modifyDynamicClassName } from '@lib/ast/dynamic-classname-mutator';
+import {
+  detectClassNameType,
+  modifyDynamicClassName,
+  replaceExistingConflictingClass,
+} from '@lib/ast/dynamic-classname-mutator';
 import type { FileIO } from '@lib/ast/file-io';
 import { applyInlineStyleUpdate } from '@lib/ast/inline-style-mutator';
 import { getAttribute, getAttributeStaticClassName, getAttributeString, setAttribute } from '@lib/ast/mutator';
@@ -269,7 +273,58 @@ export class StyleWriteExecutor {
     // tailwind-class driver (or no probe result) falls through to the normal className write below.
     const inlineOverride = this.probeDrivenInlineOverride();
     if (inlineOverride) {
-      applyInlineStyleUpdate(element, inlineOverride);
+      // HYP-1222: an `inline-style` driving candidate is a LITERAL color value already sitting in
+      // `style.<prop>` — commonly OUR OWN residue from a prior cascade-inert escalation
+      // (ast-update-utils.ts `escalateCascadeInertWrite`), which deliberately keeps a same-group
+      // Tailwind class in the className alongside the inline override (the documented
+      // "literal-className + inline-style coexistence contract"). Leaving that class untouched here
+      // was fine for the write that CREATED the inline style, but every SUBSEQUENT same-property edit
+      // also empirically finds the inline style still driving (it genuinely does — inline always wins
+      // the cascade) and keeps re-routing through this branch forever, so the class was never updated
+      // again — on a `cn()+concat` className this is HYP-1222's "second consecutive Fill pick does not
+      // replace" nightly failure.
+      //
+      // Keep an EXISTING same-group static literal in sync — replace only, NEVER append/wrap: an
+      // inline-style driver on an element that never had a matching class (a hand-authored
+      // `style={{ backgroundColor: '#fff' }}` with no `bg-*` class) must not have one injected on
+      // every edit, which is why this is a dedicated narrow helper and not the normal
+      // modifyDynamicClassName write path (that one falls back to appending/wrapping when nothing
+      // matched, which is right for the primary className write but wrong here — the inline
+      // override is already authoritative for the visible color).
+      //
+      // `kind` comes from the SAME probeDrivenInlineOverride() read that decided `inlineOverride`
+      // itself (not a separate `probeDriving[0]` re-index) so the two decisions can't diverge on a
+      // multi-entry probe result. Scoped to `inline-style` only: a `css-var`/`module-class` driver
+      // is NOT translatable to a literal Tailwind class (codex P2 — see the
+      // `empirical-probe inline-override redirect` tests), so those keep skipping the className
+      // write entirely. Best-effort: a failure here must never block the inline override write,
+      // which is already the strongest, authoritative write for this edit.
+      //
+      // Single-property only (fable review, HYP-1222): `plan.strategy.addClasses` is ONE flat
+      // string generated across every changed property at once — `replaceExistingConflictingClass`
+      // has no way to tell which token belongs to which property. Its removal gate is per-attribute
+      // ("did ANY conflicting class get removed"), not per-property, so a multi-property write where
+      // only ONE property had an existing class would still append the OTHER property's brand-new
+      // class too — exactly the injection-on-an-element-that-never-had-one pollution the helper's
+      // own contract forbids. Restricting to a single changed property keeps the gate correct without
+      // reaching for a per-property regeneration of addClasses (which is unsafe in general — several
+      // `generateTailwindClasses` branches, e.g. position/top-right-bottom-left, only emit output when
+      // multiple keys are present together, so generating per-key in isolation would silently drop
+      // classes for those groups). Multi-property inline-style-driven writes just skip the sync, same
+      // as this whole branch's behavior before HYP-1222 — not a regression, only not-yet-improved.
+      if (inlineOverride.kind === 'inline-style' && plan.strategy.removeForProperties.length === 1) {
+        try {
+          replaceExistingConflictingClass(
+            element,
+            plan.strategy.addClasses,
+            plan.strategy.removeForProperties,
+            tailwindStatePrefix(plan),
+          );
+        } catch {
+          // best-effort class sync — the inline override below is the write that must land.
+        }
+      }
+      applyInlineStyleUpdate(element, inlineOverride.styles);
       await this.fileParser.writeAST(ast, absolutePath);
       return { success: true, plan, mutatedFiles: [absolutePath] };
     }
@@ -562,12 +617,16 @@ export class StyleWriteExecutor {
    * inline-style floor (§7). A tailwind-class driver returns null → keep the existing twMerge path.
    * Requires the raw requested CSS styles (the TailwindPlan only carries the generated class).
    */
-  private probeDrivenInlineOverride(): Record<string, string> | null {
+  private probeDrivenInlineOverride(): { styles: Record<string, string>; kind: ProbeDrivingCandidate['kind'] } | null {
     const first = this.probeDriving?.[0];
     if (!first) return null;
     if (first.kind === 'tailwind-class') return null; // twMerge path handles utility drivers
     if (!this.requestedStyles || Object.keys(this.requestedStyles).length === 0) return null;
-    return { ...this.requestedStyles };
+    // HYP-1222: return the driving entry's `kind` alongside the styles, not just the styles — a
+    // caller that re-derives "which kind drove this override" from `probeDriving[0]` separately
+    // can diverge from THIS decision if it ever inspects a different index. Returning both from
+    // the same read keeps them structurally impossible to disagree.
+    return { styles: { ...this.requestedStyles }, kind: first.kind };
   }
 
   /**

@@ -9,7 +9,11 @@ import { parse } from '@babel/parser';
 import * as t from '@babel/types';
 import { describe, expect, it } from 'bun:test';
 import { twMerge } from 'tailwind-merge';
-import { type BindingLiteralRewrite, modifyDynamicClassName } from './dynamic-classname-mutator.js';
+import {
+  type BindingLiteralRewrite,
+  modifyDynamicClassName,
+  replaceExistingConflictingClass,
+} from './dynamic-classname-mutator.js';
 
 /**
  * Evaluate a rewritten className expression source against real runtime helpers so we can assert
@@ -492,6 +496,66 @@ describe('modifyDynamicClassName — DOM-anchored twMerge residual (HYP-544)', (
 
     expect(out).toContain('twMerge');
     expect(out).toContain('text-blue-500');
+  });
+});
+
+describe('replaceExistingConflictingClass — replace-only sync for the probe-driven inline-override redirect (HYP-1222)', () => {
+  function replaceExisting(
+    code: string,
+    newClasses: string,
+    changedStyleKeys: string[],
+  ): { changed: boolean; expr: string } {
+    const ast = parseToAst(code);
+    const element = firstJsxElement(ast);
+    const changed = replaceExistingConflictingClass(element, newClasses, changedStyleKeys);
+    const attr = element.openingElement.attributes.find(
+      (a): a is t.JSXAttribute => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'className',
+    );
+    const value = attr?.value;
+    let expr = '';
+    if (value && t.isJSXExpressionContainer(value) && !t.isJSXEmptyExpression(value.expression)) {
+      expr = generate(value.expression).code;
+    } else if (value && t.isStringLiteral(value)) {
+      expr = value.value;
+    }
+    return { changed, expr };
+  }
+
+  it('plain string className with a matching class: replaces in place, reports changed=true', () => {
+    const code = '<div className="p-2 bg-blue-500">Hi</div>;';
+    const { changed, expr } = replaceExisting(code, 'bg-green-500', ['backgroundColor']);
+    expect(changed).toBe(true);
+    expect(expr).toContain('bg-green-500');
+    expect(expr).not.toContain('bg-blue-500');
+    expect(expr).toContain('p-2');
+  });
+
+  it('plain string className with NO matching class: no-op, reports changed=false, nothing injected', () => {
+    const code = '<div className="p-2 rounded">Hi</div>;';
+    const { changed, expr } = replaceExisting(code, 'bg-green-500', ['backgroundColor']);
+    expect(changed).toBe(false);
+    expect(expr).not.toContain('bg-green-500');
+    expect(expr).toBe('p-2 rounded');
+  });
+
+  it('cn()+concat dynamic expression with a matching tail class: replaces in place (HYP-1222 fixture shape)', () => {
+    const code = "<div className={cn('px-6 py-4 m-4 rounded font-semibold text-white', y) + ' bg-blue-500'}>Hi</div>;";
+    const { changed, expr } = replaceExisting(code, 'bg-green-500', ['backgroundColor']);
+    expect(changed).toBe(true);
+    expect(expr).toContain('bg-green-500');
+    expect(expr).not.toContain('bg-blue-500');
+    expect(expr).toContain('px-6 py-4 m-4 rounded font-semibold text-white');
+  });
+
+  it('cn()+concat dynamic expression with NO matching class: no-op, never appends/wraps', () => {
+    const tail = "cn('px-6 py-4 m-4 rounded font-semibold text-white', y) + ' m-1'";
+    const code = `<div className={${tail}}>Hi</div>;`;
+    const { changed, expr } = replaceExisting(code, 'bg-green-500', ['backgroundColor']);
+    expect(changed).toBe(false);
+    expect(expr).not.toContain('bg-green-500');
+    // Untouched — no append/wrap fallback: the expression is byte-identical to the input tail
+    // (aside from generator whitespace), not extended with a new operand.
+    expect(expr.replace(/\s+/g, ' ')).toBe(tail.replace(/\s+/g, ' '));
   });
 });
 

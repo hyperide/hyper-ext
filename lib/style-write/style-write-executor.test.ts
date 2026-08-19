@@ -1190,6 +1190,224 @@ export function App() {
       expect(out).toContain('bg-red-600');
       expect(out).not.toMatch(/style=\{\{[^}]*#dc2626/);
     });
+
+    // HYP-1222: an `inline-style` driving candidate (a LITERAL color value already sitting in
+    // `style.<prop>`) commonly comes from OUR OWN cascade-inert escalation
+    // (ast-update-utils.ts `escalateCascadeInertWrite`), which deliberately keeps a same-group
+    // Tailwind class in the className alongside the inline override (the "literal-className +
+    // inline-style coexistence contract"). Before this fix, the redirect above left that class
+    // COMPLETELY untouched — fine for the write that CREATED the inline style, but every
+    // subsequent same-property edit also empirically finds the inline style still driving (it
+    // genuinely does — inline always wins the cascade) and keeps re-routing here forever, so
+    // the className token was NEVER updated again. On a `cn()+concat` className (the exact
+    // shape `color-expr-complex-classname.spec.ts` drives end-to-end) this is the fixture for
+    // HYP-1222's "second consecutive Fill pick does not replace" nightly failure: pick 1 writes
+    // the class correctly, an unrelated slow-HMR verify false-negative (HYP-1162) duplicates it
+    // into an inline style, and pick 2 — reproduced here — must keep the class in sync too,
+    // unlike the `css-var`/`module-class` cases above (not translatable to a literal class, so
+    // those still skip the className write — see the `css-var` test above, unchanged).
+    it('inline-style driver on a cn()+concat className → BOTH the inline style AND the same-group class update', async () => {
+      const appPath = '/project/src/App.tsx';
+      const concatSource = `const cn = (...parts) => parts.filter(Boolean).join(' ');
+const y = false;
+export function App() {
+  return (
+    <div className={cn('px-6 py-4 m-4 rounded font-semibold text-white', y) + ' bg-blue-500'} style={{ backgroundColor: '#3b82f6' }}>
+      Hi
+    </div>
+  );
+}
+`;
+      const fileIO = new InMemoryFileIO({
+        [appPath]: concatSource,
+        '/project/package.json': JSON.stringify({ dependencies: { 'tailwind-merge': '^2.6.0' } }),
+      });
+      const { ast, element } = await parseElement(fileIO, appPath, 4, 4);
+
+      const result = await executeStyleWriteRequest({
+        ast,
+        sourceFilePath: appPath,
+        element,
+        styles: { backgroundColor: '#22c55e' },
+        domClasses: 'px-6 py-4 m-4 rounded font-semibold text-white bg-blue-500',
+        probeDriving: [{ kind: 'inline-style', token: '#3b82f6', locationHint: 'style.backgroundColor' }],
+        runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'test-fixture' },
+        fileIO,
+        projectRoot: '/project',
+      });
+      expect(result.success).toBe(true);
+      const out = fileIO.content(appPath);
+      // The inline override lands the new green...
+      expect(out).toMatch(/style=\{\{[^}]*#22c55e/);
+      // ...AND the same-group class in the concat tail is replaced (not left stale, not stacked).
+      expect(out).toContain('bg-green-500');
+      expect(out).not.toContain('bg-blue-500');
+      // Non-color classes in the cn() call survive untouched.
+      expect(out).toContain('px-6 py-4 m-4 rounded font-semibold text-white');
+    });
+
+    // HYP-1222 review follow-up (Opus/Fable): the sync must be REPLACE-ONLY. An inline-style
+    // driver on an element that never had a matching Tailwind class (a hand-authored
+    // `style={{ backgroundColor: ... }}` with no `bg-*` class in the className) must not have one
+    // silently injected on every color edit — the inline override already carries the color; a
+    // freshly-appended, cascade-inert `bg-*` token would just be pollution.
+    it('inline-style driver with NO existing same-group class → class untouched, only the inline style updates', async () => {
+      const appPath = '/project/src/App.tsx';
+      const noClassSource = `export function App() {
+  return (
+    <div className="p-2 rounded" style={{ backgroundColor: '#3b82f6' }}>
+      Hi
+    </div>
+  );
+}
+`;
+      const fileIO = new InMemoryFileIO({
+        [appPath]: noClassSource,
+        '/project/package.json': JSON.stringify({ dependencies: { 'tailwind-merge': '^2.6.0' } }),
+      });
+      const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+      const result = await executeStyleWriteRequest({
+        ast,
+        sourceFilePath: appPath,
+        element,
+        styles: { backgroundColor: '#22c55e' },
+        domClasses: 'p-2 rounded',
+        probeDriving: [{ kind: 'inline-style', token: '#3b82f6', locationHint: 'style.backgroundColor' }],
+        runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'test-fixture' },
+        fileIO,
+        projectRoot: '/project',
+      });
+      expect(result.success).toBe(true);
+      const out = fileIO.content(appPath);
+      expect(out).toMatch(/style=\{\{[^}]*#22c55e/);
+      // No bg-* class was ever present — none must be injected now.
+      expect(out).not.toMatch(/bg-(?:red|blue|green)-\d{2,3}/);
+      expect(out).toContain('className="p-2 rounded"');
+    });
+
+    // HYP-1222 review follow-up (GLM/Fable): the sync must also work on a PLAIN STRING className
+    // (`classNameType === 'string'`), not only the `cn()+concat` dynamic-expression shape — that's
+    // the most common real-world shape an inline-style driver would coexist with.
+    it('inline-style driver on a plain string className → the class is replaced in place, not appended', async () => {
+      const appPath = '/project/src/App.tsx';
+      const litSource = `export function App() {
+  return (
+    <div className="p-2 bg-blue-500" style={{ backgroundColor: '#3b82f6' }}>
+      Hi
+    </div>
+  );
+}
+`;
+      const fileIO = new InMemoryFileIO({
+        [appPath]: litSource,
+        '/project/package.json': JSON.stringify({ dependencies: { 'tailwind-merge': '^2.6.0' } }),
+      });
+      const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+      const result = await executeStyleWriteRequest({
+        ast,
+        sourceFilePath: appPath,
+        element,
+        styles: { backgroundColor: '#22c55e' },
+        domClasses: 'p-2 bg-blue-500',
+        probeDriving: [{ kind: 'inline-style', token: '#3b82f6', locationHint: 'style.backgroundColor' }],
+        runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'test-fixture' },
+        fileIO,
+        projectRoot: '/project',
+      });
+      expect(result.success).toBe(true);
+      const out = fileIO.content(appPath);
+      expect(out).toMatch(/style=\{\{[^}]*#22c55e/);
+      expect(out).toContain('bg-green-500');
+      expect(out).not.toContain('bg-blue-500');
+      expect(out).toContain('p-2');
+    });
+
+    // HYP-1222 review follow-up (Opus/Fable): the class-sync decision must key off the SAME probe
+    // entry that produced the inline override, not a separate `probeDriving[0]` re-index — proven
+    // here with a multi-entry probe where the driving (first) entry is `css-var`, NOT `inline-style`.
+    // Per the codex-P2 contract a `css-var` driver must NOT touch the className at all, even though
+    // a LATER entry in the same array happens to be `inline-style`.
+    it('multi-entry probeDriving, first entry css-var → className still untouched (kind must not be re-derived from a different index)', async () => {
+      const appPath = '/project/src/App.tsx';
+      const litSource = `export function App() {
+  return (
+    <div className="p-2 bg-blue-600" style={{ backgroundColor: 'var(--brand)' }}>Hi</div>
+  );
+}
+`;
+      const fileIO = new InMemoryFileIO({
+        [appPath]: litSource,
+        '/project/package.json': JSON.stringify({ dependencies: { 'tailwind-merge': '^2.6.0' } }),
+      });
+      const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+      const result = await executeStyleWriteRequest({
+        ast,
+        sourceFilePath: appPath,
+        element,
+        styles: { backgroundColor: '#dc2626' },
+        domClasses: 'p-2 bg-blue-600',
+        probeDriving: [
+          { kind: 'css-var', token: '--brand', locationHint: 'computed' },
+          { kind: 'inline-style', token: 'rgb(30,64,175)', locationHint: 'style' },
+        ],
+        runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'test-fixture' },
+        fileIO,
+        projectRoot: '/project',
+      });
+      expect(result.success).toBe(true);
+      const out = fileIO.content(appPath);
+      expect(out).toMatch(/style=\{\{[^}]*#dc2626/);
+      // The first (driving) entry is css-var → the literal class must NOT be rewritten.
+      expect(out).toContain('bg-blue-600');
+      expect(out).not.toContain('bg-red-600');
+    });
+
+    // HYP-1222 review follow-up (Fable): `plan.strategy.addClasses` is ONE flat string covering
+    // every changed property, and the sync's removal gate is per-attribute ("did ANY conflicting
+    // class get removed"), not per-property — so a naive sync on a multi-property write would
+    // inject the SECOND property's brand-new class even though that property never had one, which
+    // is exactly the pollution the replace-only contract exists to prevent. The fix restricts the
+    // sync to single-property writes; a multi-property write here must leave BOTH classes alone
+    // (no injected `text-*`, no touched `bg-*`) and still land the authoritative inline override.
+    it('inline-style driver on a multi-property write → className sync skipped entirely, no cross-property injection', async () => {
+      const appPath = '/project/src/App.tsx';
+      const litSource = `export function App() {
+  return (
+    <div className="p-2 bg-blue-500" style={{ backgroundColor: '#3b82f6' }}>Hi</div>
+  );
+}
+`;
+      const fileIO = new InMemoryFileIO({
+        [appPath]: litSource,
+        '/project/package.json': JSON.stringify({ dependencies: { 'tailwind-merge': '^2.6.0' } }),
+      });
+      const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+      const result = await executeStyleWriteRequest({
+        ast,
+        sourceFilePath: appPath,
+        element,
+        // Two properties in the same write — only backgroundColor has an existing class.
+        styles: { backgroundColor: '#22c55e', color: '#ffffff' },
+        domClasses: 'p-2 bg-blue-500',
+        probeDriving: [{ kind: 'inline-style', token: '#3b82f6', locationHint: 'style.backgroundColor' }],
+        runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'test-fixture' },
+        fileIO,
+        projectRoot: '/project',
+      });
+      expect(result.success).toBe(true);
+      const out = fileIO.content(appPath);
+      // The inline override still lands (it's the authoritative write for this edit).
+      expect(out).toMatch(/style=\{\{[^}]*#22c55e/);
+      // The pre-existing bg-* class is left untouched (sync skipped, not partially applied)...
+      expect(out).toContain('bg-blue-500');
+      expect(out).not.toContain('bg-green-500');
+      // ...and no brand-new text-color class was injected for the property that never had one.
+      expect(out).not.toMatch(/text-(?:white|\[#ffffff\])/);
+    });
   });
 
   // HYP-544 Phase 1: a same-file const literal that contributes the conflicting color is find-replaced
