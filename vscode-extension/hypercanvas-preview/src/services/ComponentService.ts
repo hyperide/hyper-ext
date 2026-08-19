@@ -314,7 +314,7 @@ export class ComponentService {
       const ast = parseCode(sourceCode);
 
       // Find the exported component's return JSX
-      const returnJSX = this._findComponentReturnJSX(ast);
+      const returnJSX = this._findComponentReturnJSX(ast, componentPath);
       if (!returnJSX) return [];
 
       const parseContext: ParseContext = { fileAST: ast };
@@ -684,82 +684,11 @@ export class ComponentService {
   /**
    * Find the JSX returned by the main exported component function.
    * Skips nested function declarations (event handlers, helpers).
+   * Delegates to the module-level `resolveComponentReturnJSX` so the
+   * resolution logic is testable without a vscode-backed instance (HYP-1223).
    */
-  private _findComponentReturnJSX(ast: t.File): t.JSXElement | t.JSXFragment | null {
-    let result: t.JSXElement | t.JSXFragment | null = null;
-    let exportedName: string | null = null;
-
-    // First pass: find exported component name
-    traverseWithoutScope(ast, {
-      ExportDefaultDeclaration(nodePath: NodePath<t.ExportDefaultDeclaration>) {
-        const decl = nodePath.node.declaration;
-        if (t.isIdentifier(decl)) {
-          exportedName = decl.name;
-        } else if (t.isFunctionDeclaration(decl) && decl.id) {
-          exportedName = decl.id.name;
-        } else if (t.isFunctionDeclaration(decl)) {
-          // Anonymous default export function — extract return directly
-          const returnJSX = _extractReturnJSX(decl.body);
-          if (returnJSX) result = returnJSX;
-        }
-      },
-    });
-
-    if (result) return result;
-
-    // Second pass: find the function body and extract return JSX
-    traverseWithoutScope(ast, {
-      FunctionDeclaration(nodePath: NodePath<t.FunctionDeclaration>) {
-        if (result) return;
-        if (nodePath.node.id && nodePath.node.id.name === exportedName) {
-          const returnJSX = _extractReturnJSX(nodePath.node.body);
-          if (returnJSX) result = returnJSX;
-        }
-      },
-      VariableDeclarator(nodePath: NodePath<t.VariableDeclarator>) {
-        if (result) return;
-        if (t.isIdentifier(nodePath.node.id) && nodePath.node.id.name === exportedName) {
-          const init = nodePath.node.init;
-          if (t.isArrowFunctionExpression(init) || t.isFunctionExpression(init)) {
-            if (t.isBlockStatement(init.body)) {
-              const returnJSX = _extractReturnJSX(init.body);
-              if (returnJSX) result = returnJSX;
-            } else if (t.isJSXElement(init.body) || t.isJSXFragment(init.body)) {
-              result = init.body;
-            }
-          }
-        }
-      },
-    });
-
-    // Fallback: if no export default found, look for first PascalCase function
-    if (!result && !exportedName) {
-      traverseWithoutScope(ast, {
-        FunctionDeclaration(nodePath: NodePath<t.FunctionDeclaration>) {
-          if (result) return;
-          if (nodePath.node.id && /^[A-Z]/.test(nodePath.node.id.name)) {
-            const returnJSX = _extractReturnJSX(nodePath.node.body);
-            if (returnJSX) result = returnJSX;
-          }
-        },
-        VariableDeclarator(nodePath: NodePath<t.VariableDeclarator>) {
-          if (result) return;
-          if (t.isIdentifier(nodePath.node.id) && /^[A-Z]/.test(nodePath.node.id.name)) {
-            const init = nodePath.node.init;
-            if (t.isArrowFunctionExpression(init) || t.isFunctionExpression(init)) {
-              if (t.isBlockStatement(init.body)) {
-                const returnJSX = _extractReturnJSX(init.body);
-                if (returnJSX) result = returnJSX;
-              } else if (t.isJSXElement(init.body) || t.isJSXFragment(init.body)) {
-                result = init.body;
-              }
-            }
-          }
-        },
-      });
-    }
-
-    return result;
+  private _findComponentReturnJSX(ast: t.File, componentPath: string): t.JSXElement | t.JSXFragment | null {
+    return resolveComponentReturnJSX(ast, componentPath);
   }
 
   /**
@@ -1011,6 +940,279 @@ function _extractReturnJSX(body: t.BlockStatement): t.JSXElement | t.JSXFragment
     }
   }
   return null;
+}
+
+// ============================================
+// Root-JSX resolution (HYP-1223) — module-level so the resolution logic is
+// unit-testable on a bare AST, with no vscode-backed ComponentService instance.
+// ============================================
+
+/** Export classification for a file's top-level declarations. */
+interface ExportInfo {
+  hasDefaultExport: boolean;
+  defaultExportedName: string | null;
+  /** PascalCase identifiers reachable via a named export (function/const decl or `export { X }`). */
+  exportedVarNames: string[];
+}
+
+/**
+ * Unwrap a HOC call expression (`memo(App)`, `connect(...)(App)`,
+ * `memo(forwardRef(App))`) to find the wrapped component's PascalCase
+ * identifier, so its locally-declared JSX can still be resolved. Recurses
+ * only into call ARGUMENTS (never the callee) — for `connect(mapState)(App)`
+ * the outer call's arguments already contain `App` directly; for
+ * `memo(forwardRef(App))` the argument is itself a call expression whose
+ * argument is `App`. Returns the first PascalCase identifier found; not
+ * exhaustive HOC-signature modeling, just enough to recover the common
+ * single-wrapped-component shapes.
+ */
+function findWrappedComponentName(expr: t.Expression): string | null {
+  if (t.isIdentifier(expr) && /^[A-Z]/.test(expr.name)) return expr.name;
+  if (t.isCallExpression(expr)) {
+    for (const arg of expr.arguments) {
+      if (!t.isExpression(arg)) continue;
+      const name = findWrappedComponentName(arg);
+      if (name) return name;
+    }
+  }
+  return null;
+}
+
+/**
+ * Classify a file's exports. Mirrors `_parseComponent`'s export-collection
+ * visitors (prop scoping, HYP-486) so both agree on what counts as an
+ * exported PascalCase identifier — kept as its own pass here (rather than
+ * reusing `_parseComponent`'s traverse) because this is used on a bare AST
+ * with no vscode/file-path context and a different set of concerns (no prop
+ * extraction, no sampleRender detection).
+ */
+function collectExportInfo(ast: t.File): ExportInfo {
+  let hasDefaultExport = false;
+  let defaultExportedName: string | null = null;
+  const exportedVarNames: string[] = [];
+
+  traverseWithoutScope(ast, {
+    ExportDefaultDeclaration(nodePath: NodePath<t.ExportDefaultDeclaration>) {
+      hasDefaultExport = true;
+      const declaration = nodePath.node.declaration;
+      if (t.isIdentifier(declaration)) {
+        defaultExportedName = declaration.name;
+      } else if (t.isFunctionDeclaration(declaration) && declaration.id) {
+        defaultExportedName = declaration.id.name;
+      } else if (t.isCallExpression(declaration)) {
+        // HOC-wrapped default export (`export default memo(App)`,
+        // `export default connect(...)(App)`, `export default
+        // memo(forwardRef(App))`) — a common React pattern. Unwrap to the
+        // wrapped component's identifier so its locally-declared JSX can
+        // still be found, rather than degrading straight to an empty tree.
+        defaultExportedName = findWrappedComponentName(declaration);
+      }
+    },
+    ExportNamedDeclaration(nodePath: NodePath<t.ExportNamedDeclaration>) {
+      const declaration = nodePath.node.declaration;
+
+      if (t.isFunctionDeclaration(declaration) && declaration.id && /^[A-Z]/.test(declaration.id.name)) {
+        exportedVarNames.push(declaration.id.name);
+      }
+
+      if (t.isVariableDeclaration(declaration)) {
+        for (const decl of declaration.declarations) {
+          if (t.isIdentifier(decl.id) && /^[A-Z]/.test(decl.id.name)) {
+            exportedVarNames.push(decl.id.name);
+          }
+        }
+      }
+
+      // Export-list specifiers: `const Foo = ...; export { Foo };`. Skip cross-file
+      // barrel re-exports (`export { X } from './x'`) and type-only exports.
+      if (!declaration && !nodePath.node.source && nodePath.node.exportKind !== 'type') {
+        for (const spec of nodePath.node.specifiers) {
+          if (!t.isExportSpecifier(spec)) continue;
+          if (spec.exportKind === 'type') continue;
+          if (t.isIdentifier(spec.local) && /^[A-Z]/.test(spec.local.name)) {
+            exportedVarNames.push(spec.local.name);
+          }
+        }
+      }
+    },
+  });
+
+  return { hasDefaultExport, defaultExportedName, exportedVarNames };
+}
+
+/**
+ * Resolve which named-exported identifier is "the" file's component: the
+ * named export matching the file's basename (case-insensitive), else the
+ * first named export in traversal order. Only called when the file has NO
+ * default export — `resolveComponentReturnJSX` resolves the default-export
+ * case itself. Mirrors `_parseComponent`'s resolution (HYP-486).
+ */
+function resolvePrimaryExportedName(componentPath: string, info: ExportInfo): string | null {
+  if (info.exportedVarNames.length === 0) return null;
+  const fileBasenameLC = path.basename(componentPath, path.extname(componentPath)).toLowerCase();
+  const basenameMatch = info.exportedVarNames.find((n) => n.toLowerCase() === fileBasenameLC);
+  return basenameMatch ?? info.exportedVarNames[0];
+}
+
+/**
+ * Extract an anonymous default-exported function or arrow function's return
+ * JSX directly (no name to resolve). Covers `export default function () {}`
+ * and both arrow forms — `export default () => <div/>` (expression body) and
+ * `export default () => { return <div/>; }` (block body) — since
+ * arrow-function default exports are a common React shape.
+ */
+function findAnonymousDefaultExportJSX(ast: t.File): t.JSXElement | t.JSXFragment | null {
+  let result: t.JSXElement | t.JSXFragment | null = null;
+  traverseWithoutScope(ast, {
+    ExportDefaultDeclaration(nodePath: NodePath<t.ExportDefaultDeclaration>) {
+      if (result) return;
+      const decl = nodePath.node.declaration;
+      if (t.isFunctionDeclaration(decl) && !decl.id) {
+        result = _extractReturnJSX(decl.body);
+      } else if (t.isArrowFunctionExpression(decl)) {
+        if (t.isBlockStatement(decl.body)) {
+          result = _extractReturnJSX(decl.body);
+        } else if (t.isJSXElement(decl.body) || t.isJSXFragment(decl.body)) {
+          result = decl.body;
+        }
+      }
+      if (result) nodePath.stop();
+    },
+  });
+  return result;
+}
+
+/** Find a top-level function/const declaration by name and extract its return JSX. */
+function findFunctionReturnJSXByName(ast: t.File, name: string): t.JSXElement | t.JSXFragment | null {
+  let result: t.JSXElement | t.JSXFragment | null = null;
+  traverseWithoutScope(ast, {
+    FunctionDeclaration(nodePath: NodePath<t.FunctionDeclaration>) {
+      if (result) return;
+      if (nodePath.node.id && nodePath.node.id.name === name) {
+        result = _extractReturnJSX(nodePath.node.body);
+        if (result) nodePath.stop();
+      }
+    },
+    VariableDeclarator(nodePath: NodePath<t.VariableDeclarator>) {
+      if (result) return;
+      if (t.isIdentifier(nodePath.node.id) && nodePath.node.id.name === name) {
+        const init = nodePath.node.init;
+        if (t.isArrowFunctionExpression(init) || t.isFunctionExpression(init)) {
+          if (t.isBlockStatement(init.body)) {
+            result = _extractReturnJSX(init.body);
+          } else if (t.isJSXElement(init.body) || t.isJSXFragment(init.body)) {
+            result = init.body;
+          }
+          if (result) nodePath.stop();
+        }
+      }
+    },
+  });
+  return result;
+}
+
+/**
+ * Last resort when a resolved export name yields no JSX at all (either
+ * because nothing was exported, or — HYP-1223 review finding — because the
+ * resolved name IS exported but isn't a function/arrow component at all,
+ * e.g. `export const ThemeContext = createContext(null)` sorting before a
+ * real `function Card() {}` in the same file's export list). Falls back to
+ * the first PascalCase function/const in document order, regardless of
+ * whether it's actually exported — this is deliberately permissive so a
+ * resolvable name that turns out to be the wrong kind of declaration still
+ * degrades to SOME component tree instead of an empty one, matching the
+ * pre-fix fallback's behavior for this specific edge case.
+ */
+function findFirstPascalCaseReturnJSX(ast: t.File): t.JSXElement | t.JSXFragment | null {
+  let result: t.JSXElement | t.JSXFragment | null = null;
+  traverseWithoutScope(ast, {
+    FunctionDeclaration(nodePath: NodePath<t.FunctionDeclaration>) {
+      if (result) return;
+      if (nodePath.node.id && /^[A-Z]/.test(nodePath.node.id.name)) {
+        result = _extractReturnJSX(nodePath.node.body);
+        if (result) nodePath.stop();
+      }
+    },
+    VariableDeclarator(nodePath: NodePath<t.VariableDeclarator>) {
+      if (result) return;
+      if (t.isIdentifier(nodePath.node.id) && /^[A-Z]/.test(nodePath.node.id.name)) {
+        const init = nodePath.node.init;
+        if (t.isArrowFunctionExpression(init) || t.isFunctionExpression(init)) {
+          if (t.isBlockStatement(init.body)) {
+            result = _extractReturnJSX(init.body);
+          } else if (t.isJSXElement(init.body) || t.isJSXFragment(init.body)) {
+            result = init.body;
+          }
+          if (result) nodePath.stop();
+        }
+      }
+    },
+  });
+  return result;
+}
+
+/**
+ * Find the JSX returned by the file's exported component function (the
+ * Elements Tree root). Resolution order: default export (named or
+ * anonymous) > named export matching the file's basename > first named
+ * export > (degenerate files only) first PascalCase declaration in document
+ * order.
+ *
+ * HYP-1223: previously, whenever a file had no default export, this always
+ * fell back straight to "first PascalCase decl in document order",
+ * completely ignoring the file's actual `export { ... }` list. A file like
+ * shadcn's `card.tsx` (`function Card(){} ... export { Card, CardHeader,
+ * ... }`) happened to resolve correctly only because its primary component
+ * is declared textually first — a file that declares its primary component
+ * AFTER a helper, or that exports a non-first identifier, would silently
+ * resolve to the wrong root JSX. This now shares `_parseComponent`'s
+ * already-correct export-aware resolution (`exportedVarNames` + basename
+ * matching) instead of a separate, weaker fallback that never consulted the
+ * export list at all.
+ *
+ * Default-export handling never falls through to the document-order
+ * PascalCase scan below, regardless of whether a name was resolved for it —
+ * checked on `exportInfo.hasDefaultExport` directly, not on name presence,
+ * so an anonymous or HOC-wrapped default (no resolvable name) can't slip
+ * past a name-gated guard into the scan. `export default withFoo(App)` /
+ * `memo(App)` / `connect(...)(App)` are unwrapped via
+ * `findWrappedComponentName` to recover `App`'s locally-declared JSX; when
+ * unwrapping or lookup fails, resolution degrades to an empty tree rather
+ * than guessing at an unrelated declaration elsewhere in the file.
+ *
+ * When a resolved NAMED-export candidate isn't a function/arrow component at
+ * all (e.g. `export const ThemeContext = createContext(null)` sorting ahead
+ * of a real `function Card() {}` in the same export list), resolution tries
+ * the REMAINING named exports in order before falling back to the raw
+ * document-order scan — otherwise a non-exported helper declared before the
+ * real component would win, resurrecting the original bug one layer deeper.
+ */
+function resolveComponentReturnJSX(ast: t.File, componentPath: string): t.JSXElement | t.JSXFragment | null {
+  const anonymousDefaultJSX = findAnonymousDefaultExportJSX(ast);
+  if (anonymousDefaultJSX) return anonymousDefaultJSX;
+
+  const exportInfo = collectExportInfo(ast);
+
+  if (exportInfo.hasDefaultExport) {
+    // Never guess at an unrelated declaration for a default-exported file —
+    // resolve the named default's JSX, or degrade to an empty tree.
+    return exportInfo.defaultExportedName ? findFunctionReturnJSXByName(ast, exportInfo.defaultExportedName) : null;
+  }
+
+  const exportedName = resolvePrimaryExportedName(componentPath, exportInfo);
+  if (exportedName) {
+    const byName = findFunctionReturnJSXByName(ast, exportedName);
+    if (byName) return byName;
+    // The resolved candidate isn't a function/arrow component — try every
+    // other named export before falling back to document order.
+    for (const candidateName of exportInfo.exportedVarNames) {
+      if (candidateName === exportedName) continue;
+      const candidate = findFunctionReturnJSXByName(ast, candidateName);
+      if (candidate) return candidate;
+    }
+  }
+
+  return findFirstPascalCaseReturnJSX(ast);
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
