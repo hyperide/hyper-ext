@@ -35,9 +35,19 @@
  * `<Comp/>` Slot-ternary tag with zero attributes recognizes the shape and forwards nothing;
  * review finding, PR #719 P2). Both idiom shapes (the ternary tag AND the dual early-return) are
  * fully covered by the general trace above with real attribute verification, so the recognizer
- * is currently exercised only by its own tests, kept for the HYP-1235 unification with the ext's
- * older `style-forwarding-check.ts` copy (see that file's header). styled-components is still a
- * narrow, separately-testable recognizer matching a KNOWN library contract — not a general
+ * is currently exercised only by its own tests. HYP-1235 rewired the ext's write-path pre-check
+ * (`style-forwarding-check.ts`) onto `detectForwarding` (this file); that file's own header
+ * explains how it collapses these per-channel results into its pre-plan admit/exclude gate, and
+ * states the deliberate risk-acceptance for the open false-exclusion P2s below now that they can
+ * produce a write refusal, not just a stale read-path fact.
+ * `lib/style-write/component-forwarding.ts` (consumed by the shared executor's HYP-995
+ * channel-precise refusal, `style-write-executor.ts`) still runs its OWN older, coarser PER-PROP
+ * check — unifying that per-prop analysis onto `detectForwarding`'s richer trace is a tracked
+ * follow-up, not done here. Its LOCATION-resolution fallback for local monorepo workspace packages
+ * is NOT a gap anymore — HYP-1235 moved it to the shared, security-hardened
+ * `lib/ast/workspace-package-entry.ts`, which both `component-forwarding.ts` and this file's own
+ * `forward-detect-locate.ts` now call. styled-components is still a narrow, separately-testable
+ * recognizer matching a KNOWN library contract — not a general
  * `cloneElement`/HOC tracer. General `cloneElement` outside the Slot idiom, class components,
  * context-based compound components (`<Select.Trigger/>`), and prop-getter hooks (React Aria /
  * Downshift — spreading an OPAQUE hook return, not the component's own destructured binding) are

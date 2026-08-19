@@ -35,16 +35,31 @@ async function classifyTag(source: string, tagName: string) {
   return checkStyleForwarding({ ast, filePath: FILE_PATH, element, fileIO, aliasMap: {} });
 }
 
+describe('checkStyleForwarding — native tags', () => {
+  it('admits a plain native (lowercase) DOM tag through the rewired detector', async () => {
+    // The old code special-cased `facts.kind === 'native'` → `{ kind: 'forwards' }` directly. The
+    // rewired detector relies on `detectForwarding` reporting a HIGH-confidence positive on both
+    // channels for a native tag (`forward-detect.ts`'s own `isCustomComponentTag` gate) — pinning
+    // that here so a future change to that gate can't silently degrade a native tag to `unknown`.
+    const source = `export function Page() { return <div className="x" />; }\n`;
+    expect(await classifyTag(source, 'div')).toEqual({ kind: 'forwards' });
+  });
+});
+
 describe('checkStyleForwarding — transparent-HOC unwrapping', () => {
-  it('treats a styled-components factory as UNKNOWN, not a positive not-forwarding verdict', async () => {
+  it('treats a styled-components factory as a POSITIVE forwarding verdict (HYP-1235)', async () => {
     const source = `const Button = styled.button(({ theme }) => ({ color: theme.fg }));
 export function Page() {
   return <Button>hi</Button>;
 }
 `;
-    // Pre-fix this returned { kind: 'not-forwarding' } — the { theme } callback param was
-    // misread as Button's props destructure. styled.button(...) is not a transparent wrapper.
-    expect(await classifyTag(source, 'Button')).toEqual({ kind: 'unknown' });
+    // Pre-HYP-901-fix this returned { kind: 'not-forwarding' } — the { theme } callback param was
+    // misread as Button's props destructure. styled.button(...) is not a transparent wrapper, so
+    // the OLD coarser check fell back to { kind: 'unknown' } instead. HYP-1235 rewired this onto
+    // the richer A1 detector, which recognizes `styled.tag(...)` as a KNOWN library contract that
+    // always injects its generated className onto a real DOM node — a confident POSITIVE, more
+    // accurate than the old detector's "can't tell" fallback.
+    expect(await classifyTag(source, 'Button')).toEqual({ kind: 'forwards' });
   });
 
   it('still unwraps a real memo() component and sees it forwards style', async () => {
@@ -121,6 +136,142 @@ export function Page() {
 
     const result = await checkStyleForwarding({ ast, filePath: importerPath, element, fileIO, aliasMap: {} });
     expect(result).toEqual({ kind: 'forwards' });
+  });
+});
+
+describe('checkStyleForwarding — HYP-1235 root-vs-descendant (A1 unification regression case)', () => {
+  it('excludes a component that attaches className to a NESTED element, not its returned root', async () => {
+    // The OLD coarser check only inspected the param-destructure shape: `className` IS
+    // destructured, so it classified this `not-forwarding`-eligible component as `forwards` —
+    // a blind write would land on the wrapping <div>, never reach the <span> that actually reads
+    // it. The richer A1 detector traces the render body and sees `className` attached to a
+    // DESCENDANT, not the root — a `forwards-non-root-only` high-confidence exclusion. Neither
+    // channel is destructured to the root here (`style` isn't destructured at all), so this is a
+    // genuine `not-forwarding` pre-write exclusion end to end.
+    const source = `const Box = ({ className }: { className?: string }) => (
+  <div>
+    <span className={className}>content</span>
+  </div>
+);
+export function Page() {
+  return <Box />;
+}
+`;
+    const result = await classifyTag(source, 'Box');
+    expect(result).toEqual(expect.objectContaining({ kind: 'not-forwarding', displayName: 'Box' }));
+  });
+});
+
+describe('checkStyleForwarding — HYP-1235 mixed-confidence collapse (one channel high-negative, one low)', () => {
+  it('admits (unknown) rather than excludes when only ONE channel is a proven high-confidence negative', async () => {
+    // `classifyForwarding`'s admit/exclude gate requires BOTH channels to be a proven high-confidence
+    // negative before returning `not-forwarding` (an `&&`, not an `||`) — a mutant flipping that
+    // operator would still pass every other test in this file (they only cover both-negative and
+    // both-positive), so this pins the mixed case directly.
+    //
+    // `style` is never destructured at all → a structurally-impossible-to-reach HIGH-confidence
+    // negative (`no-host-forward`) — settled before the render body is even inspected.
+    // `className` IS destructured and DOES carry on one alternative (`cond` true), but the OTHER
+    // alternative is an opaque, non-JSX return the tracer can't see into — per spec §9.2a "a trace
+    // lost in a conditional... is low", so `className` downgrades to LOW confidence (uncertain, not
+    // proven either way), never a false negative for the branch that didn't render.
+    const source = `function opaque() { return null as any; }
+const Widget = ({ className, cond }: { className?: string; cond: boolean }) => {
+  if (cond) return <div className={className} />;
+  return opaque();
+};
+export function Page() {
+  return <Widget cond={true} />;
+}
+`;
+    const result = await classifyTag(source, 'Widget');
+    expect(result).toEqual({ kind: 'unknown' });
+  });
+});
+
+describe('checkStyleForwarding — HYP-1235 local monorepo workspace-package resolution', () => {
+  // The regression a 3-model `review diff` round on HYP-1235 caught: the rewired gate's OWN
+  // `detectForwarding` call resolves declarations through `locateComponentDeclaration`, which
+  // initially lacked the workspace-package fallback the OLD coarse check had (via
+  // `resolveComponentForwarding`). `forward-detect.test.ts` already pins the fallback at the
+  // `detectForwarding` level; this test pins it at THIS layer — the one that actually broke — so a
+  // future rewiring of `checkStyleForwarding` onto a different resolver can't silently lose it again
+  // without a test noticing here specifically.
+  it('resolves a workspace-package component and excludes it when it does not forward', async () => {
+    const importerPath = '/workspace/src/Page.tsx';
+    const importerSource = `import { Card } from '@acme/ui';\nexport function Page() {\n  return <Card />;\n}\n`;
+    const fileIO = new InMemoryFileIO({
+      [importerPath]: importerSource,
+      '/workspace/node_modules/@acme/ui/package.json': JSON.stringify({ exports: { '.': './src/index.ts' } }),
+      '/workspace/node_modules/@acme/ui/src/index.ts': `export { Card } from './Card';\n`,
+      '/workspace/node_modules/@acme/ui/src/Card.tsx': `export function Card({ title, children }: { title?: string; children?: unknown }) {\n  return <div>{title}{children as any}</div>;\n}\n`,
+    });
+    const ast = parseCode(importerSource);
+    const element = findAllJSXElements(ast).find(
+      (e) => e.element.openingElement.name.type === 'JSXIdentifier' && e.element.openingElement.name.name === 'Card',
+    )?.element;
+    if (!element) throw new Error('no <Card> element in fixture');
+
+    const result = await checkStyleForwarding({ ast, filePath: importerPath, element, fileIO, aliasMap: {} });
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: 'not-forwarding',
+        displayName: 'Card',
+        definition: expect.objectContaining({ filePath: '/workspace/node_modules/@acme/ui/src/Card.tsx' }),
+      }),
+    );
+  });
+});
+
+describe('checkStyleForwarding — HYP-1235 definitionLine recast quirk (export default function)', () => {
+  // The actual bug `LocatedComponent.definitionLine` was added to fix: recast (the parser
+  // `@lib/ast/parser.ts` wraps) strips `.loc` from a `FunctionDeclaration` when it's the
+  // `declaration` of `export default function Foo() {}` — the OUTER `ExportDefaultDeclaration`
+  // keeps its `.loc`, the inner node doesn't. Every other test asserting `definition?.line` in this
+  // file uses a `const X = (...) => ...` (VariableDeclarator) shape, which doesn't hit this quirk —
+  // this pins the LINE NUMBER specifically for the export-default-function shape (a P2 flagged by a
+  // 3-model review round: the fix's own bug fix had no direct assertion on the value it produces).
+  it('pinpoints the correct declaration line for a same-file export default function', async () => {
+    const source = `interface BoxProps { title: string }
+
+export default function Box({ title }: BoxProps) {
+  return <div>{title}</div>;
+}
+export function Page() {
+  return <Box title="x" />;
+}
+`;
+    const result = await classifyTag(source, 'Box');
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: 'not-forwarding',
+        displayName: 'Box',
+        definition: { filePath: FILE_PATH, line: 3 },
+      }),
+    );
+  });
+
+  it('pinpoints the correct declaration line for a CROSS-FILE export default function', async () => {
+    const importerPath = '/workspace/src/Page.tsx';
+    const boxPath = '/workspace/src/Box.tsx';
+    const importerSource = `import Box from './Box';\nexport function Page() {\n  return <Box title="x" />;\n}\n`;
+    const boxSource = `interface BoxProps { title: string }
+
+export default function Box({ title }: BoxProps) {
+  return <div>{title}</div>;
+}
+`;
+    const ast = parseCode(importerSource);
+    const element = findAllJSXElements(ast).find(
+      (e) => e.element.openingElement.name.type === 'JSXIdentifier' && e.element.openingElement.name.name === 'Box',
+    )?.element;
+    if (!element) throw new Error('no <Box> element in fixture');
+    const fileIO = new InMemoryFileIO({ [importerPath]: importerSource, [boxPath]: boxSource });
+
+    const result = await checkStyleForwarding({ ast, filePath: importerPath, element, fileIO, aliasMap: {} });
+    expect(result).toEqual(
+      expect.objectContaining({ kind: 'not-forwarding', displayName: 'Box', definition: { filePath: boxPath, line: 3 } }),
+    );
   });
 });
 

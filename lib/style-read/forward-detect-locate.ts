@@ -7,20 +7,33 @@
  * or a styled-components factory (`styled.tag(...)` / `styled(Component)(...)`, a known library
  * contract rather than user render code to trace).
  *
- * Ported from (and functionally a superset of) the HYP-901 `checkStyleForwarding`'s private
- * `locateComponentParams`/`findComponentParams` in
- * `vscode-extension/hypercanvas-preview/src/services/style-forwarding-check.ts` — that ext-only
- * file's write-path pre-check keeps its own copy rather than importing this one, deliberately, so
- * its existing HYP-901/HYP-987 regression tests (which assert the OLD, coarser `forwards` /
- * `unknown` / `not-forwarding` three-way verdict) are untouched by A1's richer per-channel
- * detection. Both copies resolve identically for every case those tests cover; if you fix a
- * resolution bug here, port the same fix there (and vice versa) — HYP-1235 tracks unifying them
- * once the ext's write-path check is itself rewired onto `ForwardDetectorResult`.
+ * Ported from (and functionally a superset of) the HYP-901 `checkStyleForwarding`'s original
+ * private `locateComponentParams`/`findComponentParams` in
+ * `vscode-extension/hypercanvas-preview/src/services/style-forwarding-check.ts`. HYP-1235 rewired
+ * that file onto `detectForwarding` (`forward-detect.ts`), which resolves declarations through
+ * THIS module — so `style-forwarding-check.ts` now imports `locateComponentDeclaration` directly
+ * (for its `not-forwarding` definition pinpoint) rather than keeping its own copy. Its HYP-901/
+ * HYP-987 regression tests were updated in the same change to match the richer per-channel
+ * detection (e.g. a styled-components factory is now a confident POSITIVE, not `unknown`).
+ *
+ * `lib/style-write/component-forwarding.ts` (consumed by the shared executor's HYP-995
+ * channel-precise write refusal, NOT by the ext's pre-write gate above) still keeps its OWN
+ * separate per-prop analysis, but the LOCATION-resolution fallback for local monorepo workspace
+ * packages (a `node_modules` symlink whose `package.json` entry is real `.ts(x)` source — the
+ * "conloca" case, HYP-995) is now SHARED: both this module and `component-forwarding.ts` call
+ * `resolveWorkspacePackageEntry` (`lib/ast/workspace-package-entry.ts`). A 3-model `review diff`
+ * round on HYP-1235 independently caught that this module lacked the fallback when it was first
+ * wired as the ext's write-path pre-check's sole resolver — a workspace-package component would
+ * have silently degraded from a real verdict to `unknown` on that path alone. If you fix a
+ * resolution bug in the non-workspace part of this file, port the same fix to
+ * `component-forwarding.ts`'s `locateComponentParams` (and vice versa) — those two still don't
+ * share code, only the workspace-entry fallback does.
  */
 import * as t from '@babel/types';
 import type { FileIO } from '../ast/file-io';
 import { resolveMasterComponent } from '../ast/master-component-resolver';
 import { parseCode } from '../ast/parser';
+import { resolveWorkspacePackageEntry } from '../ast/workspace-package-entry';
 
 export interface LocatedComponent {
   /** Null when the declaration is a styled-components factory, or an unresolvable shape. */
@@ -34,6 +47,17 @@ export interface LocatedComponent {
   fileAst: t.File;
   componentName: string;
   declarationFilePath: string;
+  /**
+   * 1-based declaration line, best-effort. NOT simply `fnNode?.loc?.start.line` — recast (the
+   * parser `../ast/parser.ts` wraps) strips `.loc` from an inner `FunctionDeclaration` when it's
+   * the `declaration` of an `export default function Foo() {}` statement (a real, reproduced
+   * recast quirk: the OUTER `ExportDefaultDeclaration` keeps its `.loc`, the inner node doesn't).
+   * Computed the same way the original HYP-901 `checkStyleForwarding` did — the declarator's own
+   * loc, falling back to the enclosing export statement's loc — so it stays accurate for both
+   * `export default function Foo() {}` and a same-line multi-declarator `export const A = ..., B
+   * = ...;`. Null only when neither the declarator nor the enclosing statement carries a loc.
+   */
+  definitionLine: number | null;
 }
 
 export interface LocateInput {
@@ -54,12 +78,37 @@ export async function locateComponentDeclaration(
     return null;
   }
 
+  const located = await resolveWithAliasMap(input, tagName, importerSource, input.aliasMap);
+  if (located) return located;
+
+  // The tag resolved to `external`/unresolved under the caller's own aliasMap. If it's actually a
+  // LOCAL monorepo workspace package (a `node_modules` symlink whose `package.json` entry is a
+  // `.ts(x)` SOURCE file), inspect it too — see `resolveWorkspacePackageEntry`'s doc comment (ported
+  // from `component-forwarding.ts`'s HYP-995 fallback). Resolve the package's entry, then re-run
+  // resolution with a synthetic alias so the existing barrel-following finds the component.
+  const workspace = await resolveWorkspacePackageEntry(input, tagName);
+  if (!workspace) return null;
+  return resolveWithAliasMap(input, tagName, importerSource, {
+    ...input.aliasMap,
+    [workspace.specifier]: workspace.entryBase,
+  });
+}
+
+/** Resolve `tagName`'s declaration under a SPECIFIC aliasMap — factored out so
+ *  {@link locateComponentDeclaration} can retry with a workspace-package synthetic alias without
+ *  re-reading `input.filePath` a second time. */
+async function resolveWithAliasMap(
+  input: LocateInput,
+  tagName: string,
+  importerSource: string,
+  aliasMap: Record<string, string>,
+): Promise<LocatedComponent | null> {
   const resolution = await resolveMasterComponent({
     importerFilePath: input.filePath,
     importerSource,
     componentName: tagName,
     fileIO: input.fileIO,
-    aliasMap: input.aliasMap,
+    aliasMap,
   });
 
   if (resolution.kind === 'inline') {
@@ -82,7 +131,9 @@ export async function locateComponentDeclaration(
   }
 }
 
-/** Same disambiguation as HYP-987 P1 #7 — see style-forwarding-check.ts's `ComponentDeclMatch`. */
+/** Same disambiguation as HYP-987 P1 #7 (`component-forwarding.ts`'s own `ComponentDeclMatch`) — a
+ *  same-line multi-declarator export (`export const Forward = …, Drop = …`) must be matched by the
+ *  resolver's own pinpointed name/column, never by line alone. */
 type ComponentDeclMatch =
   | { kind: 'byLocation'; line: number; column: number; name: string | null }
   | { kind: 'byName'; name: string };
@@ -129,12 +180,24 @@ function fromDeclarationLike(
   if (t.isFunctionDeclaration(node) || t.isFunctionExpression(node) || t.isArrowFunctionExpression(node)) {
     const name = node.type === 'FunctionDeclaration' ? node.id?.name : undefined;
     if (!declMatches(node, name, match, fallbackLoc)) return null;
-    return { fnNode: node, styledComponentsFactory: false, fileAst, componentName, declarationFilePath: filePath };
+    // See `LocatedComponent.definitionLine`'s doc comment — `node.loc` can be null here (recast
+    // strips it from an `export default function`'s inner declaration) even though the caller's
+    // `fallbackLoc` (the enclosing export statement) is populated.
+    const definitionLine = (node.loc ?? fallbackLoc)?.start.line ?? null;
+    return {
+      fnNode: node,
+      styledComponentsFactory: false,
+      fileAst,
+      componentName,
+      declarationFilePath: filePath,
+      definitionLine,
+    };
   }
   if (t.isVariableDeclaration(node)) {
     for (const d of node.declarations) {
       if (!t.isIdentifier(d.id) || !declMatches(d, d.id.name, match, fallbackLoc)) continue;
-      return fromVariableInit(d.init, fileAst, filePath, componentName);
+      const definitionLine = (d.loc ?? node.loc ?? fallbackLoc)?.start.line ?? null;
+      return fromVariableInit(d.init, fileAst, filePath, componentName, definitionLine);
     }
   }
   return null;
@@ -145,6 +208,7 @@ function fromVariableInit(
   fileAst: t.File,
   filePath: string,
   componentName: string,
+  definitionLine: number | null,
 ): LocatedComponent | null {
   const styled = classifyStyledComponentsExpression(init);
   if (styled.matched) {
@@ -154,12 +218,13 @@ function fromVariableInit(
       styledWrapsComponentTag: styled.wrapsComponentTag ?? undefined,
       fileAst,
       componentName,
+      definitionLine,
       declarationFilePath: filePath,
     };
   }
   const fn = unwrapToFunction(init);
   return fn
-    ? { fnNode: fn, styledComponentsFactory: false, fileAst, componentName, declarationFilePath: filePath }
+    ? { fnNode: fn, styledComponentsFactory: false, fileAst, componentName, declarationFilePath: filePath, definitionLine }
     : null;
 }
 
@@ -177,7 +242,9 @@ function declMatches(
   return loc.start.column === match.column;
 }
 
-/** Only `memo`/`forwardRef` are transparent w.r.t. prop forwarding — see style-forwarding-check.ts. */
+/** Only `memo`/`forwardRef` are transparent w.r.t. prop forwarding — any OTHER call (a
+ *  styled-components factory, a custom HOC) is NOT transparent: its argument is a config/render
+ *  callback, not the props destructure, so inspecting it would misread the shape. */
 const TRANSPARENT_HOC_NAMES: ReadonlySet<string> = new Set(['memo', 'forwardRef']);
 
 function isTransparentHocCallee(callee: t.Expression | t.V8IntrinsicIdentifier): boolean {

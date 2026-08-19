@@ -26,13 +26,20 @@
  * package, un-pinpointed barrel, parse failure, a non-destructured `props` param, class component,
  * unrecognised HOC) returns `kind:'unknown'` — false negatives are acceptable (runtime verify is the
  * arbiter), a false positive that refuses a genuinely-forwarding component's write is not.
+ *
+ * HYP-1235: the local monorepo workspace-package fallback (`node_modules` symlink → real `.ts(x)`
+ * source, the "conloca" case) moved to the shared `lib/ast/workspace-package-entry.ts` — see that
+ * module's header. `lib/style-read/forward-detect-locate.ts`'s `locateComponentDeclaration` (the A1
+ * detector's own resolver, now also consumed by the ext's write-path pre-check,
+ * `style-forwarding-check.ts`) uses the SAME shared fallback, so a workspace-package component
+ * resolves identically through either path.
  */
-import path from 'node:path';
 import * as t from '@babel/types';
 import type { FileIO } from '@lib/ast/file-io';
-import { findImportForName, jsxNameRoot } from '@lib/ast/jsx-deps';
+import { jsxNameFull, jsxNameRoot } from '@lib/ast/jsx-deps';
 import { resolveMasterComponent } from '@lib/ast/master-component-resolver';
 import { parseCode } from '@lib/ast/parser';
+import { resolveWorkspacePackageEntry } from '@lib/ast/workspace-package-entry';
 
 export interface ComponentForwardingInput {
   /** Parsed AST of the file containing the JSX usage (already parsed by the caller). */
@@ -85,7 +92,7 @@ export async function resolveComponentForwarding(input: ComponentForwardingInput
     // file), inspect it too: the conloca repro (CardProps = { title; children }) is exactly this case, and
     // without resolving it the dead `style` prop + TS error is never caught. Resolve the package's entry,
     // then re-run resolution with a synthetic alias so the existing barrel-following finds the component.
-    const workspace = await resolveWorkspaceEntryBase(input, tagName);
+    const workspace = await resolveWorkspacePackageEntry(input, tagName);
     if (workspace) {
       located = await locateComponentParams(input, tagName, {
         ...aliasMap,
@@ -98,7 +105,7 @@ export async function resolveComponentForwarding(input: ComponentForwardingInput
   const forwarding = analyzeParamForwarding(located.params);
   return {
     kind: 'custom',
-    displayName: describeJsxName(input.element),
+    displayName: jsxNameFull(input.element.openingElement.name),
     ...(located.definition ? { definition: located.definition } : {}),
     ...forwarding,
   };
@@ -120,23 +127,6 @@ export function forwardsProp(facts: ComponentForwardingFacts, prop: 'style' | 'c
 /** A JSX tag is a custom component when its (leftmost) name starts with an uppercase letter. */
 function isCustomComponentTag(tagName: string): boolean {
   return /^[A-Z]/.test(tagName);
-}
-
-/** Full dotted display name of a JSX tag (`<Foo.Bar>` → `Foo.Bar`). */
-function describeJsxName(el: t.JSXElement): string {
-  const name = el.openingElement.name;
-  if (t.isJSXIdentifier(name)) return name.name;
-  if (t.isJSXMemberExpression(name)) {
-    const parts: string[] = [];
-    let obj: t.JSXMemberExpression | t.JSXIdentifier = name;
-    while (t.isJSXMemberExpression(obj)) {
-      parts.unshift(obj.property.name);
-      obj = obj.object;
-    }
-    parts.unshift(obj.name);
-    return parts.join('.');
-  }
-  return 'unknown';
 }
 
 interface ParamForwarding {
@@ -329,118 +319,6 @@ function unwrapToFunction(node: t.Node | null | undefined): t.FunctionExpression
   return null;
 }
 
-/** Source extensions that mark a package entry as inspectable WORKSPACE source (vs a built `.js`
- *  external package we can't meaningfully read). `.js`/`.mjs`/`.cjs` are deliberately excluded so a
- *  real node_modules dependency (built JS + `.d.ts`) stays `unknown` and is never refused. The
- *  negative lookbehind excludes `.d.ts`/`.d.tsx` declaration files specifically — a bare `\.tsx?$`
- *  also matches the `.ts` tail of `foo.d.ts`, which has no function bodies to inspect (review, Opus:
- *  it self-corrected to `unknown` via a failed `findComponentParams` lookup either way, but excluding
- *  it here makes the "workspace SOURCE, not types" contract explicit rather than accidental). */
-const WORKSPACE_ENTRY_SOURCE = /(?<!\.d)\.(tsx?|jsx)$/;
-
-/**
- * HYP-995 — when the tag's import is a BARE specifier that `resolveMasterComponent` reported as
- * external, check whether it's actually a LOCAL monorepo workspace package: a `node_modules/<pkg>`
- * (usually a symlink into the repo) whose `package.json` entry is a `.ts(x)`/`.jsx` SOURCE file. If so,
- * return the specifier + the entry's base path (extension stripped) so the caller can resolve the
- * component through the normal alias/barrel machinery. Returns null for a relative import, a real built
- * external package (entry is `.js`/`.d.ts`), or anything unreadable — those stay `unknown` (fail-open).
- */
-async function resolveWorkspaceEntryBase(
-  input: ComponentForwardingInput,
-  tagName: string,
-): Promise<{ specifier: string; entryBase: string } | null> {
-  const specifier = findImportForName(input.ast, tagName)?.declaration.source.value;
-  // Only a well-formed BARE package specifier. Reject relative/absolute AND any `.`/`..`/empty segment
-  // or backslash — a crafted specifier like `foo/../../../etc` must never let the node_modules path
-  // interpolation escape the package dir (review P1 security / path traversal).
-  if (!specifier || !isSafePackageSpecifier(specifier)) return null;
-
-  const pkgJsonPath = await findNodeModulesPackageJson(input.filePath, specifier, input.fileIO);
-  if (!pkgJsonPath) return null;
-  const packageDir = path.dirname(pkgJsonPath);
-  const entryRel = await readPackageEntry(pkgJsonPath, input.fileIO);
-  if (!entryRel) return null;
-
-  const entryAbs = path.resolve(packageDir, entryRel);
-  // The package.json `entry` field is also untrusted input — a `../../..` entry must not point the
-  // reader outside the package directory (review P1 security).
-  if (!isPathWithin(packageDir, entryAbs)) return null;
-  if (!WORKSPACE_ENTRY_SOURCE.test(entryAbs)) return null; // built/external — leave as unknown
-  return { specifier, entryBase: entryAbs.replace(WORKSPACE_ENTRY_SOURCE, '') };
-}
-
-/** A bare package specifier safe to interpolate into a `node_modules/<spec>` path: not relative or
- *  absolute, and with no `.`/`..`/empty segment or backslash that could traverse out. Accepts an
- *  optional `@scope/` and subpath (e.g. `@acme/ui`, `lib/sub`). */
-function isSafePackageSpecifier(specifier: string): boolean {
-  if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.includes('\\')) return false;
-  return specifier.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..');
-}
-
-/** True when `target` is `base` itself or nested inside it (no `..` escape, not an absolute sibling). */
-function isPathWithin(base: string, target: string): boolean {
-  const rel = path.relative(base, target);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
-}
-
-/** Walk up from the importer's directory looking for `node_modules/<specifier>/package.json`. Returns
- *  the first that exists (and stays inside that `node_modules`), or null. Bounded against spinning. */
-async function findNodeModulesPackageJson(
-  importerFilePath: string,
-  specifier: string,
-  fileIO: FileIO,
-): Promise<string | null> {
-  let dir = path.dirname(importerFilePath);
-  for (let i = 0; i < 40; i++) {
-    const nodeModules = path.join(dir, 'node_modules');
-    const candidate = path.join(nodeModules, specifier, 'package.json');
-    // Defense in depth (the specifier is already validated): never accept a path that resolved out of
-    // this `node_modules` directory.
-    if (isPathWithin(nodeModules, candidate)) {
-      try {
-        await fileIO.access(candidate);
-        return candidate;
-      } catch {
-        // not here — keep walking up
-      }
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break; // filesystem root
-    dir = parent;
-  }
-  return null;
-}
-
-/** Read a package.json's entry, preferring `exports['.']` (string or common conditions), then
- *  `module`/`main`/`types`. Returns the entry path (relative to the package) or null. */
-async function readPackageEntry(pkgJsonPath: string, fileIO: FileIO): Promise<string | null> {
-  let pkg: {
-    exports?: unknown;
-    module?: string;
-    main?: string;
-    types?: string;
-  };
-  try {
-    pkg = JSON.parse(await fileIO.readFile(pkgJsonPath));
-  } catch {
-    return null;
-  }
-  return entryFromExports(pkg.exports) ?? pkg.module ?? pkg.main ?? pkg.types ?? null;
-}
-
-/** Pull a usable entry path from a package.json `exports` field: a bare string, or the `.` subpath as a
- *  string or a conditions object (preferring source-ish conditions before `default`/`import`). */
-function entryFromExports(exports: unknown): string | null {
-  if (typeof exports === 'string') return exports;
-  if (!exports || typeof exports !== 'object') return null;
-  const dot = (exports as Record<string, unknown>)['.'];
-  if (typeof dot === 'string') return dot;
-  if (dot && typeof dot === 'object') {
-    for (const condition of ['source', 'development', 'import', 'default', 'require']) {
-      const value = (dot as Record<string, unknown>)[condition];
-      if (typeof value === 'string') return value;
-    }
-  }
-  return null;
-}
+// The workspace-package resolution helpers (`resolveWorkspaceEntryBase` and its traversal-guard
+// internals) moved to the shared `lib/ast/workspace-package-entry.ts` (HYP-1235) — see this file's
+// header and that module's own doc comment.

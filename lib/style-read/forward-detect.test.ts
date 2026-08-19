@@ -44,6 +44,47 @@ describe('detectForwarding — native/intrinsic tags', () => {
   });
 });
 
+describe('detectForwarding — HYP-1235: local monorepo workspace-package resolution', () => {
+  // Ported from `component-forwarding.test.ts`'s "conloca case" (HYP-995): a component imported
+  // from a bare workspace-package specifier (`@acme/ui`, a `node_modules` symlink whose
+  // `package.json` entry is real `.ts(x)` SOURCE, not a built dependency) must still be resolved
+  // and inspected — `resolveMasterComponent` alone reports this as `external` and gives up. A
+  // 3-model `review diff` round on HYP-1235 caught that `locateComponentDeclaration` (this
+  // detector's own resolver) initially lacked the fallback `component-forwarding.ts` already had,
+  // which would have silently degraded the ext's write-path pre-check (now wired onto this
+  // detector) from a real `not-forwarding` exclusion to fail-open `unknown` for every
+  // workspace-package component. `resolveWorkspacePackageEntry`
+  // (`lib/ast/workspace-package-entry.ts`) is now shared by both resolvers.
+  it('resolves a workspace package and detects non-forwarding on both channels', async () => {
+    const pageSource = `import { Card } from '@acme/ui';\nexport function Page() {\n  return <Card />;\n}\n`;
+    const result = await detect(pageSource, 'Card', {
+      '/workspace/node_modules/@acme/ui/package.json': JSON.stringify({ exports: { '.': './src/index.ts' } }),
+      '/workspace/node_modules/@acme/ui/src/index.ts': `export { Card } from './Card';\n`,
+      '/workspace/node_modules/@acme/ui/src/Card.tsx': `export function Card({ title, children }: { title?: string; children?: unknown }) {\n  return <div>{title}{children as any}</div>;\n}\n`,
+    });
+    expect(result.className).toEqual({
+      forwardsClassName: false,
+      forwardsStyle: false,
+      hostProp: null,
+      confidence: 'high',
+      excludedReason: 'no-host-forward',
+    });
+    expect(result.style.forwardsStyle).toBe(false);
+    expect(result.style.confidence).toBe('high');
+  });
+
+  it('resolves a workspace package that DOES forward style to a high-confidence positive', async () => {
+    const pageSource = `import { Card } from '@acme/ui';\nexport function Page() {\n  return <Card />;\n}\n`;
+    const result = await detect(pageSource, 'Card', {
+      '/workspace/node_modules/@acme/ui/package.json': JSON.stringify({ exports: { '.': './src/index.ts' } }),
+      '/workspace/node_modules/@acme/ui/src/index.ts': `export { Card } from './Card';\n`,
+      '/workspace/node_modules/@acme/ui/src/Card.tsx': `export function Card({ style, children }: { style?: object; children?: unknown }) {\n  return <div style={style}>{children as any}</div>;\n}\n`,
+    });
+    expect(result.style.forwardsStyle).toBe(true);
+    expect(result.style.confidence).toBe('high');
+  });
+});
+
 describe('detectForwarding — finding #1: discriminated-union + rest spread', () => {
   it('resolves true, high via the AST rest-spread trace alone (no type step needed)', async () => {
     const source = `

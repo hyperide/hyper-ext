@@ -179,6 +179,29 @@ export function jsxNameRoot(name: t.JSXIdentifier | t.JSXMemberExpression | t.JS
 }
 
 /**
+ * Full, human-facing display name of a JSX tag: `<Foo.Bar>` → `Foo.Bar`, `<Foo>` → `Foo`,
+ * `<ns:tag>` → `ns:tag`. Unlike `jsxNameRoot` (the leftmost binding to resolve imports against),
+ * this is for warnings/diagnostics/last-resort messages where the FULL dotted path matters (a
+ * member-tag warning about `Foo` alone would be misleading for `<Foo.Bar>`).
+ *
+ * HYP-1235 — extracted from two byte-identical private copies (`style-forwarding-check.ts`'s and
+ * `component-forwarding.ts`'s `describeJsxName`) that a 3-model `review diff` round flagged as
+ * exactly the drift-prone duplication this ticket exists to close.
+ */
+export function jsxNameFull(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName): string {
+  if (t.isJSXIdentifier(name)) return name.name;
+  if (t.isJSXNamespacedName(name)) return `${name.namespace.name}:${name.name.name}`;
+  const parts: string[] = [];
+  let current: t.JSXMemberExpression | t.JSXIdentifier = name;
+  while (t.isJSXMemberExpression(current)) {
+    parts.unshift(current.property.name);
+    current = current.object as t.JSXMemberExpression | t.JSXIdentifier;
+  }
+  parts.unshift(current.name);
+  return parts.join('.');
+}
+
+/**
  * Walk an expression and collect every Identifier reference. Wraps the
  * expression in a synthetic File so `@babel/traverse` can do its bookkeeping.
  *
