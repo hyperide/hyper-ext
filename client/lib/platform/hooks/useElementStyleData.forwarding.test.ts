@@ -14,9 +14,10 @@
  * extension-side unit coverage in lib/style-read/forward-detect.test.ts, but for the browser path.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ComponentPropSurfaceFacts, InspectorSurfaceDecision } from '@lib/style-read/types';
 import { resolveStyleSurface } from '@lib/style-write/stylability-ladder';
+import type { CanvasAdapter } from '../types';
 import type { CanvasEngine } from '@/lib/canvas-engine';
 import type { StyleAdapter } from '@/lib/canvas-engine/adapters/StyleAdapter';
 import { fetchComponentPropSurface, useElementStyleData } from './useElementStyleData';
@@ -305,5 +306,138 @@ describe('HYP-1280 — useElementStyleData hook wiring (browser/SaaS mode)', () 
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(fetchCalled).toBe(false);
+  });
+});
+
+// --- HYP-1294 AC2: VS Code parity — componentPropSurface arrives via styles:response RPC --------
+
+/** Minimal canvas mock that routes styles:response to registered handlers (mirrors the pattern in
+ *  useElementStyleData.test.ts's VS-Code-mode describe block). */
+function makeCanvas() {
+  const responseHandlers = new Set<(msg: unknown) => void>();
+  const sent: Array<{ type: string; requestId?: string }> = [];
+
+  const canvas: CanvasAdapter = {
+    onEvent(type: string, handler: (msg: unknown) => void) {
+      if (type === 'styles:response') {
+        responseHandlers.add(handler);
+        return () => {
+          responseHandlers.delete(handler);
+        };
+      }
+      return () => {};
+    },
+    sendEvent(msg: unknown) {
+      sent.push(msg as { type: string; requestId?: string });
+    },
+  } as unknown as CanvasAdapter;
+
+  const emitResponse = (overrides: Record<string, unknown> = {}) => {
+    const req = [...sent].reverse().find((m) => m.type === 'styles:readClassName');
+    const payload = {
+      requestId: req?.requestId,
+      success: true,
+      className: '',
+      tagType: 'Layout',
+      textContent: '',
+      ...overrides,
+    };
+    for (const h of responseHandlers) h(payload);
+  };
+
+  return { canvas, emitResponse };
+}
+
+describe('HYP-1294 AC2 — VS Code mode surfaces componentPropSurface via styles:response', () => {
+  test('a styles:response carrying componentPropSurface reaches the hook result', async () => {
+    const { canvas, emitResponse } = makeCanvas();
+    const nonForwarding: ComponentPropSurfaceFacts = {
+      acceptsClassName: false,
+      acceptsStyle: false,
+      acceptsCssProp: false,
+      acceptsSxProp: false,
+      recursivePropsSchemaAvailable: false,
+      styleLikeProps: [],
+      semanticProps: [],
+    };
+
+    const { result } = renderHook(() =>
+      useElementStyleData({
+        elementId: 'src/App.tsx:5:3',
+        componentPath: 'src/App.tsx',
+        canvas,
+        engine: null,
+        styleAdapter: null,
+      }),
+    );
+
+    expect(result.current.componentPropSurface).toBeUndefined();
+    act(() => emitResponse({ componentPropSurface: nonForwarding }));
+    await waitFor(() => expect(result.current.componentPropSurface).toEqual(nonForwarding));
+  });
+
+  test('resets componentPropSurface to undefined on selection change (VS Code mode)', async () => {
+    const { canvas, emitResponse } = makeCanvas();
+    const forwarding: ComponentPropSurfaceFacts = {
+      acceptsClassName: true,
+      acceptsStyle: true,
+      acceptsCssProp: false,
+      acceptsSxProp: false,
+      recursivePropsSchemaAvailable: false,
+      styleLikeProps: [],
+      semanticProps: [],
+    };
+
+    const { result, rerender } = renderHook(
+      (props: { elementId: string }) =>
+        useElementStyleData({ ...props, componentPath: 'src/App.tsx', canvas, engine: null, styleAdapter: null }),
+      { initialProps: { elementId: 'src/App.tsx:5:3' } },
+    );
+
+    act(() => emitResponse({ componentPropSurface: forwarding }));
+    await waitFor(() => expect(result.current.componentPropSurface).toEqual(forwarding));
+
+    rerender({ elementId: 'src/App.tsx:9:1' });
+    expect(result.current.componentPropSurface).toBeUndefined();
+  });
+
+  // Review finding (2nd round, Opus) — untested path: a refetch of the SAME element (refreshKey
+  // bump) whose response carries NO componentPropSurface at all (the "selection lost after HMR"
+  // empty-result shape StyleReadService.readElementClassName returns) must KEEP the last known
+  // verdict, not clobber it to undefined — mirrors the pre-existing `i18nText ?? prev.i18nText`
+  // idiom on the line above the new `setComponentPropSurface` call.
+  test('a refetch response with no componentPropSurface field keeps the previous verdict (VS Code mode)', async () => {
+    const { canvas, emitResponse } = makeCanvas();
+    const nonForwarding: ComponentPropSurfaceFacts = {
+      acceptsClassName: false,
+      acceptsStyle: false,
+      acceptsCssProp: false,
+      acceptsSxProp: false,
+      recursivePropsSchemaAvailable: false,
+      styleLikeProps: [],
+      semanticProps: [],
+    };
+
+    const { result, rerender } = renderHook(
+      (props: { refreshKey: number }) =>
+        useElementStyleData({
+          elementId: 'src/App.tsx:5:3',
+          componentPath: 'src/App.tsx',
+          canvas,
+          engine: null,
+          styleAdapter: null,
+          refreshKey: props.refreshKey,
+        }),
+      { initialProps: { refreshKey: 0 } },
+    );
+
+    act(() => emitResponse({ componentPropSurface: nonForwarding }));
+    await waitFor(() => expect(result.current.componentPropSurface).toEqual(nonForwarding));
+
+    // Same element, new refreshKey — a fresh requestId, response has NO componentPropSurface key.
+    rerender({ refreshKey: 1 });
+    act(() => emitResponse({ componentPropSurface: undefined }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(result.current.componentPropSurface).toEqual(nonForwarding);
   });
 });

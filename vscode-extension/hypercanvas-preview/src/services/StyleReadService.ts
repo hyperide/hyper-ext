@@ -27,6 +27,7 @@ import { createDefaultStyleReadManager } from '@lib/style-read/default-style-rea
 import { detectForwarding, projectForwardDetectionToPropSurface } from '@lib/style-read/forward-detect';
 import type {
   ClassNameExpressionFacts,
+  ComponentPropSurfaceFacts,
   CssSystemId,
   ElementStyleFacts,
   ProjectStyleCapabilities,
@@ -54,6 +55,16 @@ export interface ElementStyleReadResult {
   childrenLocation?: { line: number; column: number };
   styleReadResult?: SharedStyleReadResult;
   i18nText?: I18nBindingResult;
+  /**
+   * A1 forward-detector facts (HYP-1229), projected via `projectForwardDetectionToPropSurface`
+   * (see `buildElementFacts` below) — the SAME projection the SaaS browser read route
+   * (`server/routes/readElementForwarding.ts`) uses, so `componentPropSurface` never drifts per
+   * platform. HYP-1294 AC2: carried across the `styles:response` RPC (PanelRouter spreads this
+   * whole result onto the response) so the proactive "no style-write surface" inspector warning
+   * (`client/components/RightSidebar/hooks/useNoStyleWriteSurfaceWarning.tsx`, previously
+   * SaaS-browser-only) now fires identically in VS Code mode too.
+   */
+  componentPropSurface?: ComponentPropSurfaceFacts;
 }
 
 const DEFAULT_RUNTIME_THEME_CONTEXT: RuntimeThemeContext = {
@@ -296,6 +307,7 @@ export class StyleReadService {
         childrenLocation: childrenLoc || undefined,
         styleReadResult,
         i18nText,
+        componentPropSurface: elementFacts.componentPropSurface,
       };
     } catch (error) {
       console.error('[StyleReadService] Error reading element className:', error);

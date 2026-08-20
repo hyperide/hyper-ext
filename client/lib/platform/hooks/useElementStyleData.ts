@@ -50,15 +50,24 @@ export interface ElementStyleData {
   /** All available i18n keys from the locale file (VS Code only; populated after i18nText arrives) */
   availableKeys?: string[];
   /**
-   * A1 forward-detector facts (HYP-1229/HYP-1280) — per-channel evidence for whether this element
-   * actually forwards `className`/`style` to the DOM. Browser/SaaS mode ONLY: fetched async via
-   * GET /api/element-forwarding (the browser read path has no other server round-trip for this),
-   * never blocking the rest of the synchronous browser style read. VS Code mode leaves this field
-   * undefined — the ext-host computes the same facts internally (`StyleReadService.
-   * buildElementFacts`'s `forwardDetection`) but does not currently serialize them onto the
-   * `styles:response` RPC payload, so there is nothing for this hook to surface there yet (a
-   * follow-up would extend `ElementStyleReadResult` to carry it). Read this field only in
-   * browser/SaaS-aware code paths until that lands.
+   * A1 forward-detector facts (HYP-1229/HYP-1280/HYP-1294) — per-channel evidence for whether this
+   * element actually forwards `className`/`style` to the DOM. Populated on BOTH platforms:
+   * browser/SaaS mode fetches it async via GET /api/element-forwarding (the browser read path has
+   * no other server round-trip for this), never blocking the rest of the synchronous browser style
+   * read; VS Code mode carries it on the `styles:response` RPC payload (`StyleReadService.
+   * buildElementFacts`'s `forwardDetection`, projected via `projectForwardDetectionToPropSurface`
+   * — the SAME projection both platforms use, so this never drifts per platform). Both paths reset
+   * to `undefined` on selection change and populate once the read resolves.
+   * RESET TIMING (review finding, HYP-1294): this field ALONE resets at RENDER TIME (see the
+   * hook's own `propSurfaceKey` state, keyed on elementId+componentPath) — every OTHER field on
+   * this interface (`tagType`, `parsedStyles`, `i18nText`, …) still resets EFFECT-driven, one
+   * render behind a selection change. A consumer that reads `componentPropSurface` alongside
+   * another field from THIS SAME hook (as `useNoStyleWriteSurfaceWarning` does with `tagType`)
+   * relies on the invariant that `componentPropSurface` is `undefined` throughout the one render
+   * where the other fields are still mid-transition — true today (VS Code sets both together in
+   * one batched RPC handler; the browser fetch resolves long after the transition render), but
+   * worth restating here so a future consumer pairing this field with a DIFFERENT one doesn't
+   * assume the same atomicity without checking.
    */
   componentPropSurface?: ComponentPropSurfaceFacts;
 }
@@ -439,6 +448,33 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
   // A1 forward-detector facts (HYP-1280, browser/SaaS mode only — VS Code computes these
   // internally in StyleReadService, no separate client-side fetch needed there).
   const [componentPropSurface, setComponentPropSurface] = useState<ComponentPropSurfaceFacts | undefined>(undefined);
+  // RENDER-TIME reset (review finding, HYP-1294) — not effect-driven. An effect-driven reset (the
+  // old `setComponentPropSurface(undefined)` at the top of the forwarding-fetch effect below) lags
+  // ONE RENDER behind elementId/componentPath changing: on the render where selection moves from
+  // element A to element B, this hook already returns B's elementId/componentPath but STILL the
+  // OLD componentPropSurface state (A's facts) — the reset effect hasn't run yet. Any consumer that
+  // reads componentPropSurface alongside elementId/componentPath in that SAME render (e.g. the
+  // proactive non-forwarding warning, `useNoStyleWriteSurfaceWarning`) sees a mismatched pairing:
+  // B's identity with A's verdict for the ONE render where they're inconsistent. This is React's
+  // documented "adjust state while rendering" pattern, resolving synchronously before this render
+  // commits/paints — so no mismatched pairing survives to paint or to an effect. Uses `useState`
+  // for the tracked key, NOT a `useRef` (2nd review round finding, Opus + GLM independently):
+  // React can discard an interrupted render pass (e.g. under a transition); a `useState` write is
+  // discarded along with that pass, keeping the tracked key and the `componentPropSurface` reset
+  // atomic. A `useRef` write is NOT discarded (refs survive a thrown-away render), so a ref-based
+  // version could desync the two on a rare interrupted-render replay — low probability, but this
+  // is the exact mechanism the whole reset exists to close, so it's made provably safe rather than
+  // merely "safe in the common case". (A LATE async resolution for the previously-selected element
+  // — not a render race, but the fetch itself replying after the selection already moved on — is a
+  // SEPARATE, already-guarded concern: see the `AbortController`/`latestRequestRef` staleness
+  // checks in the fetch effect and the RPC handler below, both pre-existing and unchanged by this
+  // reset. This render-time reset only closes the RENDER-ordering gap, not fetch-resolution races.)
+  const [propSurfaceKey, setPropSurfaceKey] = useState<string | null>(null);
+  const currentPropSurfaceKey = elementId && componentPath ? `${componentPath}::${elementId}` : null;
+  if (propSurfaceKey !== currentPropSurfaceKey) {
+    setPropSurfaceKey(currentPropSurfaceKey);
+    if (componentPropSurface !== undefined) setComponentPropSurface(undefined);
+  }
 
   // Track latest RPC request to ignore stale responses (VS Code mode only)
   const latestRequestRef = useRef<string | null>(null);
@@ -553,6 +589,15 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
         styleReadResult: response.styleReadResult,
         i18nText: response.i18nText ?? prev.i18nText,
       }));
+      // HYP-1294 AC2 — VS Code parity: the browser/SaaS path fills componentPropSurface via its
+      // own separate fetch effect below; VS Code mode has no such fetch, so this is the only place
+      // it's ever set there. Shares the same `componentPropSurface` state (and thus the same final
+      // merge in the `data` memo below) as the browser path. `?? prevSurface` mirrors the
+      // `i18nText ?? prev.i18nText` idiom just above (review finding, HYP-1294): a response that
+      // genuinely carries no facts (the "selection lost after HMR" empty-result path) keeps the
+      // last known-good verdict rather than clobbering it to undefined, so the warning doesn't
+      // flicker off on a transient re-read blip for the SAME already-verified element.
+      setComponentPropSurface((prevSurface) => response.componentPropSurface ?? prevSurface);
     });
 
     canvas.sendEvent({
@@ -591,8 +636,10 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
   // Fetch A1 forward-detector facts for the selected element (HYP-1280, browser/SaaS mode only).
   // Async and non-blocking — the synchronous browser style read above already returned; this
   // fills in componentPropSurface once the server route resolves, or leaves it unset on failure.
+  // The reset-on-element-change above is now RENDER-TIME (propSurfaceKeyRef), not here — a
+  // refreshKey-only re-fetch (same element) intentionally does NOT reset first, so a shown warning
+  // doesn't flicker off during the refetch window; it only updates once the new fetch resolves.
   useEffect(() => {
-    setComponentPropSurface(undefined);
     if (!engine || !styleAdapter || !elementId || !componentPath) return;
 
     const nodeRef = resolveUuidToNodeRef(elementId, engine);

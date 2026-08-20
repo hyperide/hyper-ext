@@ -48,6 +48,7 @@ import { ComponentQuickList } from './ComponentQuickList';
 import { DesignTokensPanel } from './DesignTokensPanel';
 import { useComponentPathCompat, useSelectionCompat } from './hooks/useSelectionCompat';
 import { useNavigationHandlers } from './hooks/useNavigationHandlers';
+import { useNoStyleWriteSurfaceWarning } from './hooks/useNoStyleWriteSurfaceWarning';
 import { usePopulateStyleState } from './hooks/usePopulateStyleState';
 import { useStyleHandlers } from './hooks/useStyleHandlers';
 import { MIXED, mergeStyleData } from './hooks/useBatchStyleData';
@@ -179,6 +180,9 @@ export default function RightSidebar({
     // touching useElementStyleData, so the canvas data flow stays byte-identical (HYP-372 M3 P1).
     i18nText: canvasI18nText,
     availableKeys: canvasAvailableI18nKeys,
+    // A1 forward-detector facts (HYP-1229/HYP-1280/HYP-1294) — populated in both browser/SaaS mode
+    // (read-time server fetch) and VS Code mode (styles:response RPC payload) as of HYP-1294.
+    componentPropSurface,
   } = useElementStyleData({
     elementId: selectedId,
     componentPath,
@@ -191,6 +195,16 @@ export default function RightSidebar({
     runtimeStyle,
     domTextContent: selectedElementDomText ?? undefined,
     activeLocale: i18nActiveLocale,
+  });
+
+  // HYP-1294 — proactive "this component may not accept style edits" warning, the first live
+  // consumer of componentPropSurface. Non-blocking: informational only, never disables a control.
+  useNoStyleWriteSurfaceWarning({
+    componentPropSurface,
+    tagType,
+    selectedId,
+    componentPath,
+    openAIChat,
   });
 
   // ── Browser-mode i18n READ (HYP-372 M3 P1) ──────────────────────────────────────────────────

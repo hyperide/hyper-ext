@@ -15,7 +15,8 @@ import { NodeFileIO } from '@lib/ast/node-file-io';
 import { parseCode } from '@lib/ast/parser';
 import { findAllJSXElements } from '@lib/ast/traverser';
 import { InMemoryFileIO } from '@lib/style-write/testing/in-memory-file-io';
-import { detectForwarding } from './forward-detect';
+import { hasNoStyleWriteSurface } from '@lib/style-write/stylability-ladder';
+import { detectForwarding, projectForwardDetectionToPropSurface } from './forward-detect';
 
 const FILE_PATH = '/workspace/src/Page.tsx';
 
@@ -875,6 +876,27 @@ export function Page() { return <ExternalThing />; }
     const result = await detect(source, 'ExternalThing');
     expect(result.className.confidence).toBe('low');
     expect(result.className.forwardsClassName).toBe(true); // admitted as probable, never excluded
+  });
+
+  // HYP-1294 (review finding, high-severity concern): the new proactive inspector warning
+  // (`useNoStyleWriteSurfaceWarning`, client/components/RightSidebar/hooks/) is the FIRST live
+  // consumer of `componentPropSurface`, which raised the question of whether an UNANALYZABLE
+  // component (this exact "unresolvable external package" shape) would collapse to the same
+  // all-false projection as a PROVEN non-forwarding component — which would fire the warning on
+  // every unreachable-source component in the inspector, not just genuinely non-forwarding ones.
+  // Pins the full chain end to end: `detectForwarding`'s low-confidence/`forwards:true` fallback
+  // (verified above) -> `projectForwardDetectionToPropSurface`'s low-confidence-never-excludes
+  // projection -> `hasNoStyleWriteSurface` reading `false` off that projection, i.e. the warning
+  // does NOT fire for a component A1 simply could not analyze.
+  it('an unanalyzable component projects to a surface that does NOT trigger the proactive warning', async () => {
+    const source = `import { ExternalThing } from 'some-external-package';
+export function Page() { return <ExternalThing />; }
+`;
+    const detection = await detect(source, 'ExternalThing');
+    const propSurface = projectForwardDetectionToPropSurface(detection);
+    expect(propSurface.acceptsClassName).toBe(true);
+    expect(propSurface.acceptsStyle).toBe(true);
+    expect(hasNoStyleWriteSurface(propSurface)).toBe(false);
   });
 });
 

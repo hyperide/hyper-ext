@@ -1064,6 +1064,70 @@ describe('StyleReadService — i18n binding detection', () => {
 });
 
 // =============================================================================
+// HYP-1294 AC2 — componentPropSurface (A1 forward-detector facts) on the read result
+// =============================================================================
+
+describe('StyleReadService — componentPropSurface (HYP-1294 AC2)', () => {
+  it('a native/intrinsic tag resolves accepts both channels (high confidence)', async () => {
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(SIMPLE_JSX, 'src/App.tsx');
+    const divEntry = entries[0]; // div element
+    const syntheticRef = getSyntheticRef('src/App.tsx', divEntry.loc.line, divEntry.loc.column);
+
+    const fileIO = makeFileIO({ [FILE_PATH]: SIMPLE_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.componentPropSurface).toEqual({
+      acceptsClassName: true,
+      acceptsStyle: true,
+      acceptsCssProp: false,
+      acceptsSxProp: false,
+      recursivePropsSchemaAvailable: false,
+      styleLikeProps: [],
+      semanticProps: [],
+    });
+  });
+
+  it('a custom component that never touches className/style resolves no channel at all', async () => {
+    // Same-file, same shape as lib/style-read/forward-detect.test.ts's plain non-forwarding
+    // fixtures: `Layout` destructures a `title` prop and never attaches className/style anywhere
+    // in its render body — the real A1 detector's `no-host-forward` exclusion on both channels.
+    const source = `
+function Layout({ title }: { title?: string }) {
+  return <div>{title}</div>;
+}
+export function Page() {
+  return <Layout title="hi" />;
+}
+`;
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(source, 'src/App.tsx');
+    const layoutEntry = entries.find((e) => e.tag === 'Layout');
+    if (!layoutEntry) throw new Error('no <Layout> entry in fixture');
+    const syntheticRef = getSyntheticRef('src/App.tsx', layoutEntry.loc.line, layoutEntry.loc.column);
+
+    const fileIO = makeFileIO({ [FILE_PATH]: source });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.componentPropSurface).toEqual({
+      acceptsClassName: false,
+      acceptsStyle: false,
+      acceptsCssProp: false,
+      acceptsSxProp: false,
+      recursivePropsSchemaAvailable: false,
+      styleLikeProps: [],
+      semanticProps: [],
+    });
+  });
+});
+
+// =============================================================================
 // getAvailableKeys
 // =============================================================================
 

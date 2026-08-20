@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import type { ComponentPropSurfaceFacts, InspectorSurfaceDecision } from '@lib/style-read/types';
-import { resolveStyleSurface } from './stylability-ladder';
+import { hasNoStyleWriteSurface, resolveStyleSurface } from './stylability-ladder';
 
 function surface(
   partial: Partial<InspectorSurfaceDecision> & Pick<InspectorSurfaceDecision, 'reasons'>,
@@ -99,5 +99,43 @@ describe('resolveStyleSurface', () => {
       'gap',
     );
     expect(r.rung).toBe('L2');
+  });
+});
+
+// HYP-1294 — the proactive, host-agnostic "no channel at all" predicate the SaaS inspector reads
+// straight off `ComponentPropSurfaceFacts` (no `InspectorSurfaceDecision` required — browser mode
+// has none, HYP-664).
+describe('hasNoStyleWriteSurface', () => {
+  it('true when every channel is false and no partial-prop cover exists (the A1 full-exclusion shape)', () => {
+    expect(hasNoStyleWriteSurface(facts())).toBe(true);
+  });
+
+  it('false when acceptsClassName is the only true channel', () => {
+    expect(hasNoStyleWriteSurface(facts({ acceptsClassName: true }))).toBe(false);
+  });
+
+  it('false when acceptsStyle is the only true channel', () => {
+    expect(hasNoStyleWriteSurface(facts({ acceptsStyle: true }))).toBe(false);
+  });
+
+  it('false when acceptsCssProp or acceptsSxProp is true (future adapter-facts sources)', () => {
+    expect(hasNoStyleWriteSurface(facts({ acceptsCssProp: true }))).toBe(false);
+    expect(hasNoStyleWriteSurface(facts({ acceptsSxProp: true }))).toBe(false);
+  });
+
+  it('false when a partial prop cover exists even though no generic channel does', () => {
+    expect(hasNoStyleWriteSurface(facts({ styleLikeProps: ['padding'] }))).toBe(false);
+    expect(hasNoStyleWriteSurface(facts({ semanticProps: ['gap'] }))).toBe(false);
+  });
+
+  // acceptsAnyStyleChannel (the four-channel-boolean check) stays MODULE-PRIVATE — it has no
+  // production consumer of its own outside this predicate (review finding, HYP-1294: exporting it
+  // only for a test invites a second, weaker "can we style this" predicate to accumulate call
+  // sites alongside this one). Its per-channel behavior is exercised here transitively instead.
+  it('false is returned per-channel: each of the four booleans alone still yields true (no early positive)', () => {
+    expect(hasNoStyleWriteSurface(facts({ acceptsClassName: true }))).toBe(false);
+    expect(hasNoStyleWriteSurface(facts({ acceptsStyle: true }))).toBe(false);
+    expect(hasNoStyleWriteSurface(facts({ acceptsCssProp: true }))).toBe(false);
+    expect(hasNoStyleWriteSurface(facts({ acceptsSxProp: true }))).toBe(false);
   });
 });

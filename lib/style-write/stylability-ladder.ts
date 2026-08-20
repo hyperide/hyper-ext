@@ -41,6 +41,31 @@ function acceptsAnyStyleChannel(facts: ComponentPropSurfaceFacts): boolean {
 }
 
 /**
+ * HYP-1294 — whether NO known style-write channel exists on this element's exposed prop surface
+ * at all: no generic channel (className/style/css/sx via {@link acceptsAnyStyleChannel}) AND no
+ * partial per-property cover (styleLikeProps/semanticProps). Equivalent to `resolveStyleSurface`
+ * resolving to L3 for every property, MINUS the L0 rung (adapter-declared props), which needs a
+ * host-computed `InspectorSurfaceDecision` this predicate deliberately doesn't require — a
+ * browser-mode consumer has no such value today (the cross-realm gap tracked in HYP-664). A
+ * `true` result here is therefore a conservative, host-agnostic "nothing known can reach this
+ * element's DOM node with a style write" signal, safe to surface PROACTIVELY, before any write is
+ * even attempted (the SaaS inspector's first live consumer of `componentPropSurface` — HYP-1294;
+ * before this, the field was fetched/exposed on `ElementStyleData` but read by nothing shipped).
+ * KNOWN LIMITATION (review finding, HYP-1294): an empty `styleLikeProps`/`semanticProps` is
+ * treated identically whether or not `recursivePropsSchemaAvailable` is `true` — i.e. this
+ * predicate cannot distinguish "the partial-prop surface was analyzed and is genuinely empty"
+ * from "it was never analyzed at all". Every producer of `ComponentPropSurfaceFacts` today
+ * (`projectForwardDetectionToPropSurface`) hardcodes `recursivePropsSchemaAvailable: false` and
+ * both prop-cover arrays empty — there is no live case where gating on that field would change
+ * today's verdict — so this is not gated on it now; a future prop-mapper source that actually
+ * populates `recursivePropsSchemaAvailable: true` with a genuinely-empty cover should revisit
+ * whether `false` there ought to soften this predicate's confidence.
+ */
+export function hasNoStyleWriteSurface(facts: ComponentPropSurfaceFacts): boolean {
+  return !acceptsAnyStyleChannel(facts) && facts.styleLikeProps.length === 0 && facts.semanticProps.length === 0;
+}
+
+/**
  * Resolve the write rung for one element + one property.
  *
  * DS-native writes are adapter-declared ONLY (no "this prop looks like a style" inference,

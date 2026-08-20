@@ -6,7 +6,7 @@
  * 2. VS Code Extension - with native VS Code editor via webview
  */
 
-import type { StyleReadResult } from '../../../lib/style-read/types';
+import type { ComponentPropSurfaceFacts, StyleReadResult } from '../../../lib/style-read/types';
 import type { SharedEditorState } from '../../../lib/types';
 import type { ConsoleLevel, DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
 import type { I18nBindingResult, I18nLibrary } from '../../../shared/i18n-text/types';
@@ -205,6 +205,10 @@ export type PlatformMessage =
       childrenLocation?: { line: number; column: number };
       styleReadResult?: StyleReadResult;
       i18nText?: I18nBindingResult;
+      /** A1 forward-detector facts (HYP-1229/HYP-1294) — VS Code parity with the browser/SaaS
+       *  read path's GET /api/element-forwarding fetch; see StyleReadService.ts's
+       *  ElementStyleReadResult doc comment for the shared projection this mirrors. */
+      componentPropSurface?: ComponentPropSurfaceFacts;
       error?: string;
     }
   | {

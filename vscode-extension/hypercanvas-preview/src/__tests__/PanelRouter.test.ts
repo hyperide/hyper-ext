@@ -577,6 +577,55 @@ describe('PanelRouter', () => {
     );
   });
 
+  // HYP-1294 AC2 (review finding) — the RPC-bridge seam between StyleReadService's result and the
+  // wire message was untested: StyleReadService.test.ts proves the SERVICE result carries
+  // componentPropSurface, and useElementStyleData.forwarding.test.ts proves the CLIENT hook
+  // consumes it from a mocked canvas, but neither exercises PanelRouter's own
+  // `{ ..., ...result }` response construction — if a future refactor swapped that spread for an
+  // explicit field-picker, componentPropSurface would silently stop reaching the wire while both
+  // of those tests stayed green. Stubs the private `_styleReadService` (StyleReadService itself
+  // is deliberately NOT mocked elsewhere in this file — global fs/promises mock returns fixed
+  // unparseable content, so a REAL non-empty componentPropSurface can't flow through it here;
+  // this test only needs to prove PanelRouter forwards whatever the service returns, not
+  // re-verify the service's own detection logic).
+  it('carries componentPropSurface through onto styles:response (HYP-1294 AC2 wiring)', async () => {
+    const wv = createMockWebview();
+    const fakeComponentPropSurface = {
+      acceptsClassName: false,
+      acceptsStyle: false,
+      acceptsCssProp: false,
+      acceptsSxProp: false,
+      recursivePropsSchemaAvailable: false,
+      styleLikeProps: [],
+      semanticProps: [],
+    };
+    (
+      router as unknown as { _styleReadService: { readElementClassName: () => Promise<unknown> } }
+    )._styleReadService = {
+      readElementClassName: async () => ({
+        className: 'x',
+        childrenType: undefined,
+        textContent: '',
+        tagType: 'Layout',
+        componentPropSurface: fakeComponentPropSurface,
+      }),
+    };
+
+    await router.routeMessage(
+      { type: 'styles:readClassName', requestId: 'r-cps', elementId: 'e1', componentPath: 'c.tsx' },
+      wv as never,
+    );
+
+    expect(wv.messages[0]).toEqual(
+      expect.objectContaining({
+        type: 'styles:response',
+        requestId: 'r-cps',
+        success: true,
+        componentPropSurface: fakeComponentPropSurface,
+      }),
+    );
+  });
+
   it('routes styles:fetchI18nKeys and returns keys response', async () => {
     const wv = createMockWebview();
     await router.routeMessage(
