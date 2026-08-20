@@ -659,7 +659,13 @@ export class AstBridge {
       // (`{ className }`) is unchanged — never `{ className, warning: undefined }`.
       success: result.success,
       data: result.success
-        ? { className: result.className, ...(responseWarning ? { warning: responseWarning } : {}) }
+        ? {
+            className: result.className,
+            ...(responseWarning ? { warning: responseWarning } : {}),
+            // HYP-1292 — thread the best-effort className-sync warning to the webview response,
+            // same spread-only-when-present shape as `warning` above.
+            ...(result.classSyncWarning ? { classSyncWarning: result.classSyncWarning } : {}),
+          }
         : undefined,
       error: result.error,
     };

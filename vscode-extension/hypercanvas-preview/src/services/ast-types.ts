@@ -34,6 +34,12 @@ export interface UpdateStylesResult extends AstOperationResult {
   /** HYP-901 — present ONLY once the direct write + auto-wrap retry are both tried/excluded and
    *  rolled back; the file is unchanged from before this edit. See ast-update-utils.ts. */
   warning?: StyleForwardingWarning;
+  /**
+   * HYP-1292 — set when the probe-driven inline-style redirect's best-effort className sync
+   * threw and was caught. The write above it still landed; this is visibility into a class-sync
+   * near-miss, not a write failure. See ast-update-utils.ts.
+   */
+  classSyncWarning?: string;
 }
 
 export interface MoveResult {

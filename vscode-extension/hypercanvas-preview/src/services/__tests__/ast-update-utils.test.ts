@@ -135,6 +135,61 @@ describe('updateStyles B0 wiring invariant (HYP-722 T1a)', () => {
     expect(result).toMatchObject({ success: true, resolvedPath: '/workspace/App.tsx' });
   });
 
+  // HYP-1292 — the shared executor's classSyncWarning must reach the extension's own result shape,
+  // not stay reachable only on the SaaS side (review finding, codex: the field was previously
+  // threaded on the batch route only). runStyleWriteTransaction already spreads the underlying
+  // StyleWriteResult (`{ ...result, writeId }`), so this pins that writeDirectCandidate's own
+  // return also carries it through, not just the transaction layer underneath it.
+  test('threads classSyncWarning from a successful write onto the result (HYP-1292)', async () => {
+    const fileIO = makeFileIO();
+    mockRunStyleWriteTransaction.mockResolvedValueOnce({
+      success: true,
+      plan: makeTailwindPlan(),
+      mutatedFiles: ['/workspace/App.tsx'],
+      writeId: 'wid-warn' as WriteId,
+      classSyncWarning: 'Tailwind class sync may have partially applied before failing: boom',
+    });
+
+    const result = await updateStyles(
+      'App.tsx',
+      'App.tsx:1:0',
+      { color: 'red' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      makeDeps(fileIO),
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      classSyncWarning: 'Tailwind class sync may have partially applied before failing: boom',
+    });
+  });
+
+  test('omits classSyncWarning entirely on a clean write (no field, not an empty string)', async () => {
+    const fileIO = makeFileIO();
+    mockRunStyleWriteTransaction.mockResolvedValueOnce({
+      success: true,
+      plan: makeTailwindPlan(),
+      mutatedFiles: ['/workspace/App.tsx'],
+      writeId: 'wid-clean' as WriteId,
+    });
+
+    const result = await updateStyles(
+      'App.tsx',
+      'App.tsx:1:0',
+      { color: 'red' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      makeDeps(fileIO),
+    );
+
+    expect(result).not.toHaveProperty('classSyncWarning');
+  });
+
   test('threads deps.projectDefaultCssSystem into the write request (Tailwind surfaceless floor)', async () => {
     const fileIO = makeFileIO();
     mockRunStyleWriteTransaction.mockResolvedValueOnce({

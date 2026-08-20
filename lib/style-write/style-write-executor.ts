@@ -169,6 +169,43 @@ function tailwindStatePrefix(plan: TailwindPlan): string | undefined {
   return plan.condition.state;
 }
 
+/**
+ * HYP-1292: run a best-effort className-sync callback (currently only
+ * `replaceExistingConflictingClass` on the probe-driven inline-style redirect) and turn a thrown
+ * error into a visible warning string instead of a fully-swallowed catch. The write this guards
+ * (the authoritative inline-style override) must never be BLOCKED by a sync failure — only its
+ * VISIBILITY changes: before this, a thrown error here was indistinguishable from the normal,
+ * uneventful "nothing needed syncing" no-op.
+ *
+ * Review finding (Opus): `sync` (the const-binding path in particular) can mutate more than one
+ * AST node across its own internal loop before throwing on a later iteration — a mid-loop failure
+ * leaves earlier mutations in place, which `writeAST` then persists regardless (unchanged from the
+ * original swallowed `catch {}`, not a regression this diff introduces — see its own doc). The
+ * message says "may have partially applied", not "failed", so it doesn't imply nothing landed.
+ *
+ * Review round 4 (codex P1): the returned string is threaded onto `StyleWriteResult` and from
+ * there onto both HTTP route responses (`updateComponentStyles(Batch)?.ts`) and the VS Code
+ * `UpdateStylesResult`, matching the depth `landedOn` (its sibling transparency field) already
+ * reaches — but NEITHER field goes any further than that today (no webview/AstBridge/UI
+ * consumer exists for either). A `console.warn` HERE, at the one place both realms' write paths
+ * funnel through, is a second, independent channel that reaches an actual visible surface (the
+ * VS Code Extension Host console / the server process log) in BOTH realms without threading
+ * through AstBridge.ts + PlatformContext.tsx + a UI surface — deliberately out of scope per this
+ * ticket's own acceptance criteria (visible, not necessarily a UI feature) and per HYP-1294's
+ * lesson that a UI warning surface grows fast (StrictMode races, dedupe keys). Wiring an actual
+ * UI consumer for either field is a real, separate follow-up if wanted.
+ */
+export function classSyncWarningFrom(sync: () => boolean): string | undefined {
+  try {
+    sync();
+    return undefined;
+  } catch (error) {
+    const warning = `Tailwind class sync may have partially applied before failing: ${errorMessage(error)}`;
+    console.warn(`[HYP-1292] ${warning}`);
+    return warning;
+  }
+}
+
 function stringifyTargetStyles(styles: Record<string, TargetStyleValue>): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(styles)) {
@@ -312,21 +349,26 @@ export class StyleWriteExecutor {
       // multiple keys are present together, so generating per-key in isolation would silently drop
       // classes for those groups). Multi-property inline-style-driven writes just skip the sync, same
       // as this whole branch's behavior before HYP-1222 — not a regression, only not-yet-improved.
+      // HYP-1292: `binding` extends the sync to a same-file const IDENTIFIER (`className={cn(STYLES)}`),
+      // not just an inline literal — gated on `this.domClasses` the same way the primary write path
+      // gates its own const-binding resolution (only a const CURRENTLY contributing a live-applied
+      // conflict class is touched). A thrown error is no longer silently swallowed: it becomes a
+      // visible `classSyncWarning` on the result instead of being indistinguishable from success.
+      let classSyncWarning: string | undefined;
       if (inlineOverride.kind === 'inline-style' && plan.strategy.removeForProperties.length === 1) {
-        try {
+        classSyncWarning = classSyncWarningFrom(() =>
           replaceExistingConflictingClass(
             element,
             plan.strategy.addClasses,
             plan.strategy.removeForProperties,
             tailwindStatePrefix(plan),
-          );
-        } catch {
-          // best-effort class sync — the inline override below is the write that must land.
-        }
+            { ast, domClasses: this.domClasses },
+          ),
+        );
       }
       applyInlineStyleUpdate(element, inlineOverride.styles);
       await this.fileParser.writeAST(ast, absolutePath);
-      return { success: true, plan, mutatedFiles: [absolutePath] };
+      return { success: true, plan, mutatedFiles: [absolutePath], classSyncWarning };
     }
 
     const classNameType = detectClassNameType(element);
@@ -840,7 +882,17 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
     reason: 'inexpressible',
   }));
   const mutatedFiles = [...new Set([...inlineMutatedFiles, ...(result.mutatedFiles ?? [])])];
-  return { success: true, plan: result.plan, mutatedFiles, landedOn };
+  // HYP-1292 (review finding, k3): the expressible portion's system write can carry a
+  // classSyncWarning (the probe-driven inline-style redirect can fire on it independently of the
+  // inexpressible split above) — this object-literal rebuild must not silently drop it, the exact
+  // "reconstructed result loses a field" bug class this ticket exists to close elsewhere.
+  return {
+    success: true,
+    plan: result.plan,
+    mutatedFiles,
+    landedOn,
+    ...(result.classSyncWarning ? { classSyncWarning: result.classSyncWarning } : {}),
+  };
 }
 
 /**

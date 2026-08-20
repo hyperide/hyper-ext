@@ -780,6 +780,22 @@ function replaceConflictingInStaticLiterals(
 }
 
 /**
+ * HYP-1292: optional same-file const-binding context for {@link replaceExistingConflictingClass}.
+ * When provided, an identifier in the className expression that doesn't resolve to an inline
+ * literal (e.g. `className={cn(STYLES)}`) is additionally checked against a same-file top-level
+ * const literal — the same resolution {@link replaceConflictingInSameFileBindings} already gives
+ * the PRIMARY write path (`modifyDynamicClassName`), gated the identical way: only a const that
+ * CURRENTLY contributes a live-applied conflict class (per `domClasses`) is touched, so a const
+ * reachable only through a runtime-false branch is left alone.
+ */
+export interface ExistingClassBindingContext {
+  /** The file's AST — needed to look up top-level const declarations by name. */
+  ast: t.File;
+  /** Live applied className from the DOM. Absent/empty ⇒ no live-conflict evidence ⇒ no-op. */
+  domClasses?: string;
+}
+
+/**
  * HYP-1222: replace a same-group class ALREADY present in a static className literal, in place —
  * and ONLY that. Unlike {@link modifyDynamicClassName}'s normal write path, this never falls back
  * to appending/wrapping when no conflicting literal is found; a caller with nothing to replace gets
@@ -793,12 +809,37 @@ function replaceConflictingInStaticLiterals(
  *
  * Handles both a plain string literal (`className="p-2 bg-blue-500"`) and a dynamic expression
  * (`className={cn(...) + ' bg-blue-500'}`) via {@link replaceConflictingInStaticLiterals}.
+ *
+ * HYP-1292: `binding`, when supplied, extends this to a same-file const IDENTIFIER the expression
+ * references (`className={cn(STYLES)}`). RESIDUAL-driven, mirroring
+ * {@link modifyDynamicClassName}'s own `opaqueResidual` sequencing: the binding pass only ever
+ * targets `liveConflict − staticRemoved` (classes the DOM shows are live, minus whatever the
+ * inline-literal pass already accounted for) — a class the literal pass handled is never
+ * re-targeted at a const. This is a DELIBERATE, DOCUMENTED trade-off, not an oversight (review
+ * round 3→4 tried removing the netting entirely and found it swings the bug the other way):
+ * - WITHOUT netting (round 3): `cn('bg-blue-500', cond && STYLES)` with `cond` false — the
+ *   literal contributes the only LIVE occurrence of `bg-blue-500`; `STYLES` sits in a dead branch
+ *   that renders nothing. Running the binding pass unconditionally rewrites `STYLES` anyway
+ *   (round-4 finding, Opus + codex both independently caught it) — a const write with NO live
+ *   justification, and (since the const is top-level) a blast radius onto every OTHER element in
+ *   the file that references it.
+ * - WITH netting (this version): `cn('bg-blue-500', STYLES)` with NEITHER operand conditional and
+ *   `STYLES = 'bg-blue-500'` — the literal's removal nets the residual to empty, so `STYLES`
+ *   (which, per twMerge's last-wins-per-group rule, is the operand that actually renders) stays
+ *   stale (round-3 finding, Opus). **Known, accepted limitation**: a same conflict-class token
+ *   duplicated across an unconditional literal AND a const in one expression is a narrow, rare
+ *   shape (arguably a code smell in the source being edited) that this fix does not resolve;
+ *   correctly distinguishing it from the dead-branch case above requires real branch-reachability
+ *   analysis (e.g. `@babel/traverse` scope resolution) that the coarse, whole-program style of the
+ *   rest of this file's HYP-544 lineage does not attempt. Tracked as a follow-up, not solved here.
+ * Without `binding` this behaves exactly as before (a caller that never opts in is unaffected).
  */
 export function replaceExistingConflictingClass(
   element: t.JSXElement,
   newClasses: string,
   changedStyleKeys: string[],
   state?: string,
+  binding?: ExistingClassBindingContext,
 ): boolean {
   const attr = getAttribute(element, 'className');
   if (!attr) return false;
@@ -811,16 +852,151 @@ export function replaceExistingConflictingClass(
   }
 
   if (t.isJSXExpressionContainer(attr) && !t.isJSXEmptyExpression(attr.expression)) {
-    const { handledConflict } = replaceConflictingInStaticLiterals(
-      attr.expression as t.Expression,
+    const expr = attr.expression as t.Expression;
+    const staticRemoved = new Set<string>();
+    const { handledConflict: staticHandled } = replaceConflictingInStaticLiterals(
+      expr,
       newClasses,
       changedStyleKeys,
       state,
+      staticRemoved,
     );
-    return handledConflict;
+    if (!binding) return staticHandled;
+
+    const liveConflict = new Set(liveDomConflictClasses(binding.domClasses, changedStyleKeys, state));
+    const residual = new Set([...liveConflict].filter((cls) => !staticRemoved.has(cls)));
+    if (residual.size === 0) return staticHandled;
+
+    const bindingHandled = replaceExistingConflictingClassAtBinding(
+      binding.ast,
+      expr,
+      newClasses,
+      changedStyleKeys,
+      state,
+      residual,
+    );
+    return staticHandled || bindingHandled;
   }
 
   return false;
+}
+
+/**
+ * HYP-1292: the const-binding counterpart of the inline-literal branch above. For every identifier
+ * the className expression references (`cn(STYLES)`, a ternary/concat operand, …), resolve it to a
+ * same-file top-level const literal and, if that const still carries one of the still-RESIDUAL
+ * live conflict classes (see the caller's doc for why this is netted against what the literal
+ * pass handled), replace it in place. Mirrors {@link replaceConflictingInSameFileBindings} minus
+ * its splice-range bookkeeping: unlike the primary write path, every caller of
+ * `replaceExistingConflictingClass` (the probe-driven inline-style redirect) always follows up
+ * with a whole-file `writeAST` recast, so mutating the resolved const's init node in place is
+ * sufficient — no separate splice range needs to be tracked and returned.
+ *
+ * Codex review (HYP-1292): `resolveSameFileLiteralBinding` matches by NAME against top-level
+ * declarations only — it has no notion of the REFERENCE site's own lexical scope. A function
+ * parameter (destructured or not) or a nested `const`/`let` with the same name shadows the
+ * top-level one at any reference inside that scope; rewriting the top-level declaration in that
+ * case edits a value the live class never actually came from. `hasNonTopLevelBinding` guards this:
+ * deliberately coarse (whole-program, not a true per-reference scope resolution) — a same-named
+ * local ANYWHERE in the file is enough to bail. A false bail just falls through to the existing
+ * twMerge/append path (safe); a false resolve would silently rewrite the wrong declaration (not
+ * safe), so the coarse direction is the only one that can err.
+ */
+function replaceExistingConflictingClassAtBinding(
+  ast: t.File,
+  expr: t.Expression,
+  newClasses: string,
+  changedStyleKeys: string[],
+  state: string | undefined,
+  residualConflict: Set<string>,
+): boolean {
+  let handledAny = false;
+  for (const name of collectIdentifierNames(expr)) {
+    if (hasNonTopLevelBinding(ast, name)) continue;
+    const init = resolveSameFileLiteralBinding(ast, name);
+    if (!init || !initCarriesLiveConflict(init, residualConflict)) continue;
+    const { handledConflict } = replaceConflictingInStaticLiterals(init, newClasses, changedStyleKeys, state);
+    if (handledConflict) handledAny = true;
+  }
+  return handledAny;
+}
+
+/**
+ * Does `name` have any binding declared BELOW the top level anywhere in the program — a function
+ * parameter (including a destructured one), a nested `const`/`let`/`var`, a nested named
+ * function/class declaration or expression's own name, or a `catch` clause's param? See the
+ * shadowing doc on {@link replaceExistingConflictingClassAtBinding} for why this check is
+ * deliberately whole-program rather than scoped to the specific reference site.
+ *
+ * Review findings (3-model round 2): `export const X = …` / `export default …` must NOT itself
+ * count as a shadow of `X` — the wrapped declaration is still the SAME top-level statement, so an
+ * `ExportNamedDeclaration`/`ExportDefaultDeclaration`'s `declaration` child is visited AS top-level
+ * (every other child, including a top-level function's own BODY, is genuinely non-top-level).
+ * `resolveSameFileLiteralBinding` (the resolver this guards) does not currently see through an
+ * export wrapper either — matching its own bare-`VariableDeclaration` scan of `program.body` — so
+ * an exported const still doesn't get synced end-to-end today; this fix only stops the guard from
+ * ADDING a second, independent reason for that no-op. Extending the resolver to see through
+ * exports is a separate change to shared code the primary write path also uses — out of this
+ * ticket's scope.
+ */
+function hasNonTopLevelBinding(ast: t.File, name: string): boolean {
+  let shadowed = false;
+  const visit = (node: unknown, atTopLevel: boolean): void => {
+    if (!node || typeof node !== 'object' || shadowed) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, atTopLevel);
+      return;
+    }
+    const n = node as t.Node;
+    if (t.isFunction(n)) {
+      for (const param of n.params) {
+        if (Object.keys(t.getBindingIdentifiers(param)).includes(name)) {
+          shadowed = true;
+          return;
+        }
+      }
+    }
+    // A nested named function/class declaration or expression shadows `name` with its OWN name
+    // inside its own scope — `function STYLES() {}` / `class STYLES {}` nested in a component.
+    if (
+      !atTopLevel &&
+      (t.isFunctionDeclaration(n) || t.isFunctionExpression(n) || t.isClassDeclaration(n) || t.isClassExpression(n)) &&
+      n.id?.name === name
+    ) {
+      shadowed = true;
+      return;
+    }
+    if (
+      !atTopLevel &&
+      t.isCatchClause(n) &&
+      n.param &&
+      Object.keys(t.getBindingIdentifiers(n.param)).includes(name)
+    ) {
+      shadowed = true;
+      return;
+    }
+    if (!atTopLevel && t.isVariableDeclaration(n)) {
+      for (const decl of n.declarations) {
+        if (Object.keys(t.getBindingIdentifiers(decl.id)).includes(name)) {
+          shadowed = true;
+          return;
+        }
+      }
+    }
+    for (const key in node as Record<string, unknown>) {
+      if (key === 'loc' || key === 'start' || key === 'end' || key === 'range' || key === 'leadingComments') {
+        continue;
+      }
+      // An export wrapper is transparent for top-level-ness — its `declaration` child is still
+      // the SAME top-level statement, not a shadow candidate. Every other child (including a
+      // top-level function's own body) is genuinely non-top-level.
+      const childIsTopLevel =
+        atTopLevel && (t.isExportNamedDeclaration(n) || t.isExportDefaultDeclaration(n)) && key === 'declaration';
+      visit((node as Record<string, unknown>)[key], childIsTopLevel);
+    }
+  };
+  for (const stmt of ast.program.body) visit(stmt, true);
+  return shadowed;
 }
 
 /**

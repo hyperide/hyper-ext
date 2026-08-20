@@ -10,7 +10,7 @@ import type { FileIO } from '@lib/ast/file-io';
 import { parseCode } from '@lib/ast/parser';
 import { createFileParser } from '@lib/ast/parser.node';
 import { findElementByPosition } from '@lib/ast/position-finder';
-import { executeStyleWriteRequest, StyleWriteExecutor } from './style-write-executor';
+import { classSyncWarningFrom, executeStyleWriteRequest, StyleWriteExecutor } from './style-write-executor';
 import { InMemoryFileIO } from './testing/in-memory-file-io';
 import type {
   CssModulesFilePlan,
@@ -1407,6 +1407,137 @@ export function App() {
       expect(out).not.toContain('bg-green-500');
       // ...and no brand-new text-color class was injected for the property that never had one.
       expect(out).not.toMatch(/text-(?:white|\[#ffffff\])/);
+    });
+
+    // HYP-1292: the sync above only ever looked at INLINE literals in the className expression — a
+    // same-file const IDENTIFIER (the HYP-544 shape) was invisible to it, so the exact
+    // "second consecutive Fill pick does not replace" HYP-1222 symptom reproduced on this one shape.
+    it('inline-style driver on a className bound to a same-file const identifier → the const is kept in sync too', async () => {
+      const appPath = '/project/src/App.tsx';
+      const constSource = `const STYLES = 'bg-blue-500';
+
+export function App() {
+  return (
+    <div className={cn(STYLES)} style={{ backgroundColor: '#3b82f6' }}>
+      Hi
+    </div>
+  );
+}
+`;
+      const fileIO = new InMemoryFileIO({
+        [appPath]: constSource,
+        '/project/package.json': JSON.stringify({ dependencies: { 'tailwind-merge': '^2.6.0' } }),
+      });
+      const { ast, element } = await parseElement(fileIO, appPath, 4, 4);
+
+      const result = await executeStyleWriteRequest({
+        ast,
+        sourceFilePath: appPath,
+        element,
+        styles: { backgroundColor: '#22c55e' },
+        domClasses: 'bg-blue-500',
+        probeDriving: [{ kind: 'inline-style', token: '#3b82f6', locationHint: 'style.backgroundColor' }],
+        runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'test-fixture' },
+        fileIO,
+        projectRoot: '/project',
+      });
+      expect(result.success).toBe(true);
+      // No sync failure — the wrapper must report a clean pass, not a warning, on a normal sync.
+      expect(result.success === true && result.classSyncWarning).toBeUndefined();
+      const out = fileIO.content(appPath);
+      // The inline override lands the new green...
+      expect(out).toMatch(/style=\{\{[^}]*#22c55e/);
+      // ...AND the same-file const is replaced (not left stale, not stacked, not injected elsewhere).
+      expect(out).toContain("const STYLES = 'bg-green-500'");
+      expect(out).not.toContain('bg-blue-500');
+      // The className expression itself is untouched — the sync happened at the const definition.
+      expect(out).toContain('className={cn(STYLES)}');
+    });
+
+    // HYP-1292: the const-binding sync is gated on the SAME live-conflict evidence as the primary
+    // write path — no `domClasses` (no live-conflict signal) must mean no-op, same discipline as
+    // the "NO existing same-group class" test above.
+    it('inline-style driver on a const-bound className with NO domClasses signal → const left untouched', async () => {
+      const appPath = '/project/src/App.tsx';
+      const constSource = `const STYLES = 'bg-blue-500';
+
+export function App() {
+  return (
+    <div className={cn(STYLES)} style={{ backgroundColor: '#3b82f6' }}>
+      Hi
+    </div>
+  );
+}
+`;
+      const fileIO = new InMemoryFileIO({
+        [appPath]: constSource,
+        '/project/package.json': JSON.stringify({ dependencies: { 'tailwind-merge': '^2.6.0' } }),
+      });
+      const { ast, element } = await parseElement(fileIO, appPath, 4, 4);
+
+      const result = await executeStyleWriteRequest({
+        ast,
+        sourceFilePath: appPath,
+        element,
+        styles: { backgroundColor: '#22c55e' },
+        // no domClasses
+        probeDriving: [{ kind: 'inline-style', token: '#3b82f6', locationHint: 'style.backgroundColor' }],
+        runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'test-fixture' },
+        fileIO,
+        projectRoot: '/project',
+      });
+      expect(result.success).toBe(true);
+      const out = fileIO.content(appPath);
+      expect(out).toMatch(/style=\{\{[^}]*#22c55e/);
+      expect(out).toContain("const STYLES = 'bg-blue-500'");
+    });
+  });
+
+  // HYP-1292: the swallowed `catch {}` around the best-effort className sync (above) is replaced by
+  // `classSyncWarningFrom`, a small pure wrapper — unit-tested directly here since it is the entire
+  // logic behind the fix: the call site (`executeTailwindPlan`) does nothing but pass it a closure.
+  describe('classSyncWarningFrom — swallowed-catch replacement (HYP-1292)', () => {
+    it('a clean sync (no throw) reports no warning', () => {
+      expect(classSyncWarningFrom(() => true)).toBeUndefined();
+      expect(classSyncWarningFrom(() => false)).toBeUndefined();
+    });
+
+    it('a thrown Error surfaces as a warning string instead of being silently swallowed', () => {
+      const warning = classSyncWarningFrom(() => {
+        throw new Error('boom');
+      });
+      expect(warning).toBeDefined();
+      expect(warning).toContain('boom');
+    });
+
+    it('a thrown non-Error value still surfaces a warning (never re-throws)', () => {
+      const warning = classSyncWarningFrom(() => {
+        // eslint-disable-next-line @typescript-eslint/no-throw-literal
+        throw 'not an Error instance';
+      });
+      expect(warning).toBeDefined();
+      expect(warning).toContain('not an Error instance');
+    });
+
+    // Review round 4 (codex P1): the result-field threading (classSyncWarning) stops at the same
+    // depth landedOn already does — neither reaches a UI surface. console.warn is the SECOND,
+    // independent channel that closes the AC's "not fully silent" requirement without threading
+    // through AstBridge/PlatformContext — see the function's own doc for the full rationale.
+    it('a thrown error also reaches console.warn — a channel independent of the result field', () => {
+      const originalWarn = console.warn;
+      const calls: unknown[][] = [];
+      console.warn = (...args: unknown[]) => {
+        calls.push(args);
+      };
+      try {
+        classSyncWarningFrom(() => {
+          throw new Error('boom');
+        });
+      } finally {
+        console.warn = originalWarn;
+      }
+      expect(calls).toHaveLength(1);
+      expect(String(calls[0]?.[0])).toContain('boom');
     });
   });
 

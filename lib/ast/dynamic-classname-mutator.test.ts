@@ -557,6 +557,269 @@ describe('replaceExistingConflictingClass — replace-only sync for the probe-dr
     // (aside from generator whitespace), not extended with a new operand.
     expect(expr.replace(/\s+/g, ' ')).toBe(tail.replace(/\s+/g, ' '));
   });
+
+  // HYP-1292: the narrow replace-only helper above only ever looked at inline literals in the
+  // className expression — a same-file const IDENTIFIER (the HYP-544 shape `const STYLES =
+  // 'bg-blue-500'; className={cn(STYLES)}`) was invisible to it, so this exact shape reproduced
+  // the original HYP-1222 "second consecutive pick doesn't replace" symptom. These three cases
+  // pin the fix: sync when a live conflict says the const IS the driver, stay a no-op when it
+  // isn't, and never regress a caller that doesn't opt into the new binding context.
+  describe('same-file const-binding identifier (HYP-1292)', () => {
+    const code = ["const STYLES = 'bg-blue-500';", 'const C = () => <div className={cn(STYLES)}>Hi</div>;'].join(
+      '\n',
+    );
+
+    it('const contributes the LIVE conflict class: replaces at the const definition', () => {
+      const ast = parseToAst(code);
+      const element = firstJsxElement(ast);
+      const changed = replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        domClasses: 'bg-blue-500',
+      });
+      expect(changed).toBe(true);
+      const file = generate(ast).code;
+      expect(file).toContain('bg-green-500');
+      expect(file).not.toContain('bg-blue-500');
+      // The className expression itself is untouched — the sync happened at the const, not here.
+      expect(file).toContain('className={cn(STYLES)}');
+    });
+
+    it('no domClasses signal (no live-conflict evidence): no-op, const left untouched', () => {
+      const ast = parseToAst(code);
+      const element = firstJsxElement(ast);
+      const changed = replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        domClasses: undefined,
+      });
+      expect(changed).toBe(false);
+      expect(generate(ast).code).toContain('bg-blue-500');
+    });
+
+    it('no bindingContext argument at all: unchanged legacy no-op (backward-compatible default)', () => {
+      const { changed, expr } = replaceExisting(code, 'bg-green-500', ['backgroundColor']);
+      expect(changed).toBe(false);
+      expect(expr).toBe('cn(STYLES)');
+    });
+
+    // Review finding (Fable): a mixed expression where an INLINE literal handles one occurrence of
+    // the conflict must not short-circuit past a DIFFERENT occurrence that only a const binding
+    // carries — reproduces the HYP-1222 symptom on the mixed shape if it does. Unaffected by the
+    // netting design (see `replaceExistingConflictingClass`'s doc): the DEAD branch here carries a
+    // DIFFERENT class token ('bg-red-500') than the live one ('bg-blue-500', from STYLES), so
+    // nothing nets it out of the residual either way.
+    it('mixed expression: an inline-literal hit does not suppress the still-live const sync', () => {
+      // `isActive` is false at runtime, so the inline 'bg-red-500' branch never actually renders —
+      // the LIVE class (per domClasses) is the one STYLES contributes.
+      const mixedCode = [
+        "const STYLES = 'bg-blue-500';",
+        "const isActive = false;",
+        "const C = () => <div className={cn(STYLES, isActive && 'bg-red-500')}>Hi</div>;",
+      ].join('\n');
+      const ast = parseToAst(mixedCode);
+      const element = firstJsxElement(ast);
+      const changed = replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        domClasses: 'bg-blue-500', // the DOM shows STYLES' class, not the never-rendered literal
+      });
+      expect(changed).toBe(true);
+      const file = generate(ast).code;
+      // The real (live) driver — the const — was updated.
+      expect(file).toContain("const STYLES = \"bg-green-500\"");
+      expect(file).not.toContain('bg-blue-500');
+    });
+
+    // Review rounds 3→4 (Opus, then Opus+codex again): the SAME conflict class token duplicated
+    // across an inline literal AND a const — `cn('bg-blue-500', STYLES)` with `STYLES =
+    // 'bg-blue-500'`. Round 3 found the netted design leaves STYLES stale here (it's the LAST
+    // cn() argument, so twMerge's last-wins-per-group semantics make it the one that actually
+    // renders — reproducing HYP-1222's "second pick doesn't replace" symptom). Removing the
+    // netting to fix that (round 3's own next iteration) turned out to be UNSAFE in the other
+    // direction: round 4 found and confirmed (two independent models, live repro) that an
+    // unconditional binding pass wrongly rewrites a const sitting in a DEAD conditional branch
+    // that shares the SAME token as something else that's genuinely live — a worse bug, since the
+    // const's blast radius is file-wide (every other element referencing it changes too), not
+    // scoped to this element. Netting was restored (see the doc on `replaceExistingConflictingClass`)
+    // because the dead-branch case is far more common and far more dangerous than this duplicate-
+    // token case is common. **KNOWN, ACCEPTED LIMITATION, not fixed by this ticket**: pinning the
+    // CURRENT (imperfect but safe-by-default) behavior — the const stays stale here — rather than
+    // silently losing coverage of this shape. A real fix needs branch-reachability analysis this
+    // helper's coarse, whole-program style does not attempt; tracked as a follow-up.
+    it('KNOWN LIMITATION: the same conflict class duplicated in an unconditional literal AND a const — the const stays stale', () => {
+      const dupCode = [
+        "const STYLES = 'bg-blue-500';",
+        "const C = () => <div className={cn('bg-blue-500', STYLES)}>Hi</div>;",
+      ].join('\n');
+      const ast = parseToAst(dupCode);
+      const element = firstJsxElement(ast);
+      const changed = replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        domClasses: 'bg-blue-500',
+      });
+      // The literal occurrence updates (handled by the static-literal pass, unaffected by this
+      // limitation)...
+      expect(changed).toBe(true);
+      const file = generate(ast).code;
+      expect(file).toContain('bg-green-500');
+      // ...but the const — netted out of the residual because the literal already accounted for
+      // the token — is NOT updated. If this assertion starts failing because the const now DOES
+      // update, that's good news: it means the limitation above was closed, so also flip this
+      // test's expectations and update the doc comment on `replaceExistingConflictingClass`.
+      expect(file).toContain("const STYLES = 'bg-blue-500'");
+    });
+
+    // Review round 4 (Opus + codex, independently, live-confirmed): a const referenced inside a
+    // conditional branch that DOESN'T currently render must NOT be rewritten just because its
+    // token happens to match something ELSE that's live in the same expression. This is exactly
+    // the case netting protects — the regression the round-3→round-4 revert closes.
+    it('a const inside a dead conditional branch sharing a token with a live literal: the const is NOT rewritten', () => {
+      const deadBranchCode = [
+        "const STYLES = 'bg-blue-500';",
+        'const isActive = false;',
+        "const C = () => <div className={cn('bg-blue-500', isActive && STYLES)}>Hi</div>;",
+      ].join('\n');
+      const ast = parseToAst(deadBranchCode);
+      const element = firstJsxElement(ast);
+      const changed = replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        // The DOM shows ONLY what the always-present literal contributes — isActive's branch
+        // never rendered, so its class was never applied.
+        domClasses: 'bg-blue-500',
+      });
+      expect(changed).toBe(true);
+      const file = generate(ast).code;
+      // The live literal updates...
+      expect(file).toContain('bg-green-500');
+      // ...but STYLES — never actually live here — is left completely untouched, including for
+      // every OTHER element in the file that might reference it.
+      expect(file).toContain("const STYLES = 'bg-blue-500'");
+    });
+
+    // Review finding (codex, P1): `resolveSameFileLiteralBinding` matches by name against
+    // top-level declarations only, with no notion of the reference site's own scope. A function
+    // parameter (or a nested local) with the same name as a top-level const SHADOWS it — resolving
+    // to the top-level declaration in that case would rewrite an unrelated value.
+    it('SHADOWED identifier (same name as a function parameter): bails, never rewrites the wrong declaration', () => {
+      const shadowedCode = [
+        "const STYLES = 'bg-blue-500';",
+        'function C({ STYLES }) {',
+        '  return <div className={cn(STYLES)}>Hi</div>;',
+        '}',
+      ].join('\n');
+      const ast = parseToAst(shadowedCode);
+      const element = firstJsxElement(ast);
+      const changed = replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        domClasses: 'bg-blue-500',
+      });
+      expect(changed).toBe(false);
+      // The unrelated top-level const must be left completely untouched.
+      expect(generate(ast).code).toContain("const STYLES = 'bg-blue-500'");
+    });
+
+    it('SHADOWED identifier (nested const inside the component body): also bails', () => {
+      const shadowedCode = [
+        "const STYLES = 'bg-blue-500';",
+        'function C() {',
+        "  const STYLES = 'local-only';",
+        '  return <div className={cn(STYLES)}>Hi</div>;',
+        '}',
+      ].join('\n');
+      const ast = parseToAst(shadowedCode);
+      const element = firstJsxElement(ast);
+      const changed = replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        domClasses: 'bg-blue-500',
+      });
+      expect(changed).toBe(false);
+      expect(generate(ast).code).toContain("const STYLES = 'bg-blue-500'");
+    });
+
+    // Review finding (Fable, #4 — verification requested): a member-expression property name
+    // (`styles.primary`) must NOT be treated as an identifier reference to an unrelated top-level
+    // const of the same name. `collectIdentifierNames` already excludes member expressions
+    // entirely (doc comment: "Member/object/array etc. ... don't descend into them") — this pins
+    // that the const-binding path inherits the same exclusion, not just the primary write path.
+    it('member-expression property access is NOT resolved as an identifier binding (no false-positive rewrite)', () => {
+      const memberCode = [
+        "const primary = 'bg-blue-500';", // unrelated top-level const, same name as the property below
+        'const C = (props) => <div className={cn(props.styles.primary)}>Hi</div>;',
+      ].join('\n');
+      const ast = parseToAst(memberCode);
+      const element = firstJsxElement(ast);
+      const changed = replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        domClasses: 'bg-blue-500',
+      });
+      expect(changed).toBe(false);
+      expect(generate(ast).code).toContain("const primary = 'bg-blue-500'");
+    });
+
+    // Review round 2 (k3, Fable finding #3): the shadow guard originally only checked function
+    // params and nested VariableDeclarations — a catch-clause param or a nested named
+    // function/class declaration also shadows and was missed (the unsafe direction: a false
+    // resolve, not a false bail).
+    it('SHADOWED identifier (catch-clause param): bails, never rewrites the wrong declaration', () => {
+      const shadowedCode = [
+        "const STYLES = 'bg-blue-500';",
+        'function C() {',
+        '  try {',
+        '    doSomething();',
+        '  } catch (STYLES) {',
+        '    return <div className={cn(STYLES)}>Hi</div>;',
+        '  }',
+        '}',
+      ].join('\n');
+      const ast = parseToAst(shadowedCode);
+      const element = firstJsxElement(ast);
+      const changed = replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        domClasses: 'bg-blue-500',
+      });
+      expect(changed).toBe(false);
+      expect(generate(ast).code).toContain("const STYLES = 'bg-blue-500'");
+    });
+
+    it('SHADOWED identifier (nested named function declaration reusing the name): bails', () => {
+      const shadowedCode = [
+        "const STYLES = 'bg-blue-500';",
+        'function C() {',
+        '  function STYLES() { return null; }',
+        '  return <div className={cn(STYLES)}>Hi</div>;',
+        '}',
+      ].join('\n');
+      const ast = parseToAst(shadowedCode);
+      const element = firstJsxElement(ast);
+      const changed = replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        domClasses: 'bg-blue-500',
+      });
+      expect(changed).toBe(false);
+      expect(generate(ast).code).toContain("const STYLES = 'bg-blue-500'");
+    });
+
+    // Review round 2 (Opus "blocking", Fable, k3): an `export const` top-level statement must not
+    // itself be misclassified as a shadow of its own name — the wrapped declaration is still the
+    // SAME top-level statement. (The overall sync still doesn't reach an exported const end-to-end
+    // — `resolveSameFileLiteralBinding` doesn't see through the export wrapper either, a separate,
+    // pre-existing, shared-code limitation this ticket does not extend — so `changed` stays
+    // `false` either way; this test pins that the GUARD specifically no longer contributes a
+    // second, independent reason for that no-op, which matters the moment the resolver gap closes.)
+    it('export const at the top level: the guard does not treat it as shadowing itself', () => {
+      const code = [
+        "export const STYLES = 'bg-blue-500';",
+        'const C = () => <div className={cn(STYLES)}>Hi</div>;',
+      ].join('\n');
+      const ast = parseToAst(code);
+      const element = firstJsxElement(ast);
+      // Not asserting `changed` here (see comment above) — asserting the export wrapper is
+      // untouched either way, i.e. nothing crashed and no unrelated mutation happened.
+      replaceExistingConflictingClass(element, 'bg-green-500', ['backgroundColor'], undefined, {
+        ast,
+        domClasses: 'bg-blue-500',
+      });
+      expect(generate(ast).code).toContain("export const STYLES = 'bg-blue-500'");
+    });
+  });
 });
 
 describe('modifyDynamicClassName — same-file const binding resolution (HYP-544 Phase 1)', () => {

@@ -264,6 +264,14 @@ export type StyleWriteResult =
        * still succeeded everywhere — this is transparency, not failure. Empty/absent = clean write.
        */
       landedOn?: StyleLandedFallback[];
+      /**
+       * HYP-1292 — set when the probe-driven inline-style redirect's best-effort className sync
+       * (`replaceExistingConflictingClass`, keeping a same-group Tailwind class in sync with an
+       * authoritative inline-style override, HYP-1222) threw and was caught. The write above it — the
+       * inline-style override — still landed; this is visibility into a class-sync near-miss, not a
+       * write failure. Absent for every other write and for a clean/no-op sync.
+       */
+      classSyncWarning?: string;
     }
   | {
       success: false;

@@ -180,6 +180,13 @@ export type UpdateStylesResult =
        * changed nothing there (the caller records no entry).
        */
       undoSnapshot?: { path: string; before: string; after: string };
+      /**
+       * HYP-1292 — set when the probe-driven inline-style redirect's best-effort className sync
+       * (`StyleWriteResult.classSyncWarning`) threw and was caught. The write above it still
+       * landed; this is visibility into a class-sync near-miss, not a write failure. No UI
+       * currently reads this — informational, same as the SaaS batch route's own threading.
+       */
+      classSyncWarning?: string;
     }
   | { success: false; error: string };
 
@@ -529,7 +536,14 @@ async function writeDirectCandidate(
     mutatedResolved && undoBefore !== undefined && undoAfter !== undefined
       ? { path: input.resolvedPath, before: undoBefore, after: undoAfter }
       : undefined;
-  return { success: true, resolvedPath: input.resolvedPath, contentBeforeWrite, undoSnapshot };
+  return {
+    success: true,
+    resolvedPath: input.resolvedPath,
+    contentBeforeWrite,
+    undoSnapshot,
+    // HYP-1292 — see UpdateStylesResult.classSyncWarning doc.
+    ...(writeResult.classSyncWarning ? { classSyncWarning: writeResult.classSyncWarning } : {}),
+  };
 }
 
 /** What the cascade-inert escalation resolved about the file's ownership: an advisory warning
