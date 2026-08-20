@@ -439,13 +439,160 @@ export function Page() { return <Button>hi</Button>; }
     expect(result.className.forwardsClassName).toBe(true);
   });
 
-  it('styled(UppercaseComponent) — conservatively stays low rather than a blind high (documented simplification)', async () => {
+  it('styled(UnresolvableComponent) — an undeclared wrap target stays low (nothing to trace)', async () => {
     const source = `const Fancy = styled(SomeComponent)({ color: 'red' });
 export function Page() { return <Fancy>hi</Fancy>; }
 `;
     const result = await detect(source, 'Fancy');
     expect(result.className.confidence).toBe('low');
     expect(result.className.excludedReason).toBeUndefined();
+  });
+
+  describe('styled(UppercaseComponent) — HYP-1234 one-level recursive trace', () => {
+    it('resolves to a confident positive when the wrapped component itself forwards className', async () => {
+      const source = `function Base({ className, children }: { className?: string; children?: unknown }) {
+  return <div className={className}>{children as any}</div>;
+}
+const Fancy = styled(Base)({ color: 'red' });
+export function Page() { return <Fancy>hi</Fancy>; }
+`;
+      const result = await detect(source, 'Fancy');
+      expect(result.className).toEqual({
+        forwardsClassName: true,
+        forwardsStyle: false,
+        hostProp: null,
+        confidence: 'high',
+      });
+    });
+
+    it('resolves to a confident exclusion (never a false positive) when the wrapped component swallows className', async () => {
+      const source = `function Base({ children }: { children?: unknown }) {
+  return <div>{children as any}</div>;
+}
+const Fancy = styled(Base)({ color: 'red' });
+export function Page() { return <Fancy>hi</Fancy>; }
+`;
+      const result = await detect(source, 'Fancy');
+      expect(result.className).toEqual({
+        forwardsClassName: false,
+        forwardsStyle: false,
+        hostProp: null,
+        confidence: 'high',
+        excludedReason: 'no-host-forward',
+      });
+    });
+
+    it('className and style are traced INDEPENDENTLY — a className exclusion never leaks onto style', async () => {
+      const source = `function Base({ style, children }: { style?: unknown; children?: unknown }) {
+  return <div style={style as any}>{children as any}</div>;
+}
+const Fancy = styled(Base)({ color: 'red' });
+export function Page() { return <Fancy>hi</Fancy>; }
+`;
+      const result = await detect(source, 'Fancy');
+      expect(result.className).toEqual({
+        forwardsClassName: false,
+        forwardsStyle: true,
+        hostProp: null,
+        confidence: 'high',
+        excludedReason: 'no-host-forward',
+      });
+      expect(result.style).toEqual({
+        forwardsClassName: false,
+        forwardsStyle: true,
+        hostProp: null,
+        confidence: 'high',
+      });
+    });
+
+    it('bounded to ONE level — a wrapped component that is itself another styled(Component) wrap does not recurse further', async () => {
+      // k3 review finding: `AnotherWrapped` must be a PROVABLY-forwarding component, not an
+      // undeclared identifier — otherwise this test passes identically whether the bound is real
+      // or a hypothetical regression removed it (an undeclared third level fails to resolve
+      // either way, landing on `low` regardless). `Deep` genuinely forwards className to its
+      // root; a regression to unbounded recursion would trace through it and yield a confident
+      // `high` positive, failing this assertion — that's what actually pins the one-level bound.
+      const source = `function Deep({ className }: { className?: string }) {
+  return <div className={className} />;
+}
+const Base = styled(Deep)({ color: 'blue' });
+const Fancy = styled(Base)({ color: 'red' });
+export function Page() { return <Fancy>hi</Fancy>; }
+`;
+      const result = await detect(source, 'Fancy');
+      expect(result.className.confidence).toBe('low');
+      expect(result.className.excludedReason).toBeUndefined();
+    });
+
+    // k3 review finding: `styled(Base)` where `Base` is itself `styled.tag(...)` (NOT
+    // `styled(AnotherComponent)`) is already fully classified by the same one locate call above —
+    // `outcomeForStyledFactory`'s own trusted-unconditionally branch (line 164) applies to it too,
+    // so this reuses that verdict instead of a second recursive hop (still bounded to one level:
+    // a `styled(styled(AnotherComponent))` chain, covered by the test above, still stays low).
+    it('styled(Base) where Base = styled.tag(...) reuses the inner factory\'s own trusted verdict (no second hop needed)', async () => {
+      const source = `const Base = styled.button({ color: 'blue' });
+const Fancy = styled(Base)({ color: 'red' });
+export function Page() { return <Fancy>hi</Fancy>; }
+`;
+      const result = await detect(source, 'Fancy');
+      expect(result.className).toEqual({
+        forwardsClassName: true,
+        forwardsStyle: true,
+        hostProp: null,
+        confidence: 'high',
+      });
+    });
+
+    // review finding (Codex P2 / k3 medium): the first four fixtures above all declare `Base` in
+    // the SAME source string as `Fancy`, so `located.fileAst === input.ast` and
+    // `located.declarationFilePath === input.filePath` — the recursive locate never actually
+    // crosses a file boundary. This pins the real-world shape: `Base` imported from a separate
+    // module, proving `outcomeForStyledFactory`'s `{ ast: located.fileAst, filePath:
+    // located.declarationFilePath, ... }` construction correctly hands the wrapped-component
+    // locate the FILE `Fancy` is declared in (here, same as the usage site) rather than some
+    // stale/mismatched ast-filePath pairing.
+    it('resolves a cross-file imported wrapped component the same way as a same-file one', async () => {
+      const basePath = '/workspace/src/Base.tsx';
+      const source = `import { Base } from './Base';
+const Fancy = styled(Base)({ color: 'red' });
+export function Page() { return <Fancy>hi</Fancy>; }
+`;
+      const baseSource = `export function Base({ className, children }: { className?: string; children?: unknown }) {
+  return <div className={className}>{children as any}</div>;
+}
+`;
+      const result = await detect(source, 'Fancy', { [basePath]: baseSource });
+      expect(result.className).toEqual({
+        forwardsClassName: true,
+        forwardsStyle: false,
+        hostProp: null,
+        confidence: 'high',
+      });
+    });
+
+    // k3 review finding: the cross-file fixture above only covers the POSITIVE outcome. The
+    // highest-stakes outcome of this whole change is a high-confidence EXCLUSION resolved through
+    // an import — that's the one that becomes a real write REFUSAL via HYP-1235's
+    // style-forwarding-check.ts, not just a stale read-path fact.
+    it('resolves a cross-file imported wrapped component that swallows the channel to a confident exclusion', async () => {
+      const basePath = '/workspace/src/Base.tsx';
+      const source = `import { Base } from './Base';
+const Fancy = styled(Base)({ color: 'red' });
+export function Page() { return <Fancy>hi</Fancy>; }
+`;
+      const baseSource = `export function Base({ children }: { children?: unknown }) {
+  return <div>{children as any}</div>;
+}
+`;
+      const result = await detect(source, 'Fancy', { [basePath]: baseSource });
+      expect(result.className).toEqual({
+        forwardsClassName: false,
+        forwardsStyle: false,
+        hostProp: null,
+        confidence: 'high',
+        excludedReason: 'no-host-forward',
+      });
+    });
   });
 
   it(

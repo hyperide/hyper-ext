@@ -25,13 +25,13 @@ const generate = (_generate as unknown as { default: typeof _generate }).default
 
 const FILE_PATH = '/workspace/src/Page.tsx';
 
-async function classifyTag(source: string, tagName: string) {
+async function classifyTag(source: string, tagName: string, files: Record<string, string> = {}) {
   const ast = parseCode(source);
   const element = findAllJSXElements(ast).find(
     (e) => e.element.openingElement.name.type === 'JSXIdentifier' && e.element.openingElement.name.name === tagName,
   )?.element;
   if (!element) throw new Error(`no <${tagName}> element in fixture`);
-  const fileIO = new InMemoryFileIO({ [FILE_PATH]: source });
+  const fileIO = new InMemoryFileIO({ [FILE_PATH]: source, ...files });
   return checkStyleForwarding({ ast, filePath: FILE_PATH, element, fileIO, aliasMap: {} });
 }
 
@@ -83,6 +83,51 @@ export function Page() {
     // definition location (line 1 here); the classification + display name are unchanged.
     expect(result).toEqual(expect.objectContaining({ kind: 'not-forwarding', displayName: 'Box' }));
     expect(result.kind === 'not-forwarding' && result.definition?.line).toBe(1);
+  });
+});
+
+describe('checkStyleForwarding — HYP-1234 styled(Component) diagnosis pinpoint (review finding, P1)', () => {
+  // HYP-1234 made `styled(Base)` reach a real `not-forwarding` verdict for the first time (traced
+  // through `Base`, never through `Fancy` itself — `Fancy`'s own declaration has no `fnNode`).
+  // `resolveNotForwardingDefinition` MUST re-resolve one more level and point the AI-fix diagnosis
+  // at `Base`'s definition, not `Fancy`'s one-line `styled(Base)(...)` call site — the swallowed
+  // prop lives in `Base`'s render body, and an AI-fix aimed at the `styled(...)` call edits the
+  // wrong file.
+  it('points the definition at the WRAPPED component, not the styled(...) call site', async () => {
+    const source = `function Base({ title }: { title: string }) {
+  return <div>{title}</div>;
+}
+const Fancy = styled(Base)({ color: 'red' });
+export function Page() {
+  return <Fancy title="x" />;
+}
+`;
+    const result = await classifyTag(source, 'Fancy');
+    expect(result).toEqual(expect.objectContaining({ kind: 'not-forwarding', displayName: 'Fancy' }));
+    // Line 1 is `function Base(...)` — NOT line 4, where `const Fancy = styled(Base)(...)` sits.
+    expect(result.kind === 'not-forwarding' && result.definition).toEqual({ filePath: FILE_PATH, line: 1 });
+  });
+
+  // codex review finding (P2, round 2): the same-file test above can't distinguish a correct
+  // `{ ast: located.fileAst, filePath: located.declarationFilePath }` handoff from one that
+  // silently reused the OUTER (`Fancy`'s) ast/filePath by accident, since both are identical when
+  // `Base` lives in the same file. `Base` imported from a separate module closes that gap — the
+  // diagnosis must land in `Base.tsx`, not `Page.tsx`.
+  it('points the definition at the WRAPPED component even when it is imported from another file', async () => {
+    const basePath = '/workspace/src/Base.tsx';
+    const source = `import { Base } from './Base';
+const Fancy = styled(Base)({ color: 'red' });
+export function Page() {
+  return <Fancy title="x" />;
+}
+`;
+    const baseSource = `export function Base({ title }: { title: string }) {
+  return <div>{title}</div>;
+}
+`;
+    const result = await classifyTag(source, 'Fancy', { [basePath]: baseSource });
+    expect(result).toEqual(expect.objectContaining({ kind: 'not-forwarding', displayName: 'Fancy' }));
+    expect(result.kind === 'not-forwarding' && result.definition).toEqual({ filePath: basePath, line: 1 });
   });
 });
 

@@ -137,6 +137,15 @@ function classifyForwarding(detection: ForwardDetectionResults): 'forwards' | 'u
  * (HYP-990 M2). Only called on the `not-forwarding` path (rare relative to `forwards`/`unknown`),
  * so re-running `locateComponentDeclaration` here (rather than threading the location detection
  * already did internally) is a deliberate, cheap-in-practice tradeoff — see the file header.
+ *
+ * HYP-1234 (review finding, P1): for `const Fancy = styled(Base)(...)`, the OUTER declaration is
+ * a one-line factory call, not where a swallowed prop actually lives — `Base`'s own render body
+ * is. `detectForwarding`'s `not-forwarding` verdict for this shape is now ALWAYS traced through
+ * `Base` (`forward-detect.ts`'s `outcomeForStyledFactory`, never `Fancy` itself, which has no
+ * `fnNode` to trace), so pointing the diagnosis at `Fancy` would send an AI-fix attempt at the
+ * wrong file. Re-resolve one more level, mirroring `outcomeForStyledFactory`'s own bounded
+ * one-level lookup, and prefer that inner definition; fall back to the outer (styled-call-site)
+ * location only when the inner component itself can't be re-resolved, rather than no location.
  */
 async function resolveNotForwardingDefinition(
   input: StyleForwardCheckInput,
@@ -147,7 +156,19 @@ async function resolveNotForwardingDefinition(
     { ast: input.ast, filePath: input.filePath, fileIO: input.fileIO, aliasMap: input.aliasMap },
     tagName,
   );
-  return located?.definitionLine !== null && located?.definitionLine !== undefined
+  if (!located) return undefined;
+
+  if (located.styledComponentsFactory && located.styledWrapsComponentTag) {
+    const inner = await locateComponentDeclaration(
+      { ast: located.fileAst, filePath: located.declarationFilePath, fileIO: input.fileIO, aliasMap: input.aliasMap },
+      located.styledWrapsComponentTag,
+    );
+    if (inner?.definitionLine !== null && inner?.definitionLine !== undefined) {
+      return { filePath: inner.declarationFilePath, line: inner.definitionLine };
+    }
+  }
+
+  return located.definitionLine !== null && located.definitionLine !== undefined
     ? { filePath: located.declarationFilePath, line: located.definitionLine }
     : undefined;
 }

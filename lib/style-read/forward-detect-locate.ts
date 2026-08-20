@@ -41,9 +41,10 @@ export interface LocatedComponent {
   styledComponentsFactory: boolean;
   /** Set only when `styledComponentsFactory` and the wrap target is a custom (non-host) component. */
   styledWrapsComponentTag?: string;
-  /** The AST of the file the declaration itself lives in. Currently unconsumed by
-   *  `forward-detect.ts` (its Slot-import lookup was retired in favor of the general trace, see
-   *  that file's header) — kept populated for the HYP-1235 recognizer unification. */
+  /** The AST of the file the declaration itself lives in. Consumed by `forward-detect.ts`'s
+   *  `outcomeForStyledFactory` (HYP-1234) as the entry point for the bounded one-level
+   *  `styled(WrappedComponent)` resolution — paired with `declarationFilePath` below to locate
+   *  the wrapped component from the FILE that references it, not the original call site's file. */
   fileAst: t.File;
   componentName: string;
   declarationFilePath: string;
@@ -275,7 +276,8 @@ interface StyledClassification {
  * `` styled(Component)`...` `` — both the call-style and tagged-template-style styled-components
  * APIs. `styled.tag` always injects its generated className onto a real DOM node (a known library
  * contract); `styled(Component)` only holds that guarantee if `Component` itself forwards, hence
- * `wrapsComponentTag` — see forward-detect.ts's conservative (not recursive) handling of it.
+ * `wrapsComponentTag` — see forward-detect.ts's bounded ONE-LEVEL recursive handling of it
+ * (HYP-1234): it traces the wrapped component once, never a second wrap deep.
  */
 export function classifyStyledComponentsExpression(node: t.Node | null | undefined): StyledClassification {
   if (!node) return { matched: false };

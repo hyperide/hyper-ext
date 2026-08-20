@@ -122,8 +122,8 @@ export async function detectForwarding(input: ForwardDetectionInput): Promise<Fo
   const located = await locateComponentDeclaration(input, tagName);
   if (!located) return buildResults(LOW_UNKNOWN, LOW_UNKNOWN);
 
-  const styledOutcome = outcomeForStyledFactory(located);
-  if (styledOutcome) return buildResults(styledOutcome, styledOutcome);
+  const styledOutcome = await outcomeForStyledFactory(located, input);
+  if (styledOutcome) return buildResults(styledOutcome.className, styledOutcome.style);
   if (!located.fnNode) return buildResults(LOW_UNKNOWN, LOW_UNKNOWN);
 
   const classNameOutcome = resolveChannel(located.fnNode, located, 'className', input);
@@ -131,15 +131,64 @@ export async function detectForwarding(input: ForwardDetectionInput): Promise<Fo
   return buildResults(classNameOutcome, styleOutcome);
 }
 
-/** Null when `located` isn't a styled-components factory (fall through to the render-body trace). */
-function outcomeForStyledFactory(located: LocatedComponent): ChannelOutcome | null {
+/** Per-channel pair, mirroring `ForwardDetectionResults`'s shape but before the public projection. */
+interface StyledFactoryOutcome {
+  className: ChannelOutcome;
+  style: ChannelOutcome;
+}
+
+/**
+ * Null when `located` isn't a styled-components factory (fall through to the render-body trace).
+ *
+ * HYP-1234: `styled(UppercaseComponent)` only carries the "always injects onto a real DOM node"
+ * guarantee if the wrapped component itself forwards — locate and trace it, bounded to exactly
+ * ONE level. If the wrapped component is itself another styled-components factory
+ * (`styled(styled(X))`), this deliberately does NOT recurse a second time: `resolveChannel` below
+ * requires an `fnNode`, which a nested styled factory never has (see `LocatedComponent.fnNode`'s
+ * doc comment), so that case falls through to LOW_UNKNOWN for free without an explicit depth
+ * check. className and style are traced INDEPENDENTLY, exactly like the non-styled path below —
+ * do NOT collapse them to one shared verdict the way the trivial `styled.tag(...)` case does: a
+ * `resolveChannel` trace can produce a high-confidence NEGATIVE (`no-host-forward`,
+ * `forwards-non-root-only`), and mirroring a negative traced for one channel onto the other
+ * channel (which was never actually traced) would manufacture exactly the false high-confidence
+ * exclusion the file header's "documented non-goals" paragraph forbids — and since HYP-1235 wired
+ * this detector into the ext write-path's pre-write admit/exclude gate, a false exclusion here is
+ * a real write refusal, not just a stale read-path fact.
+ */
+async function outcomeForStyledFactory(
+  located: LocatedComponent,
+  input: ForwardDetectionInput,
+): Promise<StyledFactoryOutcome | null> {
   if (!located.styledComponentsFactory) return null;
   // `styled.tag(...)` / `styled('div')` always inject onto a real DOM node — trust unconditionally.
-  // `styled(UppercaseComponent)` only holds that guarantee if the wrapped component itself
-  // forwards; the one-level recursive check the plan calls for is HYP-1234 (not built here —
-  // scope cut to avoid an untested recursive path), so this stays conservative (low, never a
-  // blind high) until then.
-  return located.styledWrapsComponentTag ? LOW_UNKNOWN : HIGH_POSITIVE;
+  if (!located.styledWrapsComponentTag) return { className: HIGH_POSITIVE, style: HIGH_POSITIVE };
+
+  // Scope cut (review finding, HYP-1234 PR): `input.aliasMap` is the OUTER call site's project
+  // aliasMap, reused as-is even though `located.declarationFilePath` may sit in a different
+  // package (e.g. a workspace package) with its own tsconfig aliases. Fails open — a wrap target
+  // reachable only via that package's own alias resolves to LOW_UNKNOWN, never a false positive
+  // — matching the single-project scope the outer locate already has.
+  const inner = await locateComponentDeclaration(
+    { ast: located.fileAst, filePath: located.declarationFilePath, fileIO: input.fileIO, aliasMap: input.aliasMap },
+    located.styledWrapsComponentTag,
+  );
+  if (!inner) return { className: LOW_UNKNOWN, style: LOW_UNKNOWN };
+  // `styled(Base)` where `Base` is ITSELF `styled.tag(...)`/`styled('div')` (never
+  // `styled(AnotherWrapped)`, which stays bounded to one level per the file header) — `inner` is
+  // already fully classified above without a second recursive hop, so reuse that trusted verdict
+  // instead of falling through to the generic `!inner.fnNode` bail (review finding: this is a
+  // real, free positive, not an unbounded recursion — a nested `styled(Component)` wrap still has
+  // no `fnNode` and correctly stays LOW_UNKNOWN below).
+  if (inner.styledComponentsFactory) {
+    return inner.styledWrapsComponentTag
+      ? { className: LOW_UNKNOWN, style: LOW_UNKNOWN }
+      : { className: HIGH_POSITIVE, style: HIGH_POSITIVE };
+  }
+  if (!inner.fnNode) return { className: LOW_UNKNOWN, style: LOW_UNKNOWN };
+  return {
+    className: resolveChannel(inner.fnNode, inner, 'className', input),
+    style: resolveChannel(inner.fnNode, inner, 'style', input),
+  };
 }
 
 function resolveChannel(
