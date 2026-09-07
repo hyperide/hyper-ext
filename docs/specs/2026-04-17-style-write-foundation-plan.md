@@ -10,8 +10,8 @@
 # Style Write Foundation — Implementation Plan
 
 > **Historical implementation plan:** Claude Code agents may use the referenced
-> superpowers workflow. Codex agents must follow `CODEX.md` and `AGENTS.md`
-> instead: no self-invoked `codex exec review`; use staged-diff self-review.
+> superpowers workflow. Codex agents must follow `AGENTS.md` instead: no
+> self-invoked `codex exec review`; use staged-diff self-review.
 > Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Create the shared type system, value normalization modules, and write plan model that form the foundation of the unified style-write architecture (Phases 1 + 2 from `docs/specs/2026-04-14-style-write-unification-plan.md`).

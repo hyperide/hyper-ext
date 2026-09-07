@@ -5,7 +5,7 @@
 The current uncommitted diff (~2557 lines, 43 files) needs to be split into
 atomic commits. Each commit should pass lint, typecheck, and tests independently.
 
-**Read `CODEX.md` first** — it has the pre-commit checklist and self-review rules.
+**Read `AGENTS.md` first** — it has the pre-commit checklist and self-review rules.
 
 ## MANDATORY: Fix Two Concerns BEFORE Committing
 
@@ -189,7 +189,7 @@ Files:
 
 ## Review Checklist (per commit)
 
-Before each `git commit` (see `CODEX.md` for details):
+Before each `git commit` (see `AGENTS.md` for details):
 
 1. `git diff --staged` — self-review the diff
 2. `biome check <changed-files>` — no lint issues

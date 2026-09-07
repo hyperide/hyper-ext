@@ -10,8 +10,8 @@
 # Style Adapters Phase 3+4 — Implementation Plan
 
 > **Historical implementation plan:** Claude Code agents may use the referenced
-> superpowers workflow. Codex agents must follow `CODEX.md` and `AGENTS.md`
-> instead: no self-invoked `codex exec review`; use staged-diff self-review.
+> superpowers workflow. Codex agents must follow `AGENTS.md` instead: no
+> self-invoked `codex exec review`; use staged-diff self-review.
 > Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the first two concrete `FrameworkStyleAdapter` implementations — TailwindV4Adapter and InlineStyleAdapter — that produce `StyleWritePlan` objects from the Phase 1+2 type system.
