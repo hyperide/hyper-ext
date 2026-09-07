@@ -40,6 +40,7 @@ import {
   ensureDependencies,
   ensureTool,
   findMissingLocalBinaries,
+  killProcessTree as killWindowsProcessTree,
   requiredToolsForPackageManager,
   shouldInstallDependencies,
   ToolchainInstallError,
@@ -108,6 +109,26 @@ const BACKEND_RECOVERY_RESTART_CAP = 3;
  * only spent on genuine dead-backend episodes.
  */
 const BACKEND_RECOVERY_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Hard ceiling on the dependency-REPAIR install (`_repairDependencies`).
+ *
+ * Matches `INSTALL_TIMEOUT_MS` in toolchainInstaller.ts, which bounds the
+ * toolchain's own install step. The repair path had NO bound at all, and that
+ * is the mechanism behind "the progress spinner never stops": the repair is
+ * reached from `_runStart`'s catch block, so it runs INSIDE the promise the
+ * `HyperIDE: Starting dev server...` progress notification is awaiting
+ * (extension-commands.ts). `<pm> install` executes the project's lifecycle
+ * scripts, and a `postinstall` can wedge indefinitely — one observed instance
+ * (Playwright's browser extractor deadlocking partway through the archive at 0%
+ * CPU) was still stuck after 1h43m. An unbounded await there means `start()`
+ * never settles, so the notification VS Code would otherwise dismiss on
+ * settlement spins forever, with no button and no log line to explain it.
+ *
+ * A bound is what makes the indicator honest: the install either finishes or is
+ * killed, and either way the promise settles and the spinner goes away.
+ */
+const DEPENDENCY_REPAIR_TIMEOUT_MS = 600_000;
 
 // Explicit dev-server lifecycle edges (HYP-370 Phase 2). The DevServerStatus enum
 // (types.ts) is the de facto state; this table makes it a guarded machine instead of
@@ -260,7 +281,121 @@ export interface SpawnCommand {
  */
 interface ToolchainPhase {
   title: string;
+  /**
+   * When true, the user pressing the progress notification's only button means
+   * "SKIP this step and carry on with the rest of the pipeline", not "abort the
+   * whole dev-server start".
+   *
+   * VS Code's `withProgress({ cancellable: true })` renders exactly one button,
+   * always labelled "Cancel", and the label cannot be changed. A real project
+   * wedged forever on a `postinstall` (Playwright's browser extractor
+   * deadlocking partway through the archive at 0% CPU — one instance was still
+   * stuck 1h43m later). The only escape was that Cancel, and it killed the
+   * ENTIRE start with "Installing project dependencies (bun install) was
+   * cancelled" — a far bigger hammer than anyone wanted.
+   *
+   * Rather than leave the user with abort-or-wait, the deps phase reinterprets
+   * the press: the step is abandoned, the pipeline continues, and the start
+   * still has a real chance of succeeding. That is not optimism — a wedged
+   * lifecycle script does not imply a broken `node_modules`. The packages are
+   * usually already installed and only the script is stuck, which is exactly
+   * why the verify phase (not this one) gets to decide whether the start can
+   * actually proceed.
+   */
+  skippable?: boolean;
+  /**
+   * Identity under which a skip is remembered. MUST pin down the project, not
+   * just the kind of step: one DevServerManager is reused across projects via
+   * `setProjectPath`, so keying on "the bun install step" alone would let a
+   * skip in project A silently suppress project B's dependency install — B
+   * would then start with nothing installed and no explanation. Defaults to
+   * `title` for phases that are not project-scoped.
+   */
+  skipKey?: string;
   run: (progress: ToolchainProgress, token: { isCancellationRequested: boolean }) => Promise<void>;
+}
+
+/**
+ * The dependency-install phase's title. Shared by the phase itself and by the
+ * "was it skipped?" lookup — a second literal would silently break the skip
+ * memory the moment either copy is reworded.
+ */
+function depsPhaseTitle(packageManager: PackageManager): string {
+  return `Installing project dependencies (${packageManager} install)…`;
+}
+
+/**
+ * The identity a dependency-install skip is remembered under: the directory the
+ * install would run in, plus the package manager. Scoped to the install root
+ * because one DevServerManager serves many projects over its lifetime
+ * (`setProjectPath`), and because a monorepo sub-project switch changes that
+ * root while keeping the same package manager.
+ */
+function depsPhaseSkipKey(installCwd: string, packageManager: PackageManager): string {
+  return `deps:${packageManager}:${installCwd}`;
+}
+
+/** The mutable token shape the toolchain phases share (a subset of vscode.CancellationToken). */
+export interface PhaseToken {
+  isCancellationRequested: boolean;
+  onCancellationRequested?: (cb: () => void) => unknown;
+}
+
+/**
+ * Wrap a cancellation token so a cancellation can be CONSUMED by a skippable
+ * phase instead of poisoning every phase after it.
+ *
+ * A `vscode.CancellationToken` latches: once cancelled it reports cancelled
+ * forever. Passing the raw token straight through means that the moment the
+ * deps phase treats a press as a skip, the very next phase sees an
+ * already-cancelled token and dies instantly — the "skip" would silently become
+ * the abort it was meant to replace. `consume()` masks the latched state so the
+ * remaining phases run against a clean token.
+ */
+export function createSkipAwareToken(outer: PhaseToken): {
+  token: PhaseToken;
+  consume: () => void;
+  requestSkip: () => void;
+} {
+  let consumed = false;
+  let skipRequested = false;
+  const listeners: Array<() => void> = [];
+  return {
+    token: {
+      get isCancellationRequested() {
+        // The skip flag is checked BEFORE the consumed mask: `consumed` exists
+        // only to hide the OUTER token's latched state from later phases, and a
+        // fresh Skip press on a later phase is a new decision, not that latch.
+        return skipRequested || (!consumed && outer.isCancellationRequested);
+      },
+      onCancellationRequested: (cb: () => void) => {
+        // Registered locally as well as forwarded, so the Skip BUTTON can drive
+        // the same teardown the Cancel button drives. runStepProcess subscribes
+        // here to kill its child; without the local list, a Skip press would
+        // flip the flag but leave the wedged installer running, and the phase
+        // would not actually end until its own timeout.
+        listeners.push(cb);
+        return outer.onCancellationRequested?.(() => {
+          if (!consumed) cb();
+        });
+      },
+    },
+    consume: () => {
+      consumed = true;
+      skipRequested = false;
+    },
+    requestSkip: () => {
+      if (skipRequested) return;
+      skipRequested = true;
+      for (const listener of listeners) {
+        try {
+          listener();
+        } catch {
+          // One listener throwing must not stop the others from tearing down.
+        }
+      }
+    },
+  };
 }
 
 /** The `<pm> run <script>` invocation for a package manager (npm/pnpm/bun run, yarn bare). */
@@ -620,6 +755,18 @@ export class DevServerManager {
   private _adoptedRecord: OwnedDevServerRecord | null = null;
   private _outputChannel: vscode.OutputChannel;
   private _onStatusChangeListeners: Array<(state: DevServerState) => void> = [];
+
+  /**
+   * Titles of toolchain phases the user skipped (see ToolchainPhase.skippable).
+   *
+   * Session-scoped on purpose. The point is not to persist a preference — it is
+   * to stop re-running, on every single start, the very install the user just
+   * walked away from because it was wedged. Without it, "Skip" buys one start
+   * and then the next press of Play walks straight back into the same hang.
+   * A fresh window is a fresh decision, which is the right default: whatever
+   * was stuck may well have been fixed in between.
+   */
+  private _skippedPhaseKeys = new Set<string>();
 
   // HYP-1169 toolchain seam (self-healing bring-up). Field-shaped so tests can
   // inject fakes via Object.assign (same convention as _spawnPlanBaseDir /
@@ -2073,7 +2220,17 @@ export class DevServerManager {
       if (!toolDirs.some((d) => d.toLowerCase() === dir.toLowerCase())) toolDirs.push(dir);
     }
 
-    const depsStale = await this._toolchain.shouldInstallDependencies(plan.cwd, pm);
+    // A skip is remembered for the session (see _skippedPhaseTitles): re-queuing
+    // the install the user just abandoned would walk the next start straight
+    // back into the same wedge.
+    const depsSkipped = this._depsInstallWasSkipped(plan.cwd, pm);
+    const depsStale = !depsSkipped && (await this._toolchain.shouldInstallDependencies(plan.cwd, pm));
+    if (depsSkipped) {
+      this._outputChannel.appendLine(
+        `[DevServer] Dependency install was skipped earlier in this session — not re-running it. ` +
+          `Reload the window to try the install again.`,
+      );
+    }
     const installRan = { value: requiredTools.some((tool) => !availability[tool]) || depsStale };
 
     // Resolved tools skip the ensureTool phase: the resolver already live-
@@ -2127,11 +2284,21 @@ export class DevServerManager {
   }
 
   /** `<pm> install` in the plan cwd, with the verified tool dirs on the child's PATH. */
+  /**
+   * `token` is deliberately the full PhaseToken, not `{ isCancellationRequested }`.
+   * The narrow shape happened to work — structural typing let the real object
+   * through with its `onCancellationRequested` intact — but it advertised a
+   * token with no teardown channel, and that channel is the ONLY thing that
+   * makes the Skip button kill a wedged install rather than just flip a flag
+   * (`runStepProcess` subscribes to it in toolchainInstaller.ts). Anyone who
+   * took the old signature at its word and passed a narrow literal would have
+   * silently disarmed the button.
+   */
   private async _runDepsInstall(
     plan: SpawnCommand & { packageManager: PackageManager },
     toolDirs: readonly string[],
     progress: ToolchainProgress,
-    token: { isCancellationRequested: boolean },
+    token: PhaseToken,
     force: boolean,
   ): Promise<void> {
     await this._toolchain.ensureDependencies(plan.cwd, plan.packageManager, {
@@ -2156,7 +2323,12 @@ export class DevServerManager {
   ): ToolchainPhase {
     const pm = plan.packageManager;
     return {
-      title: `Installing project dependencies (${pm} install)…`,
+      title: depsPhaseTitle(pm),
+      skipKey: depsPhaseSkipKey(plan.cwd, pm),
+      // The one long, network-bound, third-party-code-executing step in the
+      // pipeline — and therefore the one that can wedge. Pressing Cancel here
+      // skips the install and continues; it no longer kills the start.
+      skippable: true,
       run: async (progress, token) => {
         try {
           await this._runDepsInstall(plan, toolDirs, progress, token, false);
@@ -2230,16 +2402,25 @@ export class DevServerManager {
         this._outputChannel.appendLine(
           `[DevServer] Required local binaries missing from ${plan.cwd}/node_modules/.bin: ${names}`,
         );
+        // A skipped install and a completed-but-incomplete install are different
+        // situations and must not share a message: telling a user who just
+        // pressed Skip that "HyperIDE installed the dependencies, but …" is
+        // simply false, and hides the one fact that explains the state and the
+        // fix — that the install did not run.
+        const preamble = this._depsInstallWasSkipped(plan.cwd, plan.packageManager)
+          ? `The dependency install was skipped, and ${names} ${missing.length === 1 ? 'is' : 'are'} missing ` +
+            `from node_modules/.bin`
+          : `HyperIDE installed the dependencies, but ${names} ${missing.length === 1 ? 'is' : 'are'} still ` +
+            `missing from node_modules/.bin`;
         const choice = await vscode.window.showErrorMessage(
-          `HyperIDE installed the dependencies, but ${names} ${missing.length === 1 ? 'is' : 'are'} still missing ` +
-            `from node_modules/.bin — starting now would fail with "'${missing[0]}' is not recognized". ` +
+          `${preamble} — starting now would fail with "'${missing[0]}' is not recognized". ` +
             `The install log is in the 'HyperIDE Dev Server' output channel.`,
           'Retry',
           'Open Logs',
         );
         if (choice === 'Open Logs') this._outputChannel.show();
         if (choice === 'Retry') {
-          await this._runDepsInstall(plan, toolDirs, progress, token, true);
+          await this._retryDepsInstall(plan, toolDirs, progress, token);
           installRan.value = true;
           missing = await this._toolchain.findMissingLocalBinaries(plan.cwd, localBinaries);
         }
@@ -2254,31 +2435,106 @@ export class DevServerManager {
   }
 
   /**
+   * The verify phase's interactive Retry, run under a FRESH cancellable
+   * progress notification rather than the phase's own token.
+   *
+   * The phase token cannot serve here. Reaching this Retry at all normally
+   * means the user already skipped the dependency install, and a skip
+   * permanently consumes the shared cancellation (see createSkipAwareToken) so
+   * the later phases are not poisoned by it. Reusing that consumed token for a
+   * second install would hand the user a step that reports "not cancelled"
+   * forever and swallows its cancellation callback — so a retry that wedges the
+   * same way the first one did could not be escaped at all, and would sit for
+   * the installer's full ten-minute timeout. A brand-new token restores the
+   * escape hatch the whole ticket is about.
+   */
+  private async _retryDepsInstall(
+    plan: SpawnCommand & { packageManager: PackageManager },
+    toolDirs: readonly string[],
+    outerProgress: ToolchainProgress,
+    fallbackToken: PhaseToken,
+  ): Promise<void> {
+    if (typeof vscode.window.withProgress !== 'function') {
+      // Test doubles / hosts without the progress API: keep the old behaviour
+      // rather than losing the retry entirely.
+      await this._runDepsInstall(plan, toolDirs, outerProgress, fallbackToken, true);
+      return;
+    }
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `HyperIDE: Retrying ${plan.packageManager} install`,
+        cancellable: true,
+      },
+      (progress, token) =>
+        this._runDepsInstall(
+          plan,
+          toolDirs,
+          {
+            report: (message) => {
+              progress.report({ message });
+              outerProgress.report(message);
+            },
+          },
+          token,
+          true,
+        ),
+    );
+  }
+
+  /**
    * Drive the toolchain phases through ONE progress notification (step i/N
    * per phase) plus a companion 'Open Logs' offer — but only when there is
    * real work to show (a missing tool or a dependency install); a warm start
    * runs the same phases silently.
    */
   private async _runToolchainPhases(phases: ToolchainPhase[], notify: boolean): Promise<void> {
-    const runAll = async (report: (message: string) => void, token: { isCancellationRequested: boolean }) => {
-      for (let i = 0; i < phases.length; i++) {
-        const prefix = `Step ${i + 1}/${phases.length}`;
-        report(`${prefix}: ${phases[i].title}`);
-        await phases[i].run({ report: (message) => report(`${prefix}: ${message}`) }, token);
+    // Which phase is on screen right now. The Skip button lives on a companion
+    // notification that outlives any single phase, so the handler has to know
+    // what it would be skipping — pressing it during a non-skippable phase must
+    // do nothing rather than abort the start.
+    let current: ToolchainPhase | undefined;
+    let skipNow: (() => void) | undefined;
+    // Set in a `finally` so a THROWN phase also retires the Skip offer. Without
+    // that, a failed start would leave the companion notification re-arming
+    // itself over a pipeline that is no longer running — exactly the class of
+    // "indicator outlives the work" bug this change is meant to end.
+    let phasesDone = false;
+
+    const runAll = async (report: (message: string) => void, outer: PhaseToken) => {
+      const { token, consume, requestSkip } = createSkipAwareToken(outer);
+      skipNow = requestSkip;
+      try {
+        for (let i = 0; i < phases.length; i++) {
+          const phase = phases[i];
+          current = phase;
+          const prefix = `Step ${i + 1}/${phases.length}`;
+          report(`${prefix}: ${phase.title}`);
+          try {
+            await phase.run({ report: (message) => report(`${prefix}: ${message}`) }, token);
+          } catch (error) {
+            // Only a USER press on a skippable phase becomes a skip. A genuine
+            // failure (or a cancellation during a non-skippable phase) still
+            // propagates and stops the start, exactly as before.
+            if (!phase.skippable || !token.isCancellationRequested) throw error;
+            consume();
+            this._onPhaseSkipped(phase);
+          }
+        }
+      } finally {
+        current = undefined;
+        phasesDone = true;
       }
     };
     if (!notify) {
       await runAll(() => {}, { isCancellationRequested: false });
       return;
     }
-    void vscode.window
-      .showInformationMessage(
-        'HyperIDE is preparing the toolchain for this project (installing missing tools / dependencies).',
-        'Open Logs',
-      )
-      .then((choice) => {
-        if (choice === 'Open Logs') this._outputChannel.show();
-      });
+    this._offerToolchainSkipButton(
+      () => current,
+      () => skipNow?.(),
+      () => phasesDone,
+    );
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -2287,6 +2543,93 @@ export class DevServerManager {
       },
       (progress, token) => runAll((message) => progress.report({ message }), token),
     );
+  }
+
+  /**
+   * The companion notification carrying the explicit **Skip this step** button.
+   *
+   * VS Code's `withProgress({ cancellable: true })` renders exactly one button,
+   * always labelled "Cancel", and the label cannot be changed — so the progress
+   * notification alone cannot offer a skip that READS as a skip. "Cancel" on a
+   * step called "Installing project dependencies" reasonably looks like it
+   * abandons the whole start, which is precisely the outcome a stuck user is
+   * trying to avoid, so they wait instead of pressing it. A second, plain
+   * notification can carry any label we like, and this one does.
+   *
+   * Re-offered after every press because choosing an action dismisses a VS Code
+   * notification: without re-showing it, 'Open Logs' would silently consume the
+   * user's only Skip affordance. The loop is driven entirely by user clicks and
+   * ends when the notification is dismissed or the phases finish.
+   */
+  private _offerToolchainSkipButton(
+    getCurrent: () => ToolchainPhase | undefined,
+    requestSkip: () => void,
+    isDone: () => boolean,
+  ): void {
+    const SKIP = 'Skip this step';
+    const LOGS = 'Open Logs';
+    const offer = (): void => {
+      // Gate on "the phases have finished", NOT on "a phase is current": this
+      // first offer deliberately runs BEFORE the phase loop starts, so there is
+      // no current phase yet and gating on one would show no notification at
+      // all — the user would lose both the Skip button and the Open Logs offer.
+      if (isDone()) return;
+      void vscode.window
+        .showInformationMessage(
+          'HyperIDE is preparing the toolchain for this project (installing missing tools / dependencies). ' +
+            'You can skip a long-running dependency install and let the rest of the start continue.',
+          SKIP,
+          LOGS,
+        )
+        .then((choice) => {
+          if (choice === undefined) return; // dismissed — stop pestering
+          if (choice === LOGS) {
+            this._outputChannel.show();
+            offer();
+            return;
+          }
+          const active = getCurrent();
+          if (active?.skippable) {
+            this._outputChannel.appendLine(`[DevServer] Skip requested by the user during: ${active.title}`);
+            requestSkip();
+            return;
+          }
+          // The only non-skippable phases are short and local (tool checks,
+          // binary verification); saying so beats silently ignoring the press.
+          void vscode.window.showInformationMessage(
+            `"${active?.title ?? 'This step'}" cannot be skipped — it is a quick local check, not a download. ` +
+              `Only the dependency install is skippable.`,
+          );
+          offer();
+          return;
+        });
+    };
+    offer();
+  }
+
+  /** Did the user skip THIS project's dependency install earlier in this session? */
+  private _depsInstallWasSkipped(installCwd: string, packageManager: PackageManager): boolean {
+    return this._skippedPhaseKeys.has(depsPhaseSkipKey(installCwd, packageManager));
+  }
+
+  /**
+   * Record + announce a skipped phase. Deliberately a WARNING, never an error:
+   * nothing was aborted and nothing was undone — one step was abandoned and the
+   * start is still going. The old behaviour reported "dependency installation
+   * was cancelled" for the whole flow, which read as "your start is dead".
+   */
+  private _onPhaseSkipped(phase: ToolchainPhase): void {
+    this._outputChannel.appendLine(`[DevServer] Skipped at user request: ${phase.title} — continuing the start.`);
+    this._skippedPhaseKeys.add(phase.skipKey ?? phase.title);
+    void vscode.window
+      .showWarningMessage(
+        `Skipped "${phase.title}". HyperIDE is continuing to start the dev server with the packages already ` +
+          `installed. If the server fails to start, run the install yourself and try again.`,
+        'Open Logs',
+      )
+      .then((choice) => {
+        if (choice === 'Open Logs') this._outputChannel.show();
+      });
   }
 
   /**
@@ -2305,9 +2648,30 @@ export class DevServerManager {
 
   private async _repairDependencies(packageManager: PackageManager): Promise<void> {
     const command = buildInstallCommand(packageManager);
-    this._outputChannel.appendLine(`[DevServer] Repairing dependencies with ${command.cmd} ${command.args.join(' ')}`);
-    this._appendLog(`[HyperIDE] Repairing dependencies with ${command.cmd} ${command.args.join(' ')}\n`);
+    const label = `${command.cmd} ${command.args.join(' ')}`;
+    this._outputChannel.appendLine(`[DevServer] Repairing dependencies with ${label}`);
+    this._appendLog(`[HyperIDE] Repairing dependencies with ${label}\n`);
+    await this._runBoundedRepairInstall(command, label, DEPENDENCY_REPAIR_TIMEOUT_MS);
+  }
 
+  /**
+   * Run the repair install with a hard timeout and a process-GROUP kill.
+   *
+   * Group, not child: `shell: true` runs `/bin/sh -c "<pm> install"`, and the
+   * package manager in turn runs the project's lifecycle scripts, which can fork
+   * an arbitrary subtree. Signalling only the tracked pid leaves a wedged
+   * grandchild alive as an orphan — the observed case held Playwright's cache
+   * `__dirlock`, which then blocked every later install attempt. `detached`
+   * makes the child a group leader so there is a group to signal at all; the two
+   * are a pair and neither works alone. Mirrors killProcessTree in
+   * toolchainInstaller.ts, which fixed the identical problem on the other
+   * install path.
+   */
+  private _runBoundedRepairInstall(
+    command: { cmd: string; args: string[] },
+    label: string,
+    timeoutMs: number,
+  ): Promise<void> {
     // detectWindowsOemCodePage() (HYP-1140 follow-up) — module-cached, so this costs
     // nothing beyond the first real probe of the extension host session. NOT awaited
     // (review finding, same rationale as _runStart): a hung `chcp` must not add several
@@ -2317,7 +2681,7 @@ export class DevServerManager {
       oemCodePageBox.value = codePage;
     });
 
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       // Fold args into the command string (no `args` array) so `shell: true`
       // does not trigger DEP0190 (deprecated: args + shell:true).
       // nosemgrep: spawn-shell-true -- package-manager commands may resolve through shell shims/corepack
@@ -2329,42 +2693,103 @@ export class DevServerManager {
         },
         shell: true,
         stdio: ['pipe', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32',
       });
 
-      // One StreamOutputDecoder per stream (HYP-1140 follow-up) — same rationale as the
-      // dev-server handlers above: a raw `data` chunk can end mid-character.
-      const stdoutDecoder = new StreamOutputDecoder(process.platform, () => oemCodePageBox.value);
-      const stderrDecoder = new StreamOutputDecoder(process.platform, () => oemCodePageBox.value);
+      const flush = this._streamRepairOutput(child, oemCodePageBox);
 
-      child.stdout?.on('data', (data: Buffer) => {
-        const text = stdoutDecoder.push(data);
-        const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
-        this._outputChannel.append(clean);
-        this._appendLog(text); // raw ANSI — webview renders via ansi_up
-      });
+      // Settle exactly once: a timeout kill is followed by the child's own
+      // 'exit', and without this guard the late exit would reject an already
+      // resolved/rejected promise (silently, but it also re-runs `flush`).
+      let settled = false;
+      const finish = (outcome: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        flush();
+        outcome();
+      };
 
-      child.stderr?.on('data', (data: Buffer) => {
-        const text = stderrDecoder.push(data);
-        const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
-        this._outputChannel.append(clean);
-        this._appendLog(text); // raw ANSI — webview renders via ansi_up
-      });
+      const timer = setTimeout(() => {
+        this._outputChannel.appendLine(
+          `[DevServer] Dependency repair exceeded ${Math.round(timeoutMs / 60_000)} minutes — killing it. ` +
+            `A wedged lifecycle script (a postinstall that downloads or extracts) is the usual cause.`,
+        );
+        this._killProcessTree(child, 'SIGKILL');
+        finish(() =>
+          reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 60_000)} minutes and was killed`)),
+        );
+      }, timeoutMs);
 
-      child.on('error', (error) => reject(error));
+      child.on('error', (error) => finish(() => reject(error)));
       child.on('exit', (code) => {
-        this._flushStreamDecoder(stdoutDecoder);
-        this._flushStreamDecoder(stderrDecoder);
-        if (code === 0) {
-          resolve();
-          return;
-        }
-        reject(new Error(`${command.cmd} ${command.args.join(' ')} exited with code ${code}`));
+        finish(() => {
+          if (code === 0) {
+            resolve();
+            return;
+          }
+          reject(new Error(`${label} exited with code ${code}`));
+        });
       });
     });
   }
 
+  /**
+   * Wire the repair install's stdout/stderr into the output channel + log ring.
+   * Returns the flush callback, which must run once the process has settled —
+   * a StreamOutputDecoder can hold a trailing partial character.
+   */
+  private _streamRepairOutput(child: ChildProcess, oemCodePageBox: { value: number | null }): () => void {
+    // One StreamOutputDecoder per stream (HYP-1140 follow-up) — same rationale as the
+    // dev-server handlers above: a raw `data` chunk can end mid-character.
+    const stdoutDecoder = new StreamOutputDecoder(process.platform, () => oemCodePageBox.value);
+    const stderrDecoder = new StreamOutputDecoder(process.platform, () => oemCodePageBox.value);
+
+    const pipe = (decoder: StreamOutputDecoder) => (data: Buffer) => {
+      const text = decoder.push(data);
+      this._outputChannel.append(text.replace(ANSI_ESCAPE_PATTERN, ''));
+      this._appendLog(text); // raw ANSI — webview renders via ansi_up
+    };
+
+    child.stdout?.on('data', pipe(stdoutDecoder));
+    child.stderr?.on('data', pipe(stderrDecoder));
+
+    return () => {
+      this._flushStreamDecoder(stdoutDecoder);
+      this._flushStreamDecoder(stderrDecoder);
+    };
+  }
+
+  /**
+   * Windows has no process groups: `proc.kill(signal)` reaches only the direct
+   * child (e.g. the `cmd.exe` `shell:true` spawns) and leaves whatever IT
+   * forked — a wedged Playwright download/extract helper still holding the
+   * cache's `__dirlock` — alive as an orphan, which then blocks every later
+   * install attempt on that lock. On SIGKILL — the give-up-and-force-kill call
+   * made only after a graceful SIGTERM has already had its timeout window to
+   * work — delegate to `killProcessTree` from toolchainInstaller.ts, which
+   * already does the bounded `taskkill /pid <pid> /t /f` tree-kill for the
+   * identical problem on the other install path (review finding, HYP-1340).
+   *
+   * SIGTERM stays a plain, instant `proc.kill`: it is sent on the graceful
+   * attempt at the START of every Windows stop (stop() tries it first, before
+   * any timeout), so routing IT through a synchronous `spawnSync('taskkill', …)`
+   * would pay a blocking round trip on the extension host's single JS thread
+   * on every ordinary stop, not just the wedged case this exists to fix
+   * (perf regression, review finding round 2). The graceful path exiting
+   * cleanly is the common case; a genuinely wedged tree that SIGTERM cannot
+   * reach still gets the tree-kill once the timeout escalates to SIGKILL.
+   */
   private _killProcessTree(proc: ChildProcess, signal: NodeJS.Signals): void {
-    if (process.platform !== 'win32' && proc.pid && this._killPidGroup(proc.pid, signal)) {
+    if (process.platform === 'win32') {
+      if (signal === 'SIGKILL') {
+        killWindowsProcessTree(proc, 'win32');
+        return;
+      }
+      proc.kill(signal);
+      return;
+    }
+    if (proc.pid && this._killPidGroup(proc.pid, signal)) {
       return;
     }
     proc.kill(signal);

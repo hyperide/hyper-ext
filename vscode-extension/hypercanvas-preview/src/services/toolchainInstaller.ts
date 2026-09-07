@@ -392,7 +392,17 @@ export type SpawnStepProcess = (command: string, options: { cwd?: string; env: N
 
 const defaultSpawnStepProcess: SpawnStepProcess = (command, options) =>
   // nosemgrep: spawn-shell-true -- install commands are built by buildInstallPlan, never from user input
-  spawn(command, { ...options, shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  spawn(command, {
+    ...options,
+    shell: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    // `detached` makes the child a process-group leader on POSIX, which is what
+    // gives killProcessTree a group to signal — without it, a wedged grandchild
+    // (an installer's postinstall and whatever IT forks) survives cancellation
+    // as an orphan. Deliberately NOT unref()'d: this process is tracked, not
+    // fire-and-forget. No effect on Windows, where the tree kill is taskkill /t.
+    detached: process.platform !== 'win32',
+  });
 
 /** Runs the OS process-tree kill (default killProcessTree's win32 branch: `taskkill /pid <pid> /t /f`). */
 export type SpawnSyncTreeKill = (command: string, args: readonly string[]) => void;
@@ -437,30 +447,47 @@ const defaultSpawnSyncTreeKill: SpawnSyncTreeKill = (command, args) => {
  * after "timed out after 10 minutes" was already logged and the step had
  * already rejected. `taskkill /t` recurses the whole tree; `/f` forces it.
  *
- * POSIX does not need the SAME widening for the common case: `shell:true`
- * there spawns `/bin/sh -c "<command>"`, and for a single simple command sh
- * execs the real program IN PLACE of itself rather than forking a child, so
- * the tracked pid already IS the real installer and a single SIGKILL
- * reaches it directly — true for the ensureDependencies `<pm> install`
- * commands this bug is about. It is NOT universally true across
- * buildInstallPlan: the linux sudo-node step
- * (`sudo apt-get update && sudo apt-get install -y nodejs npm`) IS a
- * compound command, which sh runs by forking rather than exec-in-place, so
- * a SIGKILL to the tracked pid there would not reach apt-get. That step
- * requires an interactive sudo confirmation and is comparatively rare to
- * hit at exactly a timeout/cancellation; tracked as a known gap rather than
- * widened here (see HYP-1188 follow-up: POSIX process-group kill).
+ * POSIX now gets the same widening, via a process-GROUP kill (HYP-1340).
+ * The old reasoning here was that `shell:true` spawns `/bin/sh -c
+ * "<command>"` and, for a single simple command, sh execs the real program IN
+ * PLACE of itself — so the tracked pid already IS the installer and one
+ * SIGKILL reaches it. That is true, and it is also not enough: what the
+ * installer itself forks is out of reach. `<pm> install` runs the project's
+ * lifecycle scripts, and a `postinstall` can fork an arbitrary subtree.
+ * Observed live: a `postinstall` running `playwright install` forked a
+ * download/extract helper that deadlocked; SIGKILL reached the package
+ * manager but not the helper, which survived as an orphan still holding the
+ * Playwright cache's `__dirlock` — so every later attempt blocked on that
+ * lock (20 retries over 10 minutes) and the user's "cancel" appeared to
+ * achieve nothing. Signalling the GROUP reaches the whole subtree, which also
+ * closes the previously-tracked gap for the compound linux sudo-node step
+ * (`sudo apt-get update && sudo apt-get install -y nodejs npm`), where sh
+ * forks rather than execs in place.
+ *
+ * The group only exists because `defaultSpawnStepProcess` spawns POSIX
+ * children `detached` — the two are a pair; neither works alone. The single
+ * `child.kill('SIGKILL')` is kept as the fallback for a child that was
+ * spawned without a group (an injected test double, or a failed detach).
  */
 export function killProcessTree(
   child: StepChildProcess,
   platform: NodeJS.Platform,
   spawnSyncFn: SpawnSyncTreeKill = defaultSpawnSyncTreeKill,
+  processKill: (pid: number, signal: NodeJS.Signals) => void = process.kill,
 ): void {
   if (platform === 'win32' && typeof child.pid === 'number') {
     try {
       spawnSyncFn('taskkill', ['/pid', String(child.pid), '/t', '/f']);
     } catch {
       // best-effort — the SIGKILL below is the fallback (e.g. taskkill missing/blocked)
+    }
+  } else if (typeof child.pid === 'number') {
+    try {
+      // Negative pid = "every process in the group led by this pid".
+      processKill(-child.pid, 'SIGKILL');
+    } catch {
+      // No such group (child already reaped, or spawned without `detached`) —
+      // the direct SIGKILL below still covers the single-process case.
     }
   }
   try {

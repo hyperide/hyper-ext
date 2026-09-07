@@ -605,14 +605,52 @@ describe('killProcessTree (HYP-1188: Windows orphaned process tree)', () => {
     expect(kill).toHaveBeenCalledWith('SIGKILL');
   });
 
-  it('darwin/linux: never calls taskkill — shell:true execs a single simple command in place, so SIGKILL alone reaches the real process', () => {
+  // HYP-1340: SIGKILL to the tracked pid reaches the package manager but NOT
+  // what its lifecycle scripts forked. A wedged `postinstall` grandchild
+  // survived as an orphan holding a shared cache lock, which made every later
+  // attempt block — so "cancel" appeared to do nothing. Signalling the negative
+  // pid targets the whole process GROUP instead.
+  it('darwin/linux: never calls taskkill, and SIGKILLs the whole process GROUP before the direct child', () => {
     for (const platform of ['darwin', 'linux'] as const) {
-      const calls: unknown[] = [];
+      const taskkillCalls: unknown[] = [];
+      const groupKills: Array<[number, NodeJS.Signals]> = [];
       const kill = mock(() => {});
-      killProcessTree(hangingChild(123, kill), platform, (...args) => calls.push(args));
-      expect(calls).toEqual([]);
+      killProcessTree(
+        hangingChild(123, kill),
+        platform,
+        (...args) => taskkillCalls.push(args),
+        (pid, signal) => groupKills.push([pid, signal]),
+      );
+      expect(taskkillCalls).toEqual([]);
+      expect(groupKills).toEqual([[-123, 'SIGKILL']]);
       expect(kill).toHaveBeenCalledWith('SIGKILL');
     }
+  });
+
+  it('darwin/linux: a failing group kill (no such group) still falls back to the direct SIGKILL', () => {
+    const kill = mock(() => {});
+    killProcessTree(
+      hangingChild(123, kill),
+      'darwin',
+      () => {},
+      () => {
+        throw new Error('ESRCH');
+      },
+    );
+    expect(kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('darwin/linux without a pid: no group kill is attempted, still SIGKILLs', () => {
+    const groupKills: unknown[] = [];
+    const kill = mock(() => {});
+    killProcessTree(
+      hangingChild(undefined, kill),
+      'darwin',
+      () => {},
+      (...args) => groupKills.push(args),
+    );
+    expect(groupKills).toEqual([]);
+    expect(kill).toHaveBeenCalledWith('SIGKILL');
   });
 
   it('win32 without a pid (spawn failed before the OS assigned one) skips taskkill, still SIGKILLs', () => {

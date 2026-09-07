@@ -22,7 +22,7 @@ const path = await import('node:path');
 // mock.module must be registered BEFORE the module under test is linked, so
 // static imports cannot work here.
 const vscode = await import('vscode');
-const { buildDevServerChildPath, DevServerManager, requiredLocalBinaries, truncatePathForLog } =
+const { buildDevServerChildPath, createSkipAwareToken, DevServerManager, requiredLocalBinaries, truncatePathForLog } =
   await import('../services/DevServerManager');
 const { ToolchainInstallError } = await import('../services/toolchainInstaller');
 const { _resetToolchainAvailabilityCacheForTests } = await import('../services/toolchainDetector');
@@ -331,7 +331,13 @@ describe('HYP-1169 wiring: _runStart prepares the toolchain before spawning', ()
     }
   });
 
-  it('HYP-1188: a cancelled install (user clicked Cancel) never shows the "flaky network / Retry" dialog', async () => {
+  // HYP-1188 established that a user cancellation must not be dressed up as a
+  // "flaky network, want to Retry?" failure. HYP-1340 keeps that and changes
+  // what the press MEANS: the dependency install is the one step allowed to
+  // wedge (it runs the project's own lifecycle scripts), so pressing the
+  // progress notification's only button SKIPS that step and lets the start
+  // continue, instead of aborting the whole start with "… was cancelled".
+  it('HYP-1340: pressing Cancel during the dependency install skips the step and continues the start', async () => {
     const dir = await makeProject();
     const toolchain = stubToolchain({
       ensureDependencies: mock(async () => {
@@ -346,9 +352,11 @@ describe('HYP-1169 wiring: _runStart prepares the toolchain before spawning', ()
     const { manager } = wireManager(dir, toolchain);
     try {
       const state = await manager.start();
-      expect(state.status).toBe('error');
-      expect(state.error).toContain('cancelled');
-      // No "flaky network... Retry" modal — the user asked for exactly this.
+      // The start ran ON past the skipped install, all the way to the spawn
+      // (which this suite short-circuits) — it was NOT aborted.
+      expect(state.error).not.toContain('cancelled');
+      expect(state.error).toBe('test-shortcircuit-ready');
+      // Still no "flaky network... Retry" modal — HYP-1188's contract.
       const errorCalls = (vscode.window.showErrorMessage as ReturnType<typeof mock>).mock.calls;
       const depsError = errorCalls.find((call) =>
         String(call[0]).includes('could not install the project dependencies'),
@@ -672,5 +680,139 @@ describe('truncatePathForLog', () => {
     const long = ['C:\\a', 'C:\\b', 'C:\\c', 'C:\\d', 'C:\\e', 'C:\\f', 'C:\\g', 'C:\\h'].join(';');
     const rendered = truncatePathForLog(long, 3);
     expect(rendered).toBe(`C:\\a;C:\\b;C:\\c;… (+5 more entries, ${long.length} chars total)`);
+  });
+});
+
+/**
+ * End-to-end contract for the Skip button: the token the dependency phase hands
+ * to ensureDependencies must carry a live teardown channel.
+ *
+ * The unit tests below prove requestSkip() invokes its listeners; they cannot
+ * prove anyone SUBSCRIBES. The only subscriber is runStepProcess
+ * (toolchainInstaller.ts), reached through this token, and it is what actually
+ * kills a wedged installer. If the token arrives without
+ * `onCancellationRequested`, the optional call short-circuits, the button flips
+ * a flag, and the wedged install keeps running until its own timeout — the
+ * "I pressed Skip and nothing happened" failure.
+ */
+describe('the dependency phase hands the installer a token that can tear it down', () => {
+  it('ensureDependencies receives a token exposing onCancellationRequested', async () => {
+    const dir = await makeProject();
+    // package.json newer than the lockfile => the deps phase is queued.
+    await fsp.writeFile(path.join(dir, 'bun.lock'), '');
+    await fsp.writeFile(
+      path.join(dir, 'package.json'),
+      JSON.stringify({ name: 'x', scripts: { dev: 'vite' }, devDependencies: { vite: '^5.0.0' } }),
+    );
+    let seen: { isCancellationRequested: boolean; onCancellationRequested?: unknown } | undefined;
+    const toolchain = stubToolchain({
+      shouldInstallDependencies: mock(async () => true),
+      ensureDependencies: mock(async (_cwd: string, _pm: string, opts: { exec?: { token?: unknown } }) => {
+        seen = opts.exec?.token as typeof seen;
+      }),
+    });
+    const restore = stubWorkspace(dir);
+    const { manager } = wireManager(dir, toolchain);
+    try {
+      await manager.start();
+      expect(seen).toBeDefined();
+      expect(typeof seen?.onCancellationRequested).toBe('function');
+    } finally {
+      restore();
+      manager.dispose();
+    }
+  });
+});
+
+/**
+ * The skip mechanism behind Alex's "the user must be able to skip this step
+ * with a button" requirement. The button itself lives on a companion
+ * notification (VS Code hard-codes the progress notification's only button to
+ * "Cancel"), and it drives the pipeline through this token — so the token has
+ * to do two things a plain cancellation token does not: let a skip be CONSUMED
+ * so it does not poison the phases that follow, and actively tear down the
+ * running step rather than merely flipping a flag.
+ */
+describe('createSkipAwareToken', () => {
+  const idleOuter = () => ({ isCancellationRequested: false });
+
+  it('reports cancelled once a skip is requested', () => {
+    const { token, requestSkip } = createSkipAwareToken(idleOuter());
+    expect(token.isCancellationRequested).toBe(false);
+    requestSkip();
+    expect(token.isCancellationRequested).toBe(true);
+  });
+
+  // Without this the Skip button would flip a flag while the wedged installer
+  // kept running — the phase would not end until its own timeout, which is
+  // precisely the "I pressed the button and nothing happened" failure.
+  it('runs the registered teardown listeners when a skip is requested', () => {
+    const { token, requestSkip } = createSkipAwareToken(idleOuter());
+    const killed: string[] = [];
+    token.onCancellationRequested?.(() => killed.push('child'));
+    expect(killed).toEqual([]);
+    requestSkip();
+    expect(killed).toEqual(['child']);
+  });
+
+  it('requesting a skip twice only tears down once', () => {
+    const { token, requestSkip } = createSkipAwareToken(idleOuter());
+    let calls = 0;
+    token.onCancellationRequested?.(() => {
+      calls++;
+    });
+    requestSkip();
+    requestSkip();
+    expect(calls).toBe(1);
+  });
+
+  it('a throwing listener does not stop the remaining teardowns', () => {
+    const { token, requestSkip } = createSkipAwareToken(idleOuter());
+    const ran: string[] = [];
+    token.onCancellationRequested?.(() => {
+      throw new Error('first listener blew up');
+    });
+    token.onCancellationRequested?.(() => ran.push('second'));
+    requestSkip();
+    expect(ran).toEqual(['second']);
+  });
+
+  // A vscode.CancellationToken latches forever once cancelled. consume() masks
+  // that latch so the phases AFTER a skip run against a clean token instead of
+  // dying instantly — which would silently turn the skip back into the abort it
+  // was meant to replace.
+  it('consume() masks a latched outer cancellation from later phases', () => {
+    const outer = { isCancellationRequested: true };
+    const { token, consume } = createSkipAwareToken(outer);
+    expect(token.isCancellationRequested).toBe(true);
+    consume();
+    expect(token.isCancellationRequested).toBe(false);
+  });
+
+  it('consume() also clears a button-driven skip, so a later phase can be skipped on its own', () => {
+    const { token, consume, requestSkip } = createSkipAwareToken(idleOuter());
+    requestSkip();
+    consume();
+    expect(token.isCancellationRequested).toBe(false);
+    requestSkip();
+    expect(token.isCancellationRequested).toBe(true);
+  });
+
+  it('forwards an outer cancellation to listeners until it is consumed', () => {
+    let fire: (() => void) | undefined;
+    const outer = {
+      isCancellationRequested: false,
+      onCancellationRequested: (cb: () => void) => {
+        fire = cb;
+      },
+    };
+    const { token, consume } = createSkipAwareToken(outer);
+    const seen: string[] = [];
+    token.onCancellationRequested?.(() => seen.push('cancel'));
+    fire?.();
+    expect(seen).toEqual(['cancel']);
+    consume();
+    fire?.();
+    expect(seen).toEqual(['cancel']);
   });
 });

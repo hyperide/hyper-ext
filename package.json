@@ -17,7 +17,8 @@
     "lint:fix": "oxfmt --write ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/ ./packages/",
     "typecheck": "tsgo",
     "knip": "knip",
-    "postinstall": "npx playwright install chromium && bun scripts/fix-bun-shim.ts"
+    "browsers:install": "bun scripts/ensure-playwright-browser.ts",
+    "postinstall": "bun scripts/fix-bun-shim.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

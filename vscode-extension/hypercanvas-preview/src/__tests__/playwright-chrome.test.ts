@@ -95,9 +95,20 @@ describe('playwright-chrome', () => {
       expect(hasPlaywrightBundledChromium()).toBe(false);
     });
 
-    it('returns true when cache has chromium entry', () => {
+    it('returns true when cache has a COMPLETE chromium entry', () => {
       readdirSyncMock.mockReturnValue(['chromium-1140', 'firefox-1234']);
+      existsSyncMock.mockImplementation((p: string) => p.endsWith('chromium-1140/INSTALLATION_COMPLETE'));
       expect(hasPlaywrightBundledChromium()).toBe(true);
+    });
+
+    // The directory an interrupted / wedged `playwright install` leaves behind.
+    // Reporting it as present pushes the failure downstream into an opaque
+    // playwright-core launch error instead of an actionable "install it" path —
+    // and Playwright's own GC deletes marker-less directories anyway.
+    it('returns false for a half-extracted chromium entry with no INSTALLATION_COMPLETE marker', () => {
+      readdirSyncMock.mockReturnValue(['chromium-1140']);
+      existsSyncMock.mockReturnValue(false);
+      expect(hasPlaywrightBundledChromium()).toBe(false);
     });
 
     it('respects PLAYWRIGHT_BROWSERS_PATH', () => {
@@ -118,7 +129,8 @@ describe('playwright-chrome', () => {
     });
 
     it('returns --browser chromium when only bundled chromium exists', () => {
-      existsSyncMock.mockReturnValue(false);
+      // Only the completion marker exists — no system Chrome/Chromium binary.
+      existsSyncMock.mockImplementation((p: string) => p.endsWith('INSTALLATION_COMPLETE'));
       readdirSyncMock.mockReturnValue(['chromium-1140']);
       const result = detectBrowserForPlaywright();
       expect(result).toEqual({ found: true, extraArgs: ['--browser', 'chromium'] });

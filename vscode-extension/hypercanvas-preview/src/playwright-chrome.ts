@@ -47,11 +47,26 @@ export function playwrightCacheDir(): string {
   }
 }
 
-/** Check if Playwright has bundled chromium in its cache */
+/**
+ * Check if Playwright has a COMPLETE bundled chromium in its cache.
+ *
+ * The `INSTALLATION_COMPLETE` marker is load-bearing, not a nicety. Playwright
+ * writes it as the final step of a successful install, so a `chromium-*`
+ * directory WITHOUT it is a half-finished download — precisely what an
+ * interrupted or wedged `playwright install` leaves behind, and Playwright's
+ * installs can wedge (the download runs in a forked helper the parent waits on
+ * with no timeout; reproduced repeatedly on macOS, where the transfer reaches
+ * 100% and the helper then sits at 0% CPU forever). Matching on the directory
+ * name alone reported "browser present" for that wreckage and pushed the
+ * failure downstream, where it surfaces as an opaque launch error from
+ * playwright-core instead of an actionable "install the browser" path.
+ */
 export function hasPlaywrightBundledChromium(): boolean {
   const cacheDir = process.env.PLAYWRIGHT_BROWSERS_PATH || playwrightCacheDir();
   try {
-    return readdirSync(cacheDir).some((e) => e.startsWith('chromium-'));
+    return readdirSync(cacheDir).some(
+      (entry) => entry.startsWith('chromium-') && existsSync(join(cacheDir, entry, 'INSTALLATION_COMPLETE')),
+    );
   } catch {
     return false;
   }
