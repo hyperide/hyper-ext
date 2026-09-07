@@ -2352,6 +2352,82 @@ export const createRoot = ViteReactSSG(<App />);
     expect(patched).toContain('createElement');
   });
 
+  it('App Shell fallback bootstrap passes strict tsc (regression: TS2345 Node-not-Container, conloca-private incident)', async () => {
+    // `isValidTypeScript` above only checks SYNTAX via Babel — it cannot catch a semantic type
+    // error. This bug shipped to a real user's project (a strict `tsc --build` in an Nx
+    // pipeline) with no test catching it: `cloneNode()`'s declared return type is the generic
+    // `Node`, not `Element`, so passing it straight to React's `createRoot()` (which requires
+    // `Container`) fails strict tsc with TS2345. Run the REAL generated snippet (not a
+    // hand-copied string, so this can't silently drift from the implementation) through the
+    // actual TypeScript compiler with `strict: true`, matching what a consumer's own strict
+    // build would see.
+    const viteReactSsgEntry = `import { ViteReactSSG } from "vite-react-ssg/single-page";
+import App from "./App";
+export const createRoot = ViteReactSSG(<App />);
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/main.tsx', viteReactSsgEntry);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/main.tsx');
+    const patched = io.files.get('/project/src/main.tsx');
+    if (!patched) throw new Error('patchEntryFile did not write a file');
+    // Guard against silently exercising a different emitted branch than intended (e.g. the
+    // isolated/standalone importBody, which also emits `cloneNode` and whose fixture entry
+    // separately contains its own top-level `createRoot` — so a bare `toContain('createRoot')`
+    // passes regardless of which branch was emitted). Assert the App-Shell-specific call shape
+    // (`mods[1].createRoot`) so a future refactor of the isStandalone branch-selection heuristic
+    // can't silently make this test compile the wrong (trivially TS2345-free) snippet.
+    expect(patched).toContain('cloneNode');
+    expect(patched).toContain('mods[1].createRoot');
+
+    const ts = await import('typescript');
+    const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+    const path = await import('node:path');
+
+    // Write INSIDE the repo tree (not os.tmpdir()) so TypeScript's node-style module resolution
+    // walks up and finds THIS repo's own real, installed `@types/react-dom` — resolving
+    // `react-dom/client` to its actual `createRoot(container: Container, ...)` signature. Without
+    // this, the import is unresolvable (TS2307), `mods[1]` degrades to `any`, and the call
+    // silently skips argument checking — a false-negative that would make this test pass
+    // regardless of whether the code is buggy or fixed. Use mkdtempSync (not a fixed name) so
+    // concurrent `bun test` runs in the same checkout can't delete/clobber each other's fixture.
+    const dir = mkdtempSync(path.join(__dirname, '.tmp-tsc-bootstrap-fixture-'));
+    try {
+      const filePath = path.join(dir, 'main.tsx');
+      writeFileSync(filePath, patched, 'utf8');
+      const compilerOptions = {
+        target: ts.ScriptTarget.ES2020,
+        module: ts.ModuleKind.ESNext,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        jsx: ts.JsxEmit.ReactJSX,
+        strict: true,
+        noEmit: true,
+        lib: ['lib.es2020.d.ts', 'lib.dom.d.ts'],
+        skipLibCheck: true,
+      };
+      const program = ts.createProgram([filePath], compilerOptions);
+      // Positive control: confirm module resolution actually reached this repo's real
+      // @types/react-dom before trusting an absence of TS2345 below — otherwise a future
+      // dependency-hoisting change silently degrades `mods[1]` to `any` (no resolution => no
+      // argument checking => no error, regardless of whether the source is buggy) and this test
+      // would stay green while testing nothing. See Fable review round 1 finding on this PR.
+      const resolvedReactDomClient = program
+        .getSourceFiles()
+        .some((f) => /@types[\\/]react-dom[\\/]client\.d\.ts$/.test(f.fileName));
+      expect(resolvedReactDomClient).toBe(true);
+      const diagnostics = ts.getPreEmitDiagnostics(program);
+      // Unresolved imports (./App, __canvas_preview__ — expected, not present in this bare
+      // fixture dir) are irrelevant; only assert the specific semantic-type-error class (TS2345)
+      // that caused the real incident does not reappear.
+      const typeErrors = diagnostics.filter((d) => d.code === 2345);
+      const messages = typeErrors.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+      expect(messages).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('falls back to plain import for non-standard entries in Isolated/standalone mode (ViteReactSSG)', async () => {
     const viteReactSsgEntry = `import { ViteReactSSG } from "vite-react-ssg/single-page";
 import App from "./App";

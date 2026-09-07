@@ -173,7 +173,8 @@ function scanRouterSignals(root: namedTypes.Node, options: { crossFunctionBounda
       const name = path.node.openingElement.name;
       if (name.type === 'JSXIdentifier') {
         if (name.name === 'Routes' && !routesElement) routesElement = path.node;
-        else if (/^[A-Z]/.test(name.name) && !REACT_ROUTER_JSX_TAGS.has(name.name)) renderedComponentNames.push(name.name);
+        else if (/^[A-Z]/.test(name.name) && !REACT_ROUTER_JSX_TAGS.has(name.name))
+          renderedComponentNames.push(name.name);
       }
       this.traverse(path);
     },
@@ -192,7 +193,11 @@ function scanRouterSignals(root: namedTypes.Node, options: { crossFunctionBounda
  */
 /** The body of a function-like node (declaration, expression, or arrow), or null otherwise. */
 function functionBody(node: namedTypes.Node): namedTypes.Node | null {
-  if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression') {
+  if (
+    node.type === 'FunctionDeclaration' ||
+    node.type === 'FunctionExpression' ||
+    node.type === 'ArrowFunctionExpression'
+  ) {
     return (node as namedTypes.FunctionDeclaration | namedTypes.FunctionExpression | namedTypes.ArrowFunctionExpression)
       .body;
   }
@@ -1668,7 +1673,15 @@ export class PreviewFileManager {
         // App Shell: __canvas_preview__ only exports a component — must render it explicitly.
         // Replace #root node first to sever any React root the original bootstrap created.
         // React and react-dom/client resolve from Vite's module cache (already loaded by the app).
-        importBody = `import("${importTarget}").then(function(m){const C=m.default;if(C){Promise.all([import("react"),import("react-dom/client")]).then(function(mods){const orig=document.getElementById("root");let el;if(orig&&orig.parentNode){const fr=orig.cloneNode(false);orig.parentNode.replaceChild(fr,orig);el=fr;}else{el=document.body;}mods[1].createRoot(el).render(mods[0].createElement(C));});}})`;
+        // `cloneNode()`'s declared return type is the generic `Node`, not `Element` — passing it
+        // straight to `createRoot()` (which requires `Container`) fails strict `tsc` in TS/TSX
+        // entries with TS2345. Re-look-up the just-inserted clone by id instead: `orig` is only
+        // ever the element found via `getElementById("root")`, so the clone (`cloneNode` copies
+        // attributes, including `id`) is guaranteed findable the same way right after the
+        // synchronous `replaceChild` — and `getElementById` is correctly typed `HTMLElement |
+        // null`, so this needs no cast (a cast would break plain .js/.jsx entries, where `as`/`<T>`
+        // TS cast syntax is a parse error).
+        importBody = `import("${importTarget}").then(function(m){const C=m.default;if(C){Promise.all([import("react"),import("react-dom/client")]).then(function(mods){const orig=document.getElementById("root");let el;if(orig&&orig.parentNode){const fr=orig.cloneNode(false);orig.parentNode.replaceChild(fr,orig);el=document.getElementById("root")||document.body;}else{el=document.body;}mods[1].createRoot(el).render(mods[0].createElement(C));});}})`;
       }
       const appendedSource = `${source}\n// @hyperide-managed\nif (${condition}) { ${importBody}; }\n`;
       onBeforeWrite?.();
