@@ -49,13 +49,13 @@ mock.module('../extension-commands-utils', () => ({
 
 // Imported AFTER the mock.module call so extension-mcp-setup picks up the mock.
 const { setupMcpServer } = await import('../extension-mcp-setup');
-import type { HyperMcpServer } from '../mcp/HyperMcpServer';
 import type { HyperMcpServices } from '../mcp/types';
 import type { PanelRouter } from '../PanelRouter';
 import type { AstService } from '../services/AstService';
 import type { ComponentService } from '../services/ComponentService';
 import type { StateHub } from '../StateHub';
 import type { DiagnosticHub } from '../DiagnosticHub';
+import type * as vscode from 'vscode';
 
 /** Minimal AstService stand-in: only `insertElement` (what `hyper_insert_element` calls).
  *  `hyper_insert_element`'s tool handler (ast-tools.ts) re-serializes the result down to
@@ -102,11 +102,11 @@ function makeFakePanelRouter(astService: AstService, componentService: Component
   } as unknown as FakePanelRouter;
 }
 
-function makeFakeContext(): import('vscode').ExtensionContext {
+function makeFakeContext(): vscode.ExtensionContext {
   return {
     subscriptions: [] as Array<{ dispose(): void }>,
     globalState: { get: () => false, update: () => Promise.resolve() },
-  } as unknown as import('vscode').ExtensionContext;
+  } as unknown as vscode.ExtensionContext;
 }
 
 /**

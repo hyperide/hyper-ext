@@ -81,8 +81,14 @@ export function useIframeCanvas({
   onGatewayError,
   onLoadingChange,
   serverOffline,
-  overrideSrc,
-  iframeLoadedCounter,
+  // Threaded through uniformly to every split iframe-canvas-hooks/* hook by the HYP-561
+  // decomposition (592f8e67) that carved this hook out of the old monolithic
+  // IframeCanvas.tsx — sibling hooks (useIframeStyles, useIframeEventHandlers,
+  // useIframeRuntimeErrors) DO use these; this particular hook (loading/error/canvasMode
+  // state) never needed them. Kept in the params type for call-site/interface consistency
+  // with those siblings, not dead — just unused in this one hook's body.
+  overrideSrc: _overrideSrc,
+  iframeLoadedCounter: _iframeLoadedCounter,
   iframeRef,
 }: UseIframeCanvasParams) {
   const [loading, setLoading] = useState(true);

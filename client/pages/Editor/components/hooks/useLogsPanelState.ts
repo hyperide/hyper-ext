@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import type { RuntimeError } from '@/../../shared/runtime-error';
+import type { RuntimeError } from '@shared/runtime-error';
 import { useEditorStore } from '@/stores/editorStore';
 
 // --- Pure transition logic (exported for testing) ---

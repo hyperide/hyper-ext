@@ -5,7 +5,7 @@
 
 import type { CommentStatus } from '@shared/types/statuses';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isArrowAnnotation } from '@/../../shared/types/annotations';
+import { isArrowAnnotation } from '@shared/types/annotations';
 import type { AnnotationStoreApi } from '@/lib/annotation-store';
 import { getPreviewIframe } from '@/lib/dom-utils';
 import { authFetch } from '@/utils/authFetch';

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ParsedStyles } from '@/lib/canvas-engine/adapters/types';
 import type { CanvasEngine } from '@/lib/canvas-engine';
-import type { EffectItem, StrokeItem } from '../types';
+import type { EffectItem, LayoutType, StrokeItem } from '../types';
 import { cssToPosition, mapShadowSizeToValues, parseHexWithAlpha } from '../utils';
 
 // Text-entry input types whose focus means "the user is typing a value". Excludes
@@ -37,6 +37,16 @@ function isInspectorFieldFocused(): boolean {
   return TEXT_ENTRY_INPUT_TYPES.has((el as HTMLInputElement).type);
 }
 
+/**
+ * CONTRACT: every `set*` field below MUST be a raw `useState` setter (or an equally
+ * identity-stable dispatch, e.g. `useReducer`'s dispatch) — never a wrapped/derived function
+ * (`useCallback`, an inline arrow, a context value recreated per render). The populate effect
+ * in this hook lists all of them in its dependency array; a non-stable setter would make that
+ * effect re-run on every render instead of only on real selection/style-source changes,
+ * re-clobbering in-progress inspector edits. The type system can't enforce this — it's a
+ * runtime identity contract, not a structural one — so it's stated here where every caller
+ * sees it before wiring a new setter through.
+ */
 interface UsePopulateStyleStateDeps {
   selectedId: string | null;
   parsedStyles: Partial<ParsedStyles> | null;
@@ -77,9 +87,19 @@ interface UsePopulateStyleStateDeps {
   setFontSize: React.Dispatch<React.SetStateAction<string>>;
   setBorderRadius: React.Dispatch<React.SetStateAction<string>>;
   setClipContent: React.Dispatch<React.SetStateAction<boolean>>;
-  setSelectedLayout: React.Dispatch<React.SetStateAction<any>>;
+  setSelectedLayout: React.Dispatch<React.SetStateAction<LayoutType>>;
   setStrokes: React.Dispatch<React.SetStateAction<StrokeItem[]>>;
   setEffects: React.Dispatch<React.SetStateAction<EffectItem[]>>;
+  // biome/oxlint: `any` here is deliberate, NOT a lazy placeholder — `dataTextContent` is
+  // `string | null` (see below) but the concrete `setTextContent` passed by every current
+  // caller (RightSidebar.tsx `useState('')`) is `Dispatch<SetStateAction<string>>`, which
+  // does not accept `null`. Narrowing this to `string | null` breaks that call site's
+  // typecheck; narrowing to `string` and adding `?? ''` at the one call site (line ~354)
+  // would change runtime behavior (a real null currently flows through, and RightSidebar's
+  // controlled `<input value={textContent}>` may already rely on/be affected by that — not
+  // verified here). Needs a real decision, not a lint-debt-cleanup guess — tracked as
+  // HYP-1322.
+  // oxlint-disable-next-line no-explicit-any
   setTextContent: React.Dispatch<React.SetStateAction<any>>;
   setIsTextFromProps: React.Dispatch<React.SetStateAction<boolean>>;
   isEditingTextRef: React.RefObject<boolean>;
@@ -354,5 +374,56 @@ export function usePopulateStyleState(deps: UsePopulateStyleStateDeps) {
       setTextContent(dataTextContent);
     }
     setIsTextFromProps(engine !== null && !childrenType && !!dataTextContent);
-  }, [selectedId, parsedStyles, effectiveParsed, dataTextContent, childrenType, engine]);
+    // The ~38 `set*` state setters below are listed, not suppressed: they are useState
+    // setters, which React guarantees have a stable identity across renders, so listing them
+    // is behavior-neutral (no extra re-runs) and keeps this rule live for any REAL future
+    // missing dependency in this large effect body — the opposite of what a blanket
+    // exhaustive-deps suppression here would do.
+  }, [
+    selectedId,
+    parsedStyles,
+    effectiveParsed,
+    dataTextContent,
+    childrenType,
+    engine,
+    isEditingTextRef,
+    setSelectedPosition,
+    setPosTop,
+    setPosRight,
+    setPosBottom,
+    setPosLeft,
+    setWidth,
+    setHeight,
+    setMarginTop,
+    setMarginRight,
+    setMarginBottom,
+    setMarginLeft,
+    setPaddingTop,
+    setPaddingRight,
+    setPaddingBottom,
+    setPaddingLeft,
+    setGap,
+    setJustifyContent,
+    setAlignItems,
+    setColumnGap,
+    setRowGap,
+    setGridJustifyItems,
+    setGridAlignItems,
+    setGridCols,
+    setGridRows,
+    setBackgroundColor,
+    setFillOpacity,
+    setOpacity,
+    setBackgroundImage,
+    setTextColor,
+    setTextOpacity,
+    setFontSize,
+    setBorderRadius,
+    setClipContent,
+    setSelectedLayout,
+    setStrokes,
+    setEffects,
+    setTextContent,
+    setIsTextFromProps,
+  ]);
 }

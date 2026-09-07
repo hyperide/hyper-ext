@@ -10,6 +10,14 @@ export type UIKitType = UiKitLabel;
 
 export type DesignTokenCategory = 'colors' | 'typography' | 'spacing' | 'shadows' | 'other';
 
+/** Which axes of a CSS grid cell are stretched — produced by useLayoutSection's grid-click
+ * handlers, consumed by GridLayoutControls' onGridClick/onGridDoubleClick callback props. */
+export interface GridStretchState {
+  isBothStretch: boolean;
+  isHorStretch: boolean;
+  isVertStretch: boolean;
+}
+
 /** A single CSS custom property surfaced in the Inspector empty state. */
 export interface DesignToken {
   /** Full property name including leading dashes, e.g. `--color-primary` */

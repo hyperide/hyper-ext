@@ -17,6 +17,7 @@ import { DiagnosticPersistenceService } from './services/DiagnosticPersistenceSe
 // No module-level ERROR_SINK_PATH — read at call time so startDiagnosticCapture
 // can set the env var after module load and reach this path.
 
+// oxlint-disable-next-line no-control-regex -- intentional: strips ANSI/VT escape sequences
 const ANSI_STRIP = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[A-Z\\[\]^_@]/g;
 function stripAnsi(s: string): string {
   return s.replace(ANSI_STRIP, '');
@@ -273,9 +274,9 @@ export class DiagnosticHub {
     if (this._runtimeError) {
       const e = this._runtimeError;
       parts.push(
-        `Runtime Error (${e.framework}): ${e.type}: ${e.message}` +
-          (e.file ? `\nFile: ${e.file}${e.line ? `:${e.line}` : ''}` : '') +
-          (e.codeframe ? `\n\`\`\`\n${e.codeframe}\n\`\`\`` : ''),
+        `Runtime Error (${e.framework}): ${e.type}: ${e.message}${
+          e.file ? `\nFile: ${e.file}${e.line ? `:${e.line}` : ''}` : ''
+        }${e.codeframe ? `\n\`\`\`\n${e.codeframe}\n\`\`\`` : ''}`,
       );
     }
 

@@ -207,7 +207,17 @@
       // -> `import { MockPathOps } from 'vector-wasm'` (register-all.ts, a value import).
       // vecli executes path-ops (boolean/offset) which need the backend at runtime, so the
       // declaration is load-bearing — knip's per-package src/ scan can't see it.
-      "ignoreDependencies": ["vector-wasm"],
+      //
+      // vector-engine declares graphology-types (^0.24.7) but never imports it directly —
+      // it's satisfied by peerDependencies, not a value/type import: `graphology@0.26.0`
+      // and `graphology-dag@0.4.1` (both real vector-engine deps) each declare
+      // `"peerDependencies": { "graphology-types": ">=..." }` in bun.lock, because their own
+      // .d.ts files import shared graph interfaces from graphology-types. TypeScript needs
+      // the package physically installed to resolve those transitive type imports even
+      // though no vector-engine source file names it — knip's import-graph scan only sees
+      // direct imports, not peer-dependency satisfaction, so it always flags it as unused
+      // (HYP-1150 investigation, oxlint/knip debt cleanup).
+      "ignoreDependencies": ["vector-wasm", "graphology-types"],
     },
     "vscode-extension/hypercanvas-preview": {
       "entry": [

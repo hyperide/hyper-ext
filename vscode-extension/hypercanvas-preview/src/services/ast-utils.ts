@@ -1,3 +1,4 @@
+import type { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 
 export function replaceStringLiteralValue(node: t.Node, previousValue: string, nextValue: string): boolean {
@@ -79,14 +80,14 @@ function findJsxInExpression(expr: t.Expression | t.JSXEmptyExpression, needle: 
 }
 
 export function liftToCommonJsxParent(
-  sourcePath: import('@babel/traverse').NodePath<t.JSXElement>,
-  targetPath: import('@babel/traverse').NodePath<t.JSXElement>,
+  sourcePath: NodePath<t.JSXElement>,
+  targetPath: NodePath<t.JSXElement>,
 ): {
   sourceLifted: t.JSXElement;
   targetLifted: t.JSXElement;
   commonParent: t.JSXElement | t.JSXFragment;
 } | null {
-  type AnyPath = import('@babel/traverse').NodePath;
+  type AnyPath = NodePath;
   const buildChain = (start: AnyPath): t.Node[] => {
     const chain: t.Node[] = [];
     let p: AnyPath | null = start;

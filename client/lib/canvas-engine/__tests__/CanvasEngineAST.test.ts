@@ -218,7 +218,7 @@ describe('CanvasEngine AST Integration', () => {
 
       expect(mockApi.getCallCount('deleteElements')).toBe(1);
       const call = mockApi.getLastCall('deleteElements');
-      expect((call?.args[0] as Record<string, unknown>).elementIds).toEqual(['pasted-1', 'pasted-2']);
+      expect((call!.args[0] as Record<string, unknown>).elementIds).toEqual(['pasted-1', 'pasted-2']);
     });
   });
 
@@ -309,8 +309,8 @@ describe('CanvasEngine AST Integration', () => {
       expect(mockApi.getCallCount('editCondition')).toBe(1);
       const call = mockApi.getLastCall('editCondition');
       // On undo, expressions are swapped
-      expect((call?.args[0] as Record<string, unknown>).newExpression).toBe('isVisible');
-      expect((call?.args[0] as Record<string, unknown>).oldExpression).toBe('isVisible && isActive');
+      expect((call!.args[0] as Record<string, unknown>).newExpression).toBe('isVisible');
+      expect((call!.args[0] as Record<string, unknown>).oldExpression).toBe('isVisible && isActive');
     });
   });
 

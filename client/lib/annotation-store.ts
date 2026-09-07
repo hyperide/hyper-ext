@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { AnnotationElement } from '@/../../shared/types/annotations';
+import type { AnnotationElement } from '@shared/types/annotations';
 import { authFetch } from '@/utils/authFetch';
 
 export interface AnnotationStoreApi {

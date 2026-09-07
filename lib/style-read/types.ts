@@ -42,6 +42,7 @@ export type UiKitId =
   | 'headless-ui'
   | 'tamagui';
 
+/** @public */
 export type ComponentPropMapperId =
   | 'tamagui'
   | 'chakra-ui'
@@ -77,6 +78,7 @@ export type SourceConfidence = 'exact' | 'probable' | 'computed-only';
 
 // --- Conditions ---
 
+/** @public */
 export type StylePseudoState = 'base' | 'hover' | 'focus' | 'active' | 'focus-visible' | 'disabled';
 
 /** @public */
@@ -283,6 +285,11 @@ export interface FrameworkReadResult {
   conditions: StyleCondition[];
 }
 
+/** @public — consumed by lib/style-write/types.ts's FrameworkStyleReader.read() return shape
+ * and exercised in vscode-extension/hypercanvas-preview/src/__tests__/StyleReadService.test.ts;
+ * still flagged unused by knip even with lib/**\/* in the tsconfig program (verified by
+ * temporarily removing this tag), because knip's reachability graph doesn't trace this
+ * specific cross-file edge — see HYP-1321. */
 export interface FiberTraceResult {
   sourceLocation?: {
     filePath: string;

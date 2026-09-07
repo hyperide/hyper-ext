@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { getPreviewIframe } from '@/lib/dom-utils';
-import type { ViewportState } from '@/../../shared/types/canvas';
+import type { ViewportState } from '@shared/types/canvas';
 
 interface UseViewportHandlersDeps {
   viewport: ViewportState;

@@ -4,7 +4,7 @@
  */
 
 import { type RefObject, useEffect } from 'react';
-import type { ViewportState } from '@/../../shared/types/canvas';
+import type { ViewportState } from '@shared/types/canvas';
 import { getPreviewIframe } from '@/lib/dom-utils';
 
 interface UseOffscreenIndicatorsProps {

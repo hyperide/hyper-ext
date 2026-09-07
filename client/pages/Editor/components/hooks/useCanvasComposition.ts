@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import { DEFAULT_VIEWPORT, type ViewportState } from '@/../../shared/types/canvas';
+import { DEFAULT_VIEWPORT, type ViewportState } from '@shared/types/canvas';
 import type { AnnotationStoreApi } from '@/lib/annotation-store';
 import { migrateExcalidrawAnnotations, needsMigration } from '@/lib/annotations-utils';
 import { authFetch } from '@/utils/authFetch';

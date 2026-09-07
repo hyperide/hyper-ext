@@ -54,7 +54,7 @@ describe('setupMcpServer() — start() failure toast (HYP-953)', () => {
     const fakeContext = { subscriptions: [] as Array<{ dispose(): void }> };
 
     const server = setupMcpServer(
-      fakeContext as unknown as import('vscode').ExtensionContext,
+      fakeContext as unknown as vscode.ExtensionContext,
       makeFakePanelRouter(),
       {} as unknown as StateHub,
       {} as unknown as DiagnosticHub,

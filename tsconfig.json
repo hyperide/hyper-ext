@@ -39,6 +39,43 @@
       "vector-wasm": ["./packages/vector-wasm/src"]
     }
   },
-  "include": ["client/**/*", "server/**/*", "shared/**/*", "vite.config.ts", "vite.config.server.ts", "packages/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "client/**/*",
+    "server/**/*",
+    "shared/**/*",
+    "lib/**/*",
+    "vite.config.ts",
+    "vite.config.server.ts",
+    "packages/**/*"
+  ],
+  // lib/**/* source files are included above to close a real gap: "@lib/*" is a valid path
+  // alias (see "paths" above) but its target directory was never in "include", and several
+  // lib/ files (e.g. lib/style-read/style-read-manager.ts) are reached ONLY via that alias —
+  // not transitively imported by any client/server/shared file — so they, and everything they
+  // in turn import via @lib/* (e.g. lib/style-adapters/*/reader.ts -> lib/style-write/types.ts),
+  // were entirely absent from this TS program. knip's own "project" glob (knip.jsonc) already
+  // lists lib/**/*.ts directly, so knip does discover these files either way; what this
+  // "include" entry fixes is that knip couldn't trace the @lib/* import EDGES between them,
+  // because those edges only exist to a tool reading this program's module graph, and the
+  // importing file (e.g. registry.ts) wasn't part of the program (HYP-1150 investigation).
+  //
+  // lib/**/*.test.{ts,tsx} and __tests__/** are excluded from the type-checked program: they
+  // run under `bun test` (which strips types rather than checking them, unlike tsgo) and were
+  // never part of this program before this change, so they carry ~30 pre-existing type errors
+  // against current lib/ source that this change would otherwise newly surface as build
+  // failures (separate, larger cleanup — not fixed here). This means lib/ tests get no
+  // language-service alias resolution either (same as before this change — not a regression,
+  // just not newly fixed); a future tsconfig.tests.json that extends this one and includes
+  // those globs would restore that without reintroducing the compile failures — tracked as
+  // HYP-1322 (this diff's two lib/ test-file edits are themselves only verified by `bun test`,
+  // which strips types rather than checking them, same gap this note describes).
+  "exclude": [
+    "node_modules",
+    "dist",
+    "lib/**/*.test.ts",
+    "lib/**/*.test.tsx",
+    "lib/**/*.spec.ts",
+    "lib/**/*.spec.tsx",
+    "lib/**/__tests__/**"
+  ]
 }

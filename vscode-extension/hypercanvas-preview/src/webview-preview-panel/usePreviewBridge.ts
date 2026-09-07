@@ -12,7 +12,7 @@ import type { NonPreviewableReason, NonPreviewableRecommendation, SimplePropInfo
 import type { RouteSuggestionItem } from '@shared/components/preview-chrome';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
-import type { UnsupportedProjectError } from '../types';
+import type { ProjectCapabilities, UnsupportedProjectError } from '../types';
 import type { PickerGroupsData } from './CanvasComponentPicker';
 import { postToPreviewIframe } from './postToPreviewIframe';
 
@@ -90,7 +90,7 @@ interface UsePreviewBridgeResult {
   /** Set when extension detects an unsupported project type (e.g. React Native / Tamagui) */
   projectError: UnsupportedProjectError | null;
   /** Detected project capabilities — CSS system, readonly mode, etc. */
-  projectCapabilities: import('../types').ProjectCapabilities | null;
+  projectCapabilities: ProjectCapabilities | null;
   /** Set when iframe ErrorBoundary catches a component render error */
   componentError: ComponentError | null;
   /** Set when the opened file is not previewable (entry/bootstrap or no component export). */
@@ -286,7 +286,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   // reports itself visible.
   const [sidePanelsHidden, setSidePanelsHidden] = useState(true);
   const [projectError, setProjectError] = useState<UnsupportedProjectError | null>(null);
-  const [projectCapabilities, setProjectCapabilities] = useState<import('../types').ProjectCapabilities | null>(null);
+  const [projectCapabilities, setProjectCapabilities] = useState<ProjectCapabilities | null>(null);
   const [componentError, setComponentError] = useState<ComponentError | null>(null);
   const [unsupportedFile, setUnsupportedFile] = useState<NonPreviewableFile | null>(null);
   const [devServerUnreachable, setDevServerUnreachable] = useState<DevServerUnreachableInfo | null>(null);
@@ -1038,7 +1038,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'projectCapabilities':
           // Extension detected CSS system and computed read/write capabilities
           setProjectCapabilities(
-            (msg as { capabilities?: import('../types').ProjectCapabilities }).capabilities ?? null,
+            (msg as { capabilities?: ProjectCapabilities }).capabilities ?? null,
           );
           break;
 

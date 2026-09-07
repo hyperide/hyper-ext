@@ -287,8 +287,9 @@ export async function resolveToolBinary(
   } catch (error) {
     const onLog = deps.onLog ?? (() => {});
     onLog(
-      `[toolchain] ${tool} resolution failed, falling back to installer: ` +
-        (error instanceof Error ? error.message : String(error)),
+      `[toolchain] ${tool} resolution failed, falling back to installer: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     );
     return null;
   }

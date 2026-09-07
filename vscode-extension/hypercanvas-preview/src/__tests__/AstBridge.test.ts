@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { AstService } from '../services/AstService';
+import type { NodeRef } from '@shared/element-tracing/types';
 
 // Fake AstService — we test the bridge routing, not AST logic. Injected via
 // AstBridge's constructor (NOT mock.module). bun's mock.module is process-global
@@ -1098,7 +1099,7 @@ describe('AstBridge', () => {
       await bridge.getElementLocation(
         'targets/conloca-app/src/app/page.tsx',
         'src/app/page.tsx:5:2',
-        'src/app/page.tsx:5:2' as import('@shared/element-tracing/types').NodeRef,
+        'src/app/page.tsx:5:2' as NodeRef,
       );
       expect(mockAstService.getElementLocation).toHaveBeenCalledWith(
         'targets/conloca-app/src/app/page.tsx',

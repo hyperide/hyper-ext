@@ -17,7 +17,14 @@ import { invokesBunRuntime, readNxDevCommand } from '@lib/preview-generator/fram
 import type { NxPackageJson } from '@lib/preview-generator/framework-routing';
 import { getWriterBackedCssSystemIds } from '@lib/style-adapters/registry';
 import type { UiKitLabel } from '@lib/ui-kit';
-import type { CssSystem, ProjectInfo, ProjectType, RepoType, UnsupportedProjectError } from '../types';
+import type {
+  CssSystem,
+  ProjectCapabilities,
+  ProjectInfo,
+  ProjectType,
+  RepoType,
+  UnsupportedProjectError,
+} from '../types';
 import { CSS_SYSTEM_TO_ADAPTER_ID } from '../types';
 
 /**
@@ -572,7 +579,7 @@ export async function detectUIKit(
 export async function detectCssSystem(
   projectPath: string,
   packageJson?: Record<string, unknown> | null,
-): Promise<import('../types').CssSystem> {
+): Promise<CssSystem> {
   const pkg = packageJson ?? (await readPackageJson(projectPath));
   if (!pkg) return 'unknown';
 
@@ -623,7 +630,7 @@ export async function detectCssSystem(
 
   // SASS/SCSS — detected by sass/node-sass dep. Extension treats it like
   // plain CSS (className-based, no special AST handling needed).
-  if (has('sass') || has('node-sass') || has('sass-embedded')) return 'sass' as import('../types').CssSystem;
+  if (has('sass') || has('node-sass') || has('sass-embedded')) return 'sass' as CssSystem;
 
   // CSS Modules have no package.json dependency — detect by scanning src/
   // for *.module.css / *.module.scss / *.module.less files.
@@ -768,7 +775,7 @@ async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
  * works for the common client-component case. Promoted to full-edit; the
  * readonly badge stays available for genuine non-writable systems.
  */
-const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'webpack', 'nextjs', 'bun'];
+const FULL_EDIT_BUNDLERS: ProjectType[] = ['vite', 'cra', 'webpack', 'nextjs', 'bun'];
 
 // 'unknown' → unsupported (no dev server management)
 
@@ -782,18 +789,18 @@ const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'we
  * Readonly = preview renders but either CSS or bundler is limited
  */
 export function computeCapabilities(
-  cssSystem: import('../types').CssSystem,
+  cssSystem: CssSystem,
   uiKit: UiKitLabel,
-  projectError: import('../types').UnsupportedProjectError | null,
-  projectType?: import('../types').ProjectType,
+  projectError: UnsupportedProjectError | null,
+  projectType?: ProjectType,
   repoType?: RepoType,
-): import('../types').ProjectCapabilities {
+): ProjectCapabilities {
   const cssWritable = isCssSystemWritable(cssSystem);
   const bundlerFullEdit = projectType ? FULL_EDIT_BUNDLERS.includes(projectType) : false;
   const canWriteStyles = cssWritable && bundlerFullEdit;
   const canRender = projectError === null;
   const readonly = canRender && !canWriteStyles;
-  const readonlyReason: import('../types').ProjectCapabilities['readonlyReason'] = !readonly
+  const readonlyReason: ProjectCapabilities['readonlyReason'] = !readonly
     ? undefined
     : cssWritable
       ? 'bundler'

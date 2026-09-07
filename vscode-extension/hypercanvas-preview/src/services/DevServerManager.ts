@@ -78,6 +78,7 @@ export function anyDirtyDocIsViteConfig(
 const MAX_LOG_ENTRIES = 200;
 // Strips all ANSI/VT escape sequences: CSI (ESC[...final), OSC (ESC]...BEL/ST), and bare ESC+char.
 // CSI pattern covers color codes AND terminal mode sequences like \x1b[?2004h that Bun emits.
+// oxlint-disable-next-line no-control-regex -- intentional: strips ANSI/VT escape sequences
 const ANSI_ESCAPE_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[A-Z\\[\]^_@]/g;
 type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
 

@@ -36,6 +36,7 @@ const { setupMcpServer } = await import('../extension-mcp-setup');
 import type { PanelRouter } from '../PanelRouter';
 import type { StateHub } from '../StateHub';
 import type { DiagnosticHub } from '../DiagnosticHub';
+import type * as vscode from 'vscode';
 
 function makeFakePanelRouter(): PanelRouter {
   return {
@@ -48,11 +49,11 @@ function makeFakePanelRouter(): PanelRouter {
   } as unknown as PanelRouter;
 }
 
-function makeFakeContext(): import('vscode').ExtensionContext {
+function makeFakeContext(): vscode.ExtensionContext {
   return {
     subscriptions: [] as Array<{ dispose(): void }>,
     globalState: { get: () => false, update: () => Promise.resolve() },
-  } as unknown as import('vscode').ExtensionContext;
+  } as unknown as vscode.ExtensionContext;
 }
 
 describe('setupMcpServer() — retry-success side effects (HYP-954 review P3)', () => {

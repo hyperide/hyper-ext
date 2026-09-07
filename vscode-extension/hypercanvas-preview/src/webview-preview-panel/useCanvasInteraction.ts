@@ -956,6 +956,14 @@ export function useCanvasInteraction(
 
     container.addEventListener('contextmenu', handleResizeContextMenu);
 
+    // Captured here (effect setup), not read from the ref inside the cleanup closure below —
+    // these Maps are mutated in place and never reassigned (`useRef(new Map())`, no
+    // `.current = ...` anywhere in this file), so the captured reference and a live `.current`
+    // read are the same object; this only silences react-hooks/exhaustive-deps's generic
+    // "ref value may have changed by cleanup time" warning without changing behavior.
+    const overlayEls = overlayElements.current;
+    const placeholderEls = placeholderElements.current;
+
     return () => {
       window.removeEventListener('message', handleMessage);
       frame.removeEventListener('load', handleIframeLoad);
@@ -966,8 +974,8 @@ export function useCanvasInteraction(
         activeGhost.remove();
         activeGhost = null;
       }
-      clearOverlays(overlayElements.current);
-      clearOverlays(placeholderElements.current);
+      clearOverlays(overlayEls);
+      clearOverlays(placeholderEls);
     };
   }, [canvas, iframeEl, overlayEl, recordClick, noteError, emitTelemetry]);
 

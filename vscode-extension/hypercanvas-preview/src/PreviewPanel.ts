@@ -62,7 +62,13 @@ import {
   handleScreenshotResult,
 } from './preview-panel-context-menu';
 import { SyncPositionService } from './services/SyncPositionService';
-import type { DevServerRuntimeError, NonPreviewableFilePayload, UnsupportedProjectError } from './types';
+import type {
+  DevServerRuntimeError,
+  NonPreviewableFilePayload,
+  ProjectCapabilities,
+  SupportDimension,
+  UnsupportedProjectError,
+} from './types';
 import { generatePreviewHtml } from './preview-html';
 import { postToWebviewSafe, readWebviewSafe } from './webview-post';
 
@@ -240,7 +246,7 @@ export class PreviewPanel {
   private _screenDecisionSeq = 0;
 
   // Project capabilities (readonly mode, CSS system) — cached so _pushFullStateToWebview can replay
-  private _capabilities: import('./types').ProjectCapabilities | null = null;
+  private _capabilities: ProjectCapabilities | null = null;
 
   // True when BOTH side panels (Explorer + Inspector) are hidden — gates the canvas component
   // picker (#92). Defaults true: with neither panel ever opened the host fires no visibility
@@ -1190,7 +1196,7 @@ export class PreviewPanel {
    * Notify the webview about project capabilities (readonly mode, CSS system).
    * Sent after CSS system detection completes during activation.
    */
-  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities): void {
+  public notifyCapabilities(capabilities: ProjectCapabilities): void {
     this._capabilities = capabilities;
     this._postToWebview({ type: 'projectCapabilities', capabilities });
   }
@@ -1207,7 +1213,7 @@ export class PreviewPanel {
    * capabilities. The caller uses the return value to avoid caching a sub-repo as "already
    * applied" when the merge was dropped (so a later selection retries once caps exist).
    */
-  public updateSupportDimensions(supportDimensions: import('./types').SupportDimension[]): boolean {
+  public updateSupportDimensions(supportDimensions: SupportDimension[]): boolean {
     if (!this._capabilities) return false;
     const merged = { ...this._capabilities, supportDimensions };
     this._capabilities = merged;

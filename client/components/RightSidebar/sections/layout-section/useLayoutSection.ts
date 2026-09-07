@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { LayoutType } from '../../types';
+import type { GridStretchState, LayoutType } from '../../types';
 
 const DB = { debounceOnly: true } as const;
 
@@ -27,7 +27,11 @@ export function useLayoutSection({
   width,
   height,
   justifyContent,
-  alignItems,
+  // Kept symmetric with justifyContent/onAlignItemsChange in the params interface, but
+  // unlike justifyContent (checked for 'space-between' to drive the row-toggle logic below),
+  // this hook has no alignItems-specific branch that needs the current value — only the
+  // string literal key 'alignItems' is used, passed to syncStyleChange.
+  alignItems: _alignItems,
   clipContent,
   onWidthChange,
   onHeightChange,
@@ -188,7 +192,7 @@ export function useLayoutSection({
   const handleGridClick = useCallback(
     (
       pos: { justify: string; align: string; col: number; row: number },
-      gridState: { isBothStretch: boolean; isHorStretch: boolean; isVertStretch: boolean },
+      gridState: GridStretchState,
     ) => {
       const { isBothStretch, isHorStretch, isVertStretch } = gridState;
       const alignValue = pos.align === 'flex-start' ? 'start' : pos.align === 'flex-end' ? 'end' : pos.align;
@@ -228,7 +232,7 @@ export function useLayoutSection({
   const handleGridDoubleClick = useCallback(
     (
       pos: { justify: string; align: string },
-      gridState: { isBothStretch: boolean; isHorStretch: boolean; isVertStretch: boolean },
+      gridState: GridStretchState,
     ) => {
       const { isBothStretch, isHorStretch, isVertStretch } = gridState;
       bothStretchClickCountRef.current = 0;

@@ -6,6 +6,7 @@
 import type { FileIO } from '@lib/ast/file-io';
 import type { FindElementResult } from '@lib/types';
 import type { NodeRef } from '@shared/element-tracing/types';
+import type { File as BabelFile } from '@babel/types';
 import { resolveWorkspacePath } from './workspace-path';
 
 export interface AstMutationDeps {
@@ -14,15 +15,15 @@ export interface AstMutationDeps {
   additionalWorkspaceRoot?: string;
   fileIO: FileIO;
   fileParser: {
-    readAndParseFile(filePath: string): Promise<{ ast: import('@babel/types').File }>;
-    writeAST(ast: import('@babel/types').File, filePath: string): Promise<void>;
+    readAndParseFile(filePath: string): Promise<{ ast: BabelFile }>;
+    writeAST(ast: BabelFile, filePath: string): Promise<void>;
     readFileContent(filePath: string): Promise<string>;
   };
   updateNodeMap: (filePath: string) => Promise<void>;
   resolveElementInCorrectFile: (
     absolutePath: string,
     nodeRef: NodeRef,
-  ) => Promise<{ result: FindElementResult; ast: import('@babel/types').File; resolvedPath: string } | null>;
+  ) => Promise<{ result: FindElementResult; ast: BabelFile; resolvedPath: string } | null>;
 }
 
 interface MutationResult {
@@ -48,7 +49,7 @@ async function resolveAndPrepare(
 ): Promise<
   | {
       result: FindElementResult;
-      ast: import('@babel/types').File;
+      ast: BabelFile;
       resolvedPath: string;
       absolutePath: string;
       contentBeforeWrite: string | undefined;
@@ -81,7 +82,7 @@ async function resolveAndPrepare(
 async function finalizeMutation(
   deps: AstMutationDeps,
   result: FindElementResult,
-  ast: import('@babel/types').File,
+  ast: BabelFile,
   resolvedPath: string,
   contentBeforeWrite: string | undefined,
 ): Promise<MutationResult> {
@@ -95,7 +96,7 @@ export async function mutateElement(
   filePath: string,
   elementId: string,
   nodeRef: NodeRef | undefined,
-  mutate: (result: FindElementResult, ast: import('@babel/types').File) => void | Promise<void>,
+  mutate: (result: FindElementResult, ast: BabelFile) => void | Promise<void>,
 ): Promise<MutationOutcome> {
   const prep = await resolveAndPrepare(deps, filePath, elementId, nodeRef);
   if ('error' in prep) return prep;

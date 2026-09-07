@@ -11,19 +11,19 @@ import {
   PROVIDER_LABELS,
   PROVIDER_PURCHASE_HINTS,
 } from '../../../shared/ai-provider-info';
-import { AIChatPanelProvider } from './AIChatPanelProvider';
-import { DiagnosticHub } from './DiagnosticHub';
-import { LeftPanelProvider } from './LeftPanelProvider';
-import { LogsPanelProvider } from './LogsPanelProvider';
-import { HyperMcpServer } from './mcp/HyperMcpServer';
-import { PanelRouter } from './PanelRouter';
-import { PreviewPanel } from './PreviewPanel';
+import type { AIChatPanelProvider } from './AIChatPanelProvider';
+import type { DiagnosticHub } from './DiagnosticHub';
+import type { LeftPanelProvider } from './LeftPanelProvider';
+import type { LogsPanelProvider } from './LogsPanelProvider';
+import type { HyperMcpServer } from './mcp/HyperMcpServer';
+import type { PanelRouter } from './PanelRouter';
+import type { PreviewPanel } from './PreviewPanel';
 import { detectBrowserForPlaywright } from './playwright-chrome';
-import { RightPanelProvider } from './RightPanelProvider';
-import { StateHub } from './StateHub';
+import type { RightPanelProvider } from './RightPanelProvider';
+import type { StateHub } from './StateHub';
 import { TelemetryEvents } from './telemetry/events';
 import { AstService } from './services/AstService';
-import { DevServerManager } from './services/DevServerManager';
+import type { DevServerManager } from './services/DevServerManager';
 import { detectPackageManager, detectUnsupportedProject } from './services/ProjectDetector';
 import { computeSupportDimensionsForRoot } from './services/support-dimensions-detect';
 import { ensureIsolationWrapper } from './services/WrapperGenerator';

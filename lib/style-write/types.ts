@@ -302,6 +302,11 @@ export type StyleWriteResult =
 
 // --- Framework Adapter Interfaces ---
 
+/** @public — implemented by lib/style-adapters/tailwind-v4/reader.ts,
+ * lib/style-adapters/css-modules/reader.ts, and lib/style-adapters/inline-style/reader.ts;
+ * still flagged unused by knip even with lib source files in the tsconfig program (verified
+ * by temporarily removing this tag), because knip's reachability graph doesn't trace this
+ * specific cross-file edge — see HYP-1321. */
 export interface FrameworkStyleReader {
   read(input: {
     elementFacts: ElementStyleFacts;

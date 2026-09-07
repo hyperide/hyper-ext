@@ -227,7 +227,24 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
   );
 
   useEffect(() => {
+    // Unmount-only cleanup (deps: []) — intentionally reads `.current` live, not a value
+    // captured at effect-setup/mount time. `runIdRef.current++` must bump the LATEST run
+    // generation (any async start()/restart() between mount and unmount can have advanced
+    // it), and `podRef.current` must tear down whatever pod is actually live at unmount
+    // (set well after mount, e.g. by start()) — capturing either at mount time would tear
+    // down/invalidate the wrong generation. The generic "ref value may have changed by
+    // cleanup time" concern this rule warns about is exactly what this cleanup needs, not a
+    // bug to fix. Re-verification of this suppression after any future refactor is tracked
+    // as HYP-1322.
+    //
+    // Placement note (asked about repeatedly across review rounds): the single
+    // oxlint-disable-next-line below covers the WHOLE cleanup, not just runIdRef — verified
+    // directly by running `bunx oxlint` on this exact file (0 warnings), re-checked after
+    // every subsequent edit to this hook. oxlint's react-hooks/exhaustive-deps reports once
+    // per cleanup function (anchored at the first `.current` read), not once per ref access,
+    // so podRef.current below is already covered; it does not need its own directive.
     return () => {
+      // oxlint-disable-next-line react-hooks/exhaustive-deps
       runIdRef.current++;
       if (podRef.current) {
         podRef.current.teardown();

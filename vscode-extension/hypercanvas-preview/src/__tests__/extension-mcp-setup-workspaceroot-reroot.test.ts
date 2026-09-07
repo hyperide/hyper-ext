@@ -52,6 +52,7 @@ const { setupMcpServer } = await import('../extension-mcp-setup');
 import type { PanelRouter } from '../PanelRouter';
 import type { StateHub } from '../StateHub';
 import type { DiagnosticHub } from '../DiagnosticHub';
+import type * as vscode from 'vscode';
 
 /** Fake PanelRouter with a MUTABLE `workspaceRoot` — a test can flip it mid-run to simulate
  *  `PanelRouter._ensureCurrentWorkspace()` rerooting to a new folder. */
@@ -63,11 +64,11 @@ function makeFakePanelRouter(initialRoot: string): PanelRouter & { workspaceRoot
   } as unknown as PanelRouter & { workspaceRoot: string };
 }
 
-function makeFakeContext(): import('vscode').ExtensionContext {
+function makeFakeContext(): vscode.ExtensionContext {
   return {
     subscriptions: [] as Array<{ dispose(): void }>,
     globalState: { get: () => false, update: () => Promise.resolve() },
-  } as unknown as import('vscode').ExtensionContext;
+  } as unknown as vscode.ExtensionContext;
 }
 
 describe('setupMcpServer() — workspaceRoot config-write follows a live PanelRouter root across a reroot (HYP-984)', () => {

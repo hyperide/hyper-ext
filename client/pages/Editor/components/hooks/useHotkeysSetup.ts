@@ -71,6 +71,21 @@ export function useHotkeysSetup({
   const redoInProgressRef = useRef<boolean>(false);
   const redoPendingRef = useRef<boolean>(false);
 
+  // HYP-1323: mirrored into a ref (updated every render via the cheap effect below) so the
+  // main keydown-handler effect further down can read the LIVE value through
+  // selectedItemIndicesRef.current instead of closing over selectedItemIndices directly.
+  // That closure is only rebuilt when the main effect's own deps change, so a direct closure
+  // over selectedItemIndices would go stale between rebuilds — e.g. right after the user
+  // reselects a different item inside a repeated/mapped element, a hotkey (Delete, Duplicate)
+  // could still act on the PREVIOUS item index. Mirroring into a ref sidesteps the tradeoff
+  // entirely: this effect is cheap (one assignment, no listener re-registration) so it can
+  // safely re-run on every selectedItemIndices change, while the expensive effect (global
+  // keydown listener setup/teardown) does not need to.
+  const selectedItemIndicesRef = useRef(selectedItemIndices);
+  useEffect(() => {
+    selectedItemIndicesRef.current = selectedItemIndices;
+  }, [selectedItemIndices]);
+
   // Hotkey: Toggle sidebars visibility (Mod+/)
   useEffect(() => {
     const handleToggleSidebars = (e: KeyboardEvent) => {
@@ -629,7 +644,9 @@ export function useHotkeysSetup({
       getState: () => ({
         selectedIds,
         activeInstanceId: activeDesignInstanceId,
-        selectedItemIndices: selectedItemIndices ? Object.fromEntries(selectedItemIndices) : undefined,
+        selectedItemIndices: selectedItemIndicesRef.current
+          ? Object.fromEntries(selectedItemIndicesRef.current)
+          : undefined,
       }),
       getDocument: () => getPreviewIframe()?.contentDocument ?? null,
       callbacks: {
@@ -741,8 +758,20 @@ export function useHotkeysSetup({
         iframe.contentDocument.removeEventListener('keydown', handleKeyDown);
       }
     };
+    // getState() reads selectedItemIndicesRef.current (HYP-1323), not selectedItemIndices
+    // directly, so the ref — not the raw value — is the correct dependency here. Widening
+    // this to the raw selectedItemIndices would be wrong: it comes from engine.getSelection()
+    // (SelectionManager.ts), which the store's updateState() (createCanvasStore.ts) calls on
+    // EVERY engine event — tree:change, hover:change, history:change,
+    // instance:insert/update/delete/move/duplicate, not just selection:change — and
+    // getSelection() allocates a NEW Map each call. Depending on that raw value directly
+    // would tear down and re-register the global keydown listeners on nearly every canvas
+    // interaction — verified via SelectionManager.ts:158-163 and createCanvasStore.ts:63-84,
+    // not assumed. selectedItemIndicesRef itself is a ref object (stable identity, per
+    // React's contract), so listing it below is free.
   }, [
     selectedIds,
+    selectedItemIndicesRef,
     engine,
     meta,
     activeDesignInstanceId,

@@ -54,6 +54,7 @@ const NODE_MODULES_SEGMENT = /(?:^|[\\/])node_modules[\\/]/;
  * it is canonicalized downstream (`toProjectRelative`) and is a real monorepo file path.
  */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: \0 is the real Vite virtual-module marker.
+// oxlint-disable-next-line no-control-regex -- same: \0 is the real Vite virtual-module marker.
 const NON_FILE_SOURCE = /^(?:\0|data:|blob:|about:|virtual:|[a-z][a-z0-9+.-]*:\/\/)/i;
 
 /**

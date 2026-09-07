@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'bun:test';
+import type { NodePath } from '@babel/traverse';
+import type { JSXElement, ReturnStatement } from '@babel/types';
 import { parseCode } from '../ast/parser';
 import type { ComponentNode, ParseContext } from './component-parser';
 import { parseJSXElement } from './component-parser';
@@ -397,12 +399,12 @@ describe('tree-adapter', () => {
       const ast = parseCode(source);
 
       // Find the JSXElement in the return statement
-      let rootJSX: import('@babel/types').JSXElement | null = null;
+      let rootJSX: JSXElement | null = null;
       const t = require('@babel/types');
       const _traverse = require('@babel/traverse');
       const traverse = _traverse.default ?? _traverse;
       traverse(ast, {
-        ReturnStatement(path: import('@babel/traverse').NodePath<import('@babel/types').ReturnStatement>) {
+        ReturnStatement(path: NodePath<ReturnStatement>) {
           if (t.isJSXElement(path.node.argument)) {
             rootJSX = path.node.argument;
             path.stop();
@@ -482,9 +484,9 @@ describe('tree-adapter', () => {
       const t = require('@babel/types');
       const _traverse = require('@babel/traverse');
       const traverse = _traverse.default ?? _traverse;
-      let rootJSX: import('@babel/types').JSXElement | null = null;
+      let rootJSX: JSXElement | null = null;
       traverse(ast, {
-        ReturnStatement(path: import('@babel/traverse').NodePath<import('@babel/types').ReturnStatement>) {
+        ReturnStatement(path: NodePath<ReturnStatement>) {
           if (t.isJSXElement(path.node.argument)) {
             rootJSX = path.node.argument;
             path.stop();

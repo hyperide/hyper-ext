@@ -590,7 +590,7 @@ export { Alert, AlertTitle, AlertDescription };
 
       const call = postMessage.mock.calls.find((c) => (c[0] as { type?: string })?.type === 'setGeneratedProps');
       expect(call).toBeDefined();
-      expect((call?.[0] as { values: Record<string, unknown> }).values).toEqual({});
+      expect((call![0] as { values: Record<string, unknown> }).values).toEqual({});
       expect(result).toBe(false);
     });
   });

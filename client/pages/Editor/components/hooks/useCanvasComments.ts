@@ -4,7 +4,7 @@
  */
 
 import { type RefObject, useEffect } from 'react';
-import type { CanvasMode } from '@/../../shared/types/canvas';
+import type { CanvasMode } from '@shared/types/canvas';
 import { getPreviewIframe } from '@/lib/dom-utils';
 
 interface UseCanvasCommentsProps {

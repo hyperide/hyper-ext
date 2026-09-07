@@ -114,7 +114,7 @@ export function parseColors(classes: string[]): ParsedColorStyles {
 
   for (const cls of classes) {
     if (cls.startsWith('bg-[url(')) {
-      const urlMatch = cls.match(/bg-\[url\(['"]?([^'"\)]+)['"]?\)\]/);
+      const urlMatch = cls.match(/bg-\[url\(['"]?([^'")]+)['"]?\)\]/);
       if (urlMatch) {
         result.backgroundImage = urlMatch[1];
       }

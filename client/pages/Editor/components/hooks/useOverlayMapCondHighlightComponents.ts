@@ -2,7 +2,7 @@ import { findDOMElementsBySource } from '@shared/canvas-interaction/fiber-elemen
 import type { TracingResolver } from '@shared/canvas-interaction/types';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import { type RefObject, useEffect } from 'react';
-import type { ViewportState } from '@/../../shared/types/canvas';
+import type { ViewportState } from '@shared/types/canvas';
 import type { CondBoundary } from '@/components/CondOverlay';
 import type { MapBoundary } from '@/components/MapOverlay';
 import type { useComponentMeta } from '@/contexts/ComponentMetaContext';

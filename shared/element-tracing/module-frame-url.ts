@@ -65,7 +65,7 @@ export function isFetchableModuleFrameUrl(url: string, baseOrigin?: string): boo
   // `new URL` parse. The trailing '/' is load-bearing: it excludes prefix-collision authorities
   // (`http://localhost:5173.evil.com/…`, `http://localhost:5173@evil.com/…`), which fall
   // through to the parse and are correctly rejected there.
-  if (url.startsWith(origin + '/')) return true;
+  if (url.startsWith(`${origin}/`)) return true;
   try {
     return new URL(url).origin === origin;
   } catch {

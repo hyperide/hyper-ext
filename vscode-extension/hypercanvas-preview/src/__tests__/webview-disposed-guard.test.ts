@@ -33,6 +33,7 @@ import { AIChatPanelProvider } from '../AIChatPanelProvider';
 import type { PanelRouter } from '../PanelRouter';
 import type { StateHub } from '../StateHub';
 import type { ColorProbeRequest } from '../services/color-probe-types';
+import type { ScanResult } from '../services/ComponentService';
 
 function createStateHub() {
   const state = { currentComponent: null, insertTargetId: null, selectedIds: [] };
@@ -579,7 +580,7 @@ describe('RightPanelProvider reuse-after-dispose guard', () => {
       { register: mock(() => {}), unregister: mock(() => {}) } as unknown as StateHub,
       { routeMessage: mock(() => Promise.resolve()) } as unknown as PanelRouter,
       undefined,
-      getComponentGroups as (() => Promise<import('../services/ComponentService').ScanResult>) | undefined,
+      getComponentGroups as (() => Promise<ScanResult>) | undefined,
     );
   }
 

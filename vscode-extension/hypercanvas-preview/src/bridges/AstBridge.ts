@@ -1037,6 +1037,7 @@ export class AstBridge {
     // regex `/\{([^}]+)\}/g`, which is naïve about string literals — a `}` inside
     // the key prematurely closes the expression and the rest leaks into JSXText.
     const keyLen = message.key.length;
+    // oxlint-disable-next-line no-control-regex -- intentional: \0 is a real reject case (embedded NUL), not accidental.
     if (keyLen === 0 || keyLen > 256 || /[\n\r\0{}<>]/.test(message.key)) {
       return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid key' };
     }

@@ -78,6 +78,7 @@ export interface SharedEditorState {
 // Component types (shared between extension host and webview)
 // ============================================================================
 
+/** @public */
 export interface ComponentInfo {
   name: string;
   /** Relative path from workspace root */
@@ -97,6 +98,7 @@ export interface PropInfo {
   objectFields?: PropInfo[];
 }
 
+/** @public */
 export interface ComponentTree {
   atoms: ComponentInfo[];
   composites: ComponentInfo[];

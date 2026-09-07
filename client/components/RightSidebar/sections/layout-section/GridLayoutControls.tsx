@@ -1,6 +1,6 @@
 import cn from 'clsx';
 import { LAYOUT_OPTIONS } from '../../constants';
-import type { LayoutOption } from '../../types';
+import type { GridStretchState, LayoutOption } from '../../types';
 import IconLayoutChart from '../../../icons/IconLayoutChart';
 import { Input } from '../../../ui/input';
 import { TID } from '@shared/data-testid-map';
@@ -39,8 +39,11 @@ interface GridLayoutControlsProps {
     defaultValue?: string,
   ) => void;
   syncStyleChange: (key: string, value: string, options?: { debounceOnly?: boolean }) => void;
-  onGridClick: (pos: { justify: string; align: string; col: number; row: number }, gridState: any) => void;
-  onGridDoubleClick: (pos: { justify: string; align: string }, gridState: any) => void;
+  onGridClick: (
+    pos: { justify: string; align: string; col: number; row: number },
+    gridState: GridStretchState,
+  ) => void;
+  onGridDoubleClick: (pos: { justify: string; align: string }, gridState: GridStretchState) => void;
   dismissGridTooltip: () => void;
   focusInput: (e: React.MouseEvent) => void;
   setPaddingExpanded: (v: boolean) => void;

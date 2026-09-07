@@ -49,7 +49,7 @@ import {
 } from './extension-utils';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
-import { HyperMcpServer } from './mcp/HyperMcpServer';
+import type { HyperMcpServer } from './mcp/HyperMcpServer';
 import { NoFolderViewProvider } from './NoFolderViewProvider';
 import { PanelRouter } from './PanelRouter';
 import { PostEditDiagnosticWatcher } from './services/PostEditDiagnosticWatcher';

@@ -4,7 +4,7 @@
  */
 
 import { type RefObject, useCallback, useEffect, useRef } from 'react';
-import type { ViewportState } from '@/../../shared/types/canvas';
+import type { ViewportState } from '@shared/types/canvas';
 import { getPreviewIframe } from '@/lib/dom-utils';
 import { clampZoom } from '@/lib/viewport';
 
