@@ -36,6 +36,7 @@ import { runAppModeActivation } from './webview-preview-panel/app-mode-activatio
 import { resetPreviewToAppShell } from './webview-preview-panel/reset-to-app-shell';
 import { createLivenessGuard, runGuardedStartupSweep } from './startup-sweep';
 import { AIChatPanelProvider } from './AIChatPanelProvider';
+import { openComponentFileThenRevealPreview } from './component-selection-open-order';
 import { DiagnosticHub } from './DiagnosticHub';
 import {
   createSequencedReroot,
@@ -1949,36 +1950,23 @@ export function activate(context: vscode.ExtensionContext) {
     const componentName = resolveComponentIdentifier(patch.currentComponent?.name ?? '', componentPath);
     const sampleComponentName = normalizeSampleComponentName(componentName);
 
-    // Auto-open Preview Panel if not already visible.
-    // ViewColumn.Two (not Beside): in single-column E2E setups, ViewColumn.Beside
-    // resolves to column 2 which doesn't exist yet — VS Code places the webview
-    // off-screen. ViewColumn.Two forces a visible split in any layout.
-    previewPanel?.createOrShow(vscode.ViewColumn.Two);
-
-    // Open the component file in the left editor group (ViewColumn.One)
-    // so the user can see the code alongside the preview.
-    // Uses preview mode (italic tab) — consistent with single-click Explorer UX.
-    const absPath = absSelectedComponent;
-    // .then(onFulfilled, onRejected) only catches openTextDocument's rejection.
-    // showTextDocument can also reject (disposed editor / workspace switch /
-    // race with another panel closing all editors), and that rejection
-    // becomes an unhandled promise rejection which VS Code surfaces as a
-    // ".error" notification toast containing "Unhandled rejection ..." —
-    // tripping every preview-render "renders without errors" assertion that
-    // greps for /fatal|crash|unhandled/i. Use a trailing .then().catch()
-    // chain so both stages funnel into the same handler.
-    vscode.workspace
-      .openTextDocument(vscode.Uri.file(absPath))
-      .then((doc) =>
-        vscode.window.showTextDocument(doc, {
-          viewColumn: vscode.ViewColumn.One,
-          preserveFocus: true,
-          preview: true,
-        }),
-      )
-      .then(undefined, (err) => {
-        console.error('[HyperIDE] Failed to open component file:', err);
-      });
+    // Open the component file in ViewColumn.One, THEN reveal the Preview
+    // Panel in ViewColumn.Two — in that order. Order is load-bearing
+    // (HYP-1372): see component-selection-open-order.ts's file header for
+    // the full root-cause narrative (ViewColumn.Two only produces a genuine
+    // split relative to an EXISTING ViewColumn.One). Uses preview mode
+    // (italic tab) — consistent with single-click Explorer UX.
+    // Captured (not fire-and-forget): revealPreview's createOrShow() is what
+    // assigns PreviewPanel's underlying _panel, so the generated-sample-props
+    // injection below (which needs a live _panel) awaits this settling first —
+    // otherwise a fast ensureSample/getComponentDefinitions resolution could
+    // beat the now-deferred panel creation and injectGeneratedSampleProps would
+    // silently no-op on a still-unattached panel (review finding, HYP-1372).
+    const previewRevealedPromise = openComponentFileThenRevealPreview(absSelectedComponent, {
+      openTextDocument: (uri) => vscode.workspace.openTextDocument(uri),
+      showTextDocument: (doc, options) => vscode.window.showTextDocument(doc, options),
+      revealPreview: (column) => previewPanel?.createOrShow(column),
+    });
 
     // Parse component structure
     const capturedComponentPath = componentPath;
@@ -2103,6 +2091,12 @@ export function activate(context: vscode.ExtensionContext) {
         const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
         const primitiveSampleInfo = await primitiveSampleInfoPromise;
         if (previewPanel && shouldInjectGeneratedPropsForSelection(sampleResult, props, primitiveSampleInfo)) {
+          // Wait for the panel to actually be attached (see the call-site comment
+          // above) before posting generated props — createOrShow() is now deferred
+          // behind the file-open, so without this the panel can still be undefined
+          // here and injectGeneratedSampleProps would silently drop the payload.
+          await previewRevealedPromise;
+          if (ac.signal.aborted) return;
           await previewPanel.injectGeneratedSampleProps(componentPath, relativePath);
         }
         // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic).
