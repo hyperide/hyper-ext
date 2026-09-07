@@ -9,6 +9,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import AuthProvider from './components/AuthProvider';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ThemeProvider } from './components/ThemeProvider';
+import { getOrCreateHmrRoot } from './lib/hmr-root';
 import { PlatformProvider } from './lib/platform';
 
 // Initialize PostHog EU analytics only in production.
@@ -171,11 +172,15 @@ const App = () => (
 // createRoot call). The `else` branch keeps behavior identical to the pre-fix code for
 // such cases — it does not, by itself, make this module safe to import outside a
 // browser: `document.getElementById` still requires a DOM either way.
+//
+// The actual get-or-create logic lives in ./lib/hmr-root.ts (getOrCreateHmrRoot) — a
+// side-effect-free extraction so it has a real unit test (client/lib/__tests__/hmr-root.test.ts)
+// without importing this file, which mounts a real app to the DOM as an import-time side effect.
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- root element is guaranteed by index.html
 const rootElement = document.getElementById('root')!;
 if (import.meta.hot) {
   const hotData = import.meta.hot.data as { root?: Root };
-  const root = (hotData.root ??= createRoot(rootElement));
+  const root = getOrCreateHmrRoot(hotData, () => createRoot(rootElement));
   root.render(<App />);
 } else {
   createRoot(rootElement).render(<App />);
