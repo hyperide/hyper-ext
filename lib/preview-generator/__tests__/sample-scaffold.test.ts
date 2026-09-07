@@ -48,7 +48,12 @@ describe('buildSampleScaffold', () => {
     expect(scaffold).not.toContain('TODO');
   });
 
-  it('keeps explicit prop values when the user filled the overlay form', () => {
+  it('keeps explicit prop values AND still adds visible children when the user filled the overlay form (HYP-1367 follow-up)', () => {
+    // Regression test: this used to assert a self-closing `<Alert variant={...} />` with
+    // NO children whenever any prop was present -- which is exactly the "empty button"
+    // symptom (a Button/Alert/etc. with props renders with no visible content). Alert
+    // genuinely accepts children (generic HTMLAttributes<HTMLDivElement>), so the fix
+    // is to keep BOTH the explicit prop value and the synthesized children.
     const scaffold = buildSampleScaffold({
       sourceCode: ALERT_SOURCE,
       componentName: 'Alert',
@@ -58,10 +63,12 @@ describe('buildSampleScaffold', () => {
 
     expect(scaffold).toContain('<Alert');
     expect(scaffold).toContain('variant={"destructive"}');
-    expect(scaffold).toContain('/>');
+    expect(scaffold).toContain('<AlertTitle>Preview title</AlertTitle>');
+    expect(scaffold).toContain('</Alert>');
+    expect(scaffold).not.toMatch(/\/>\s*\)/);
   });
 
-  it('emits parseable JSX for explicit prop samples', () => {
+  it('emits parseable JSX for explicit prop samples with children', () => {
     const scaffold = buildSampleScaffold({
       sourceCode: ALERT_SOURCE,
       componentName: 'Alert',
@@ -70,7 +77,240 @@ describe('buildSampleScaffold', () => {
     });
 
     expect(scaffold).toContain('variant={"destructive"}');
+    expect(scaffold).toContain('</Alert>');
+    expect(() => parse(scaffold, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+  });
+
+  it('does not synthesize children for a void-element component even with props (generic HTMLAttributes spelling)', () => {
+    const scaffold = buildSampleScaffold({
+      sourceCode: `
+export const Avatar = React.forwardRef<HTMLImageElement, React.HTMLAttributes<HTMLImageElement>>(
+  ({ className, ...props }, ref) => <img ref={ref} className={className} {...props} />,
+);
+`,
+      componentName: 'Avatar',
+      exportName: 'SampleDefault',
+      propEntries: [['src', 'sample.png']],
+    });
+
+    expect(scaffold).toContain('<Avatar');
+    expect(scaffold).toContain('src={"sample.png"}');
     expect(scaffold).toContain('/>');
+    expect(scaffold).not.toContain('Sample content');
+  });
+
+  it('does not synthesize children for a void-element component using the SPECIALIZED attrs-type spelling (load-bearing substring match)', () => {
+    // Pins the behavior TEXT_CHILDREN_SUPPRESSING_DOM_SPELLING's doc comment calls
+    // load-bearing: matching `InputHTMLAttributes<HTMLInputElement>` via plain substring
+    // (no leading `\b`) is what suppresses children here, not an accident. If a future
+    // cleanup "fixes" the regex to require a boundary, this test catches the regression.
+    const scaffold = buildSampleScaffold({
+      sourceCode: `
+export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ className, ...props }, ref) => <input ref={ref} className={className} {...props} />,
+);
+`,
+      componentName: 'Input',
+      exportName: 'SampleDefault',
+      propEntries: [['placeholder', 'Email']],
+    });
+
+    expect(scaffold).toContain('placeholder={"Email"}');
+    expect(scaffold).toContain('/>');
+    expect(scaffold).not.toContain('Sample content');
+  });
+
+  it('does not synthesize compound children for a void-element wrapper with a same-file sibling (HYP-1399 F1/P1 regression)', () => {
+    // A void wrapper (Input over <input>) with a same-prefix sibling export (InputLabel)
+    // must still get NO children, even though buildCompoundChildLines would otherwise
+    // splice InputLabel in as a compound child -- compound children are children too.
+    const scaffold = buildSampleScaffold({
+      sourceCode: `
+export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ ...props }, ref) => <input ref={ref} {...props} />,
+);
+export const InputLabel = React.forwardRef<HTMLLabelElement, React.HTMLAttributes<HTMLLabelElement>>(
+  ({ ...props }, ref) => <label ref={ref} {...props} />,
+);
+`,
+      componentName: 'Input',
+      exportName: 'SampleDefault',
+      propEntries: [['placeholder', 'Email']],
+    });
+
+    expect(scaffold).toContain('placeholder={"Email"}');
+    expect(scaffold).toContain('/>');
+    expect(scaffold).not.toContain('InputLabel');
+    expect(scaffold).not.toContain('Sample content');
+  });
+
+  it('documents a known limitation: a comment mentioning a suppressing DOM-attributes spelling is indistinguishable from a real one (HYP-1373, not fixed here)', () => {
+    // TEXT_CHILDREN_SUPPRESSING_DOM_SPELLING matches raw source text, so a comment merely
+    // MENTIONING e.g. "React.HTMLAttributes<HTMLInputElement>" is indistinguishable from a
+    // real type reference to this regex -- an attempted comment/string-stripping fix was
+    // tried during review and rejected for introducing a WORSE bug (an apostrophe in JSX
+    // text opened an unterminated quote span that swallowed real code, see the doc comment
+    // on TEXT_CHILDREN_SUPPRESSING_DOM_SPELLING). This test pins the current, accepted
+    // whole-file-scan behavior so a future change to it is deliberate (real fix: HYP-1373).
+    const scaffold = buildSampleScaffold({
+      sourceCode: `
+// Note: this component intentionally does NOT use React.HTMLAttributes<HTMLInputElement>.
+export const Button = (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} />;
+`,
+      componentName: 'Button',
+      exportName: 'SampleDefault',
+      propEntries: [['variant', 'primary']],
+    });
+
+    expect(scaffold).toContain('variant={"primary"}');
+    // Known limitation: the comment's mention of HTMLAttributes<HTMLInputElement> falsely
+    // suppresses children for this unrelated Button.
+    expect(scaffold).not.toContain('Sample content');
+    expect(scaffold).toContain('/>');
+  });
+
+  it('drops an explicit `children` entry for a void component instead of forcing a crash-prone children value onto it', () => {
+    const scaffold = buildSampleScaffold({
+      sourceCode: `
+export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ ...props }, ref) => <input ref={ref} {...props} />,
+);
+`,
+      componentName: 'Input',
+      exportName: 'SampleDefault',
+      propEntries: [
+        ['placeholder', 'Email'],
+        ['children', 'not allowed on a void element'],
+      ],
+    });
+
+    expect(scaffold).toContain('placeholder={"Email"}');
+    expect(scaffold).not.toContain('not allowed on a void element');
+    expect(scaffold).not.toContain('children={');
+    expect(scaffold).toContain('/>');
+  });
+
+  it('emits both an explicit propEntries value AND the children entry together (combined attrs+children shape)', () => {
+    const scaffold = buildSampleScaffold({
+      sourceCode: ALERT_SOURCE,
+      componentName: 'Alert',
+      exportName: 'SampleDefault',
+      propEntries: [
+        ['variant', 'outline'],
+        ['children', 'Save'],
+      ],
+    });
+
+    expect(scaffold).toContain('variant={"outline"} >');
+    expect(scaffold).toContain('{"Save"}');
+    expect(scaffold).not.toContain('children={');
+    expect(scaffold).not.toContain('Sample content');
+    expect(() => parse(scaffold, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+  });
+
+  it('does not synthesize children for a textarea component even with props (generic HTMLAttributes spelling)', () => {
+    const scaffold = buildSampleScaffold({
+      sourceCode: `
+export const Textarea = React.forwardRef<HTMLTextAreaElement, React.HTMLAttributes<HTMLTextAreaElement>>(
+  ({ className, ...props }, ref) => <textarea ref={ref} className={className} {...props} />,
+);
+`,
+      componentName: 'Textarea',
+      exportName: 'SampleDefault',
+      propEntries: [['rows', 4]],
+    });
+
+    expect(scaffold).toContain('<Textarea');
+    expect(scaffold).toContain('rows={4}');
+    expect(scaffold).toContain('/>');
+    expect(scaffold).not.toContain('Sample content');
+  });
+
+  it('does not synthesize children for a <col> or <wbr> component even with props (HYP-1399 F1 regression)', () => {
+    const colScaffold = buildSampleScaffold({
+      sourceCode: `
+export const TableColumn = React.forwardRef<HTMLTableColElement, React.HTMLAttributes<HTMLTableColElement>>(
+  ({ span, ...props }, ref) => <col ref={ref} span={span} {...props} />,
+);
+`,
+      componentName: 'TableColumn',
+      exportName: 'SampleDefault',
+      propEntries: [['span', 2]],
+    });
+    expect(colScaffold).toContain('span={2}');
+    expect(colScaffold).toContain('/>');
+    expect(colScaffold).not.toContain('Sample content');
+
+    const wbrScaffold = buildSampleScaffold({
+      sourceCode: `
+export const Break = React.forwardRef<HTMLWBRElement, React.HTMLAttributes<HTMLWBRElement>>(
+  (props, ref) => <wbr ref={ref} {...props} />,
+);
+`,
+      componentName: 'Break',
+      exportName: 'SampleDefault',
+      propEntries: [['id', 'x']],
+    });
+    expect(wbrScaffold).toContain('id={"x"}');
+    expect(wbrScaffold).toContain('/>');
+    expect(wbrScaffold).not.toContain('Sample content');
+  });
+
+  it('documents a known limitation: a void/textarea/select sibling in the same file can suppress an unrelated component\'s children (HYP-1373, not fixed here)', () => {
+    // componentAcceptsChildren scans the WHOLE file, not just componentName's own
+    // declaration -- this predates this fix (the positive HTMLAttributes check has always
+    // scanned whole-file) and two attempted precise-scoping heuristics were rejected during
+    // review of this fix for being order-dependent and introducing worse false negatives of
+    // their own (see the doc comment on NON_TEXT_CHILDREN_GENERIC_DOM_ELEMENTS). This test
+    // pins the CURRENT, accepted-as-residual-risk behavior so a future change to it is
+    // deliberate, not an accidental regression -- a real fix needs AST parsing (HYP-1373).
+    const sourceCode = `
+export const TextField = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ label, ...props }, ref) => <div ref={ref} {...props} />,
+);
+export const TextArea = React.forwardRef<HTMLTextAreaElement, React.HTMLAttributes<HTMLTextAreaElement>>(
+  ({ ...props }, ref) => <textarea ref={ref} {...props} />,
+);
+`;
+
+    const fieldScaffold = buildSampleScaffold({
+      sourceCode,
+      componentName: 'TextField',
+      exportName: 'SampleDefault',
+      propEntries: [['label', 'Email']],
+    });
+    expect(fieldScaffold).toContain('label={"Email"}');
+    // Known limitation: TextArea's generic HTMLAttributes<HTMLTextAreaElement> spelling
+    // elsewhere in the file suppresses TextField's own (otherwise-correct) children.
+    expect(fieldScaffold).not.toContain('Sample content');
+
+    // TextArea itself still correctly gets no children -- unaffected by the limitation.
+    const textAreaScaffold = buildSampleScaffold({
+      sourceCode,
+      componentName: 'TextArea',
+      exportName: 'SampleDefault',
+      propEntries: [['rows', 3]],
+    });
+    expect(textAreaScaffold).toContain('rows={3}');
+    expect(textAreaScaffold).not.toContain('Sample content');
+  });
+
+  it('uses an explicit `children` propEntry as the JSX children instead of duplicating it as an attribute (HYP-1399 F3 regression)', () => {
+    const scaffold = buildSampleScaffold({
+      sourceCode: `
+export const Button = (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} />;
+`,
+      componentName: 'Button',
+      exportName: 'SampleDefault',
+      propEntries: [['children', 'Save']],
+    });
+
+    // Must render as JSX children, not a `children={...}` attribute -- and must not
+    // ALSO get separately synthesized "Sample content" (the duplicate-children bug).
+    expect(scaffold).not.toContain('children={');
+    expect(scaffold).toContain('{"Save"}');
+    expect(scaffold).not.toContain('Sample content');
+    expect(scaffold).toContain('</Button>');
     expect(() => parse(scaffold, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
   });
 
