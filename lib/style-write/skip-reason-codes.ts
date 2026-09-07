@@ -7,6 +7,7 @@
  * Architecture: docs/specs/2026-06-11-270-d2-source-routing.md §4.4,
  *   docs/specs/2026-06-11-270-d3-stylability-ladder.md §5.3
  */
+import type { StyleLandedReason } from './types';
 
 /**
  * Stable machine reason underneath the user-friendly banner text. Distinct codes drive
@@ -59,13 +60,20 @@ export function describeLandedSystem(system: string): string {
  * Trailing clause explaining WHY a property landed lower (D2 badge). Empty for the unremarkable
  * cases. The marquee case is 'inexpressible' → "(outside the system's scale)".
  */
-export function describeLandedReason(reason: string): string {
+// Review finding (GLM P4): a bare `string` param defeats exhaustiveness — exactly the hazard that
+// let `'unresolvable-selector'` silently fall through to `''` before this reason was added below.
+// `StyleLandedReason | (string & {})` (the repo's own forward-compat convention for status-like
+// strings — see `StyleBreakpointKey`/`ThemeAxisId` in lib/style-read/types.ts) keeps unknown WIRE
+// values compiling while still nudging a NEW known reason toward an explicit case here.
+export function describeLandedReason(reason: StyleLandedReason | (string & {})): string {
   switch (reason) {
     case 'inexpressible':
       return " (outside the system's scale)";
     case 'project-default':
     case 'project-system':
       return ' (project default)';
+    case 'unresolvable-selector':
+      return ' (CSS rule not found)';
     default:
       return '';
   }

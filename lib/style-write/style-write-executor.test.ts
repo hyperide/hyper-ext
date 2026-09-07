@@ -645,6 +645,698 @@ export function App() {
     expect(fileIO.content(cssPath)).toContain('padding-left: 16px');
   });
 
+  // HYP-706: a CSS-file plan whose selector can't be located in the CSS file used to hard-fail —
+  // the user's color edit did nothing. It must now degrade to the universal inline-style floor
+  // on the source element instead, so the edit is at least visible.
+  describe('CSS-file rule-not-found degrades to the inline-style floor (HYP-706)', () => {
+    it('CSS Modules selector miss → inline style floor on the source element, CSS file untouched', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makeCssModulesPlan({
+        target: { ...makeCssModulesPlan().target, selector: '.root' }, // not present in cssOriginal
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result).toEqual({
+        success: true,
+        plan,
+        mutatedFiles: [appPath],
+        landedOn: [{ property: 'padding-left', system: 'inline-style', reason: 'unresolvable-selector' }],
+      });
+      // CSS file is never touched — the miss falls through to inline, not a partial CSS write.
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toMatch(/style=\{\{[^}]*paddingLeft[^}]*16px/);
+    });
+
+    it('plain CSS selector miss → inline style floor on the source element', async () => {
+      const cssPath = '/project/src/App.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makePlainCssExistingPlan({
+        target: { ...makePlainCssExistingPlan().target, selector: '.card' }, // not present in cssOriginal
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result).toEqual({
+        success: true,
+        plan,
+        mutatedFiles: [appPath],
+        landedOn: [{ property: 'color', system: 'inline-style', reason: 'unresolvable-selector' }],
+      });
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toMatch(/style=\{\{[^}]*color[^}]*blue/);
+    });
+
+    // Review finding (k3, corroborated blocking): `applyInlineStyleUpdate` silently drops any
+    // declaration whose value normalizes to null (empty/whitespace). `landedOn` must reflect only
+    // the declarations that actually landed — reporting a dropped one as "landed inline" is the
+    // same silent-failure shape HYP-706 exists to close, just relabeled.
+    it('a declaration whose value normalizes to empty is dropped from BOTH the write and landedOn', async () => {
+      const cssPath = '/project/src/App.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makePlainCssExistingPlan({
+        target: {
+          ...makePlainCssExistingPlan().target,
+          selector: '.card', // not present in cssOriginal
+          declarations: { color: 'blue', 'background-color': '   ' }, // whitespace-only → dropped
+        },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result).toEqual({
+        success: true,
+        plan,
+        mutatedFiles: [appPath],
+        // Only `color` landed — `background-color` never reached the JSX and must NOT appear here.
+        landedOn: [{ property: 'color', system: 'inline-style', reason: 'unresolvable-selector' }],
+      });
+      const written = fileIO.content(appPath);
+      expect(written).toMatch(/style=\{\{[^}]*color[^}]*blue/);
+      expect(written).not.toContain('backgroundColor');
+    });
+
+    it('EVERY declaration normalizing to empty → failure, not a lying success (nothing written)', async () => {
+      const cssPath = '/project/src/App.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makePlainCssExistingPlan({
+        target: {
+          ...makePlainCssExistingPlan().target,
+          selector: '.card', // not present in cssOriginal
+          declarations: { color: '   ' }, // whitespace-only — the ONLY declaration, and it drops
+        },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      // Review finding (GLM P2/P3): pin the FAILURE CAUSE via `toMatchObject`, not just
+      // success:false behind a narrowing `if` (which reads as skippable) — the floor has four
+      // distinguishable failure branches (unparseable elementRef / unreadable source file /
+      // element not resolvable / no expressible inline value), and the pre-fix plain "CSS selector
+      // not found:" failure would also satisfy a bare success:false check.
+      expect(result).toMatchObject({ success: false, error: expect.stringContaining('no expressible inline value') });
+      // Nothing written anywhere — the CSS file untouched (as always for the floor) AND the JSX
+      // file untouched too (no bogus mutatedFiles for a write that landed nothing).
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+    });
+
+    // Review finding (GLM P1): a custom property (`--brandColor`) is kept VERBATIM by
+    // `toReactStyleKey` (unlike a standard property, which round-trips through kebab-case) — CSS
+    // custom property names are case-sensitive, so `landedOn` must report the exact name written,
+    // not a `camelToKebab`-mangled one that was never requested.
+    it('a CSS custom property in the declarations reports its EXACT case in landedOn, unmangled', async () => {
+      const cssPath = '/project/src/App.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makePlainCssExistingPlan({
+        target: {
+          ...makePlainCssExistingPlan().target,
+          selector: '.card', // not present in cssOriginal
+          declarations: { '--brandColor': '#f00' },
+        },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result).toEqual({
+        success: true,
+        plan,
+        mutatedFiles: [appPath],
+        // Must be '--brandColor', NOT '--brand-color' — a camelToKebab mangle would report a
+        // property name that was never written.
+        landedOn: [{ property: '--brandColor', system: 'inline-style', reason: 'unresolvable-selector' }],
+      });
+      expect(fileIO.content(appPath)).toMatch(/style=\{\{[^}]*'--brandColor'[^}]*#f00/);
+    });
+
+    it('findRule HIT is unchanged — still writes the CSS rule, no inline floor', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const cssOriginal = `.root {
+  color: red;
+}
+`;
+      const plan = makeCssModulesPlan();
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result).toEqual({ success: true, plan, mutatedFiles: [cssPath] });
+      expect(fileIO.content(cssPath)).toContain('padding-left: 16px');
+    });
+
+    it('selector miss AND unresolvable source element → still fails (nothing left to degrade to)', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  const x = 1;
+  const y = 2;
+  return x + y;
+}
+`; // no JSX element anywhere near src/App.tsx:3:4
+      const plan = makeCssModulesPlan({
+        target: { ...makeCssModulesPlan().target, selector: '.root' },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+    });
+
+    // Review round 1 (codex) P1: `CssModulesWriter.createPlan` sets `sourceElement.filePath` to
+    // `sourceOwner.filePath` — the SAME `.module.css` path as `target.cssFilePath` — because
+    // `StyleSourceOwner.filePath` means "the file that owns this style", not "the JSX file". A
+    // real request-built plan therefore has `sourceElement.filePath === target.cssFilePath`, NOT
+    // the JSX file. The floor must derive the JSX path from `elementRef`'s own encoding instead.
+    it('real request-shaped plan (sourceElement.filePath = the CSS file, not the JSX file) still floors correctly', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makeCssModulesPlan({
+        sourceElement: { filePath: cssPath, elementRef: 'src/App.tsx:3:4' }, // matches the real writer's shape
+        target: { ...makeCssModulesPlan().target, selector: '.root' }, // not present in cssOriginal
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result).toEqual({
+        success: true,
+        plan,
+        mutatedFiles: [appPath],
+        landedOn: [{ property: 'padding-left', system: 'inline-style', reason: 'unresolvable-selector' }],
+      });
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toMatch(/style=\{\{[^}]*paddingLeft[^}]*16px/);
+    });
+
+    // Review round 1 (Fable): an inline `style` is unconditional — it cannot express a pseudo-state
+    // or an at-rule wrapper. Degrading those to inline would silently turn a conditional edit into
+    // an always-on one, which is worse than the dead click it replaces. Both must keep failing.
+    it('selector miss on a non-base condition (hover) does NOT floor — stays a failure', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makeCssModulesPlan({
+        condition: { state: 'hover' },
+        target: { ...makeCssModulesPlan().target, selector: '.root:hover' },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+    });
+
+    it('selector miss inside an @media cascade context does NOT floor — stays a failure', async () => {
+      const cssPath = '/project/src/App.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makePlainCssExistingPlan({
+        target: {
+          ...makePlainCssExistingPlan().target,
+          selector: '.card', // not present in cssOriginal
+          cascadeContext: { atRuleStack: [{ name: 'media', params: '(min-width: 768px)' }] },
+        },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+    });
+
+    // Review round 2 (Opus P1): a base-state, at-rule-free selector can still be structurally
+    // unable to express as an inline style on the source element — a descendant combinator
+    // targets a DIFFERENT element entirely. Flooring it onto the source element would be silently
+    // wrong, not a floor.
+    it('selector miss on a descendant-combinator selector does NOT floor — stays a failure', async () => {
+      const cssPath = '/project/src/App.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makePlainCssExistingPlan({
+        target: { ...makePlainCssExistingPlan().target, selector: '.card .title' }, // descendant combinator
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+    });
+
+    it('selector miss on a pseudo-element selector does NOT floor — stays a failure', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makeCssModulesPlan({
+        target: { ...makeCssModulesPlan().target, selector: '.root::before' }, // pseudo-element
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+    });
+
+    // Review round 2 (codex P1): the HYP-995 dead-prop-forwarding preflight in
+    // `executeStyleWriteRequest` computes its required-prop set from the plan's static
+    // `sourceForm` — a `cssStyleRule` plan normally never writes a JSX prop, so that preflight
+    // can't see this floor coming. The floor must re-check forwarding itself before writing.
+    it('selector miss on a custom component that does not forward "style" does NOT floor — stays a failure', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cardPath = '/project/src/Card.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      // <Card> is the sole JSX element on its line, matching sourceElement.elementRef 'src/App.tsx:3:4'.
+      const appOriginal = `import { Card } from './Card';
+export function App() {
+  return (
+    <Card className={styles.root}>Hi</Card>
+  );
+}
+`;
+      const cardOriginal = `export function Card({ className, title }: { className?: string; title?: string }) {
+  return <div className={className}>{title}</div>;
+}
+`; // forwards className, NOT style
+      const plan = makeCssModulesPlan({
+        target: { ...makeCssModulesPlan().target, selector: '.root' }, // not present in cssOriginal
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal, [cardPath]: cardOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+      // Review round 3 (codex P1): the refusal must carry the SAME structured `nonForwarding`
+      // shape as the HYP-995 request-level preflight (`refusalForUnforwardedProps`) — both the
+      // SaaS route and the extension only enter their warn/retarget UX when this field is
+      // present; a bare `success:false` falls through to a generic operation-failure toast.
+      if (result.success) throw new Error('expected failure');
+      expect(result.nonForwarding?.componentName).toBe('Card');
+      expect(result.nonForwarding?.requiredProp).toBe('style');
+    });
+
+    // Review round 3 (codex P1): `StyleWriteExecutorOptions.aliasMap` must reach the floor's own
+    // forwarding re-check the same way `executeStyleWriteRequest`'s request-level preflight
+    // receives it — otherwise an alias-imported (`@/components/Card`) non-forwarding component
+    // resolves as `unknown` here and gets a dead `style` prop nobody catches.
+    it('aliasMap threads into the floor — an alias-imported non-forwarding component is still caught', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cardPath = '/project/src/components/Card.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `import { Card } from '@/components/Card';
+export function App() {
+  return (
+    <Card className={styles.root}>Hi</Card>
+  );
+}
+`;
+      const cardOriginal = `export function Card({ className, title }: { className?: string; title?: string }) {
+  return <div className={className}>{title}</div>;
+}
+`; // forwards className, NOT style
+      const plan = makeCssModulesPlan({
+        target: { ...makeCssModulesPlan().target, selector: '.root' },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal, [cardPath]: cardOriginal });
+      const executor = new StyleWriteExecutor({
+        fileIO,
+        aliasMap: { '@/components/Card': '/project/src/components/Card' },
+      });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+      if (result.success) throw new Error('expected failure');
+      expect(result.nonForwarding?.componentName).toBe('Card');
+    });
+
+    // Review round 4 (Opus P1): the suite covered the non-forwarding refusal but never the
+    // positive branch — a custom component that DOES forward `style` should floor normally.
+    it('selector miss on a custom component that DOES forward "style" floors normally', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cardPath = '/project/src/Card.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `import { Card } from './Card';
+export function App() {
+  return (
+    <Card className={styles.root}>Hi</Card>
+  );
+}
+`;
+      const cardOriginal = `export function Card({ className, style, title }: { className?: string; style?: React.CSSProperties; title?: string }) {
+  return <div className={className} style={style}>{title}</div>;
+}
+`; // forwards both className and style
+      const plan = makeCssModulesPlan({
+        target: { ...makeCssModulesPlan().target, selector: '.root' }, // not present in cssOriginal
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal, [cardPath]: cardOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result).toEqual({
+        success: true,
+        plan,
+        mutatedFiles: [appPath],
+        landedOn: [{ property: 'padding-left', system: 'inline-style', reason: 'unresolvable-selector' }],
+      });
+      expect(fileIO.content(appPath)).toMatch(/style=\{\{[^}]*paddingLeft[^}]*16px/);
+    });
+
+    // Review round 4 (Fable): a bare tag/type selector (`div`) commonly matches every element of
+    // that tag in the file — flooring it onto only the ONE source element narrows scope, the same
+    // problem class the descendant-combinator/pseudo-element exclusions already guard against.
+    // `SIMPLE_SELECTOR` requires a `.`/`#` prefix specifically to exclude this case.
+    it('selector miss on a bare tag selector does NOT floor — stays a failure', async () => {
+      const cssPath = '/project/src/App.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makePlainCssExistingPlan({
+        target: { ...makePlainCssExistingPlan().target, selector: 'div' }, // bare tag selector
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+    });
+
+    // Review round 4 (Fable): `CascadeContext` carries `layer`/`scope` beyond `atRuleStack` — a
+    // `@layer` or CSS `@scope` rule is just as unable to express as an unconditional inline style.
+    it('selector miss inside an @layer cascade context does NOT floor — stays a failure', async () => {
+      const cssPath = '/project/src/App.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makePlainCssExistingPlan({
+        target: {
+          ...makePlainCssExistingPlan().target,
+          selector: '.card', // not present in cssOriginal
+          cascadeContext: { layer: 'components' },
+        },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+    });
+
+    // Review round 3 (Opus P1): the floor must safely MERGE into a pre-existing `style` object
+    // literal, not clobber it — the shared `applyInlineStyleUpdate` already guarantees this for
+    // every other caller; this pins the guarantee on the floor's own call path too.
+    it('merges into a pre-existing style object literal instead of clobbering it', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div style={{ color: 'red' }}>Hi</div>
+  );
+}
+`;
+      const plan = makeCssModulesPlan({
+        target: { ...makeCssModulesPlan().target, selector: '.root' },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result).toEqual({
+        success: true,
+        plan,
+        mutatedFiles: [appPath],
+        landedOn: [{ property: 'padding-left', system: 'inline-style', reason: 'unresolvable-selector' }],
+      });
+      const out = fileIO.content(appPath);
+      expect(out).toContain("color: 'red'");
+      expect(out).toMatch(/paddingLeft:\s*'16px'/);
+    });
+
+    // Review round 3 (Opus P1): `StyleCondition` carries `viewport`/`container`/`media`/`theme`/
+    // `selector`/`raw` beyond `state` — a responsive CSS-Modules edit scoped through one of those
+    // (not `cascadeContext.atRuleStack`, which only plain/module CSS at-rule wrapping uses) must
+    // be excluded from the floor exactly like the `@media` case already is.
+    it('selector miss with a condition.media qualifier does NOT floor — stays a failure', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makeCssModulesPlan({
+        condition: {
+          state: 'base',
+          media: [{ kind: 'media', query: '(min-width: 768px)', source: 'css-media-query' }],
+        },
+        target: { ...makeCssModulesPlan().target, selector: '.root' },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      expect(fileIO.content(appPath)).toBe(appOriginal);
+    });
+
+    // Review round 2 (Opus P1): a missing/unparseable JSX file must not turn a clean structured
+    // failure into an unhandled rejection — `execute()`'s top-level try/catch must convert the
+    // thrown error into `{ success: false }`, same as any other executor exception.
+    it('missing JSX source file → structured failure, not a thrown rejection', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const cssOriginal = `.other {
+  color: red;
+}
+`; // /project/src/App.tsx is intentionally absent from fileIO
+      const plan = makeCssModulesPlan({
+        target: { ...makeCssModulesPlan().target, selector: '.root' },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result.success).toBe(false);
+      expect(fileIO.content(cssPath)).toBe(cssOriginal);
+      // Review round 4 (Fable): caught locally with the same distinguishable-reason pattern as
+      // the floor's other failure branches, not a generic message from execute()'s catch-all.
+      if (result.success) throw new Error('expected failure');
+      expect(result.error).toContain('source file unreadable');
+    });
+
+    // Review round 2 (Opus): `resolveFilePath` accepts an elementRef file-path prefix whether it's
+    // project-relative or already absolute — confirms the floor doesn't assume one or the other.
+    it('an absolute elementRef file-path prefix resolves correctly', async () => {
+      const cssPath = '/project/src/App.module.css';
+      const appPath = '/project/src/App.tsx';
+      const cssOriginal = `.other {
+  color: red;
+}
+`;
+      const appOriginal = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const plan = makeCssModulesPlan({
+        sourceElement: { filePath: cssPath, elementRef: `${appPath}:3:4` }, // absolute prefix
+        target: { ...makeCssModulesPlan().target, selector: '.root' },
+      });
+      const fileIO = new InMemoryFileIO({ [cssPath]: cssOriginal, [appPath]: appOriginal });
+      const executor = new StyleWriteExecutor({ fileIO });
+
+      const result = await executor.execute(plan);
+
+      expect(result).toEqual({
+        success: true,
+        plan,
+        mutatedFiles: [appPath],
+        landedOn: [{ property: 'padding-left', system: 'inline-style', reason: 'unresolvable-selector' }],
+      });
+      expect(fileIO.content(appPath)).toMatch(/style=\{\{[^}]*paddingLeft[^}]*16px/);
+    });
+  });
+
   it('executes plain CSS existing-owner plans inside matching at-rules', async () => {
     const cssPath = '/project/src/App.css';
     const original = `@media (min-width: 768px) {
@@ -1919,6 +2611,46 @@ describe('executeStyleWriteRequest — D2 priority cascade, per-property inexpre
     // The "where it landed" transparency signal names the inline-redirected property.
     expect(result.success === true && result.landedOn).toEqual([
       expect.objectContaining({ property: 'mix-blend-mode', system: 'inline-style', reason: 'inexpressible' }),
+    ]);
+  });
+
+  // Review finding (GLM, HYP-706 follow-up): a CSS custom property is ALWAYS Tailwind-inexpressible
+  // and lands inline verbatim — the same case-sensitive-name hazard the CSS-miss floor test pins,
+  // reached here through the D2 cascade-fallback branch instead.
+  it('a custom property falls to inline with its EXACT case preserved in landedOn', async () => {
+    const appPath = '/project/src/App.tsx';
+    const fileIO = new InMemoryFileIO({
+      [appPath]: `export function App() {
+  return (
+    <div className="pl-2">Hi</div>
+  );
+}
+`,
+    });
+    const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+    const result = await executeStyleWriteRequest({
+      ast,
+      sourceFilePath: appPath,
+      element,
+      styles: { color: '#ff0000', '--brandColor': '#f00' },
+      selectedSourceTabId: 'auto',
+      runtimeThemeContext: {
+        ideThemePreference: 'system',
+        resolvedColorScheme: 'light',
+        source: 'test-fixture',
+      },
+      fileIO,
+      projectRoot: '/project',
+    });
+
+    expect(result.success).toBe(true);
+    const written = fileIO.content(appPath);
+    expect(written).toContain("'--brandColor': '#f00'");
+    // Must be '--brandColor', NOT '--brand-color' — a camelToKebab mangle would report a
+    // property name that was never written.
+    expect(result.success === true && result.landedOn).toEqual([
+      expect.objectContaining({ property: '--brandColor', system: 'inline-style', reason: 'inexpressible' }),
     ]);
   });
 

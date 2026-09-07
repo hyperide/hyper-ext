@@ -237,8 +237,13 @@ export interface StyleWriteContext {
  *   'inexpressible' — the property has no representation in the element's system (e.g. a CSS
  *     property with no Tailwind utility, even as an arbitrary value) → fell to inline, per-property.
  *   'project-default' / 'project-system' — a surfaceless element floored to the project system.
+ *   'unresolvable-selector' — a CSS-file plan's `findRule` couldn't locate the targeted selector
+ *     in the file (HYP-706, `applyCssFileInlineFloor`) → fell to a verified inline write on the
+ *     source element. Master spec (`docs/specs/2026-06-12-styles-system-master-spec.md` §A3/HYP-706):
+ *     "the floor is a reported, verified inline write (canonical code surfaced in the inspector)" —
+ *     this reason IS that canonical code; the floor must never land silently.
  */
-type StyleLandedReason = 'inexpressible' | 'project-default' | 'project-system';
+export type StyleLandedReason = 'inexpressible' | 'project-default' | 'project-system' | 'unresolvable-selector';
 
 export interface StyleLandedFallback {
   /** kebab-case CSS property that landed on a fallback system. */

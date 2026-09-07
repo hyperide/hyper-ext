@@ -38,12 +38,13 @@ import type {
   AdapterPropPlan,
   CssFilePlan,
   StyleLandedFallback,
+  StyleLandedReason,
   StyleWritePlan,
   StyleWriteResult,
   TailwindPlan,
   TargetStyleValue,
 } from './types';
-import { camelToKebab, errorMessage } from './utils';
+import { errorMessage, styleKeyToCssProperty } from './utils';
 
 /**
  * HYP-544 Phase 3 — a candidate token the empirical color-probe found to DRIVE the element's
@@ -92,6 +93,14 @@ export interface StyleWriteExecutorOptions {
    * wider monorepo root.
    */
   additionalProjectRoots?: string[];
+  /**
+   * HYP-995 — tsconfig path-alias map, threaded so the CSS-file inline-style floor's own
+   * dead-prop-forwarding re-check (HYP-706, `applyCssFileInlineFloor`) resolves an alias-imported
+   * component the same way the request-level `executeStyleWriteRequest` preflight does. Absent →
+   * relative-only resolution (an alias-imported component reads as `unknown` and is never refused
+   * — no regression versus not having the guard at all, just a narrower one).
+   */
+  aliasMap?: Record<string, string>;
 }
 
 export interface ExecuteStyleWriteRequestInput {
@@ -133,6 +142,9 @@ export interface ExecuteStyleWriteRequestInput {
 }
 
 interface ElementRefPosition {
+  /** The `<filePath>` prefix of the ref (before the trailing `:line:column`), as-authored — may
+   *  be project-relative or absolute; `resolveFilePath` handles both. */
+  filePath: string;
   line: number;
   column: number;
 }
@@ -154,9 +166,85 @@ function parseElementRef(elementRef: string): ElementRefPosition | null {
   if (!match) return null;
 
   return {
+    filePath: match[1],
     line: Number.parseInt(match[2], 10),
     column: Number.parseInt(match[3], 10),
   };
+}
+
+/**
+ * A simple selector this codebase can safely re-target as an inline `style` on the SAME element
+ * the selector's rule would otherwise style: a single class or id token (`.card`/`#hero`), no
+ * descendant/child/sibling combinator (space, `>`, `+`, `~`), no pseudo-class/element (`:`/`::`),
+ * no attribute selector, no selector list (`,`). A bare tag/type selector (`div`, `button`) is
+ * EXCLUDED too (review round 4, Fable): it commonly matches every element of that tag in the
+ * file, so flooring it onto only the one source element narrows scope the same way a shared
+ * class selector would — see the `isUnconditionalCssTarget` doc for why that's out of scope for
+ * this floor. Requiring the `.`/`#` prefix keeps the floor to the one case this codebase already
+ * treats as "this selector names THIS element": a CSS-Modules classKey or an authored id/class
+ * hook, never a bare-tag rule that plausibly matches siblings too.
+ */
+const SIMPLE_SELECTOR = /^[.#][A-Za-z_][A-Za-z0-9_-]*$/;
+
+function isSimpleSelector(selector: string): boolean {
+  return SIMPLE_SELECTOR.test(selector.trim());
+}
+
+/**
+ * `plan.condition` (`StyleCondition`) carries `state` PLUS optional `viewport` / `container` /
+ * `media` / `theme` / `selector` / `raw` axes — any one of those means the edit is scoped to a
+ * breakpoint, container query, theme, or other qualifier, not just a pseudo-state. Checking
+ * `state === 'base'` alone (review round 2) missed all of them: a responsive CSS-Modules edit
+ * encoded via `condition.media`/`condition.viewport` would have passed and floored into an
+ * always-on inline style, silently dropping its scoping (review round 3, Opus P1).
+ */
+function isBaseCondition(condition: CssFilePlan['condition']): boolean {
+  return (
+    condition.state === 'base' &&
+    !condition.viewport &&
+    !condition.container &&
+    !condition.media?.length &&
+    !condition.theme?.length &&
+    !condition.selector?.length &&
+    !condition.raw?.length
+  );
+}
+
+/**
+ * `CascadeContext` (`target.cascadeContext`) carries `atRuleStack` PLUS optional `layer` and
+ * `scope` — any of the three means the rule lives inside a scoping construct (`@media`,
+ * `@layer`, CSS `@scope`) an inline `style` attribute cannot express. Checking only
+ * `atRuleStack` (review round 3) missed `layer`/`scope` — the same missed-axes bug class
+ * {@link isBaseCondition} was rewritten to close (review round 4, Fable).
+ */
+function hasCascadeScoping(cascadeContext: CssRuleTarget['cascadeContext']): boolean {
+  if (!cascadeContext) return false;
+  return Boolean(cascadeContext.layer) || Boolean(cascadeContext.scope) || Boolean(cascadeContext.atRuleStack?.length);
+}
+
+/**
+ * A CSS-file rule-not-found miss may only degrade to the inline-style floor (HYP-706) when the
+ * write is UNCONDITIONAL and TARGETS THE ELEMENT ITSELF: an unqualified base condition (see
+ * {@link isBaseCondition}), no cascade scoping (see {@link hasCascadeScoping}), and a simple
+ * selector (see {@link isSimpleSelector}). An inline `style` attribute is always-active and lands
+ * only on the source element — applying it for a conditional or structurally different target
+ * would silently change what the edit does, not just where it lands.
+ */
+function isUnconditionalCssTarget(plan: CssFilePlan, target: CssRuleTarget): boolean {
+  return (
+    isBaseCondition(plan.condition) && !hasCascadeScoping(target.cascadeContext) && isSimpleSelector(target.selector)
+  );
+}
+
+/**
+ * Build `StyleLandedFallback` entries for a set of kebab-case CSS properties that landed on the
+ * inline-style channel instead of the resolved system (review round: GLM P3 — the HYP-706 floor
+ * and the D2 cascade-fallback branch each hand-rolled this same `{property, system, reason}` shape;
+ * a future field added to `StyleLandedFallback` could then land at one call site and be missed at
+ * the other, the exact "reconstructed result loses a field" bug class HYP-1292 already guards.
+ */
+function inlineLandedFallbacks(properties: string[], reason: StyleLandedReason): StyleLandedFallback[] {
+  return properties.map((property) => ({ property, system: 'inline-style', reason }));
 }
 
 function cssSystemLabel(plan: StyleWritePlan): string {
@@ -231,6 +319,7 @@ export class StyleWriteExecutor {
   private readonly domClasses?: string;
   private readonly probeDriving?: ProbeDrivingCandidate[];
   private readonly requestedStyles?: Record<string, string>;
+  private readonly aliasMap?: Record<string, string>;
 
   constructor(options: StyleWriteExecutorOptions = {}) {
     this.fileIO = options.fileIO ?? new NodeFileIO();
@@ -240,6 +329,7 @@ export class StyleWriteExecutor {
     this.domClasses = options.domClasses;
     this.probeDriving = options.probeDriving;
     this.requestedStyles = options.requestedStyles;
+    this.aliasMap = options.aliasMap;
   }
 
   /**
@@ -534,12 +624,130 @@ export class StyleWriteExecutor {
     const rule = target.mode === 'create-rule' ? createRule(root, target) : findRule(root, target);
 
     if (!rule) {
+      // HYP-706: a findRule miss (selector not locatable in the CSS file) used to hard-fail —
+      // the user's color edit did nothing. Degrade to the universal §7 inline-style floor
+      // instead of a dead click; `target.mode === 'create-rule'` is excluded on purpose
+      // (createRule's return type has no undefined case — this branch is only reachable via
+      // findRule) and the floor only fires for an UNCONDITIONAL, at-rule-free target: an inline
+      // `style` cannot express a pseudo-state (`:hover`) or an `@media`/`@container` wrapper, so
+      // degrading those would silently turn a conditional edit into an always-on one — worse
+      // than the dead click it replaces (review round 1, Fable).
+      if (target.mode !== 'create-rule' && isUnconditionalCssTarget(plan, target)) {
+        return this.applyCssFileInlineFloor(plan, target);
+      }
       return this.failure(plan, `CSS selector not found: ${target.selector}`);
     }
 
     applyDeclarations(rule, target.declarations);
     await this.fileIO.writeFile(cssFilePath, root.toString());
     return { success: true, plan, mutatedFiles: [cssFilePath] };
+  }
+
+  /**
+   * §7 inline-style floor for a CSS-file plan whose rule couldn't be located (HYP-706). Writes
+   * the same declarations that would have gone into the CSS rule onto the source element's own
+   * `style` attribute in its JSX file, so the edit is at least visible instead of silently
+   * dropped. Falls back to the original CSS-selector failure — with a distinguishable reason —
+   * whenever the floor itself can't land: the ref doesn't parse, the JSX file can't be read, the
+   * element can't be resolved, or the target is a custom component that doesn't forward `style`.
+   *
+   * The JSX file path comes from `plan.sourceElement.elementRef`'s own `<filePath>:<line>:<col>`
+   * encoding (review round 1, codex P1), NOT `plan.sourceElement.filePath` — for a CSS Modules
+   * plan that field is set to the SAME `.module.css` path as `target.cssFilePath`
+   * (`createCssModuleSourceOwnersFromReferences`, `lib/style-write/style-write-request-context.ts`),
+   * because `StyleSourceOwner.filePath` means "the file that owns this style representation", not
+   * "the JSX file". `elementRef` is always built as `${jsxSourceFilePath}:${line}:${column}`
+   * (`getElementRef` in this file), so its prefix is the one reliable source for the real JSX path
+   * — `resolveFilePath` accepts it whether that prefix is project-relative or already absolute.
+   *
+   * A read/parse failure on the JSX file (missing/unparseable — review round 2, Opus P1) is caught
+   * locally and reported with the same distinguishable-reason pattern as every other floor-failure
+   * branch (review round 4, Fable), rather than escaping to `execute()`'s generic catch-all.
+   *
+   * The HYP-995 dead-prop-forwarding preflight in `executeStyleWriteRequest` computes its
+   * required-prop set from the plan's STATIC `sourceForm` before execution — a `cssStyleRule`
+   * plan needs no prop there, because normally it never touches one. This floor is the one case
+   * where a `cssStyleRule` plan DOES write a prop (`style`) at execution time, so that preflight
+   * can't see it coming; the same check is re-run here, directly, before writing (review round 2,
+   * codex P1) — writing `style={{}}` on `<Card>` when `Card` doesn't forward `style` would be dead
+   * code AND a TypeScript error, same failure class HYP-995 already guards on every other path.
+   */
+  private async applyCssFileInlineFloor(plan: CssFilePlan, target: CssRuleTarget): Promise<StyleWriteResult> {
+    const position = parseElementRef(plan.sourceElement.elementRef);
+    if (!position) {
+      return this.failure(plan, `CSS selector not found (unparseable elementRef): ${target.selector}`);
+    }
+
+    const jsxFilePath = this.resolveFilePath(position.filePath, plan.projectRoot);
+    let ast: t.File;
+    let absolutePath: string;
+    try {
+      ({ ast, absolutePath } = await this.fileParser.readAndParseFile(jsxFilePath));
+    } catch (error) {
+      return this.failure(
+        plan,
+        `CSS selector not found (source file unreadable: ${errorMessage(error)}): ${target.selector}`,
+      );
+    }
+    const element = this.findElement(ast, plan.sourceElement.elementRef);
+    if (!element) {
+      return this.failure(plan, `CSS selector not found (element not resolvable): ${target.selector}`);
+    }
+
+    const forwarding = await resolveComponentForwarding({
+      ast,
+      filePath: absolutePath,
+      element,
+      fileIO: this.fileIO,
+      aliasMap: this.aliasMap,
+    });
+    if (forwarding.kind === 'custom' && !forwardsProp(forwarding, 'style')) {
+      // Same structured shape as `refusalForUnforwardedProps` (HYP-995) — the extension's M1
+      // verify-and-retry / warn+rollback path and the SaaS route both branch on `nonForwarding`
+      // being present, not just on `success:false` (review round 3, codex P1).
+      return {
+        success: false,
+        plan,
+        error: `<${forwarding.displayName}> does not forward the "style" prop to the DOM — the inline-style floor would be dead code`,
+        nonForwarding: {
+          componentName: forwarding.displayName,
+          requiredProp: 'style',
+          ...(forwarding.definition ? { definition: forwarding.definition } : {}),
+        },
+      };
+    }
+
+    // `applyInlineStyleUpdate` silently DROPS any declaration whose value normalizes to null
+    // (empty/whitespace, `normalizeInlineStyleValue`) and returns only the React style keys it
+    // actually wrote (review finding: k3, corroborated blocking). Build `landedOn` from THAT
+    // return value, not from `target.declarations`'s keys — otherwise a dropped declaration still
+    // gets reported as "landed inline", the exact silent-failure shape HYP-706 exists to close.
+    // Not reachable today (`CssModulesWriter` filters empty values upstream), but this is a public
+    // executor contract every test in the suite constructs plans against directly, so a future
+    // writer that lets an empty value through must not silently regress into a dead click.
+    const appliedReactKeys = applyInlineStyleUpdate(element, target.declarations);
+    if (appliedReactKeys.length === 0) {
+      // Every declaration dropped — nothing was written. Report failure instead of a lying
+      // success; skip the write entirely so the file isn't touched (and no bogus `mutatedFiles`).
+      return this.failure(plan, `CSS selector not found (no expressible inline value): ${target.selector}`);
+    }
+    await this.fileParser.writeAST(ast, absolutePath);
+    // Master spec §A3/HYP-706: "the floor is a reported, verified inline write (canonical code
+    // surfaced in the inspector)" — never a silent channel switch. `landedOn` is the existing D2
+    // transparency mechanism (see `executeStyleWriteRequest`'s cascade-fallback rebuild further
+    // down this file); reuse it here so the badge fires wherever a caller already threads
+    // `landedOn` through (currently the SaaS multi-select batch route — the single-select route
+    // and the VS Code extension don't yet surface it, a PRE-EXISTING gap shared with the
+    // `'inexpressible'` reason, not introduced by this floor; tracked as a follow-up, not fixed
+    // here).
+    // `appliedReactKeys` are REACT-camelCase (`toReactStyleKey` in inline-style-mutator.ts); a
+    // custom property (`--brandColor`) passes through that conversion UNCHANGED (kept verbatim),
+    // so blindly `camelToKebab`-ing every key would rewrite it to `--brand-color` — CSS custom
+    // property names are case-sensitive, so that's a DIFFERENT name than what was actually written
+    // (review finding: GLM P1). `styleKeyToCssProperty` is the shared single-source conversion —
+    // see its own doc comment for the sibling call site this exact bug also lived in.
+    const landedOn = inlineLandedFallbacks(appliedReactKeys.map(styleKeyToCssProperty), 'unresolvable-selector');
+    return { success: true, plan, mutatedFiles: [absolutePath], landedOn };
   }
 
   private async executeInlineStylePlan(
@@ -799,6 +1007,7 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
       domClasses: input.domClasses,
       probeDriving: input.probeDriving,
       requestedStyles: expressible,
+      aliasMap: input.aliasMap,
     }),
   });
   const context = createStyleWriteContextFromRequest({
@@ -876,21 +1085,25 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
     return result;
   }
 
-  const landedOn: StyleLandedFallback[] = inexpressibleKeys.map((key) => ({
-    property: camelToKebab(key),
-    system: 'inline-style',
-    reason: 'inexpressible',
-  }));
+  // Review finding (GLM, HYP-706 follow-up): a custom property (`--brandColor`) is ALWAYS
+  // Tailwind-inexpressible (no `--*` branch in `generateTailwindClasses`) and lands inline
+  // VERBATIM (`toReactStyleKey` keeps it as-is) — `camelToKebab` alone would mangle it into a
+  // different, case-corrupted name here too. `styleKeyToCssProperty` is the shared conversion.
+  const landedOn = inlineLandedFallbacks(inexpressibleKeys.map(styleKeyToCssProperty), 'inexpressible');
   const mutatedFiles = [...new Set([...inlineMutatedFiles, ...(result.mutatedFiles ?? [])])];
   // HYP-1292 (review finding, k3): the expressible portion's system write can carry a
   // classSyncWarning (the probe-driven inline-style redirect can fire on it independently of the
   // inexpressible split above) — this object-literal rebuild must not silently drop it, the exact
   // "reconstructed result loses a field" bug class this ticket exists to close elsewhere.
+  // HYP-706 review (GLM P2): the SAME rebuild also used to drop `result.landedOn` — the
+  // `systemPlan` execute() above can itself now be a CSS-file plan whose own findRule missed and
+  // floored to inline (`unresolvable-selector`), e.g. an existing plain-css owner alongside a
+  // Tailwind-inexpressible split. Concatenate rather than overwrite so BOTH reason kinds survive.
   return {
     success: true,
     plan: result.plan,
     mutatedFiles,
-    landedOn,
+    landedOn: [...landedOn, ...(result.landedOn ?? [])],
     ...(result.classSyncWarning ? { classSyncWarning: result.classSyncWarning } : {}),
   };
 }

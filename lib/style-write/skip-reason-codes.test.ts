@@ -32,6 +32,12 @@ describe('describeLandedSystem / describeLandedReason — D2 cascade badge (CTO 
     expect(describeLandedReason('project-system')).toContain('project default');
   });
 
+  // HYP-706: the CSS-file findRule-miss inline floor needed its own label — it used to fall through
+  // to the unknown-reason empty string, silently dropping the "why" half of the badge.
+  it('labels the HYP-706 CSS-miss inline floor', () => {
+    expect(describeLandedReason('unresolvable-selector')).toContain('CSS rule not found');
+  });
+
   it('adds no clause for an unknown reason', () => {
     expect(describeLandedReason('something-else')).toBe('');
   });
