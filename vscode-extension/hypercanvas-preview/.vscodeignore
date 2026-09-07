@@ -8,6 +8,7 @@ tsconfig.json
 node_modules/**
 esbuild.js
 build-and-install.sh
+.webview-bundle-hash.*
 DEVELOPMENT.md
 package-lock.json
 tailwind.config.*
