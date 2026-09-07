@@ -2,6 +2,7 @@
  * DOM utility functions for iframe-interaction.ts
  */
 
+import { detectTailwindExplicitSize, getElementClassName } from '@shared/canvas-interaction/overlay-rects';
 import { computeEffectiveBackgroundColor } from '@shared/utils/effective-background';
 import { NO_ELEMENT_ROOT_SENTINEL, WRITE_MARKER_ATTR, WRITE_MARKER_VERIFY_PREFIX } from '../style-verify-marker';
 
@@ -39,6 +40,20 @@ export function scrollIntoViewCenterSmooth(el: Element): void {
 }
 
 /**
+ * Whether the element's LIVE (composed, post-cn()/twMerge) className carries an explicit,
+ * pixel-resizable Tailwind size class per axis — the exact same check
+ * `computeOverlayRects` uses to decide whether to show a resize handle
+ * (`shared/canvas-interaction/overlay-rects.ts`'s `detectTailwindExplicitSize`). Reused here so
+ * the inspector's width/height "Auto" fallback (see `mergeRuntimeStyle` in
+ * `client/lib/platform/hooks/useElementStyleData.ts`) agrees with the handle on which axis is
+ * actually a real, explicit pixel size, rather than answering that question a second,
+ * independently-drifting way.
+ */
+function extractResizableAxes(el: Element): { width: boolean; height: boolean } {
+  return detectTailwindExplicitSize(getElementClassName(el));
+}
+
+/**
  * Extract computed style properties from an element.
  */
 export function extractComputedStyle(el: HTMLElement): Record<string, string> {
@@ -48,6 +63,12 @@ export function extractComputedStyle(el: HTMLElement): Record<string, string> {
     const value = cs[prop as keyof CSSStyleDeclaration] as string;
     if (value) result[prop] = value;
   }
+  // Load-bearing for the width/height "Auto" fallback (see extractResizableAxes' doc comment
+  // above) — encoded as strings ('1'/'0') because `computedStyle` is typed
+  // `Record<string, string>` end-to-end (postMessage payload, SharedEditorState, mergeRuntimeStyle).
+  const resizable = extractResizableAxes(el);
+  result.hcResizableWidth = resizable.width ? '1' : '0';
+  result.hcResizableHeight = resizable.height ? '1' : '0';
   // The element's own `backgroundColor` is `rgba(0,0,0,0)` for a transparent element,
   // which the inspector cannot judge text contrast against. Resolve the real painted
   // background by walking ancestors here (the iframe has the DOM; the inspector doesn't).

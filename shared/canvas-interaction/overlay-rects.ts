@@ -10,6 +10,20 @@ import { clearTracingDebugOnce, tracingDebugOnce } from './tracing-debug';
 import type { OverlayElementResolver, OverlayRect, PlaceholderRect } from './types';
 
 /**
+ * Read an element's className as a plain string, tolerating SVG's `SVGAnimatedString` shape
+ * (`SVGElement.className` is NOT a plain string in the browser — it has a `.baseVal`). Shared so
+ * every consumer of the live, composed DOM className (resize-handle detection here, style reads
+ * in TailwindAdapter, the VS Code iframe's resizable-axis facts) answers this one question the
+ * same way instead of re-implementing the type-narrowing dance per call site (review finding,
+ * HYP-1420 review round — three independent copies had already started to drift).
+ */
+export function getElementClassName(el: Element): string | undefined {
+  const cn = el.className;
+  if (typeof cn === 'string') return cn;
+  return (cn as unknown as SVGAnimatedString | undefined)?.baseVal;
+}
+
+/**
  * Detect whether a Tailwind class list authors an explicit, pixel-resizable size per axis.
  *
  * A canvas resize handle commits `width: <N>px` / `height: <N>px`, so it is only meaningful
@@ -240,12 +254,10 @@ export function computeOverlayRects(
         height: rect.height,
         type: 'selection',
       };
-      const cn = elements[i].className;
-      // SVGElement.className is SVGAnimatedString in the browser, not a plain string
-      const rawClass = typeof cn === 'string' ? cn : (cn as unknown as SVGAnimatedString).baseVal;
+      const rawClass = getElementClassName(elements[i]);
       const resizable = detectTailwindExplicitSize(rawClass);
       if (resizable.width || resizable.height) {
-        const hasSizeClass = rawClass.split(/\s+/).some((cls) => {
+        const hasSizeClass = (rawClass ?? '').split(/\s+/).some((cls) => {
           const bracketIdx = cls.indexOf('[');
           const searchEnd = bracketIdx === -1 ? cls.length : bracketIdx;
           const colonIdx = cls.lastIndexOf(':', searchEnd - 1);

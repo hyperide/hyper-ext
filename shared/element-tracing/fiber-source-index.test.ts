@@ -511,6 +511,98 @@ describe('FiberSourceIndex.findClosestSourceDOMElements', () => {
   });
 });
 
+/* ─── findClosestLineDOMElements: the sibling-substitution hazard ──────
+ *
+ * HYP-1420 Codex P2 follow-up (PR #773): `iframe-interaction.ts`'s `findElementsByRef` treats
+ * a `findClosestLineDOMElements` hit as `matchIsExact` — i.e. an APPROXIMATE same-line,
+ * different-column match is reported with the SAME confidence as a true exact-key hit. That's
+ * the right tradeoff for callers with no better signal (Explorer-tree nav, an explicit
+ * host-requested elementId re-read), but it means a caller that already holds the precisely
+ * correct DOM element and only wants confirmation a ref names that SAME element can be handed a
+ * DIFFERENT, merely nearby sibling during HMR/source-map skew (a stale ref one column off from
+ * where the element actually lives). This test proves the hazard is real using the real
+ * `FiberSourceIndex` method, not an assumption.
+ *
+ * `resolveStyleCaptureElement`'s DOM `.contains()` structural guard
+ * (`iframe-style-capture-resolver.ts`) rejects a candidate in a DISJOINT subtree — a wrong
+ * `.map()` instance, or a different-file collision (see the "same-basename-different-file
+ * collision" test below) — but it does NOT disambiguate a candidate that happens to be a
+ * CONTAINING ANCESTOR of the actually-clicked element (e.g. a same-line match landing on an
+ * enclosing wrapper `<div>` instead of the real `<button>`): `ancestor.contains(clicked)` is
+ * true regardless of whether the ancestor is the "right" element. This is intentionally
+ * accepted, not a residual bug: the resize handle / selection overlay resolve through this
+ * SAME unrestricted `findElementsByRef` chain (`iframeElementResolver.findElements`, feeding
+ * `computeOverlayRects`) — so whichever element this fallback tier picks, the handle draws
+ * around that SAME element. Style capture and the handle stay in agreement either way, which is
+ * this PR's actual invariant; a stricter lookup for style capture ALONE would defeat that by
+ * making the panel describe a different element than the handle draws around, in exactly this
+ * skew scenario.
+ */
+describe('FiberSourceIndex.findClosestLineDOMElements — sibling-substitution hazard', () => {
+  function hostFiber(el: HTMLElement, source: SourceLocation, parent: Fiber | null = null): Fiber {
+    return {
+      tag: FiberTag.HostComponent,
+      type: 'div',
+      stateNode: el,
+      return: parent,
+      child: null,
+      sibling: null,
+      memoizedProps: {},
+      _debugSource: { fileName: source.fileName, lineNumber: source.line, columnNumber: source.column + 1 },
+      _debugOwner: null,
+    };
+  }
+
+  function setup(entries: Array<{ source: SourceLocation }>) {
+    const elements = entries.map(() => {
+      const el = document.createElement('div');
+      document.body.appendChild(el);
+      return el;
+    });
+    const root: Fiber = {
+      tag: FiberTag.HostRoot,
+      type: null,
+      stateNode: null,
+      return: null,
+      child: null,
+      sibling: null,
+      memoizedProps: {},
+      _debugSource: null,
+      _debugOwner: null,
+    };
+    let prev: Fiber | null = null;
+    entries.forEach((entry, i) => {
+      const fiber = hostFiber(elements[i], entry.source, root);
+      if (prev === null) root.child = fiber;
+      else prev.sibling = fiber;
+      prev = fiber;
+    });
+    const index = new FiberSourceIndex(() => root, document);
+    return { index, elements, cleanup: () => elements.forEach((el) => el.remove()) };
+  }
+
+  it('returns a DIFFERENT sibling element for a same-line, different-column ref that is not actually indexed', () => {
+    // Simulates a stale/shifted click ref (Button.tsx:20:4 — where the clicked element
+    // WOULD be if the source hadn't shifted) landing on an index built from the current
+    // (already-shifted) fiber tree, which only has a sibling further along the same line
+    // (Button.tsx:20:30 — a genuinely different element, e.g. an adjacent icon or label).
+    const { index, elements, cleanup } = setup([
+      { source: { fileName: '/src/Button.tsx', line: 20, column: 30 } },
+    ]);
+    try {
+      // Exact lookup correctly finds nothing — the ref genuinely isn't indexed.
+      expect(index.findDOMElements({ fileName: '/src/Button.tsx', line: 20, column: 4 })).toEqual([]);
+
+      // But the same-line fallback DOES return the unrelated sibling, not an empty result —
+      // this is precisely what an `exactOnly`-style guard must refuse to accept as a match.
+      const closest = index.findClosestLineDOMElements({ fileName: '/src/Button.tsx', line: 20, column: 4 });
+      expect(closest).toEqual([elements[0]]);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
 /* ─── findDOMElements cross-format fallback ─────────────────────────── */
 
 // Safety net for fileName canonicalization drift (HYP-594): the index can be keyed
@@ -615,6 +707,76 @@ describe('FiberSourceIndex.findDOMElements cross-format fallback', () => {
       expect(debugSpy.mock.calls.length).toBe(0);
     } finally {
       debugSpy.mockRestore();
+      cleanup();
+    }
+  });
+
+  // HYP-1420 Codex P2 follow-up (PR #773, second review round): the cross-format rescue matches
+  // by a fileName SUFFIX comparison, not a full-path comparison — so it can also concatenate
+  // matches from two DIFFERENT files that merely share a basename and happen to sit at the
+  // identical (line, column) (e.g. two near-identical `Button.tsx` files in different
+  // directories). This is exactly the shape of wrong-answer `resolveStyleCaptureElement`'s DOM
+  // `.contains()` structural guard exists to catch (`iframe-style-capture-resolver.ts`): a
+  // candidate from a genuinely different file's component can never contain the actually-clicked
+  // element, so it gets rejected regardless of which lookup tier produced it.
+  function setupTwoFiles(
+    fileA: string,
+    fileB: string,
+    line: number,
+    column: number,
+  ): { index: FiberSourceIndex; elA: HTMLElement; elB: HTMLElement; cleanup: () => void } {
+    const elA = document.createElement('div');
+    const elB = document.createElement('div');
+    document.body.appendChild(elA);
+    document.body.appendChild(elB);
+    const fiberFor = (el: HTMLElement, fileName: string, parent: Fiber): Fiber => ({
+      tag: FiberTag.HostComponent,
+      type: 'div',
+      stateNode: el,
+      return: parent,
+      child: null,
+      sibling: null,
+      memoizedProps: {},
+      _debugSource: { fileName, lineNumber: line, columnNumber: column + 1 },
+      _debugOwner: null,
+    });
+    const root: Fiber = {
+      tag: FiberTag.HostRoot,
+      type: null,
+      stateNode: null,
+      return: null,
+      child: null,
+      sibling: null,
+      memoizedProps: {},
+      _debugSource: null,
+      _debugOwner: null,
+    };
+    const fiberA = fiberFor(elA, fileA, root);
+    const fiberB = fiberFor(elB, fileB, root);
+    fiberA.sibling = fiberB;
+    root.child = fiberA;
+    const index = new FiberSourceIndex(() => root, document);
+    return {
+      index,
+      elA,
+      elB,
+      cleanup: () => {
+        elA.remove();
+        elB.remove();
+      },
+    };
+  }
+
+  it('same-basename-different-file collision: the cross-format rescue concatenates BOTH unrelated matches', () => {
+    const { index, elA, elB, cleanup } = setupTwoFiles('src/a/Button.tsx', 'src/b/Button.tsx', 12, 4);
+    try {
+      // Neither file's full path is an exact-key hit for a bare basename query — both suffix-match.
+      // `findElementsByRef`/`resolveStyleCaptureElement` (iframe-interaction.ts,
+      // iframe-style-capture-resolver.ts) are responsible for not blindly trusting `[0]` here —
+      // see the `.contains()` structural guard coverage in iframe-style-capture-resolver.test.ts.
+      const found = index.findDOMElements({ fileName: 'Button.tsx', line: 12, column: 4 });
+      expect(found).toEqual([elA, elB]);
+    } finally {
       cleanup();
     }
   });

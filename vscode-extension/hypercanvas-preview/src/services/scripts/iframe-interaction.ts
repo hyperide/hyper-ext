@@ -26,6 +26,7 @@ import type { OverlayElementResolver } from '@shared/canvas-interaction/types';
 import { type Fiber, getFiberFromDOM } from '@shared/element-tracing/fiber-internals';
 import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 import { setupReadabilityReporting } from './iframe-readability';
+import { resolveStyleCaptureElement } from './iframe-style-capture-resolver';
 import {
   scrollIntoViewCenterSmooth,
   extractComputedStyle,
@@ -323,13 +324,18 @@ const pendingClickRetry = createPendingClickRetry({
   warmFiberChunkFrames,
   onResolved: ({ element, source, itemIndex }) => {
     const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
+    // Resolve the same outermost DOM host `findElementsByRef` returns for this ref/itemIndex
+    // (see `resolveStyleCaptureElement`'s doc comment below) instead of `element` — the raw
+    // clicked descendant a warm-retry resolution started from, which can be a nested host
+    // inside a collapsed `node_modules` primitive (HYP-1420 Codex P2, PR #773).
+    const resolvedEl = resolveStyleCaptureElement(syntheticRef, itemIndex, element, findElementsByRef);
     window.parent.postMessage(
       {
         type: 'hypercanvas:elementClick',
         elementId: syntheticRef,
         itemIndex,
         source,
-        computedStyle: extractComputedStyle(element),
+        computedStyle: extractComputedStyle(resolvedEl),
         computedStyleSeq: ++elementClickSeq,
       },
       '*',
@@ -576,30 +582,36 @@ attachClickHandler(
   {
     onElementClick: (nodeRef, el, e, itemIndex, source) => {
       const additive = isAdditiveSelectionEvent(e);
+      // Synthesize a ref from source when nodeRef is null so source-only elements
+      // (mapped list items, decorative nodes) select/toggle correctly instead of clearing.
+      const effectiveRef = source ? computeEffectiveRef(nodeRef, source) : nodeRef;
       if (additive) {
-        // Synthesize a ref from source when nodeRef is null so source-only elements
-        // (mapped list items, decorative nodes) toggle correctly instead of clearing.
-        const additiveRef = source ? computeEffectiveRef(nodeRef, source) : nodeRef;
-        const nextIds = toggleNodeRefInSelection(state.selectedIds, additiveRef);
-        const nextIndices = toggleItemIndex(state.selectedItemIndices, additiveRef, nextIds, itemIndex);
+        const nextIds = toggleNodeRefInSelection(state.selectedIds, effectiveRef);
+        const nextIndices = toggleItemIndex(state.selectedItemIndices, effectiveRef, nextIds, itemIndex);
         logSelsurvSelectedIdsAssign('click:additive', state.selectedIds, nextIds);
         state.selectedIds = nextIds;
         state.selectedItemIndices = nextIndices;
         needsOverlayUpdate = true;
         scheduleOverlayLoopIfNeeded();
-      } else {
-        const effectiveRef = source ? computeEffectiveRef(nodeRef, source) : nodeRef;
-        if (effectiveRef) {
-          logSelsurvSelectedIdsAssign('click:single', state.selectedIds, [effectiveRef]);
-          state.selectedIds = [effectiveRef];
-          // Always reset selectedItemIndices so stale map-item indices from a previous
-          // selection don't linger and cause the resolver to look up the wrong instance.
-          state.selectedItemIndices = itemIndex != null ? { [effectiveRef]: itemIndex } : {};
+      } else if (effectiveRef) {
+        logSelsurvSelectedIdsAssign('click:single', state.selectedIds, [effectiveRef]);
+        state.selectedIds = [effectiveRef];
+        // Always reset selectedItemIndices so stale map-item indices from a previous
+        // selection don't linger and cause the resolver to look up the wrong instance.
+        state.selectedItemIndices = itemIndex != null ? { [effectiveRef]: itemIndex } : {};
 
-          needsOverlayUpdate = true;
-          scheduleOverlayLoopIfNeeded();
-        }
+        needsOverlayUpdate = true;
+        scheduleOverlayLoopIfNeeded();
       }
+      // Resolve the same outermost DOM host `findElementsByRef` returns for this ref/itemIndex
+      // — matching what the resize handle and selection overlay key off — instead of the raw
+      // clicked descendant `el`. A click on a nested host inside a `node_modules` primitive
+      // (e.g. an icon inside a shadcn `asChild` Button) collapses to the button's call site
+      // while `el` stays the icon; capturing computedStyle off `el` then describes the icon's
+      // own size/resizable-axis verdict instead of the visibly-selected button's (HYP-1420
+      // Codex P2, PR #773). Scoped to computedStyle only — `domTextContent` deliberately keeps
+      // reading `el` (see below), that's a separate, off-scope concern for THIS finding.
+      const resolvedEl = resolveStyleCaptureElement(effectiveRef, itemIndex, el, findElementsByRef);
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
@@ -610,8 +622,14 @@ attachClickHandler(
           itemIndex,
           source,
           additive,
-          computedStyle: extractComputedStyle(el),
+          computedStyle: extractComputedStyle(resolvedEl),
           computedStyleSeq: ++elementClickSeq,
+          // Intentionally still `el`, NOT `resolvedEl`: `domTextContent` feeds
+          // `resolveI18nByDomText` (StyleReadService), which expects the raw clicked leaf's own
+          // text, not the resolved outer host's full (concatenated-subtree) text — switching
+          // this to `resolvedEl` would regress i18n-key detection for nested clicks. Off-scope
+          // for the HYP-1420 Codex P2 finding this block otherwise fixes; PR #773 didn't cause
+          // that behavior, so it's left alone here.
           domTextContent: el.innerText?.trim() || undefined,
         },
         '*',
@@ -845,6 +863,11 @@ const contextMenuHandler = (e: MouseEvent) => {
   const source = result?.source ?? null;
   const elementId = result ? `${result.source.fileName}:${result.source.line}:${result.source.column}` : null;
   const itemIndex = result?.itemIndex ?? null;
+  // Same divergence as `onElementClick`/the warm-retry `onResolved` above (HYP-1420 Codex P2,
+  // PR #773): a right-click on a nested node_modules-primitive host resolves `elementId` to the
+  // collapsed call site while `target` stays the raw right-clicked descendant. Resolve back
+  // through the same index before capturing computedStyle.
+  const resolvedTarget = resolveStyleCaptureElement(elementId, itemIndex, target, findElementsByRef);
   window.parent.postMessage(
     {
       type: 'hypercanvas:contextMenu',
@@ -853,7 +876,7 @@ const contextMenuHandler = (e: MouseEvent) => {
       source,
       x: e.clientX,
       y: e.clientY,
-      computedStyle: elementId ? extractComputedStyle(target) : undefined,
+      computedStyle: elementId ? extractComputedStyle(resolvedTarget) : undefined,
       computedStyleSeq: elementId ? ++elementClickSeq : undefined,
     },
     '*',

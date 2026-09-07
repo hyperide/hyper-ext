@@ -256,6 +256,43 @@ export function mergeRuntimeStyle(
     changed = true;
   }
 
+  // Width/height fallback (HYP report: "Get started" CtaButton, conloca-landing) — VS Code mode's
+  // StyleReadService reads className from the exact resolved source JSX node only (static AST
+  // inspection). That's empty whenever the node's className is a dynamic expression the AST can't
+  // statically read (e.g. shadcn's `<Comp className={cn(buttonVariants({ size }), className)} />`
+  // on a Radix asChild/Slot primitive) — the real composed class lives only in the live DOM, not
+  // as a literal string on this node. Left unfilled, the Layout panel showed a blank "Auto"
+  // placeholder for an axis whose real rendered size is a fixed pixel value.
+  //
+  // The fallback must NOT just paste in the computed pixel value — that would silently relabel a
+  // GENUINELY auto/intrinsic axis as "explicit" (the width/height inputs use the presence of the
+  // " Auto" suffix to decide the muted "Auto"/"Hug" badge, see LayoutSection.tsx). So this reuses
+  // `hcResizableWidth`/`hcResizableHeight` — computed in the iframe by the SAME
+  // `detectTailwindExplicitSize` the resize handle itself uses (`extractResizableAxes` in
+  // vscode-extension/.../scripts/dom-utils.ts, reading the live composed className) — to decide
+  // which shape to fill: a resizable axis fills as a bare pixel value (explicit, no badge); a
+  // non-resizable axis keeps the existing browser/SaaS TailwindAdapter.read() convention of a
+  // `'<px> Auto'` suffix (see TailwindAdapter.ts's own `offsetWidth/offsetHeight + ' Auto'`
+  // fallback). This keeps the panel's explicit/auto distinction in sync with the handle's — both
+  // now key off the identical live-DOM check — instead of introducing a second, independently
+  // drifting way to answer "is this axis a real pixel size".
+  // Only a `px` computed value is fillable — `getComputedStyle().width/height` returns the
+  // literal string `'auto'` for a non-replaced inline element (e.g. a bare `<span>`/`<a>` with
+  // no `flex`/`block` class, common inside buttons and text blocks). Without this guard that
+  // string would concatenate into `'auto Auto'` and render as literal garbage in the width/height
+  // inputs (review finding, GLM full-panel pass) — worse than the pre-fix blank placeholder, and
+  // it would disagree with the SaaS path, which fills `offsetWidth`/`offsetHeight` (always a real
+  // pixel number) for the identical element shape.
+  if (!merged.width && cs.width?.endsWith('px')) {
+    merged.width = cs.hcResizableWidth === '1' ? cs.width : `${cs.width} Auto`;
+    changed = true;
+  }
+
+  if (!merged.height && cs.height?.endsWith('px')) {
+    merged.height = cs.hcResizableHeight === '1' ? cs.height : `${cs.height} Auto`;
+    changed = true;
+  }
+
   return changed ? merged : base;
 }
 

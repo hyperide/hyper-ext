@@ -139,6 +139,104 @@ describe('mergeRuntimeStyle', () => {
     // rgba(0,0,0,0) is browser-default transparent — must not populate backgroundColor
     expect(merged.backgroundColor).toBeUndefined();
   });
+
+  // Reproduces the real report: conloca-landing's Hero "Get started" CtaButton, a Radix
+  // asChild/Slot shadcn <Button> whose className is a dynamic `cn(buttonVariants(...), ...)`
+  // expression. VS Code's StyleReadService reads className from the exact resolved source JSX
+  // node only (static AST inspection) — empty for this shape — so parsedStyles.width/height come
+  // back undefined even though the element's real rendered size (h-[34px] composed at the CtaButton
+  // call site) is a genuine, explicit pixel value. `hcResizableWidth`/`hcResizableHeight` are
+  // computed in the iframe by the SAME `detectTailwindExplicitSize` the resize handle itself uses
+  // (reading the live, composed DOM className) — when that says an axis IS resizable, the fallback
+  // must fill a BARE pixel value (no " Auto" suffix), matching the handle's own verdict for that
+  // axis exactly. This is the fix: emitting " Auto" unconditionally here (an earlier, wrong
+  // attempt) would have relabeled this exact real-explicit-height case as "Auto" in the panel while
+  // the handle correctly showed a height handle — the same mismatch as the original bug, just
+  // inverted.
+  test('resizable axis (per detectTailwindExplicitSize) fills as a bare pixel value, not "Auto"', () => {
+    // Empty className: e.g. a Radix asChild/Slot internal node with a dynamic className expression.
+    const base = classNameToStyles('');
+    expect(base.width).toBeUndefined();
+    expect(base.height).toBeUndefined();
+
+    const runtime: SelectedElementRuntimeStyle = {
+      componentPath: 'client/components/FAQ.tsx',
+      elementId,
+      seq: 1,
+      computedStyle: {
+        width: '108.656px',
+        height: '34px',
+        hcResizableWidth: '0',
+        hcResizableHeight: '1',
+      },
+    };
+
+    const merged = mergeRuntimeStyle(base, runtime, elementId);
+    // width axis is NOT explicit (e.g. intrinsic/hug) → keeps the Auto-badge suffix
+    expect(merged.width).toBe('108.656px Auto');
+    // height axis IS explicit (h-[34px] in the live composed className) → bare pixel value
+    expect(merged.height).toBe('34px');
+  });
+
+  // Non-resizable-axis case with the flags OMITTED entirely (a runtime snapshot captured before
+  // this fix shipped, or from a code path that hasn't been updated) must fail closed to the
+  // pre-existing "Auto" behavior — never silently treat a missing flag as "resizable".
+  test('missing resizable flags fall back to the "Auto" suffix (fail-closed)', () => {
+    const base = classNameToStyles('');
+    const runtime: SelectedElementRuntimeStyle = {
+      componentPath: 'client/components/FAQ.tsx',
+      elementId,
+      seq: 1,
+      computedStyle: { width: '134.766px', height: '34px' },
+    };
+
+    const merged = mergeRuntimeStyle(base, runtime, elementId);
+    expect(merged.width).toBe('134.766px Auto');
+    expect(merged.height).toBe('34px Auto');
+  });
+
+  test('does not overwrite Tailwind-parsed width/height', () => {
+    const base = classNameToStyles('w-24 h-12');
+    const originalWidth = base.width;
+    const originalHeight = base.height;
+    expect(originalWidth).toBeDefined();
+    expect(originalHeight).toBeDefined();
+
+    const runtime: SelectedElementRuntimeStyle = {
+      componentPath: 'client/components/FAQ.tsx',
+      elementId,
+      seq: 1,
+      computedStyle: {
+        width: '999px',
+        height: '999px',
+        hcResizableWidth: '1',
+        hcResizableHeight: '1',
+      },
+    };
+
+    const merged = mergeRuntimeStyle(base, runtime, elementId);
+    expect(merged.width).toBe(originalWidth);
+    expect(merged.height).toBe(originalHeight);
+  });
+
+  // GLM full-panel review finding (F1): getComputedStyle().width/height returns the literal
+  // string 'auto' for a non-replaced inline element (a bare <span>/<a> with no flex/block class).
+  // Without a px-suffix guard, that string would concatenate into the garbage display value
+  // 'auto Auto' — worse than the pre-fix blank placeholder, and inconsistent with the SaaS path
+  // (TailwindAdapter.read(), which always fills a real offsetWidth/offsetHeight pixel number).
+  test('a non-px computed value ("auto") is never filled — no garbage "auto Auto" string', () => {
+    const base = classNameToStyles('');
+    const runtime: SelectedElementRuntimeStyle = {
+      componentPath: 'client/components/FAQ.tsx',
+      elementId,
+      seq: 1,
+      computedStyle: { width: 'auto', height: 'auto', hcResizableWidth: '0', hcResizableHeight: '0' },
+    };
+
+    const merged = mergeRuntimeStyle(base, runtime, elementId);
+    expect(merged.width).toBeUndefined();
+    expect(merged.height).toBeUndefined();
+  });
 });
 
 // ============================================================================

@@ -3,6 +3,7 @@
  * Reads className and writes className updates
  */
 
+import { getElementClassName } from '@shared/canvas-interaction/overlay-rects';
 import { applyOrderClassChange } from '@shared/canvas-interaction/order-class-utils';
 import type { AstOperations } from '@/lib/platform/types';
 import type { ASTNode } from '../types/ast';
@@ -81,16 +82,9 @@ export class TailwindAdapter implements StyleAdapter {
    */
   read(node: ASTNode, domElement?: HTMLElement): ParsedStyles {
     // Prefer DOM classes - they reflect actual runtime values (including dynamic className)
-    // SVG elements have className as SVGAnimatedString, not string
     let className = getClassNameFromNode(node);
     if (domElement) {
-      const domClassName = domElement.className;
-      if (typeof domClassName === 'string') {
-        className = domClassName;
-      } else if (domClassName && typeof domClassName === 'object' && 'baseVal' in domClassName) {
-        // SVGAnimatedString
-        className = (domClassName as SVGAnimatedString).baseVal;
-      }
+      className = getElementClassName(domElement) ?? className;
     }
     const parsed = parseTailwindClasses(className);
 
