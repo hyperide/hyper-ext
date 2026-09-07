@@ -1,7 +1,7 @@
 import posthog from 'posthog-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { Toaster } from '@/components/ui/toaster';
@@ -148,8 +148,37 @@ const App = () => (
   </QueryClientProvider>
 );
 
-// Mount the app
+// Mount the app.
+//
+// Reuse the existing React root across Bun HMR module re-evaluations instead of calling
+// createRoot() again on every hot-reload cycle. This file is both the SPA entry AND the
+// router shell (see index.html), so Bun's dev server (server/main.ts, `development.hmr:
+// true`) re-executes this module's top-level code whenever anything in its dependency
+// graph changes. Without the guard, each cycle calls createRoot() on the SAME #root
+// container that a previous cycle already passed to createRoot() — React warns
+// "You are calling ReactDOMClient.createRoot() on a container that has already been
+// passed to createRoot() before" and, once two roots both think they own the same DOM
+// nodes, can eventually crash with removeChild()/NotFoundError. See HYP-1380 for the
+// live before/after verification numbers (distinct from the componentMissing-retry loop
+// #754 already fixed for this file). HYP-1385 tracks the structural fix — splitting this
+// file's mount side effect into a separate entry module — which would let App.tsx export
+// only a component and remove the need for this guard entirely; land that first if it's
+// still open when touching this block again.
+//
+// import.meta.hot is undefined for any Bun dev-server reload cycle where the HMR
+// transform doesn't apply (and is always undefined outside Bun's own bundler, e.g. a
+// production build, where Bun dead-code-eliminates the whole `if` branch down to a bare
+// createRoot call). The `else` branch keeps behavior identical to the pre-fix code for
+// such cases — it does not, by itself, make this module safe to import outside a
+// browser: `document.getElementById` still requires a DOM either way.
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- root element is guaranteed by index.html
-createRoot(document.getElementById('root')!).render(<App />);
+const rootElement = document.getElementById('root')!;
+if (import.meta.hot) {
+  const hotData = import.meta.hot.data as { root?: Root };
+  const root = (hotData.root ??= createRoot(rootElement));
+  root.render(<App />);
+} else {
+  createRoot(rootElement).render(<App />);
+}
 
 export default App;
