@@ -96,6 +96,16 @@ export interface PropInfo {
   defaultValue?: string;
   /** Nested object field schema (for inline object types like { user: string; count: number }) */
   objectFields?: PropInfo[];
+  /**
+   * True when this entry was FABRICATED by the parser rather than read from the
+   * component's own source (e.g. an implicit `children` prop inherited purely via
+   * `extends *HTMLAttributes` — see `synthesizeChildrenProp` in
+   * componentSourceParser.ts, HYP-1367). `required` on a synthesized entry is a
+   * sample-generation hint, not a claim about literal TS optionality — consumers that
+   * need real "does this component have a required prop I can't satisfy" semantics
+   * (e.g. the Create Sample "needs AI key" gate) must exclude synthesized entries.
+   */
+  synthesized?: true;
 }
 
 /** @public */

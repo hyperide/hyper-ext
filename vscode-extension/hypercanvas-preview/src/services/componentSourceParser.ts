@@ -177,6 +177,57 @@ function stringLiteralDefault(value: t.ObjectProperty['value']): string | undefi
 }
 
 /**
+ * A component like conloca's `Button.tsx` (`interface ButtonProps extends
+ * ButtonHTMLAttributes<HTMLButtonElement>`) never names `children` anywhere in its own
+ * source — no destructured `children` param, no `children` member in its `*Props`
+ * interface body. `children` only exists because the interface EXTENDS a React DOM
+ * attributes type, and this parser (Babel AST walk, no TS type-checker) never resolves
+ * heritage clauses. Left alone, `component.props` has no `children` entry at all, so
+ * `generateSamplePropValues` (lib/preview-generator/sample-values.ts) never generates a
+ * label and the preview renders a real, visible-but-textless `<Button />` — matches Alex's
+ * "button appeared with no text" report on conloca-private's
+ * `packages/cms-spa/src/components/ui/Button.tsx`. Same "prop-requiring atom in
+ * conloca-private/packages/cms-spa stays uninspectable" theme HYP-922 filed (that ticket's
+ * literal symptom — the OLD "No sample for this component" placeholder — was superseded by
+ * HYP-915's registry-inclusion fix; this is the next-layer gap HYP-915 exposed, not the same
+ * bug restated).
+ *
+ * `extendsHtmlAttributes` is computed by the CALLER (`ComponentService._parseComponent`)
+ * from the real AST heritage clause of the resolved component's Props declaration — NOT
+ * derived here from source text. An earlier revision of this fix used a source-text regex
+ * (shared with the unrelated `sample-scaffold.ts` "Create Sample" scaffold path) and went
+ * through three rounds of review before the regex approach was abandoned entirely: a fixed
+ * character window bled into sibling declarations, and a keyword-boundary attempt still
+ * bled across `function`/`const` boundaries and false-halted on an unrelated property
+ * literally named `type`. `_parseComponent` already has exact AST declaration boundaries
+ * available — no heuristic needed for THIS call site.
+ *
+ * An explicit `children` declared in the Props body needs no separate detection here: it's
+ * already merged into `props` by `_parseComponent`'s deferred type-member merge BEFORE this
+ * function runs, so the `props.some((p) => p.name === 'children')` guard below catches it.
+ *
+ * Only called from `ComponentService._parseComponent` (the real runtime parse), NOT
+ * from the standalone `parseComponentSource` below — that pure function is exercised by
+ * fixtures (e.g. `menubarSource` in ComponentService.test.ts) that assert "no required
+ * props" for React.HTMLAttributes-spreading components; synthesizing a required
+ * `children` there would falsify that assertion for a path nothing actually renders
+ * through.
+ *
+ * `required: true` is a deliberate simplification, not a claim about the real (usually
+ * optional) TS type: it's the one signal `sample-values.ts`'s existing
+ * `prop.required && acceptsTextPlaceholder(type)` branch already acts on to produce a
+ * humanized placeholder — see HYP-453. A `component:parse` / MCP consumer reading this
+ * synthesized entry's `required` as literal TS optionality would be misled, but only for
+ * primitives matching this exact signal, and only on the field this fix intentionally
+ * repurposes.
+ */
+export function synthesizeChildrenProp(props: PropInfo[], extendsHtmlAttributes: boolean): PropInfo[] {
+  if (props.some((p) => p.name === 'children')) return props;
+  if (!extendsHtmlAttributes) return props;
+  return [...props, { name: 'children', type: 'ReactNode', required: true, synthesized: true }];
+}
+
+/**
  * Parse component name and props from source code without VS Code or filesystem dependency.
  * Skips TSInterface/TSType annotation resolution (no class instance required).
  * Use for testing or when filesystem access is unavailable.

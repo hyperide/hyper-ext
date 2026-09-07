@@ -5,11 +5,13 @@ command equivalents, commit discipline rules, and legacy fallback policy.
 
 ## Quick Reference
 
-**Committing:** Read `.claude/commands/commit.md` and execute each step as shell
-commands. Do not run nested `codex exec review` from inside Codex; if another
-agent CLI is available (for example `claude`), use it for external review, then
-always do self-review via `git diff --staged`. Commit every 15 minutes max, not
-at session end.
+**Committing:** Follow the `ai-review-before-commit`, `atomic-commits`, and
+`comment-hygiene` skills, plus AGENTS.md's "PR Merge Discipline" section
+(`.claude/commands/commit.md` was deleted 2026-08-27 — HYP-1361/HYP-1362 cleanup;
+it duplicated these skills and referenced the purged Linear MCP tools). Do not run
+nested `codex exec review` from inside Codex; if another agent CLI is available
+(for example `claude`), use it for external review, then always do self-review via
+`git diff --staged`. Commit every 15 minutes max, not at session end.
 
 **Building extension:** `./vscode-extension/hypercanvas-preview/build-and-install.sh`
 

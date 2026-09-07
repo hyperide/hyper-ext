@@ -18,7 +18,12 @@ import * as vscode from 'vscode';
 import { getDirectoryTree } from '../../../../lib/component-scanner/directory-tree';
 import { ComponentScanner } from '../../../../lib/component-scanner/scanner';
 import type { ComponentsData, TestGroup, TestInfo } from '../../../../lib/component-scanner/types';
-import { extractPropsFromDestructuring, getTypeString, isForwardRefCall } from './componentSourceParser';
+import {
+  extractPropsFromDestructuring,
+  getTypeString,
+  isForwardRefCall,
+  synthesizeChildrenProp,
+} from './componentSourceParser';
 import { FileProjectStructureStore } from './FileStructureStore';
 
 // Re-export shared types for convenience
@@ -47,6 +52,191 @@ function paramPropsTypeName(pattern: t.ObjectPattern): string | null {
     return typeNode.typeName.name;
   }
   return null;
+}
+
+/**
+ * React DOM attribute types for HTML void elements, matched by the ATTRIBUTES TYPE NAME
+ * itself (`InputHTMLAttributes`, `ImgHTMLAttributes`, ...). A component whose Props
+ * extends one of these must NOT get a synthesized `children` prop: React throws at
+ * runtime if a void element receives children (verified: `React.forwardRef<
+ * HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>` synthesizing children
+ * produces `<Input>Sample content</Input>` around an `<input>`, review finding on
+ * HYP-1367). Attribute-type-name spellings verified against `@types/react`'s
+ * `index.d.ts`; this is not a claim that every DOM-interface-name spelling below is
+ * similarly exhaustive — see `VOID_DOM_ELEMENT_TYPE_NAMES` for that set's own caveat.
+ */
+const VOID_ELEMENT_HTML_ATTRS_NAMES = new Set([
+  'AreaHTMLAttributes',
+  'BaseHTMLAttributes',
+  'ColHTMLAttributes',
+  'EmbedHTMLAttributes',
+  'ImgHTMLAttributes',
+  'InputHTMLAttributes',
+  'LinkHTMLAttributes',
+  'MetaHTMLAttributes',
+  'ParamHTMLAttributes',
+  'SourceHTMLAttributes',
+  'TrackHTMLAttributes',
+]);
+
+/**
+ * The void-element DOM interface names React's generic `HTMLAttributes<T>` (or
+ * `AllHTMLAttributes<T>`) is commonly parameterized with directly — `React.HTMLAttributes
+ * <HTMLImageElement>` instead of the specialized `ImgHTMLAttributes`. Matching only the
+ * ATTRIBUTES TYPE NAME (`VOID_ELEMENT_HTML_ATTRS_NAMES` above) misses this spelling
+ * entirely and still synthesizes children for a component wrapping `<img>`/`<br>`/etc.,
+ * causing the exact React crash this whole guard exists to prevent (review finding on
+ * HYP-1367 — codex reproduced the real `renderToString` throw). `br`/`hr`/`wbr` are
+ * covered here even though they have no dedicated attributes interface, since the
+ * generic-argument spelling is how they'd actually appear.
+ */
+const VOID_DOM_ELEMENT_TYPE_NAMES = new Set([
+  'HTMLAreaElement',
+  'HTMLBaseElement',
+  'HTMLBRElement',
+  'HTMLEmbedElement',
+  'HTMLHRElement',
+  'HTMLImageElement',
+  'HTMLInputElement',
+  'HTMLLinkElement',
+  'HTMLMetaElement',
+  'HTMLParamElement',
+  'HTMLSourceElement',
+  // <col> has no dedicated `HTMLColElement` — its real DOM interface is
+  // `HTMLTableColElement` (shared with <colgroup>, which is NOT void; the
+  // attributes-type-name guard above already excludes `ColHTMLAttributes`
+  // specifically, so this entry only closes the generic-argument spelling
+  // `React.HTMLAttributes<HTMLTableColElement>` for <col>). Review finding
+  // GLM F2, HYP-1367.
+  'HTMLTableColElement',
+  'HTMLTrackElement',
+  'HTMLWBRElement',
+]);
+
+/**
+ * Attribute-type names for host ELEMENTS that are not void but whose Props type still
+ * must not get a synthesized text `children`: React controls them via `value`/
+ * `defaultValue` and either warns or throws when children are also present.
+ * `<textarea>` warns "Use the `defaultValue` or `value` props instead of setting
+ * children on <textarea>" and throws if BOTH children and `value`/`defaultValue` are
+ * supplied (the common case for a wrapper that forwards `value` through `...props`,
+ * review finding codex P1 on HYP-1367 — this repo's own `client/components/ui/
+ * textarea.tsx` reproduces it: `TextareaProps extends React.TextareaHTMLAttributes<
+ * HTMLTextAreaElement>`, no explicit `children`, spreads `...props` onto `<textarea>`).
+ * `<select>` accepts only `<option>`/`<optgroup>` as meaningful children — a synthesized
+ * plain-string child renders as an inert, invisible text node, never the visible label
+ * the whole synthesis exists to produce.
+ *
+ * Each name maps to the SPECIFIC DOM interface it's meant to pair with — unlike the
+ * void-element set above, `SelectHTMLAttributes`/`TextareaHTMLAttributes` are generic
+ * types a caller could (in valid, if contrived, TypeScript) parameterize with an
+ * unrelated element, e.g. `interface ToggleProps extends
+ * React.SelectHTMLAttributes<HTMLButtonElement> { }` on a component that renders a
+ * `<button>` and DOES render a text child — excluding it purely by attrs-NAME would
+ * wrongly kill its generated label (review finding codex P2, HYP-1367 round 7). The
+ * exclusion below fires only when the generic argument is ABSENT (bare `extends
+ * TextareaHTMLAttributes`, no way to tell it's mismatched — same safe-direction bias as
+ * every other "can't tell" case in this file) or MATCHES the expected element.
+ *
+ * Deliberately narrow (textarea + select only, not every host with unusual children
+ * semantics) to close the confirmed cases without reopening the same false-positive/
+ * negative hunt void-element detection went through — broader coverage (`AllHTMLAttributes`
+ * generic spelling, `option`/`optgroup`/`datalist`/`progress`/`meter`/`output`, and
+ * collapsing this and the void-element pair into one exclusion-rule table) is tracked in
+ * the follow-up ticket linked from this fix's pull request description.
+ */
+const NON_TEXT_CHILDREN_HTML_ATTRS_NAME_TO_DOM_ELEMENT: ReadonlyMap<string, string> = new Map([
+  ['SelectHTMLAttributes', 'HTMLSelectElement'],
+  ['TextareaHTMLAttributes', 'HTMLTextAreaElement'],
+]);
+
+/** DOM interface names for the generic-argument spelling, e.g. `HTMLAttributes<HTMLSelectElement>`. */
+const NON_TEXT_CHILDREN_DOM_ELEMENT_TYPE_NAMES = new Set(['HTMLSelectElement', 'HTMLTextAreaElement']);
+
+function lastNameSegment(name: t.TSEntityName | t.Expression): string | null {
+  if (t.isIdentifier(name)) return name.name;
+  if (t.isTSQualifiedName(name)) return name.right.name;
+  if (t.isMemberExpression(name) && t.isIdentifier(name.property)) return name.property.name;
+  return null;
+}
+
+/** Does the FIRST generic type argument name a DOM interface in the given set? */
+function firstTypeArgNameIsIn(
+  typeParameters: t.TSTypeParameterInstantiation | null | undefined,
+  domElementNames: Set<string>,
+): boolean {
+  const firstArg = typeParameters?.params[0];
+  if (!firstArg || !t.isTSTypeReference(firstArg)) return false;
+  const argName = lastNameSegment(firstArg.typeName);
+  return argName !== null && domElementNames.has(argName);
+}
+
+/**
+ * Is the FIRST generic type argument absent (can't tell — stay conservative), or does
+ * it name `expectedDomElement`? Used to gate `NON_TEXT_CHILDREN_HTML_ATTRS_NAME_TO_DOM_ELEMENT`
+ * so `SelectHTMLAttributes<HTMLButtonElement>` (a real, if contrived, type-valid
+ * mismatch) does NOT suppress children for that unrelated element.
+ */
+function firstTypeArgIsAbsentOrNames(
+  typeParameters: t.TSTypeParameterInstantiation | null | undefined,
+  expectedDomElement: string,
+): boolean {
+  const firstArg = typeParameters?.params[0];
+  if (!firstArg) return true;
+  if (!t.isTSTypeReference(firstArg)) return true;
+  return lastNameSegment(firstArg.typeName) === expectedDomElement;
+}
+
+/**
+ * Does this heritage/type-reference name resolve to a native React HTML-attributes type
+ * that a component can plausibly render TEXT children through (`HTMLAttributes`,
+ * `ButtonHTMLAttributes`, `React.HTMLAttributes`, ...) — EXCLUDING void-element attribute
+ * type names (`VOID_ELEMENT_HTML_ATTRS_NAMES`), non-text-children hosts like textarea/
+ * select whose generic argument is absent or matches
+ * (`NON_TEXT_CHILDREN_HTML_ATTRS_NAME_TO_DOM_ELEMENT`), and both of those types' generic
+ * `HTMLAttributes<DomElement>` spellings (`VOID_DOM_ELEMENT_TYPE_NAMES`,
+ * `NON_TEXT_CHILDREN_DOM_ELEMENT_TYPE_NAMES`, via the optional `typeParameters` of the
+ * SAME heritage clause / type reference)? Used by the
+ * AST-precise `extends *HTMLAttributes` detection below — replaces an earlier
+ * source-text regex approach (HYP-1367) that repeatedly proved unable to bound itself to
+ * a single declaration: a fixed character window bled into sibling declarations, and a
+ * keyword-boundary attempt still bled across `function`/`const` boundaries and
+ * false-halted on an unrelated property literally named `type`. The AST already has
+ * exact declaration boundaries — no heuristic needed. `name` handles both a
+ * `TSEntityName` (`typeName` on a `TSTypeReference` — always this shape, e.g. a
+ * forwardRef generic argument or a type-alias reference) and a general `Expression` (an
+ * interface heritage clause's `.expression`, which parses as `MemberExpression` for
+ * `extends React.Foo`).
+ */
+function isHtmlAttributesTypeName(
+  name: t.TSEntityName | t.Expression,
+  typeParameters?: t.TSTypeParameterInstantiation | null,
+): boolean {
+  const lastSegment = lastNameSegment(name);
+  if (!lastSegment || !lastSegment.endsWith('HTMLAttributes')) return false;
+  if (VOID_ELEMENT_HTML_ATTRS_NAMES.has(lastSegment)) return false;
+  const nonTextChildrenDomElement = NON_TEXT_CHILDREN_HTML_ATTRS_NAME_TO_DOM_ELEMENT.get(lastSegment);
+  if (nonTextChildrenDomElement && firstTypeArgIsAbsentOrNames(typeParameters, nonTextChildrenDomElement)) {
+    return false;
+  }
+  if (firstTypeArgNameIsIn(typeParameters, VOID_DOM_ELEMENT_TYPE_NAMES)) return false;
+  if (firstTypeArgNameIsIn(typeParameters, NON_TEXT_CHILDREN_DOM_ELEMENT_TYPE_NAMES)) return false;
+  return true;
+}
+
+/**
+ * Does this type node extend/intersect a (non-void-element) native HTML-attributes type?
+ * Handles a direct reference (`ButtonHTMLAttributes<T>`) and an intersection
+ * (`SomeBase & React.HTMLAttributes<T>` or `React.HTMLAttributes<T> & { ... }`) — the
+ * shape real shadcn/ui code uses, e.g. this repo's own
+ * `client/components/ui/card.tsx` (`React.HTMLAttributes<HTMLDivElement> & { testId?:
+ * string }`), verified missed by an earlier revision that only checked a direct
+ * `TSTypeReference` (HYP-1367 review finding).
+ */
+function typeNodeExtendsHtmlAttributes(node: t.TSType): boolean {
+  if (t.isTSTypeReference(node)) return isHtmlAttributesTypeName(node.typeName, node.typeParameters);
+  if (t.isTSIntersectionType(node)) return node.types.some((member) => typeNodeExtendsHtmlAttributes(member));
+  return false;
 }
 
 // ============================================
@@ -420,7 +610,47 @@ export class ComponentService {
         objectFields: PropInfo[] | undefined;
       };
       const deferredTypeMembersByDecl = new Map<string, DeferredTypeMember[]>();
+      // Which Props declarations (interface/type-alias, keyed by declaration name) extend
+      // or intersect a native `*HTMLAttributes` type — the AST-precise signal
+      // `synthesizeChildrenProp` uses to add an implicit `children` prop for a component
+      // that inherits it purely through that heritage (HYP-1367). Kept as a SEPARATE set
+      // from `forwardRefHtmlAttrsComponents` below (rather than one map covering both
+      // namespaces) so a Props-declaration name can never collide with an unrelated
+      // component of the same name minus "Props" — e.g. `interface Icon extends
+      // HTMLAttributes<...>` alongside a same-file `function Icon(props: IconProps)` must
+      // not cross-contaminate (review finding on HYP-1367).
+      const htmlAttrsPropsDecls = new Set<string>();
+      // Which forwardRef COMPONENTS (keyed by component name, not a Props declaration —
+      // shadcn's `const Alert = React.forwardRef<Element, *HTMLAttributes<...>>(...)`
+      // spelling has no named Props declaration at all) have a `*HTMLAttributes` second
+      // generic argument.
+      const forwardRefHtmlAttrsComponents = new Set<string>();
       const exportedVarNames: string[] = [];
+
+      // Shared by the TSInterfaceDeclaration and TSTypeAliasDeclaration visitors below —
+      // extracts PropInfo-shaped members from a list of TS type members (an interface
+      // body, or a type-literal's members). Also used for EACH TSTypeLiteral inside a
+      // type-alias intersection (`SomeAttrs & { children: ReactElement }`) — extracting
+      // only when the whole RHS is a bare literal missed explicit members declared
+      // alongside an intersected `*HTMLAttributes` type (HYP-1367 review finding: an
+      // explicit `children: ReactElement` in that shape was invisible to the merge and
+      // got silently overwritten by the synthesized `children: ReactNode`).
+      const collectTypeMembers = (typeMembers: t.TSTypeElement[]): DeferredTypeMember[] => {
+        const members: DeferredTypeMember[] = [];
+        for (const member of typeMembers) {
+          if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
+            const typeAnnotation = member.typeAnnotation;
+            let propType = 'unknown';
+            let objectFields: PropInfo[] | undefined;
+            if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
+              propType = this._getTypeString(typeAnnotation.typeAnnotation);
+              objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, 0, localTypes);
+            }
+            members.push({ name: member.key.name, type: propType, required: !member.optional, objectFields });
+          }
+        }
+        return members;
+      };
 
       // Look for component declarations and exports
       traverseWithoutScope(ast, {
@@ -523,6 +753,14 @@ export class ComponentService {
                 if (t.isArrowFunctionExpression(firstArg) || t.isFunctionExpression(firstArg)) {
                   renderFn = firstArg;
                 }
+                // shadcn/ui's other common spelling has no named Props declaration at all —
+                // the HTML-attributes type is the SECOND generic argument to forwardRef
+                // itself: `React.forwardRef<Element, React.ButtonHTMLAttributes<...>>(...)`.
+                const typeArgs = (init as t.CallExpression).typeParameters;
+                const secondTypeArg = t.isTSTypeParameterInstantiation(typeArgs) ? typeArgs.params[1] : undefined;
+                if (secondTypeArg && typeNodeExtendsHtmlAttributes(secondTypeArg)) {
+                  forwardRefHtmlAttrsComponents.add(id.name);
+                }
               }
 
               if (renderFn) {
@@ -543,58 +781,38 @@ export class ComponentService {
         // TypeScript interface/type for Props
         TSInterfaceDeclaration: (nodePath: NodePath<t.TSInterfaceDeclaration>) => {
           const name = nodePath.node.id.name;
+          const heritage = nodePath.node.extends ?? [];
+          if (heritage.some((clause) => isHtmlAttributesTypeName(clause.expression, clause.typeParameters))) {
+            htmlAttrsPropsDecls.add(name);
+          }
           if (name.endsWith('Props')) {
-            const members: DeferredTypeMember[] = deferredTypeMembersByDecl.get(name) ?? [];
-            for (const member of nodePath.node.body.body) {
-              if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
-                const propName = member.key.name;
-                const typeAnnotation = member.typeAnnotation;
-                let propType = 'unknown';
-                let objectFields: PropInfo[] | undefined;
-
-                if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
-                  propType = this._getTypeString(typeAnnotation.typeAnnotation);
-                  objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, 0, localTypes);
-                }
-
-                members.push({
-                  name: propName,
-                  type: propType,
-                  required: !member.optional,
-                  objectFields,
-                });
-              }
-            }
-            deferredTypeMembersByDecl.set(name, members);
+            const existing = deferredTypeMembersByDecl.get(name) ?? [];
+            deferredTypeMembersByDecl.set(name, [...existing, ...collectTypeMembers(nodePath.node.body.body)]);
           }
         },
 
         // TypeScript type alias for Props
         TSTypeAliasDeclaration: (nodePath: NodePath<t.TSTypeAliasDeclaration>) => {
           const name = nodePath.node.id.name;
-          if (name.endsWith('Props') && t.isTSTypeLiteral(nodePath.node.typeAnnotation)) {
-            const members: DeferredTypeMember[] = deferredTypeMembersByDecl.get(name) ?? [];
-            for (const member of nodePath.node.typeAnnotation.members) {
-              if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
-                const propName = member.key.name;
-                const typeAnnotation = member.typeAnnotation;
-                let propType = 'unknown';
-                let objectFields: PropInfo[] | undefined;
-
-                if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
-                  propType = this._getTypeString(typeAnnotation.typeAnnotation);
-                  objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, 0, localTypes);
-                }
-
-                members.push({
-                  name: propName,
-                  type: propType,
-                  required: !member.optional,
-                  objectFields,
-                });
-              }
+          const rhs = nodePath.node.typeAnnotation;
+          // Covers both `type XProps = SomeBase & ButtonHTMLAttributes<...>` (intersection,
+          // in either order) and a bare `type XProps = ButtonHTMLAttributes<...>` (direct
+          // reference).
+          if (typeNodeExtendsHtmlAttributes(rhs)) {
+            htmlAttrsPropsDecls.add(name);
+          }
+          if (name.endsWith('Props')) {
+            // Walk every TSTypeLiteral member of the RHS — the bare literal itself, or
+            // EACH literal inside an intersection (`SomeAttrs & { children: ReactElement }`)
+            // — not just a bare `type XProps = { ... }`. Missing the intersection case
+            // silently dropped an explicit `children` declared alongside an intersected
+            // `*HTMLAttributes` type (HYP-1367 review finding).
+            const rhsTypeLiterals = (t.isTSIntersectionType(rhs) ? rhs.types : [rhs]).filter(t.isTSTypeLiteral);
+            if (rhsTypeLiterals.length > 0) {
+              const existing = deferredTypeMembersByDecl.get(name) ?? [];
+              const collected = rhsTypeLiterals.flatMap((literal) => collectTypeMembers(literal.members));
+              deferredTypeMembersByDecl.set(name, [...existing, ...collected]);
             }
-            deferredTypeMembersByDecl.set(name, members);
           }
         },
       });
@@ -623,9 +841,12 @@ export class ComponentService {
       // its props-param type name when annotated (`{ ... }: ButtonProps`), else the
       // `${componentName}Props` convention. A sibling component's `*Props` (e.g. BadgeProps)
       // must not leak its members, nor overwrite a same-name field's type (HYP-486).
+      // Computed once here and reused below for the heritage lookup (HYP-1367 review
+      // follow-up — was previously recomputed identically at both call sites).
+      let propsDeclName: string | undefined;
       const props: PropInfo[] = componentName ? [...(propsPerName.get(componentName) ?? [])] : [];
       if (componentName) {
-        const propsDeclName = propsTypeNamePerComponent.get(componentName) ?? `${componentName}Props`;
+        propsDeclName = propsTypeNamePerComponent.get(componentName) ?? `${componentName}Props`;
         const deferredTypeMembers = deferredTypeMembersByDecl.get(propsDeclName) ?? [];
         for (const member of deferredTypeMembers) {
           const existing = props.find((p) => p.name === member.name);
@@ -652,6 +873,22 @@ export class ComponentService {
         return null;
       }
 
+      // A component whose Props interface EXTENDS a native HTML attributes type (e.g.
+      // `ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>`) inherits `children`
+      // without ever naming it — this Babel-only walk never resolves the heritage clause on
+      // its own, so `children` would otherwise be missing from `props` entirely and the
+      // sample-value generator never renders a label. See synthesizeChildrenProp's doc
+      // comment (HYP-922 theme). `extendsHtmlAttributes` was computed AST-precisely above:
+      // `htmlAttrsPropsDecls` (keyed by Props DECLARATION name) and
+      // `forwardRefHtmlAttrsComponents` (keyed by COMPONENT name — the forwardRef-generic
+      // spelling has no named Props declaration at all) are two SEPARATE sets, not one
+      // map covering both namespaces, so a same-named-but-unrelated declaration in the
+      // other namespace can never false-positive (review finding on HYP-1367).
+      const extendsHtmlAttributes =
+        (propsDeclName !== undefined && htmlAttrsPropsDecls.has(propsDeclName)) ||
+        forwardRefHtmlAttrsComponents.has(componentName);
+      const propsWithChildren = synthesizeChildrenProp(props, extendsHtmlAttributes);
+
       // Determine component type
       let type: 'atom' | 'composite' | 'page' = 'atom';
       if (componentPath.includes('/pages/') || componentPath.includes('/app/')) {
@@ -666,7 +903,7 @@ export class ComponentService {
         type,
         hasDefaultExport,
         hasSampleRender,
-        props,
+        props: propsWithChildren,
       };
     } catch (error) {
       // Recoverable: null means "no component info", and the caller degrades to a

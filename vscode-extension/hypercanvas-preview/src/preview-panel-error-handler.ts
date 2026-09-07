@@ -128,7 +128,12 @@ export async function handleCreateSampleFromError(
     const propDefs = await deps.panelRouter.componentService
       ?.getComponentDefinitions(repoRelativePath)
       .catch(() => null);
-    const hasRequiredProps = propDefs?.some((p) => p.required) ?? false;
+    // Exclude SYNTHESIZED props (e.g. an implicit `children: ReactNode` inherited via
+    // `extends *HTMLAttributes` — see synthesizeChildrenProp, HYP-1367): `required: true`
+    // on those is a sample-generation hint, not a real "the sampler can't fabricate this"
+    // signal — generateSamplePropValues always fills it with a humanized placeholder, so
+    // it must never force the "needs AI key" gate for components this fix targets.
+    const hasRequiredProps = propDefs?.some((p) => p.required && !p.synthesized) ?? false;
 
     if (hasRequiredProps) {
       const deterministicProps = propDefs ? generateSamplePropValues(propDefs, { componentName }) : undefined;
