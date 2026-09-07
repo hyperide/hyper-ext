@@ -788,8 +788,14 @@ export class ComponentScanner {
     return components;
   }
 
-  /** Build ComponentsData from absolute paths */
-  private buildComponentsData(paths: ProjectStructurePaths, projectRoot: string): ComponentsData {
+  /**
+   * Build the three group lists for one set of scanned paths. Shared by the whole-project
+   * scan and the monorepo root's own-app scan so both apply the same de-duplication rules.
+   */
+  private buildScopedGroups(
+    paths: ProjectStructurePaths,
+    projectRoot: string,
+  ): Pick<ComponentsData, 'atomGroups' | 'compositeGroups' | 'pageGroups'> {
     const resolvePaths = (rawPaths: string[] | null | undefined): Set<string> =>
       new Set((rawPaths ?? []).map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))));
 
@@ -805,14 +811,21 @@ export class ComponentScanner {
     // Composites must skip both atom dirs AND page dirs to avoid double-listing.
     const compositeExcludeDirs = new Set([...atomDirPaths, ...pageDirPaths]);
 
-    const atomGroups = this.buildGroups(paths.atomComponentsPaths, projectRoot, 'component');
-    const compositeGroups = this.buildGroups(
-      paths.compositeComponentsPaths,
-      projectRoot,
-      'component',
-      compositeExcludeDirs,
-    );
-    const pageGroups = this.buildGroups(paths.pagesPaths, projectRoot, 'page', compositeDirPaths);
+    return {
+      atomGroups: this.buildGroups(paths.atomComponentsPaths, projectRoot, 'component'),
+      compositeGroups: this.buildGroups(
+        paths.compositeComponentsPaths,
+        projectRoot,
+        'component',
+        compositeExcludeDirs,
+      ),
+      pageGroups: this.buildGroups(paths.pagesPaths, projectRoot, 'page', compositeDirPaths),
+    };
+  }
+
+  /** Build ComponentsData from absolute paths */
+  private buildComponentsData(paths: ProjectStructurePaths, projectRoot: string): ComponentsData {
+    const { atomGroups, compositeGroups, pageGroups } = this.buildScopedGroups(paths, projectRoot);
 
     const isMonorepo = this.isMonorepoRoot(projectRoot);
     if (!isMonorepo) {
@@ -823,19 +836,101 @@ export class ComponentScanner {
     // Flat consumers that only read atom/composite groups — useComponentAutoLoad
     // (auto-selects first component) and FloatingPanels — would otherwise see nothing.
     // Mirror the union of sub-project atom/composite groups into the flat fields so
-    // those consumers keep working. pageGroups stays empty: no flat consumer reads it,
-    // and PagesSection renders flat pageGroups unconditionally — populating it would
-    // double-render pages already shown per sub-project in the accordion.
+    // those consumers keep working.
+    //
+    // HYP-1347: a monorepo root can ALSO be an app in its own right (HyperIDE's own repo
+    // is `client/` at the root plus `packages/*`). The root scan above already found those
+    // components, but this branch used to discard them and list only `packages/*`, so the
+    // Explorer showed an empty Components list and "No pages" while hundreds of real
+    // components sat in `client/`. The root now joins the accordion as its own entry, and
+    // its pages fill the flat Pages section.
     const subProjects = this.detectSubProjects(projectRoot);
-    const flatAtomGroups = subProjects.flatMap((sp) => sp.atomGroups);
-    const flatCompositeGroups = subProjects.flatMap((sp) => sp.compositeGroups);
+    // The whole-project scan reaches INTO sub-packages on some layouts (an Nx root with no
+    // `src/` of its own still resolves `targets/web/src/LoginScreen.tsx`). Anything already
+    // owned by a sub-project must be dropped before the remainder can be called "the root's
+    // own app", or those entries would render twice — once flat, once in the accordion.
+    const ownPaths = this.excludeSubProjectPaths(paths, projectRoot, subProjects);
+    const own = this.buildScopedGroups(ownPaths, projectRoot);
+
+    const rootProject = this.buildRootAppSubProject(projectRoot, own.atomGroups, own.compositeGroups);
+    const allSubProjects = rootProject ? [rootProject, ...subProjects] : subProjects;
     return {
-      atomGroups: flatAtomGroups,
-      compositeGroups: flatCompositeGroups,
-      pageGroups: [],
+      atomGroups: allSubProjects.flatMap((sp) => sp.atomGroups),
+      compositeGroups: allSubProjects.flatMap((sp) => sp.compositeGroups),
+      // The root's OWN pages only (empty for a pure umbrella root). Sub-project pages stay
+      // in the accordion, so mirroring them here too would double-render them (Codex #230).
+      pageGroups: own.pageGroups,
       isMonorepo: true,
-      subProjects,
+      subProjects: allSubProjects,
     };
+  }
+
+  /**
+   * Narrow a whole-project scan to the paths the workspace ROOT owns, by dropping every
+   * path that lives inside one of the detected sub-projects.
+   */
+  private excludeSubProjectPaths(
+    paths: ProjectStructurePaths,
+    projectRoot: string,
+    subProjects: SubProject[],
+  ): ProjectStructurePaths {
+    const subProjectDirs = subProjects
+      .filter((sp) => sp.path)
+      .map((sp) => path.join(projectRoot, sp.path) + path.sep);
+    if (subProjectDirs.length === 0) return paths;
+
+    const isRootOwned = (p: string): boolean => {
+      const abs = path.isAbsolute(p) ? p : path.join(projectRoot, p);
+      return !subProjectDirs.some((dir) => abs.startsWith(dir));
+    };
+
+    return {
+      ...paths,
+      atomComponentsPaths: (paths.atomComponentsPaths ?? []).filter(isRootOwned),
+      compositeComponentsPaths: (paths.compositeComponentsPaths ?? []).filter(isRootOwned),
+      pagesPaths: (paths.pagesPaths ?? []).filter(isRootOwned),
+    };
+  }
+
+  /**
+   * Represent the monorepo root itself as a sub-project, so an app living at the root
+   * (rather than under `packages/*`) is reachable from the Explorer's accordion — which in
+   * monorepo mode renders sub-projects INSTEAD of the flat groups.
+   *
+   * Returns null for a pure umbrella root that owns no components, so a conventional
+   * monorepo gains no empty extra row.
+   */
+  private buildRootAppSubProject(
+    projectRoot: string,
+    atomGroups: ComponentGroup[],
+    compositeGroups: ComponentGroup[],
+  ): SubProject | null {
+    const ownsComponents = [...atomGroups, ...compositeGroups].some((g) => g.components.length > 0);
+    if (!ownsComponents) return null;
+
+    return {
+      name: this.readRootProjectName(projectRoot),
+      // Empty relative path = "this is the workspace root", which is also how consumers
+      // tell the root entry apart from a `packages/x` entry.
+      path: '',
+      supported: true,
+      atomGroups,
+      compositeGroups,
+      // Root pages are surfaced through the flat `pageGroups` (the Pages section); listing
+      // them here too would show every root page twice.
+      pageGroups: [],
+    };
+  }
+
+  /** The root package's own name, falling back to its directory name. */
+  private readRootProjectName(projectRoot: string): string {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf-8'));
+      if (typeof pkg.name === 'string' && pkg.name.trim()) return pkg.name.trim();
+    } catch {
+      // No package.json, or unparseable — the directory name is a fine label.
+    }
+    return path.basename(projectRoot);
   }
 
   /** Enumerate sub-packages in a monorepo and build per-sub-project component groups. */

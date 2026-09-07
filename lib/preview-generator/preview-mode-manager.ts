@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import { join } from 'node:path';
 import type { FileIO } from '../ast/file-io';
 import { detectFramework, detectHtmlModuleEntry } from './framework-routing';
+import { DEFAULT_FRONTEND_ROOT, detectFrontendRootFromHtml } from './frontend-root';
 import { PreviewFileManager } from './preview-file-manager';
 
 export type PreviewMode = 'app-shell' | 'isolated';
@@ -334,22 +335,21 @@ export class PreviewModeManager {
   /**
    * Detect the frontend root directory ('src', 'client', etc.) from index.html.
    * Falls back to 'src' if index.html is absent or doesn't specify a different root.
+   *
+   * The pattern itself lives in `frontend-root.ts` — this used to carry a private copy
+   * pinned to `main.[jt]sx`, which missed entries named `App`/`index` (HyperIDE's own
+   * repo loads `/client/App.tsx`). The miss sent `detectRouterFile()` to a non-existent
+   * `src/`, which downgraded the project to entry-mount patching and stranded app-mode
+   * on "Loading app…" forever (HYP-1345). Do not re-inline the regex here.
    */
   private async _detectFrontendRoot(): Promise<string> {
     try {
       const html = await this._io.readFile(join(this._projectRoot, 'index.html'));
-      // HTML tag names are case-insensitive — match `<SCRIPT>`/`<Script>` too
-      // (CodeQL js/bad-tag-filter). Regex HTML parsing is a smell; this is a
-      // best-effort entry-script sniff over project HTML, not a sanitizer.
-      for (const tag of html.matchAll(/<script\b[^>]*>/gi)) {
-        if (!/\btype=["']module["']/i.test(tag[0])) continue;
-        const src = tag[0].match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/i)?.[1];
-        if (src && src !== 'src') return src;
-      }
+      return detectFrontendRootFromHtml(html);
     } catch {
       /* no index.html */
     }
-    return 'src';
+    return DEFAULT_FRONTEND_ROOT;
   }
 
   async getEntryFilePath(): Promise<string | null> {
@@ -372,8 +372,20 @@ export class PreviewModeManager {
       'routes.ts',
     ];
     const candidates = [...rootPrefixes.flatMap((r) => suffixes.map((s) => `${r}/${s}`)), 'App.tsx'];
-    for (const rel of candidates) {
-      const abs = join(this._projectRoot, rel);
+
+    // The project's ACTUAL entry module, probed first. The `suffixes` list only covers
+    // conventional router filenames, so a project whose entry is e.g. `client/entry.tsx` had
+    // no candidate at all and fell through to entry-mount patching — the same "Loading app…"
+    // hang HYP-1345 fixes for the directory half of the problem. The entry file is frequently
+    // also the router shell (HyperIDE's own `client/App.tsx` is both).
+    // `_detectEntryFile` yields an ABSOLUTE path; the static candidates are project-relative.
+    const entryFile = await this._detectEntryFile().catch(() => null);
+    const absCandidates = [
+      ...(entryFile ? [entryFile] : []),
+      ...candidates.map((rel) => join(this._projectRoot, rel)),
+    ];
+
+    for (const abs of absCandidates) {
       try {
         const content = await this._io.readFile(abs);
         if (

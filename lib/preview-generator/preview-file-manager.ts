@@ -37,6 +37,7 @@ import {
   ensureStandaloneEntry,
   listSkipWorktreeFiles,
 } from './preview-file-ops';
+import { DEFAULT_FRONTEND_ROOT, detectFrontendRootFromHtml } from './frontend-root';
 import { buildEntry, computeImportPath } from './preview-build-entry';
 import { getSampleFilePath } from './sample-ensurer';
 import {
@@ -447,9 +448,12 @@ export class PreviewFileManager {
     // the actual frontend entrypoint (e.g. bulka-the-dog) are handled correctly.
     try {
       const html = await this.io.readFile(join(this.projectRoot, 'index.html')); // nosemgrep: path-join-resolve-traversal
-      const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/[^/"']+\.[jt]sx?["']/);
-      if (match && match[1] !== 'src') {
-        return join(this.projectRoot, match[1], '__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
+      // Shared with `detectRouterFile`/`detectFrontendRoot` so the registry is written to the
+      // SAME directory those resolve against. This used to be a private regex here; the copies
+      // drifted and a mismatch between them strands app-mode on "Loading app…" (HYP-1345).
+      const frontendRoot = detectFrontendRootFromHtml(html);
+      if (frontendRoot !== DEFAULT_FRONTEND_ROOT) {
+        return join(this.projectRoot, frontendRoot, '__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
       }
     } catch {
       // No index.html or no matching script tag

@@ -366,6 +366,30 @@ describe('generatePreviewContent', () => {
       expect(applyCalls).toBeGreaterThanOrEqual(2);
     });
 
+    // HYP-1345: the placeholder shown while `_AppRouteDriver` drives the patched entry file to
+    // a real route used to be a plain unstyled text node. Locks in the animated-spinner shape
+    // (driven via the Web Animations API, not a `<style>`/`@keyframes` block — the generated
+    // file runs inside an arbitrary previewed project whose CSP may drop an injected `<style>`
+    // tag, see the comment in buildAppRouteDriver) so a future edit can't silently regress it
+    // back to the plain-text placeholder or reintroduce a CSP-fragile `<style>` dependency.
+    it('renders an animated spinner (not plain text) for the app-mode route-driver placeholder', () => {
+      const content = generatePreviewContent([APP_ENTRY]);
+      expect(content).toContain('function _AppRouteDriver() {');
+      // Scope the driver-body assertions to just that function so a `<style>` (or other string)
+      // legitimately added elsewhere in the generated file can't fail this test for an unrelated
+      // reason — and so a false pass can't hide behind matching the wrong function.
+      const driverStart = content.indexOf('function _AppRouteDriver() {');
+      const driverEnd = content.indexOf('\nfunction ', driverStart + 1);
+      const driverBody = content.slice(driverStart, driverEnd === -1 ? undefined : driverEnd);
+      expect(driverBody).toContain('Loading app…');
+      expect(driverBody).toContain('_spinRef.current');
+      expect(driverBody).toContain('.animate(');
+      // Not a `<style>`/`@keyframes` block — see the CSP comment in buildAppRouteDriver.
+      expect(driverBody).not.toMatch(/<style[\s>]/);
+      expect(driverBody).not.toContain("createElement('style'");
+      expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
+    });
+
     it('CACHES the nav strategy so it survives the boot route rewrite (query-string drop)', () => {
       const content = generatePreviewContent([APP_ENTRY]);
       // _driveInitialAppRoute navigates immediately and drops `?nav=`; the strategy must be memoized

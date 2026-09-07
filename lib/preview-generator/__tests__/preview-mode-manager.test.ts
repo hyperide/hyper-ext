@@ -1895,3 +1895,87 @@ createRoot(document.getElementById('root')!).render(<App />);
     expect(await io.readFile(`${root}/src/App.tsx`)).toBe(ROUTER_SOURCE);
   });
 });
+
+// HYP-1345 — HyperIDE's own repo (and any project whose index.html entry is not named
+// `main.*`) hung forever on "Loading app…". `_detectFrontendRoot` carried a private regex
+// pinned to `/DIR/main.[jt]sx`, so `/client/App.tsx` did not match; the root fell back to a
+// non-existent `src/`, `detectRouterFile()` found nothing, and the project was patched with
+// the ENTRY-mount shape (preview replaces the app) instead of the ROUTER-route shape
+// (preview renders inside the still-mounted app). App-mode's placeholder then waited forever
+// for an app that was never mounted. All copies of the sniff now share
+// `detectFrontendRootFromHtml`.
+describe('PreviewModeManager — frontend root from a non-`main` entry (HYP-1345)', () => {
+  const HYPERIDE_INDEX_HTML = [
+    '<!doctype html>',
+    '<html><body><div id="root"></div>',
+    '<script type="module" src="/client/App.tsx"></script>',
+    '</body></html>',
+  ].join('\n');
+
+  const ROUTER_APP_SOURCE = [
+    "import { createRoot } from 'react-dom/client';",
+    "import { BrowserRouter, Route, Routes } from 'react-router-dom';",
+    'const App = () => (<BrowserRouter><Routes><Route path="/" element={<Home />} /></Routes></BrowserRouter>);',
+    "createRoot(document.getElementById('root')!).render(<App />);",
+    'export default App;',
+  ].join('\n');
+
+  it('finds the router file under a `client/App.tsx` entry instead of returning null', async () => {
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { react: '^18' } }),
+      [`${root}/index.html`]: HYPERIDE_INDEX_HTML,
+      [`${root}/client/App.tsx`]: ROUTER_APP_SOURCE,
+    });
+    const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
+
+    expect(await m.detectRouterFile()).toBe(`${root}/client/App.tsx`);
+  });
+
+  it('still resolves the conventional `src/main.tsx` layout', async () => {
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { react: '^18' } }),
+      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
+      [`${root}/src/App.tsx`]: ROUTER_APP_SOURCE,
+    });
+    const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
+
+    expect(await m.detectRouterFile()).toBe(`${root}/src/App.tsx`);
+  });
+
+  it('returns null when the detected root holds no router file', async () => {
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { react: '^18' } }),
+      [`${root}/index.html`]: HYPERIDE_INDEX_HTML,
+      [`${root}/client/App.tsx`]: 'export default function App() { return <div>no router</div>; }',
+    });
+    const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
+
+    expect(await m.detectRouterFile()).toBeNull();
+  });
+
+  // The regression class is DRIFT BETWEEN CONSUMERS, not a wrong answer in any single one.
+  // PreviewFileManager decides where the generated registry is WRITTEN; PreviewModeManager
+  // decides which directory is SEARCHED for the router file. If they disagree, the preview
+  // is written somewhere nothing looks for it and app-mode strands on "Loading app…".
+  // `entry.tsx` is the case that used to split them: any-filename on one side, `src`
+  // fallback on the other.
+  it.each([
+    ['App.tsx', 'a conventional-but-not-`main` entry'],
+    ['entry.tsx', 'an unconventionally-named entry'],
+    ['main.tsx', 'the conventional `main` entry'],
+  ])('writes and searches the same directory for %s (%s)', async (entryFile) => {
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { react: '^18' } }),
+      [`${root}/index.html`]: `<script type="module" src="/client/${entryFile}"></script>`,
+      [`${root}/client/${entryFile}`]: ROUTER_APP_SOURCE,
+    });
+    const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
+    const fileManager = new PreviewFileManager({ projectRoot: root, io });
+
+    const writtenDir = (await fileManager.getPreviewFilePath()).replace(/\/[^/]+$/, '');
+    const searchedFile = await m.detectRouterFile();
+
+    expect(writtenDir).toBe(`${root}/client`);
+    expect(searchedFile).toBe(`${root}/client/${entryFile}`);
+  });
+});

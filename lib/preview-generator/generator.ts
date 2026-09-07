@@ -525,9 +525,46 @@ function buildAppRouteDriver(): string[] {
     '}',
     '',
     'function _AppRouteDriver() {',
+    '  const _spinRef = React.useRef<HTMLDivElement | null>(null);',
+    '  React.useEffect(() => {',
+    // Web Animations API instead of a `<style>` + `@keyframes` block. This generated file
+    // runs inside an arbitrary previewed project's index.html, which may carry a strict CSP
+    // (`style-src` without `unsafe-inline`) — an injected `<style>` tag would be silently
+    // dropped there, leaving a static half-ring instead of a spinner. `.animate()` is a JS
+    // call, not a stylesheet, so it is unaffected by `style-src`.
+    '    const el = _spinRef.current;',
+    "    if (!el || typeof el.animate !== 'function') return;",
+    '    const anim = el.animate(',
+    "      [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],",
+    "      { duration: 800, iterations: Infinity, easing: 'linear' },",
+    '    );',
+    '    return () => anim.cancel();',
+    '  }, []);',
     '  return (<>',
     '    <_AppModeBridge />',
-    "    <div style={{ padding: 20, fontFamily: 'sans-serif', color: '#888' }}>Loading app…</div>",
+    '    <div style={{',
+    "      display: 'flex',",
+    "      flexDirection: 'column',",
+    "      alignItems: 'center',",
+    '      padding: 20,',
+    '      gap: 12,',
+    "      fontFamily: 'sans-serif',",
+    '    }}>',
+    '      <div',
+    '        ref={_spinRef}',
+    '        style={{',
+    '          width: 32,',
+    '          height: 32,',
+    "          borderRadius: '50%',",
+    // Slate-400/500 — matches the muted spinner+label tone of the shared
+    // `LoadingSpinner` component (client/components/LoadingSpinner.tsx) used
+    // everywhere else in the SaaS app and the VS Code preview shell.
+    "          border: '3px solid rgba(148, 163, 184, 0.35)',",
+    "          borderTopColor: '#64748b',",
+    '        }}',
+    '      />',
+    "      <div style={{ fontSize: 13, color: '#94a3b8' }}>Loading app…</div>",
+    '    </div>',
     '  </>);',
     '}',
   ];

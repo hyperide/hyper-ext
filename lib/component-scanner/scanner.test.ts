@@ -1107,8 +1107,80 @@ describe('ComponentScanner.getComponentsData — sub-project grouping (HYP-391)'
     expect(flatComponentNames.some((n) => n.includes('Button'))).toBe(true);
     expect(flatComponentNames.some((n) => n.includes('DataTable'))).toBe(true);
 
-    // pageGroups stays empty — no flat consumer reads it and PagesSection would double-render.
+    // pageGroups stays empty — this root has no app of its own, and sub-project pages
+    // render in the accordion, so populating the flat list would double-render them.
     expect(result.pageGroups).toHaveLength(0);
+  });
+
+  // HYP-1347: a monorepo root that is ALSO an app (HyperIDE's own repo: `client/` at the
+  // root plus `packages/*`) had its entire root scan computed and then discarded — the
+  // monorepo branch overwrote the flat groups with the sub-project union only, and forced
+  // pageGroups to []. The Explorer showed "No pages" and an empty Components list while
+  // hundreds of real components sat in `client/`.
+  describe('monorepo root that is also an app (HYP-1347)', () => {
+    const makeRootAppMonorepo = (name: string): string =>
+      createSubprojProject(name, {
+        'package.json': '{"workspaces":["packages/*"],"dependencies":{"react":"19"}}',
+        // The root's own app, in a non-`src` frontend dir, exactly like HyperIDE.
+        'client/components/ui/Button.tsx': 'export function Button() { return <button/>; }',
+        'client/components/Header.tsx': 'export function Header() { return <div/>; }',
+        'client/pages/Dashboard.tsx': 'export default function Dashboard() { return <div/>; }',
+        // A genuinely non-React workspace package, like vector-engine.
+        'packages/engine/package.json': '{"dependencies":{"pako":"2"}}',
+        'packages/engine/src/index.ts': 'export const x = 1;',
+      });
+
+    it("lists the root's own components as a sub-project so the Explorer can show them", async () => {
+      const root = makeRootAppMonorepo('root-app-components');
+      const scanner = new ComponentScanner(createMockStore(null));
+
+      const result = await scanner.getComponentsData(root);
+
+      expect(result.isMonorepo).toBe(true);
+      const rootProject = result.subProjects?.find((sp) => sp.path === '');
+      expect(rootProject).toBeDefined();
+      expect(rootProject!.supported).toBe(true);
+
+      const rootComponentNames = [
+        ...rootProject!.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+        ...rootProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ];
+      expect(rootComponentNames.some((n) => n.includes('Button'))).toBe(true);
+      expect(rootComponentNames.some((n) => n.includes('Header'))).toBe(true);
+    });
+
+    it("surfaces the root's own pages in the flat pageGroups instead of 'No pages'", async () => {
+      const root = makeRootAppMonorepo('root-app-pages');
+      const scanner = new ComponentScanner(createMockStore(null));
+
+      const result = await scanner.getComponentsData(root);
+
+      const pageNames = result.pageGroups.flatMap((g) => g.components.map((c) => c.name));
+      expect(pageNames.some((n) => n.includes('Dashboard'))).toBe(true);
+    });
+
+    it("keeps the root's components reachable from the flat groups too", async () => {
+      const root = makeRootAppMonorepo('root-app-flat');
+      const scanner = new ComponentScanner(createMockStore(null));
+
+      const result = await scanner.getComponentsData(root);
+
+      const flatNames = [
+        ...result.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+        ...result.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ];
+      expect(flatNames.some((n) => n.includes('Button'))).toBe(true);
+      expect(flatNames.some((n) => n.includes('Header'))).toBe(true);
+    });
+
+    it('still lists the real workspace packages alongside the root', async () => {
+      const root = makeRootAppMonorepo('root-app-packages');
+      const scanner = new ComponentScanner(createMockStore(null));
+
+      const result = await scanner.getComponentsData(root);
+
+      expect(result.subProjects?.some((sp) => sp.name === 'engine')).toBe(true);
+    });
   });
 
   // Codex #229: a sub-package keeping pages/ or components/ at its package root
