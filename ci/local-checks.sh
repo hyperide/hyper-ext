@@ -210,9 +210,9 @@ echo "[local-checks] ── Secret scan (gitleaks) ─────────�
 }
 
 echo "[local-checks] ── Tests ──────────────────────────────────────────────────"
-# Run the same path list CI uses (matches ci.yml "Test" job — ./packages/ is separate
-# and excluded to keep local runtime close to CI).
-bun test --isolate client lib server shared scripts vscode-extension \
+# Path list scoped to this mirror's actual directories (server/scripts are excluded by
+# hyper-saas's sync-to-public.sh and never exist here); ./packages/ stays separate.
+bun test --isolate client lib shared vscode-extension \
   || { echo "[local-checks] FAIL: unit tests"; exit 3; }
 
 echo "[local-checks] ── Extension production build ────────────────────────────"
