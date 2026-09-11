@@ -99,6 +99,12 @@ Run `code --telemetry` to see the full list of events, or read
 - VS Code 1.74 or later
 - A React project (JSX/TSX)
 
+## FAQ
+
+### Preview shows a white screen instead of my component
+
+Check your app’s configuration for **iframe embedding** (for example `X-Frame-Options`, `Content-Security-Policy` `frame-ancestors`, or framework-specific headers). If the dev server blocks being framed, the preview cannot render. **Allow embedding in development** (for example relax or omit those headers for `NODE_ENV=development`, or add your preview origin to `frame-ancestors`) so the VS Code webview can load the iframe.
+
 ## Development
 
 See [DEVELOPMENT.md](https://github.com/hyperide/hyper-ext/blob/main/vscode-extension/hypercanvas-preview/DEVELOPMENT.md) for architecture details, build instructions, and contribution guide.
