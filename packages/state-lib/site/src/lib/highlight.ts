@@ -129,6 +129,33 @@ const UNESCAPE: Record<string, string> = {
   '&#x27;': "'",
 };
 
+/** Extract caption text from rendered heading markup; insertion still HTML-escapes the result. */
+function headingCaptionText(markup: string): string {
+  let text = '';
+  let inTag = false;
+  let quote: '"' | "'" | undefined;
+  for (let index = 0; index < markup.length; index++) {
+    const character = markup[index];
+    if (!inTag) {
+      if (markup.startsWith('<!--', index)) {
+        const end = markup.indexOf('-->', index + 4);
+        if (end === -1) break;
+        index = end + 2;
+        continue;
+      }
+      if (character === '<') inTag = true;
+      else text += character;
+    } else if (quote) {
+      if (character === quote) quote = undefined;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === '>') {
+      inTag = false;
+    }
+  }
+  return text.replace(/&amp;/g, '&');
+}
+
 /**
  * Highlight every fenced code block inside already-rendered HTML (R80).
  *
@@ -153,7 +180,7 @@ export function highlightHtml(html: string): string {
       if (isAsciiDiagram(raw, lang)) {
         const caption =
           headingAt >= 0
-            ? `${headings[headingAt][1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&')} — diagram`
+            ? `${headingCaptionText(headings[headingAt][1])} — diagram`
             : 'Diagram of the relationships described below';
         return inlineDiagramHtml(raw, caption);
       }

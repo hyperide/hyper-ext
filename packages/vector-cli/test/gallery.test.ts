@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'bun:test';
 import { svgToPng } from '../src/png';
 import { GALLERY, type GalleryEntry, renderEntry } from './gallery/corpus';
+import { gallerySvgMatches } from './gallery/svg-comparison';
 
 const GALLERY_DIR = join(import.meta.dir, '..', 'gallery');
 const UPDATE = process.env.GALLERY_UPDATE === '1';
@@ -39,7 +40,7 @@ describe('vecli gallery visual regression (VECLI-8 / HYP-526)', () => {
         // A missing golden is a hard failure (not auto-pass): regenerate with GALLERY_UPDATE=1.
         expect(existsSync(path)).toBe(true);
         const golden = readFileSync(path, 'utf-8').trim();
-        expect(svg.trim()).toBe(golden);
+        expect(gallerySvgMatches(svg.trim(), golden)).toBe(true);
       });
 
       it('renders to a valid PNG via the resvg path', () => {
@@ -68,6 +69,6 @@ describe('vecli gallery visual regression (VECLI-8 / HYP-526)', () => {
     // golden compare above would catch a real generator-math regression.
     const baseline = renderEntry(GALLERY[0]);
     const altered: GalleryEntry = { name: 'ribbon-altered', build: (g) => g.ribbon(200, 35, 10) };
-    expect(renderEntry(altered)).not.toBe(baseline);
+    expect(gallerySvgMatches(renderEntry(altered), baseline)).toBe(false);
   });
 });

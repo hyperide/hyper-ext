@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "outDir": "dist"
+  },
+  "include": ["src/index.ts", "src/testing.ts"],
+  "exclude": ["src/*.test.ts", "src/*.fixture.ts"]
+}

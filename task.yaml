@@ -21,7 +21,6 @@
 # viewer (HYP-1237). `native` mode (task-cli's new default for every OTHER repo) uploads the bytes
 # through Linear's real authenticated API instead — see task-cli PR #90 for the "no 401" fix.
 version: 1
-backend: linear
 linear:
   team: HYP
   attachment_mode: link

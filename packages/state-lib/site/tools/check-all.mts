@@ -42,6 +42,7 @@ const page = [
   'navigation-panel.mts',
   'site-feedback.mts',
   'visible-workbench.mts',
+  'workbench-readiness-regression.mts',
   'workbench-lifecycle.mts',
   'reading-ux.mts',
   'lesson-entry.mts',

@@ -1,0 +1,28 @@
+{
+  "name": "@ultrabricks/state-toolkit-async",
+  "version": "0.0.0-pilot.0",
+  "private": true,
+  "description": "Unpublished pre-release of the framework-neutral async-resource contract (HYP-1507). Universal toolkit, not internal-only; private:true is a temporary no-npm-publish guard for this unfinished pre-release. Not a stable API.",
+  "files": [
+    "dist",
+    "README.md",
+    "PROVENANCE.json"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "default": "./dist/testing.js"
+    }
+  },
+  "peerDependencies": {
+    "@ultrabricks/state-lib": "0.1.0-pilot.1"
+  }
+}

@@ -37,7 +37,7 @@ Consolidated from Mextner's working notes and decisions (2026-09-01 → 2026-09-
 - **R16.** Easy debugging of user problems — reproducible event logs, recordings. _(spec §11.4)_
 - **R17.** Easy Storybook stories. _(spec §12.2)_
 - **R18.** Clean separation: UI / UI logic / business logic. _(spec §4.8, §17)_
-- **R19.** Framework-agnostic core; adapters for React/Vue/Solid/Svelte/web components; works with SSR, server components, meta-frameworks (front+back in one framework). _(spec §6, §7)_
+- **R19.** Framework-agnostic core; adapters for React/Vue/Solid/Svelte/web components; works with SSR, server components, meta-frameworks (front+back in one framework). _(spec §6, §7)_ Core/toolkit conformance matrix: `docs/api/CORE-TOOLKIT-CONFORMANCE.md` (HYP-1507 pilot, integration pending).
 - **R20.** Zero dependencies, tiny bundle, ESM, tree-shaking; "faster than vanilla JS" as aspiration, measured bars as the enforceable form. Old browsers can be dropped. _(spec §13, §14)_
 - **R21.** Devtools that are pleasant and never freeze — unlike Redux DevTools' UI. _(spec §10)_
 - **R22.** Modern browsers only. _(spec §13)_

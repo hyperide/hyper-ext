@@ -8,9 +8,11 @@
 # ── CI coverage map ──────────────────────────────────────────────────────────
 # COVERED locally (this script):
 #   ci.yml / Lint & Typecheck         → bun run typecheck + bun run lint
-#   ci.yml / Tests                    → bun test --isolate <main dirs>
+#   ci.yml / Tests                    → bun run test (application, packages, complete site)
 #   ci.yml / Extension production build → npm ci + tsc --noEmit + esbuild + check-webview-bundles.mjs
-#   ci.yml / Typecheck extension        → npx tsc --noEmit -p ./ (part of the extension build step)
+#   ci.yml / Typecheck extension        → installed tsc --noEmit -p ./ (extension build step)
+#   security-scan.yml / Extension audit → npm audit + dependency-security.test.cjs (exit 7)
+#   security-scan.yml / Fork inventory  → braces-fork-scan.cjs + eight negative controls (exit 12)
 #   ci/leftover-grep/leftover-grep.sh → focused-test markers, debugger, merge conflicts,
 #                                       untracked TODOs, console.log (exit 5)
 #   ci/secret-scan/secret-scan.sh     → gitleaks working-tree scan, SECRET_SCAN_SCOPE=dir
@@ -93,6 +95,30 @@ done
 if [ -n "${LOCAL_CHECKS_SKIP_EXT_BUILD:-}" ] && [ "${LOCAL_CHECKS_SKIP_EXT_BUILD}" != "0" ]; then
   echo "[local-checks] note: LOCAL_CHECKS_SKIP_EXT_BUILD is ignored (removed as a self-bypass-able env var) — use --skip-ext-build instead."
 fi
+
+echo "[local-checks] ── Frozen dependencies and browsers ─────────────────────"
+# Root types import the independently installed site; all test phases need their
+# pinned site browsers. Ignore lifecycle scripts and invoke the installed CLIs so
+# setup neither downloads an unpinned npx package nor runs unrelated postinstalls.
+bun install --frozen-lockfile --ignore-scripts \
+  || { echo "[local-checks] FAIL: root dependency installation"; exit 9; }
+SITE_DIR="$ROOT/packages/state-lib/site"
+(cd "$SITE_DIR" && bun install --frozen-lockfile --ignore-scripts) \
+  || { echo "[local-checks] FAIL: site dependency installation"; exit 9; }
+EXT_DIR="$ROOT/vscode-extension/hypercanvas-preview"
+(cd "$EXT_DIR" && npm ci --ignore-scripts --include=dev) \
+  || { echo "[local-checks] FAIL: extension dependency installation"; exit 9; }
+(cd "$SITE_DIR" && node node_modules/playwright/cli.js install chromium webkit) \
+  || { echo "[local-checks] FAIL: site browser installation"; exit 9; }
+# Local checks cannot assume permission to install system libraries. Launch both
+# engines to fail closed on missing libraries even if installation only warned.
+(cd "$SITE_DIR" && node --input-type=module -e '
+  import { chromium, webkit } from "playwright";
+  for (const engine of [chromium, webkit]) {
+    const browser = await engine.launch({ headless: true, timeout: 30000 });
+    await browser.close();
+  }
+') || { echo "[local-checks] FAIL: browser launch prerequisites (system libraries/binaries required; no privileged setup attempted)"; exit 9; }
 
 echo "[local-checks] ── Typecheck (tsgo) ─────────────────────────────────────"
 bun run typecheck || { echo "[local-checks] FAIL: typecheck"; exit 1; }
@@ -210,10 +236,15 @@ echo "[local-checks] ── Secret scan (gitleaks) ─────────�
 }
 
 echo "[local-checks] ── Tests ──────────────────────────────────────────────────"
-# Run the same path list CI uses (matches ci.yml "Test" job — ./packages/ is separate
-# and excluded to keep local runtime close to CI).
-bun test --isolate client lib server shared scripts vscode-extension \
-  || { echo "[local-checks] FAIL: unit tests"; exit 3; }
+# The official runner owns every phase and validates completion evidence.
+bun run test || { echo "[local-checks] FAIL: workspace tests"; exit 3; }
+
+echo "[local-checks] ── Extension dependency security ─────────────────────────"
+# Independent of --skip-ext-build: development tools are part of the audit too.
+(cd "$EXT_DIR" && npm audit --audit-level=high --include=dev) \
+  || { echo "[local-checks] FAIL: extension npm audit (see findings or operational error above)"; exit 7; }
+(cd "$EXT_DIR" && node scripts/dependency-security.test.cjs) \
+  || { echo "[local-checks] FAIL: extension dependency security tests"; exit 7; }
 
 echo "[local-checks] ── Extension production build ────────────────────────────"
 # Mirrors the "Extension production build" CI job (ci.yml). Catches the HYP-747
@@ -223,23 +254,18 @@ if [ "$skip_ext_build" = "1" ]; then
   echo "[local-checks] Extension build SKIPPED (--skip-ext-build)"
   echo "[local-checks] WARNING: skipping extension build misses the HYP-747 regression class."
 else
-  EXT_DIR="$ROOT/vscode-extension/hypercanvas-preview"
   (
-    cd "$EXT_DIR"
-    # Root deps provide @/, @shared/, @lib/ source aliases the extension bundles.
-    # Skip postinstall (playwright install + fix-bun-shim) — not needed for build.
-    cd "$ROOT" && bun install --frozen-lockfile --ignore-scripts
-    cd "$EXT_DIR"
-    # Extension is npm-only: @vscode/vsce runs `npm list`; bun.lock breaks `vsce package`.
-    npm ci
+    cd "$EXT_DIR" || exit 1
+    # Root deps provide @/, @shared/, @lib/ source aliases; the extension deps
+    # are installed with npm above (@vscode/vsce requires an npm-only tree).
     # Mirrors ci.yml's "Typecheck extension" job (P-8 retrospective, HYP-947): the
     # extension previously had NO tsc gate anywhere — root `bun run typecheck` (tsgo)
     # does not cover it (root tsconfig.json excludes it, and tsgo mis-infers `rootDir`
     # for this tsconfig's ../../lib and ../../shared includes). Without this line the
     # local fallback could report success on a PR that would fail CI's real gate.
-    npx tsc --noEmit -p ./
+    node node_modules/typescript/bin/tsc --noEmit -p ./ || exit 1
     # Exits non-zero on any unresolvable import (e.g. node:* built-in in a browser bundle).
-    node esbuild.js --production
+    node esbuild.js --production || exit 1
     # Scans built browser bundles for forbidden node-only tokens (process, __dirname, etc.).
     node scripts/check-webview-bundles.mjs
   ) || { echo "[local-checks] FAIL: extension production build"; exit 4; }
@@ -383,5 +409,16 @@ if [ "$trivy_rc" -ne 0 ]; then
   exit 10
 fi
 rm -f "$trivy_log"
+
+echo "[local-checks] ── Audited fork identity and SBOM security ────────────────"
+# Additive to the unchanged repository scan: Trivy's Bun alias parser cannot
+# inventory the fork by its installed npm identity. Keep its negative controls
+# on this path too, including the genuinely vulnerable SBOM component.
+fork_scan_dir=$(mktemp -d)
+trap 'rm -rf "$fork_scan_dir"' EXIT
+node ci/braces-fork-scan.cjs "$fork_scan_dir/braces-fork.cdx.json" \
+  || { echo "[local-checks] FAIL: fork inventory/scan (identity, vulnerability or tooling error; see log above)"; exit 12; }
+node ci/braces-fork-scan.test.cjs \
+  || { echo "[local-checks] FAIL: fork scanner negative controls"; exit 12; }
 
 echo "[local-checks] ── All local checks PASSED ────────────────────────────────"

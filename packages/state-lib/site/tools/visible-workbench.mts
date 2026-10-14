@@ -3,6 +3,7 @@ import { chromium, webkit } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { serveStatic } from './static-server.mts';
+import { waitForWorkbenchEditors } from './workbench-readiness.mts';
 const server = await serveStatic(fileURLToPath(new URL('../dist-served/', import.meta.url)), false);
 const artifacts = fileURLToPath(new URL('./artifacts/visible-workbench/', import.meta.url));
 mkdirSync(artifacts, { recursive: true });
@@ -20,7 +21,7 @@ try {
         for (const label of ['Interactive example', 'Live state', 'Editable code']) {
           assert(await page.getByRole('region', { name: label, exact: true }).isVisible(), label);
         }
-        assert.equal(await page.locator('.guide-source .cm-editor').count(), 3);
+        await waitForWorkbenchEditors(page);
         assert.equal(
           await page.locator('.guide-source').evaluate((node) => node.closest('details:not([open])') !== null),
           false,

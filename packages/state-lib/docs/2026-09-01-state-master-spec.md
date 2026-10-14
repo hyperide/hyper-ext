@@ -179,7 +179,7 @@ Reading aids: [DAG](/concepts/practical#dag), [ALS](/concepts/practical#als), [t
 
 This figure is generated in place by vecli from the editable text source. Borders are repaired before drawing; labels remain SVG text. Open the figure to inspect it at full size.
 
-Layering is a DAG, not strict layers: `core` imports nothing and has no environment assumptions (no ALS, no Web Locks, no `window`); `collections` → core; `optimistic` → collections; `outbox` → optimistic + persist; `persist/opfs` → persist + worker; `url` → core (+ optional `history`); `remote` → core; `worker` → remote; adapters → core (+ framework as peer; `@vue/devtools-api` is an optional peer); `ssr` → core (+ `node:async_hooks` where available); sources → collections (+ third-party SDK as peer). The compiler and CLI never ship in the runtime bundle; devtools are stripped in production by the compiler and are a no-op export otherwise.
+Layering is a DAG, not strict layers: `core` imports nothing and has no environment assumptions (no ALS, no Web Locks, no `window`); `collections` → core; `optimistic` → collections; `outbox` → optimistic + persist; `persist/opfs` → persist + worker; `url` → core (+ optional `history`); `remote` → core; `worker` → remote; adapters → core (+ framework as peer; `@vue/devtools-api` is an optional peer); `ssr` → core (+ `node:async_hooks` where available); sources → collections (+ third-party SDK as peer). The compiler and CLI never ship in the runtime bundle; devtools are stripped in production by the compiler and are a no-op export otherwise. The HYP-1507 pilot records this boundary as a tested core/toolkit conformance matrix in `docs/api/CORE-TOOLKIT-CONFORMANCE.md` (integration pending).
 
 ---
 
@@ -1047,7 +1047,7 @@ const Row = component(
 
 **Ownership and implementation status (R93):** `state/react`, `state/vue`, `state/solid`, `state/svelte`, `state/angular` and `state/lit` below are proposed adapters. Names such as `useSlice`, `useActions`, `definePiniaStore`, `injectSlice` and `StateController` belong to that proposal; they are not native framework exports. Native names retain their native imports. [The adapter guide](/adapters) gives explicit imports, complete explanatory wrappers, disposal/SSR constraints and Try links, including a runnable React/prototype example. Targets and conformance suites are design goals, not measured bundle sizes or published dependencies.
 
-Every adapter is built on the same four core primitives — `subscribe(node|selector, cb)`, `getSnapshot(node)` (cached reference), `signal(node)` (accessor), `scope` — so each is small (target ≤ 1.5 kB gz; React includes the uSES shim for 18) and testable against one conformance suite (`@state/adapter-tests`: subscription, batching, unmount cleanup, SSR hydration, StrictMode double-render, keyed lists).
+Every adapter is built on the same four core primitives — `subscribe(node|selector, cb)`, `getSnapshot(node)` (cached reference), `signal(node)` (accessor), `scope` — so each is small (target ≤ 1.5 kB gz; React includes the uSES shim for 18) and testable against one conformance suite (`@state/adapter-tests`: subscription, batching, unmount cleanup, SSR hydration, StrictMode double-render, keyed lists). The HYP-1507 pilot adds the headless async half of that suite (`packages/state-lib/toolkit/src/async-conformance.ts`, scenarios AR-01…AR-10); renderer bindings consume it in later slices (integration pending).
 
 ### 6.1 React (18.3+ and 19)
 
@@ -1110,7 +1110,7 @@ The store never mutates during render on the server; on the client, per-boundary
 
 ## 8. Data layer
 
-**Package correction and research (R94):** the earlier `@state/db-ivm` name was a placeholder, not an installed dependency. The actual upstream package is `@tanstack/db-ivm`; its public collection/query layer is `@tanstack/db`. The path **`state/query-tanstack` throughout this spec is a planned adapter**, not an existing package or a claim of drop-in compatibility. The site tests values against `@tanstack/db` 0.8.7 (IVM dependency 0.1.19). [Research, comparison with the intended Rust/WASM engine, differential-dataflow explanation and syntax proposal](/query-research). No benchmark win or unverified capability of the intended engine is inferred from this comparison.
+**Package correction and research (R94):** the earlier `@state/db-ivm` name was a placeholder, not an installed dependency. The actual upstream package is `@tanstack/db-ivm`; its public collection/query layer is `@tanstack/db`. The path **`state/query-tanstack` throughout this spec is a planned adapter**, not an existing package or a claim of drop-in compatibility. Source adapters in later slices consume the same headless async contract as the renderer bindings (`docs/api/CORE-TOOLKIT-CONFORMANCE.md`, HYP-1507 pilot; integration pending). The site tests values against `@tanstack/db` 0.8.7 (IVM dependency 0.1.19). [Research, comparison with the intended Rust/WASM engine, differential-dataflow explanation and syntax proposal](/query-research). No benchmark win or unverified capability of the intended engine is inferred from this comparison.
 
 ### 8.1 Collection source contract (TanStack DB compatible)
 

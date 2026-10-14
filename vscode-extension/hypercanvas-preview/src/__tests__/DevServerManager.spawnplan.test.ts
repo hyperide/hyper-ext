@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import type { ensureDependencies, shouldInstallDependencies } from '../services/toolchainInstaller';
 
 // PreviewProxy reads iframe-*.js via fs.readFileSync AT IMPORT TIME (built next to the
 // bundle, absent in src/). Stub readFileSync for iframe-* only — same pattern as the
@@ -462,6 +463,10 @@ describe('HYP-1160 (c2): attach supersede + adopted-server lifecycle (PR #692 re
     const priv = manager as unknown as ManagerPrivates & {
       _findFreePort: (start: number) => Promise<number>;
       _waitForReady: (timeout: number, gen?: number) => Promise<void>;
+      _toolchain: {
+        shouldInstallDependencies: typeof shouldInstallDependencies;
+        ensureDependencies: typeof ensureDependencies;
+      };
     };
     priv._orphanBaseDir = store;
     try {
@@ -494,9 +499,16 @@ describe('HYP-1160 (c2): attach supersede + adopted-server lifecycle (PR #692 re
       priv._waitForReady = mock(async () => {
         throw new Error('test-shortcircuit-ready');
       });
+      // This fixture exercises server ownership, not package registry access or installation.
+      const install = mock(async () => {
+        throw new Error('lifecycle fixture attempted a dependency install');
+      });
+      priv._toolchain.ensureDependencies = install;
+      priv._toolchain.shouldInstallDependencies = mock(async () => false);
       const respawned = await manager.start();
       expect(respawned.status).toBe('error');
       expect(respawned.error).toBe('test-shortcircuit-ready');
+      expect(install).not.toHaveBeenCalled();
     } finally {
       restore();
       manager.dispose();

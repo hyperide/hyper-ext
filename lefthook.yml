@@ -89,15 +89,29 @@ pre-commit:
     no-conflict-markers:
       glob: '*.{ts,tsx,js,jsx,json,md,yml,yaml,css,scss}'
       run: |
-        FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -v "node_modules" | grep -E "\.(ts|tsx|js|jsx|json|md|yml|yaml|css|scss)$")
+        FILES=$(git diff --cached --name-only --diff-filter=ACMR) || exit "$?"
         if [ -z "$FILES" ]; then exit 0; fi
         FOUND=""
         while IFS= read -r f; do
-          RESULT=$(git show ":$f" 2>/dev/null | grep -n "^<<<<<<< \|^=======$\|^>>>>>>> ")
+          case "$f" in
+            *node_modules*) continue ;;
+            *.ts|*.tsx|*.js|*.jsx|*.json|*.md|*.yml|*.yaml|*.css|*.scss) ;;
+            *) continue ;;
+          esac
+          # Separate Git and grep so a failed index read cannot pass as no matches.
+          CONTENT=$(git show ":$f") || exit "$?"
+          RESULT=$(grep -nE '^<<<<<<< |^=======$|^>>>>>>> ' <<EOF
+        $CONTENT
+        EOF
+          )
+          STATUS=$?
+          case "$STATUS" in 0|1) ;; *) exit "$STATUS" ;; esac
           if [ -n "$RESULT" ]; then
             FOUND="$FOUND\n$f:\n$RESULT"
           fi
-        done <<< "$FILES"
+        done <<EOF
+        $FILES
+        EOF
         if [ -n "$FOUND" ]; then
           echo "ERROR: Conflict markers found in staged index:"
           printf "%b\n" "$FOUND"
