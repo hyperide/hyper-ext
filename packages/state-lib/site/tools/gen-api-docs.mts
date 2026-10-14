@@ -1,3 +1,5 @@
+import { isPublicApiMember, apiTypeDefinition } from './api-public-surface.mts';
+import { apiSymbolName } from './api-symbol-name.mts';
 /**
  * Generate the editor's hover/completion index from the prototype's REAL types.
  *
@@ -58,8 +60,8 @@ function sigOf(name: string, sym: ts.Symbol, at: ts.Node): string {
     : `${name}: ${checker.typeToString(type, at, FLAGS)}`;
 }
 
-function add(key: string, sym: ts.Symbol, at: ts.Node, kind: string) {
-  const sig = sigOf(key.split('.').pop()!, sym, at);
+function add(key: string, sym: ts.Symbol, at: ts.Node, kind: string, label = key.split('.').pop()!) {
+  const sig = sigOf(label, sym, at);
   entries[key] = { sig: tidy(sig), doc: docOf(sym), kind };
 }
 
@@ -81,10 +83,13 @@ for (const exported of exports) {
   if (isType) {
     // Interfaces and object type aliases: emit each member as Name.member.
     const t = checker.getDeclaredTypeOfSymbol(sym);
-    const props = t.getProperties();
-    if (props.length && !(sym.flags & ts.SymbolFlags.TypeParameter)) {
-      entries[name] = { sig: `type ${name}`, doc: docOf(sym), kind: 'type' };
-      for (const p of props) add(`${name}.${p.getName()}`, p, decl, 'member');
+    const props = t.getProperties().filter((member) => isPublicApiMember(member, program));
+    entries[name] = { sig: apiTypeDefinition(name, decl, t, checker), doc: docOf(sym), kind: 'type' };
+    if (!(sym.flags & ts.SymbolFlags.TypeParameter)) {
+      for (const p of props) {
+        const member = apiSymbolName(p);
+        add(`${name}.${member}`, p, decl, 'member', member);
+      }
     }
     continue;
   }
@@ -92,7 +97,10 @@ for (const exported of exports) {
 
   if (name === 'region') {
     const type = checker.getTypeOfSymbolAtLocation(sym, decl);
-    for (const p of type.getProperties()) add(`region.${p.getName()}`, p, decl, 'method');
+    for (const p of type.getProperties().filter((member) => isPublicApiMember(member, program))) {
+      const member = apiSymbolName(p);
+      add(`region.${member}`, p, decl, 'method', member);
+    }
   }
 
   // The store's methods live on createStore's return type: surface them as store.<name>
@@ -100,7 +108,10 @@ for (const exported of exports) {
   if (name === 'createStore') {
     const t = checker.getTypeOfSymbolAtLocation(sym, decl);
     const ret = t.getCallSignatures()[0]?.getReturnType();
-    for (const p of ret?.getProperties() ?? []) add(`store.${p.getName()}`, p, decl, 'method');
+    for (const p of (ret?.getProperties() ?? []).filter((member) => isPublicApiMember(member, program))) {
+      const member = apiSymbolName(p);
+      add(`store.${member}`, p, decl, 'method', member);
+    }
   }
 }
 

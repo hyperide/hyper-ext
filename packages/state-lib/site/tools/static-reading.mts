@@ -1,3 +1,4 @@
+import { expectVisibleExampleSource } from './workbench-fixture.mts';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -80,6 +81,7 @@ try {
     assert.ok(await page.locator('h1').isVisible());
   }
   await page.goto(`${server.url}/repl/read-write`);
+  await expectVisibleExampleSource(page);
   assert.ok((await page.locator('.editor-static').first().innerText()).includes('createStore'));
   assert.ok((await page.locator('.editor-static').nth(1).innerText()).includes("log('left'"));
   const text = await fetch(`${server.url}/repl/read-write.md`).then((r) => r.text());

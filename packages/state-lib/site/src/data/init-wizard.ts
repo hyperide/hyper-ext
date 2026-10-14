@@ -60,14 +60,14 @@ export const WIZARD_STEPS: WizardStep[] = [
     title: 'Framework',
     question: 'Framework',
     about:
-      'R19 is explicit that state is framework-agnostic, so this comes before any framework-specific question: which framework you\'re on. The core (signals + proxy store + patch-emitting transactions + keyed collections, spec §1) is itself framework-agnostic and runs in a browser tab, a Web Worker, a VS Code extension host, or Node/Bun with no adapter at all; React/Vue/Solid/Svelte are adapters built on top of it (§6). v1 GA targets those four behind one conformance suite — anything else ships `preview`.',
+      "R19 is explicit that state is framework-agnostic, so this comes before any framework-specific question: which framework you're on. The core (signals + proxy store + patch-emitting transactions + keyed collections, spec §1) is itself framework-agnostic and runs in a browser tab, a Web Worker, a VS Code extension host, or Node/Bun with no adapter at all; React/Vue/Solid/Svelte are adapters built on top of it (§6). v1 GA targets those four behind one conformance suite — anything else ships `preview`.",
     choices: [
       {
         id: 'react',
         label: 'React',
         reality: 'prototyped',
         note: 'The only adapter with anything running today: store.usePath(...) in the prototype is the real React hook binding, exercised live in the REPL.',
-        example: 'collection',
+        example: 'task-screen',
         apply: (cfg) => {
           cfg.framework = 'react';
         },
@@ -85,7 +85,7 @@ export const WIZARD_STEPS: WizardStep[] = [
         id: 'solid',
         label: 'Solid',
         reality: 'designed',
-        note: 'Specified (§6.3): signals map 1:1 (from(node)), and Solid\'s <For> would consume our ids directly. No Solid adapter is built.',
+        note: "Specified (§6.3): signals map 1:1 (from(node)), and Solid's <For> would consume our ids directly. No Solid adapter is built.",
         apply: (cfg) => {
           cfg.framework = 'solid';
         },
@@ -103,7 +103,7 @@ export const WIZARD_STEPS: WizardStep[] = [
         id: 'vanilla',
         label: 'vanilla (core only, no adapter)',
         reality: 'prototyped',
-        note: 'The framework-agnostic core itself — createStore, derive, actions, undo/redo — runs today with no framework import at all. The example below is the site\'s own opening claim, and its code path never imports React; only the separate interactive UI block below it does.',
+        note: "The framework-agnostic core itself — createStore, derive, actions, undo/redo — runs today with no framework import at all. The example below is the site's own opening claim, and its code path never imports React; only the separate interactive UI block below it does.",
         example: 'read-write',
         exampleCaption: 'the code path only — no framework import anywhere in it',
       },
@@ -121,7 +121,7 @@ export const WIZARD_STEPS: WizardStep[] = [
         id: 'tracked',
         label: 'tracked (recommended)',
         reality: 'prototyped',
-        note: 'This is exactly what store.usePath(...) does in the prototype today: a component subscribes only to the paths it actually reads — the same read-path-tracking approach as Valtio\'s useSnapshot + proxy-compare, with our own fix (a monotonic read set, forced by React Compiler memoisation) layered on top.',
+        note: "This is exactly what store.usePath(...) does in the prototype today: a component subscribes only to the paths it actually reads — the same read-path-tracking approach as Valtio's useSnapshot + proxy-compare, with our own fix (a monotonic read set, forced by React Compiler memoisation) layered on top.",
         example: 'collection',
         apply: (cfg) => {
           cfg.reactMode = 'tracked';
@@ -228,7 +228,7 @@ store.persist(indexedDBAdapter({ db: 'app', store: 'state' }), {
         id: 'localstorage',
         label: 'localStorage',
         reality: 'prototyped',
-        note: 'Runs today — storageAdapter(...) takes any object shaped like {getItem, setItem}, and localStorage satisfies that natively — but it is usually the wrong default for a real app, not the recommended one. The Web Storage API is fully synchronous: every read and write blocks the main thread until it completes. Its per-origin quota is also small, commonly cited around 5-10 MiB depending on the browser, against IndexedDB\'s asynchronous, much larger, browser-negotiated one. We keep Zustand\'s persist-middleware property that sync storage must never cause a hydration flash; the linked example swaps in an in-memory store instead of your real localStorage, but it is the same adapter mechanism.',
+        note: "Runs today — storageAdapter(...) takes any object shaped like {getItem, setItem}, and localStorage satisfies that natively — but it is usually the wrong default for a real app, not the recommended one. The Web Storage API is fully synchronous: every read and write blocks the main thread until it completes. Its per-origin quota is also small, commonly cited around 5-10 MiB depending on the browser, against IndexedDB's asynchronous, much larger, browser-negotiated one. We keep Zustand's persist-middleware property that sync storage must never cause a hydration flash; the linked example swaps in an in-memory store instead of your real localStorage, but it is the same adapter mechanism.",
         citations: [
           {
             url: 'https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API',
@@ -286,7 +286,7 @@ store.persist(indexedDBAdapter({ db: 'app', store: 'state' }), {
         id: 'use',
         label: 'use regions',
         reality: 'prototyped',
-        note: 'store.regionOf(path) and the { regions: {...} } option to createStore are real today: persist(...) already reads region policy to decide what reaches disk, with no separate include/exclude list. Unlike most mechanisms on this page, this one has no cited prior art (§4.16) — the design brief\'s own brainstorm records candidate region types folded in or rejected (automations, cache) rather than borrowed from another library.',
+        note: "store.regionOf(path) and the { regions: {...} } option to createStore are real today: persist(...) already reads region policy to decide what reaches disk, with no separate include/exclude list. Unlike most mechanisms on this page, this one has no cited prior art (§4.16) — the design brief's own brainstorm records candidate region types folded in or rejected (automations, cache) rather than borrowed from another library.",
         example: 'regions',
       },
       {

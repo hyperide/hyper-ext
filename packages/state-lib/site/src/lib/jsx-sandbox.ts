@@ -29,8 +29,7 @@ import { createRoot, type Root } from 'react-dom/client';
  * evaluated code alongside the hooks the examples use.
  */
 
-const REACT_SCOPE = {
-  React: { createElement, Fragment },
+const REACT_BINDINGS = Object.freeze({
   createElement,
   Fragment,
   useState,
@@ -41,7 +40,8 @@ const REACT_SCOPE = {
   useCallback,
   useSyncExternalStore,
   memo,
-};
+});
+const REACT_SCOPE = { React: REACT_BINDINGS, ...REACT_BINDINGS };
 
 export const REACT_SCOPE_NAMES = Object.keys(REACT_SCOPE);
 

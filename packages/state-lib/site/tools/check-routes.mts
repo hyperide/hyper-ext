@@ -9,7 +9,6 @@ const routes = [
   '/concepts/practical',
   '/query-research',
   '/selectors-vs-datalog',
-  '/diagrams',
   '/',
   '/init',
   '/concepts',

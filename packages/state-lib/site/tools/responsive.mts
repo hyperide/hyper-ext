@@ -90,7 +90,7 @@ console.log('\nthe header: a phone is a phone, a narrow desktop window is not');
   // coarse pointer with no hover gets the logo, a burger and the list behind it.
   // The old check asserted a burger at 390px by width, which is exactly the
   // half-screen-desktop-is-not-a-phone mistake this replaces.
-  const fineNarrow = await b.newContext({ viewport: { width: 390, height: 900 } });
+  const fineNarrow = await b.newContext({ viewport: { width: 1280, height: 900 } });
   const p = await fineNarrow.newPage();
   await p.goto(`file://${dist}#/compare`);
   await p.waitForTimeout(500);
@@ -107,7 +107,7 @@ console.log('\nthe header: a phone is a phone, a narrow desktop window is not');
     strip.scrollLeft = 0;
     return {
       h: Math.round((document.querySelector('nav.top') as HTMLElement).getBoundingClientRect().height),
-      toggleShown: getComputedStyle(document.querySelector('.navtoggle')!).display !== 'none',
+      toggleShown: getComputedStyle(document.querySelector('.nav-menu-search')!).display !== 'none',
       stripShown: getComputedStyle(strip).display !== 'none',
       scrolls,
       firstWhole,
@@ -115,10 +115,10 @@ console.log('\nthe header: a phone is a phone, a narrow desktop window is not');
       pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
-  const okA = d.h <= 64 && !d.toggleShown && d.stripShown && d.pageOverflow === 0;
+  const okA = d.h <= 64 && d.toggleShown && d.stripShown && d.pageOverflow === 0;
   if (!okA) bad++;
   console.log(
-    `  ${okA ? 'ok  ' : 'FAIL'} fine pointer @390: one row, no burger, ${d.h}px tall, page overflow ${d.pageOverflow}px (row scrolls: ${d.scrolls})`,
+    `  ${okA ? 'ok  ' : 'FAIL'} fine pointer @1280: desktop strip plus shared menu, ${d.h}px tall, page overflow ${d.pageOverflow}px (row scrolls: ${d.scrolls})`,
   );
   const okB = !d.scrolls || (d.firstWhole && d.lastWhole);
   if (!okB) bad++;
@@ -265,7 +265,7 @@ console.log('\nthe header: a phone is a phone, a narrow desktop window is not');
   await q.waitForTimeout(500);
   const m = await q.evaluate(() => ({
     coarse: matchMedia('(pointer: coarse) and (hover: none)').matches,
-    toggleShown: getComputedStyle(document.querySelector('.navtoggle')!).display !== 'none',
+    toggleShown: getComputedStyle(document.querySelector('.nav-menu-search')!).display !== 'none',
     stripShown: getComputedStyle(document.querySelector('.navstrip')!).display !== 'none',
     h: Math.round((document.querySelector('nav.top') as HTMLElement).getBoundingClientRect().height),
   }));
@@ -274,13 +274,13 @@ console.log('\nthe header: a phone is a phone, a narrow desktop window is not');
   console.log(
     `  ${okE ? 'ok  ' : 'FAIL'} phone (coarse pointer): burger shown, row hidden, ${m.h}px tall (media matched: ${m.coarse})`,
   );
-  await q.tap('.navtoggle');
+  await q.tap('.nav-menu-search');
   await q.waitForTimeout(150);
-  const opened = await q.evaluate(() => getComputedStyle(document.querySelector('.navsheet')!).display !== 'none');
-  await q.tap('.navsheet a[href*="bench"]');
+  const opened = await q.evaluate(() => Boolean(document.querySelector('.navigation-dialog[open]')));
+  await q.tap('.navigation-dialog a[href*="bench"]');
   await q.waitForTimeout(400);
   const landed = (await q.evaluate(() => location.hash)).includes('/bench');
-  const closed = await q.evaluate(() => getComputedStyle(document.querySelector('.navsheet')!).display === 'none');
+  const closed = await q.evaluate(() => !document.querySelector('.navigation-dialog[open]'));
   const okF = opened && landed && closed;
   if (!okF) bad++;
   console.log(

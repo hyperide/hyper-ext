@@ -51,6 +51,20 @@ function StepList({
  *  a literal string next to its own `exampleById(...)` call, so the two cannot drift apart. */
 function ExampleFor({ id }: { id: string }) {
   switch (id) {
+    case 'task-screen':
+      // The runnable example in full: Run executes setup + code step by step and mounts ui,
+      // so this block shows all three — nothing below is display-only.
+      return (
+        <>
+          <p className="lnote">
+            <em>
+              Store setup, then the prepared script Run executes, then the screen component — the complete runnable
+              example, not an excerpt.
+            </em>
+          </p>
+          <Code repl="task-screen">{`${exampleById('task-screen')!.setup}\n\n${exampleById('task-screen')!.code}\n\n${exampleById('task-screen')!.ui}`}</Code>
+        </>
+      );
     case 'collection':
       return <Code repl="collection">{exampleById('collection')!.code}</Code>;
     case 'queries':
@@ -182,6 +196,33 @@ export default function Init() {
           }
         </T>
       </header>
+      <section id="react-screen">
+        <h2>A screen before a configuration file.</h2>
+        <p>
+          One store owns the checklist. Named actions change it. TaskScreen subscribes to values; TaskView and TaskRow
+          receive plain props and event callbacks. The presentational components have no store import and can be
+          exercised with a test or story fixture.
+        </p>
+        <p>
+          The workbench supplies React and createStore for this prototype. The model and component source below belong
+          to the same runnable example, not a production npm installation recipe.
+        </p>
+        <ExampleFor id="task-screen" />
+        <p>
+          <a href={href('/repl/task-screen')}>Open the screen, live state and editable code →</a>
+        </p>
+        <p>
+          Every test or Storybook story should create its own model. “Global” means one coherent app model, not a
+          singleton shared between requests, users or tests. Standalone signals are a lower-level tool, not another
+          piece of state you must keep synchronized with each store field.
+        </p>
+        <p>
+          <a href="https://storybook.js.org/docs/writing-stories/build-pages-with-storybook">
+            Storybook’s container/presentational-component guidance ↗
+          </a>
+        </p>
+      </section>
+      <h2>Optional configuration choices</h2>
       <div className="cli-layout">
         <StepList steps={steps} activeId={step.id} selection={selection} onSelect={setActiveId} />
         <StepDetail step={step} selection={selection} onPick={pick} />

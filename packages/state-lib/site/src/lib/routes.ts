@@ -15,7 +15,6 @@ export const ROUTES: [string, string][] = [
   ['/repl', 'REPL'],
   ['/bench', 'Bench'],
   ['/cli', 'CLI'],
-  ['/diagrams', 'Diagrams'],
   ['/effects', 'No useEffect'],
   ['/devtools', 'Devtools'],
   ['/dive-data', 'Dive: data'],

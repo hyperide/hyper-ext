@@ -1085,7 +1085,9 @@ function pathGet(value: unknown, path: string): unknown {
  * button. Everything below is the running proof of that distinction.
  * ------------------------------------------------------------------ */
 
+/** Why owned work ended: explicit cancellation, owner disposal, replacement, timeout or dependency cancellation. */
 export type CancelReason = 'user' | 'scope-ended' | 'superseded' | 'timeout' | 'dependency-cancelled';
+/** Observable lifecycle of a prototype task; cancellation and settlement are distinct. */
 export type TaskStatus = 'pending' | 'loading' | 'success' | 'error' | 'cancelled';
 
 /** Thrown inside a task body when its signal aborts. Swallowed at the task
@@ -1762,10 +1764,11 @@ export function presented<V, W, C>(read: () => V, type: CustomType<V, W, C>, ctx
   return derive(() => type.present!.format(read(), ctx()), `present:${type.name}`);
 }
 
+/** Maps normalized field paths to their declared custom conversion types. */
+export type TypeMap = Record<string, CustomType<never, unknown, never>>;
 /** Encode a snapshot for the wire, using whichever declared type owns each path.
  *  Runs at the transport edge only — the in-memory patch log behind undo holds
  *  live values and encodes nothing. */
-export type TypeMap = Record<string, CustomType<never, unknown, never>>;
 export function encodeFor(value: unknown, path: string, types: TypeMap): unknown {
   const t = types[path];
   return t ? (t.codec as Codec<unknown, unknown>).encode(value) : value;

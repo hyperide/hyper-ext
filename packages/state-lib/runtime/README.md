@@ -129,3 +129,54 @@ previous node twice. One staged or read-only transaction read uses 25 callbacks
 Coverage includes in-flight disposal, self-disposal and unsubscribe, dynamic branches,
 cached failures/cycles, failed preflight, committed cache/graph isolation and nested
 savepoints.
+
+## Optional latest-result module — HYP-1464 candidate
+
+`src/latest-task.ts` composes the existing Runtime rather than importing the site's
+prototype. It loads outside a transaction, then publishes only the currently owned
+request's result inside one synchronous transaction. Its names are experimental,
+not a declaration that the public API v1 has been approved.
+
+`latestTask(runtime, load, commit)` returns `run(input)`, `cancel()` and `dispose()`.
+The loader receives an AbortSignal. Each run resolves to `committed`, `superseded`
+or `cancelled`; current loader/commit errors reject. Illegal lifecycle/pure/transaction
+starts throw before loading or aborting existing work. Static types reject async
+commit callbacks; dynamic promise returns are rejected by the kernel.
+
+Cancellation revokes publication even when the loader ignores AbortSignal, and
+settles the caller without waiting for that loader. It cannot stop non-cooperative
+external work or release a server reservation. Once commit begins, its real outcome
+wins: a NotificationError still means committed, even if an observer disposes the task.
+Dispose tasks explicitly with their owner. Runtime disposal prevents late publication
+but does not automatically abort or settle every externally owned task.
+
+The optional module requires AbortController/AbortSignal; its strict type project is
+`tsconfig.latest.json`. The environment-free core's ES-only type project is unchanged.
+Use stable immutable request keys; there is no automatic cache/retry/input deep clone.
+
+Run the complete controlled availability example from `../site` with
+`node --import tsx ../runtime/examples/availability.ts`, or run
+`node --import tsx tools/real-app-runtime.check.mts` for app-derived tests and types.
+Source-pinned corpus and known normalized-store failures: `../docs/api/REAL-APP-CORPUS.md`.
+
+## Installable private pilot — tasks-app and boards-app
+
+`package.json` and `tsconfig.build.json` define `@ultrabricks/state-lib@0.1.0-pilot.1`.
+Export a new self-contained package directory with
+`node tools/export-pilot.mjs /absolute/new/directory` from this runtime directory.
+The exporter compiles ESM/declarations and records source/output SHA256 provenance;
+it refuses to overwrite an existing destination. This is not an npm publication.
+
+`toExternalStore` adapts a real Runtime signal/derive for UI snapshot subscriptions.
+`selectExternalStore` caches derived snapshot identity and suppresses notifications
+for equal selected values. React consumers use the official useSyncExternalStore;
+the core has no React dependency. Snapshot values follow the immutable-update
+convention: direct deep mutation is not intercepted by this adapter.
+
+The initial app pilots deliberately cover real but bounded paths: tasks-app UI
+preferences (baseline Zustand remains selectable), and boards-app workspace loading
+(baseline epoch guard remains selectable). They do not replace TanStack Query,
+server authorization, durable drafts, document history or all application state.
+Each pilot includes actual HTTP/browser A/B tests, not just a synthetic showcase.
+The normalized experiment's membership/cache fixes are separately tested and are
+not silently presented as an integrated structural store in this package.

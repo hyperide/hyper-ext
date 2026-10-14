@@ -30,6 +30,13 @@ export function pageMarkdown(root: Element, url: string): string {
     }
     if (!(n instanceof Element)) return '';
     const tag = n.tagName.toLowerCase();
+    if (n.hasAttribute('data-diagram-source'))
+      return `\n${n.querySelector('figcaption')?.textContent ?? ''}\n${code(n.getAttribute('data-diagram-source') ?? '', 'text')}`;
+    if (n.hasAttribute('data-code-source') || n.hasAttribute('data-literate-source'))
+      return code(
+        n.getAttribute('data-code-source') ?? n.getAttribute('data-literate-source') ?? '',
+        n.getAttribute('data-source-lang') ?? 'ts',
+      );
     if (n.classList.contains('editor-shell')) return code(n.querySelector('.editor-static')?.textContent ?? '', 'tsx');
     if (n.classList.contains('cm-host')) {
       const lines = Array.from(n.querySelectorAll('.cm-line'), (e) => e.textContent ?? '');

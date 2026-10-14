@@ -1,3 +1,4 @@
+import { inlineDiagramHtml, isAsciiDiagram } from './inline-diagram';
 /** R80 — syntax highlighting for the code samples, in about eighty lines and no dependency.
  *
  *  A real tokeniser (shiki, prism) is 30–200 kB and this site is one self-contained file.
@@ -141,13 +142,92 @@ const UNESCAPE: Record<string, string> = {
  * re-scanning generated HTML is what corrupted attributes the first time.
  */
 export function highlightHtml(html: string): string {
+  const headings = [...html.matchAll(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/g)];
+  let headingAt = -1;
   return html.replace(
     /<pre([^>]*)><code([^>]*)>([\s\S]*?)<\/code><\/pre>/g,
-    (whole, preAttrs: string, codeAttrs: string, body: string) => {
+    (whole, preAttrs: string, codeAttrs: string, body: string, offset: number) => {
       const lang = /class="[^"]*language-([\w-]+)/.exec(codeAttrs)?.[1];
-      if (lang && NOT_CODE.has(lang)) return whole;
       const raw = body.replace(/&(amp|lt|gt|quot|#x?39|#x27);/g, (m) => UNESCAPE[m] ?? m);
+      while (headingAt + 1 < headings.length && headings[headingAt + 1].index! < offset) headingAt++;
+      if (isAsciiDiagram(raw, lang)) {
+        const caption =
+          headingAt >= 0
+            ? `${headings[headingAt][1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&')} — diagram`
+            : 'Diagram of the relationships described below';
+        return inlineDiagramHtml(raw, caption);
+      }
+      if (lang && NOT_CODE.has(lang)) return whole;
+      const parts = /^(?:ts|tsx|js|jsx|javascript|typescript)$/.test(lang ?? '') ? literateParts(raw) : [];
+      if (parts.some((part) => part.kind === 'prose')) {
+        const source = esc(raw).replace(/"/g, '&quot;');
+        const body = parts
+          .map((part) =>
+            !part.text
+              ? ''
+              : part.kind === 'prose'
+                ? `<p class="literate-prose">${esc(part.text)}</p>`
+                : `<pre${preAttrs} data-no-try><code${codeAttrs}>${highlight(part.text)}</code></pre>`,
+          )
+          .join('');
+        return `<div class="literate-source" data-code-source="${source}" data-source-lang="${lang}">${body}</div>`;
+      }
       return `<pre${preAttrs}><code${codeAttrs}>${highlight(raw)}</code></pre>`;
     },
   );
+}
+
+/** Reuse the highlighting lexer for presentation; never mistake a comment inside a string for prose. */
+export function sourceTokens(code: string): { kind: string; text: string; start: number; end: number }[] {
+  const tokens: { kind: string; text: string; start: number; end: number }[] = [];
+  let start = 0;
+  while (start < code.length) {
+    const rest = code.slice(start);
+    let consumed = false;
+    for (const [pattern, kind] of RULES) {
+      const match = pattern.exec(rest);
+      if (!match) continue;
+      const text = match[0];
+      tokens.push({ kind, text, start, end: start + text.length });
+      start += text.length;
+      consumed = true;
+      break;
+    }
+    if (!consumed) throw new Error('Source presentation lexer made no progress');
+  }
+  return tokens;
+}
+
+export type LiteratePart = { kind: 'code' | 'prose'; text: string; raw: string };
+/** Full-line comments become readable narrative; concatenating raw parts restores the exact source. */
+export function literateParts(source: string): LiteratePart[] {
+  if (!/(?:^|\n)[\t ]*\/[/*]/.test(source)) return [{ kind: 'code', text: source, raw: source }];
+  const displayCode = (text: string) => text.replace(/^(?:[ \t]*\r?\n)+|(?:\r?\n[ \t]*)+$/g, '');
+  const parts: LiteratePart[] = [];
+  let cursor = 0;
+  for (const token of sourceTokens(source)) {
+    if (token.kind !== 'comment' || /@(?:ts-|jsx|license|preserve)/.test(token.text)) continue;
+    const start = source.lastIndexOf('\n', token.start - 1) + 1;
+    const nextLine = source.indexOf('\n', token.end);
+    const end = nextLine < 0 ? source.length : nextLine + 1;
+    if (start < cursor || source.slice(start, token.start).trim() || source.slice(token.end, end).trim()) continue;
+    const before = source.slice(cursor, start);
+    if (before.trim()) parts.push({ kind: 'code', text: displayCode(before), raw: before });
+    else if (before && parts.length) parts[parts.length - 1].raw += before;
+    const raw = (parts.length ? '' : before) + source.slice(start, end);
+    const text = token.text
+      .replace(/^\/\/\s?/, '')
+      .replace(/^\/\*+|\*\/$/g, '')
+      .replace(/^\s*\* ?/gm, '')
+      .trim();
+    const prior = parts[parts.length - 1];
+    if (prior?.kind === 'prose') {
+      prior.raw += raw;
+      prior.text += `\n${text}`;
+    } else parts.push({ kind: 'prose', text, raw });
+    cursor = end;
+  }
+  const tail = source.slice(cursor);
+  if (tail) parts.push({ kind: 'code', text: displayCode(tail), raw: tail });
+  return parts.length ? parts : [{ kind: 'code', text: source, raw: source }];
 }

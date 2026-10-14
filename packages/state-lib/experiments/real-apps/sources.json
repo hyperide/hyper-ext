@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "retrievedAt": "2026-09-16",
+  "scope": "Pinned upstream source inspection and original reduced behavioral workloads, not execution or migration of the upstream applications.",
+  "sources": [
+    {
+      "id": "excalidraw",
+      "repository": "excalidraw/excalidraw",
+      "commit": "a9186480121afc16ccdec789fc533e6a9ee68c10",
+      "path": "packages/element/src/store.ts",
+      "url": "https://github.com/excalidraw/excalidraw/blob/a9186480121afc16ccdec789fc533e6a9ee68c10/packages/element/src/store.ts",
+      "sha256": "45cad877e99ced5c813539e4ad422f8c8bc5a71d15307750f374d648ae82e480",
+      "bytes": 29265
+    },
+    {
+      "id": "plane",
+      "repository": "makeplane/plane",
+      "commit": "a8961152ed30823048d95b848ae3cae019ec1b77",
+      "path": "apps/web/core/store/issue/helpers/base-issues.store.ts",
+      "url": "https://github.com/makeplane/plane/blob/a8961152ed30823048d95b848ae3cae019ec1b77/apps/web/core/store/issue/helpers/base-issues.store.ts",
+      "sha256": "f64b69e3f4f820fbb230f5461adbeb5ad33f1747fc009f4456ea9f32ae009e12",
+      "bytes": 76478
+    },
+    {
+      "id": "calcom",
+      "repository": "calcom/cal.diy",
+      "commit": "6bc45298226f96ff79e0c070c8b2ce39727e8477",
+      "path": "packages/features/bookings/Booker/store.ts",
+      "url": "https://github.com/calcom/cal.diy/blob/6bc45298226f96ff79e0c070c8b2ce39727e8477/packages/features/bookings/Booker/store.ts",
+      "sha256": "1df7eb00c3cd247b60e455ecf471bf23e6be1e7e796bf268303151dac774830e",
+      "bytes": 19131
+    },
+    {
+      "id": "calcom-slots",
+      "repository": "calcom/cal.diy",
+      "commit": "6bc45298226f96ff79e0c070c8b2ce39727e8477",
+      "path": "apps/web/modules/bookings/hooks/useSlots.ts",
+      "url": "https://github.com/calcom/cal.diy/blob/6bc45298226f96ff79e0c070c8b2ce39727e8477/apps/web/modules/bookings/hooks/useSlots.ts",
+      "sha256": "b3992f9f91cb8fa3441a420be54027aca5c9c48544694e5fad37660e4dcf726c",
+      "bytes": 6358
+    }
+  ],
+  "reports": [
+    {
+      "repository": "makeplane/plane",
+      "issue": 9049,
+      "url": "https://github.com/makeplane/plane/issues/9049",
+      "scope": "Reporter-described grouped kanban mismatch; guard independently located in pinned implementation. Not a claim of executing upstream Plane."
+    }
+  ]
+}

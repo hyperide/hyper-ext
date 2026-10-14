@@ -48,7 +48,6 @@ for (const route of [
   '/concepts/practical',
   '/query-research',
   '/selectors-vs-datalog',
-  '/diagrams',
   '/',
   '/concepts',
   '/compare',

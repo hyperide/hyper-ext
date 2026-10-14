@@ -1,3 +1,4 @@
+import { chooseScriptedDemo } from './workbench-fixture.mts';
 import { chromium } from './browser.mts';
 import { EXAMPLES } from '../src/data/examples';
 const b = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
@@ -7,6 +8,7 @@ p.on('pageerror', (e) => failures.push(`page: ${e.message}`));
 try {
   for (const ex of EXAMPLES) {
     await p.goto(`file://${process.cwd()}/dist/index.html#/repl/${ex.id}`);
+    await chooseScriptedDemo(p);
     await p.locator('.pane-primary .runall').click();
     await p.waitForFunction(
       () => !(document.querySelector('.pane-primary .runall') as HTMLButtonElement)?.disabled,

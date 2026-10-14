@@ -189,7 +189,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
   },
   encodeFor: {
     sig: 'encodeFor(value: unknown, path: string, types: TypeMap): unknown',
-    doc: '',
+    doc: 'Encode a snapshot for the wire, using whichever declared type owns each path.\nRuns at the transport edge only — the in-memory patch log behind undo holds\nlive values and encodes nothing.',
     kind: 'function',
   },
   decodeFor: {
@@ -228,7 +228,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'method',
   },
   Patch: {
-    sig: 'type Patch',
+    sig: "type Patch = { op: 'replace' | 'add' | 'remove'; path: string; value?: unknown };",
     doc: '',
     kind: 'type',
   },
@@ -248,7 +248,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'member',
   },
   PersistAdapter: {
-    sig: 'type PersistAdapter',
+    sig: 'type PersistAdapter = { write(patches: Patch[]): void; read(): Patch[] };',
     doc: 'Somewhere patches can be written and read back. A Map, IndexedDB, a file — the\nstore does not care, which is the point of specifying persistence as patches.',
     kind: 'type',
   },
@@ -263,7 +263,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'member',
   },
   Tx: {
-    sig: 'type Tx',
+    sig: 'type Tx = {\n  id: number;\n  name: string;\n  /** what changed */\n  patches: Patch[];\n  /** how to put it back — the same edit, reversed (§4.4). Undo is applying these. */\n  inverse: Patch[];\n  ts: number;\n};',
     doc: '',
     kind: 'type',
   },
@@ -293,259 +293,9 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'member',
   },
   Region: {
-    sig: 'type Region',
+    sig: "type Region = 'domain' | 'session' | 'view' | 'draft';",
     doc: '§4.16 — a region is not a new concept, it is a name for a bundle of policy defaults.\nDeclaring one replaces several option lines; declaring none changes nothing.',
     kind: 'type',
-  },
-  'Region.toString': {
-    sig: 'toString(): string',
-    doc: 'Returns a string representation of a string.',
-    kind: 'member',
-  },
-  'Region.charAt': {
-    sig: 'charAt(pos: number): string',
-    doc: 'Returns the character at the specified index.',
-    kind: 'member',
-  },
-  'Region.charCodeAt': {
-    sig: 'charCodeAt(index: number): number',
-    doc: 'Returns the Unicode value of the character at the specified location.',
-    kind: 'member',
-  },
-  'Region.concat': {
-    sig: 'concat(...strings: string[]): string',
-    doc: 'Returns a string that contains the concatenation of two or more strings.',
-    kind: 'member',
-  },
-  'Region.indexOf': {
-    sig: 'indexOf(searchString: string, position?: number): number',
-    doc: 'Returns the position of the first occurrence of a substring.',
-    kind: 'member',
-  },
-  'Region.lastIndexOf': {
-    sig: 'lastIndexOf(searchString: string, position?: number): number',
-    doc: 'Returns the last occurrence of a substring in the string.',
-    kind: 'member',
-  },
-  'Region.localeCompare': {
-    sig: 'localeCompare(that: string): number\nlocaleCompare(that: string, locales?: string | string[], options?: Intl.CollatorOptions): number\nlocaleCompare(that: string, locales?: Intl.LocalesArgument, options?: Intl.CollatorOptions): number',
-    doc: 'Determines whether two strings are equivalent in the current locale.\nDetermines whether two strings are equivalent in the current or specified locale.',
-    kind: 'member',
-  },
-  'Region.match': {
-    sig: 'match(regexp: string | RegExp): RegExpMatchArray | null\nmatch(matcher: { [Symbol.match](string: string): RegExpMatchArray | null; }): RegExpMatchArray | null',
-    doc: 'Matches a string with a regular expression, and returns an array containing the results of that search.\nMatches a string or an object that supports being matched against, and returns an array\ncontaining the results of that search, or null if no matches are found.',
-    kind: 'member',
-  },
-  'Region.replace': {
-    sig: 'replace(searchValue: string | RegExp, replaceValue: string): string\nreplace(searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string\nreplace(searchValue: { [Symbol.replace](string: string, replaceValue: string): string; }, replaceValue: string): string\nreplace(searchValue: { [Symbol.replace](string: string, replacer: (substring: string, ...args: any[]) => string): string; }, replacer: (substring: string, ...args: any[]) => string): string',
-    doc: 'Replaces text in a string, using a regular expression or search string.\nPasses a string and {@linkcode replaceValue} to the `[Symbol.replace]` method on {@linkcode searchValue}. This method is expected to implement its own replacement algorithm.\nReplaces text in a string, using an object that supports replacement within a string.',
-    kind: 'member',
-  },
-  'Region.search': {
-    sig: 'search(regexp: string | RegExp): number\nsearch(searcher: { [Symbol.search](string: string): number; }): number',
-    doc: 'Finds the first substring match in a regular expression search.',
-    kind: 'member',
-  },
-  'Region.slice': {
-    sig: 'slice(start?: number, end?: number): string',
-    doc: 'Returns a section of a string.',
-    kind: 'member',
-  },
-  'Region.split': {
-    sig: 'split(separator: string | RegExp, limit?: number): string[]\nsplit(splitter: { [Symbol.split](string: string, limit?: number): string[]; }, limit?: number): string[]',
-    doc: 'Split a string into substrings using the specified separator and return them as an array.',
-    kind: 'member',
-  },
-  'Region.substring': {
-    sig: 'substring(start: number, end?: number): string',
-    doc: 'Returns the substring at the specified location within a String object.',
-    kind: 'member',
-  },
-  'Region.toLowerCase': {
-    sig: 'toLowerCase(): string',
-    doc: 'Converts all the alphabetic characters in a string to lowercase.',
-    kind: 'member',
-  },
-  'Region.toLocaleLowerCase': {
-    sig: 'toLocaleLowerCase(locales?: string | string[]): string\ntoLocaleLowerCase(locales?: Intl.LocalesArgument): string',
-    doc: "Converts all alphabetic characters to lowercase, taking into account the host environment's current locale.",
-    kind: 'member',
-  },
-  'Region.toUpperCase': {
-    sig: 'toUpperCase(): string',
-    doc: 'Converts all the alphabetic characters in a string to uppercase.',
-    kind: 'member',
-  },
-  'Region.toLocaleUpperCase': {
-    sig: 'toLocaleUpperCase(locales?: string | string[]): string\ntoLocaleUpperCase(locales?: Intl.LocalesArgument): string',
-    doc: "Returns a string where all alphabetic characters have been converted to uppercase, taking into account the host environment's current locale.",
-    kind: 'member',
-  },
-  'Region.trim': {
-    sig: 'trim(): string',
-    doc: 'Removes the leading and trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'Region.length': {
-    sig: 'length: number',
-    doc: 'Returns the length of a String object.',
-    kind: 'member',
-  },
-  'Region.substr': {
-    sig: 'substr(from: number, length?: number): string',
-    doc: 'Gets a substring beginning at the specified location and having the specified length.',
-    kind: 'member',
-  },
-  'Region.valueOf': {
-    sig: 'valueOf(): string',
-    doc: 'Returns the primitive value of the specified object.',
-    kind: 'member',
-  },
-  'Region.codePointAt': {
-    sig: 'codePointAt(pos: number): number | undefined',
-    doc: 'Returns a nonnegative integer Number less than 1114112 (0x110000) that is the code point\nvalue of the UTF-16 encoded code point starting at the string element at position pos in\nthe String resulting from converting this object to a String.\nIf there is no element at that position, the result is undefined.\nIf a valid UTF-16 surrogate pair does not begin at pos, the result is the code unit at pos.',
-    kind: 'member',
-  },
-  'Region.includes': {
-    sig: 'includes(searchString: string, position?: number): boolean',
-    doc: 'Returns true if searchString appears as a substring of the result of converting this\nobject to a String, at one or more positions that are\ngreater than or equal to position; otherwise, returns false.',
-    kind: 'member',
-  },
-  'Region.endsWith': {
-    sig: 'endsWith(searchString: string, endPosition?: number): boolean',
-    doc: 'Returns true if the sequence of elements of searchString converted to a String is the\nsame as the corresponding elements of this object (converted to a String) starting at\nendPosition – length(this). Otherwise returns false.',
-    kind: 'member',
-  },
-  'Region.normalize': {
-    sig: 'normalize(form: "NFC" | "NFD" | "NFKC" | "NFKD"): string\nnormalize(form?: string): string',
-    doc: 'Returns the String value result of normalizing the string into the normalization form\nnamed by form as specified in Unicode Standard Annex #15, Unicode Normalization Forms.',
-    kind: 'member',
-  },
-  'Region.repeat': {
-    sig: 'repeat(count: number): string',
-    doc: 'Returns a String value that is made from count copies appended together. If count is 0,\nthe empty string is returned.',
-    kind: 'member',
-  },
-  'Region.startsWith': {
-    sig: 'startsWith(searchString: string, position?: number): boolean',
-    doc: 'Returns true if the sequence of elements of searchString converted to a String is the\nsame as the corresponding elements of this object (converted to a String) starting at\nposition. Otherwise returns false.',
-    kind: 'member',
-  },
-  'Region.anchor': {
-    sig: 'anchor(name: string): string',
-    doc: 'Returns an `<a>` HTML anchor element and sets the name attribute to the text value',
-    kind: 'member',
-  },
-  'Region.big': {
-    sig: 'big(): string',
-    doc: 'Returns a `<big>` HTML element',
-    kind: 'member',
-  },
-  'Region.blink': {
-    sig: 'blink(): string',
-    doc: 'Returns a `<blink>` HTML element',
-    kind: 'member',
-  },
-  'Region.bold': {
-    sig: 'bold(): string',
-    doc: 'Returns a `<b>` HTML element',
-    kind: 'member',
-  },
-  'Region.fixed': {
-    sig: 'fixed(): string',
-    doc: 'Returns a `<tt>` HTML element',
-    kind: 'member',
-  },
-  'Region.fontcolor': {
-    sig: 'fontcolor(color: string): string',
-    doc: 'Returns a `<font>` HTML element and sets the color attribute value',
-    kind: 'member',
-  },
-  'Region.fontsize': {
-    sig: 'fontsize(size: number): string\nfontsize(size: string): string',
-    doc: 'Returns a `<font>` HTML element and sets the size attribute value',
-    kind: 'member',
-  },
-  'Region.italics': {
-    sig: 'italics(): string',
-    doc: 'Returns an `<i>` HTML element',
-    kind: 'member',
-  },
-  'Region.link': {
-    sig: 'link(url: string): string',
-    doc: 'Returns an `<a>` HTML element and sets the href attribute value',
-    kind: 'member',
-  },
-  'Region.small': {
-    sig: 'small(): string',
-    doc: 'Returns a `<small>` HTML element',
-    kind: 'member',
-  },
-  'Region.strike': {
-    sig: 'strike(): string',
-    doc: 'Returns a `<strike>` HTML element',
-    kind: 'member',
-  },
-  'Region.sub': {
-    sig: 'sub(): string',
-    doc: 'Returns a `<sub>` HTML element',
-    kind: 'member',
-  },
-  'Region.sup': {
-    sig: 'sup(): string',
-    doc: 'Returns a `<sup>` HTML element',
-    kind: 'member',
-  },
-  'Region.padStart': {
-    sig: 'padStart(maxLength: number, fillString?: string): string',
-    doc: 'Pads the current string with a given string (possibly repeated) so that the resulting string reaches a given length.\nThe padding is applied from the start (left) of the current string.',
-    kind: 'member',
-  },
-  'Region.padEnd': {
-    sig: 'padEnd(maxLength: number, fillString?: string): string',
-    doc: 'Pads the current string with a given string (possibly repeated) so that the resulting string reaches a given length.\nThe padding is applied from the end (right) of the current string.',
-    kind: 'member',
-  },
-  'Region.trimEnd': {
-    sig: 'trimEnd(): string',
-    doc: 'Removes the trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'Region.trimStart': {
-    sig: 'trimStart(): string',
-    doc: 'Removes the leading white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'Region.trimLeft': {
-    sig: 'trimLeft(): string',
-    doc: 'Removes the leading white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'Region.trimRight': {
-    sig: 'trimRight(): string',
-    doc: 'Removes the trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'Region.matchAll': {
-    sig: 'matchAll(regexp: RegExp): RegExpStringIterator<RegExpExecArray>',
-    doc: 'Matches a string with a regular expression, and returns an iterable of matches\ncontaining the results of that search.',
-    kind: 'member',
-  },
-  'Region.replaceAll': {
-    sig: 'replaceAll(searchValue: string | RegExp, replaceValue: string): string\nreplaceAll(searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string',
-    doc: 'Replace all instances of a substring in a string, using a regular expression or search string.',
-    kind: 'member',
-  },
-  'Region.at': {
-    sig: 'at(index: number): string | undefined',
-    doc: 'Returns a new String consisting of the single UTF-16 code unit located at the specified index.',
-    kind: 'member',
-  },
-  'Region.__@iterator@104': {
-    sig: '__@iterator@104(): StringIterator<string>',
-    doc: 'Iterator',
-    kind: 'member',
   },
   REGION_POLICY: {
     sig: 'REGION_POLICY: Record<Region, { persist: boolean; note: string; }>',
@@ -553,7 +303,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'value',
   },
   DerivedCollection: {
-    sig: 'type DerivedCollection',
+    sig: 'type DerivedCollection<_I> = {\n  /** Current member ids, in sort order. A signal: reading it inside a `watch` subscribes. */\n  ids: Signal<string[]>;\n  /** How many patch-driven repairs have run — the evidence that nothing re-ran wholesale. */\n  readonly repairs: number;\n  dispose(): void;\n};',
     doc: 'A filtered, sorted view over a keyed collection, maintained from patches (§4.5, R66).\n\nThe view is built once. After that a write does not re-run filter or sort over the\ncollection — it inspects the patches of the committed transaction, works out which\nitems those touched, and repairs only those positions. Cost is O(changed · log n)\nrather than O(n log n), which is the whole claim, measured on the Bench page.',
     kind: 'type',
   },
@@ -573,514 +323,14 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'member',
   },
   CancelReason: {
-    sig: 'type CancelReason',
-    doc: '',
+    sig: "type CancelReason = 'user' | 'scope-ended' | 'superseded' | 'timeout' | 'dependency-cancelled';",
+    doc: 'Why owned work ended: explicit cancellation, owner disposal, replacement, timeout or dependency cancellation.',
     kind: 'type',
-  },
-  'CancelReason.toString': {
-    sig: 'toString(): string',
-    doc: 'Returns a string representation of a string.',
-    kind: 'member',
-  },
-  'CancelReason.charAt': {
-    sig: 'charAt(pos: number): string',
-    doc: 'Returns the character at the specified index.',
-    kind: 'member',
-  },
-  'CancelReason.charCodeAt': {
-    sig: 'charCodeAt(index: number): number',
-    doc: 'Returns the Unicode value of the character at the specified location.',
-    kind: 'member',
-  },
-  'CancelReason.concat': {
-    sig: 'concat(...strings: string[]): string',
-    doc: 'Returns a string that contains the concatenation of two or more strings.',
-    kind: 'member',
-  },
-  'CancelReason.indexOf': {
-    sig: 'indexOf(searchString: string, position?: number): number',
-    doc: 'Returns the position of the first occurrence of a substring.',
-    kind: 'member',
-  },
-  'CancelReason.lastIndexOf': {
-    sig: 'lastIndexOf(searchString: string, position?: number): number',
-    doc: 'Returns the last occurrence of a substring in the string.',
-    kind: 'member',
-  },
-  'CancelReason.localeCompare': {
-    sig: 'localeCompare(that: string): number\nlocaleCompare(that: string, locales?: string | string[], options?: Intl.CollatorOptions): number\nlocaleCompare(that: string, locales?: Intl.LocalesArgument, options?: Intl.CollatorOptions): number',
-    doc: 'Determines whether two strings are equivalent in the current locale.\nDetermines whether two strings are equivalent in the current or specified locale.',
-    kind: 'member',
-  },
-  'CancelReason.match': {
-    sig: 'match(regexp: string | RegExp): RegExpMatchArray | null\nmatch(matcher: { [Symbol.match](string: string): RegExpMatchArray | null; }): RegExpMatchArray | null',
-    doc: 'Matches a string with a regular expression, and returns an array containing the results of that search.\nMatches a string or an object that supports being matched against, and returns an array\ncontaining the results of that search, or null if no matches are found.',
-    kind: 'member',
-  },
-  'CancelReason.replace': {
-    sig: 'replace(searchValue: string | RegExp, replaceValue: string): string\nreplace(searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string\nreplace(searchValue: { [Symbol.replace](string: string, replaceValue: string): string; }, replaceValue: string): string\nreplace(searchValue: { [Symbol.replace](string: string, replacer: (substring: string, ...args: any[]) => string): string; }, replacer: (substring: string, ...args: any[]) => string): string',
-    doc: 'Replaces text in a string, using a regular expression or search string.\nPasses a string and {@linkcode replaceValue} to the `[Symbol.replace]` method on {@linkcode searchValue}. This method is expected to implement its own replacement algorithm.\nReplaces text in a string, using an object that supports replacement within a string.',
-    kind: 'member',
-  },
-  'CancelReason.search': {
-    sig: 'search(regexp: string | RegExp): number\nsearch(searcher: { [Symbol.search](string: string): number; }): number',
-    doc: 'Finds the first substring match in a regular expression search.',
-    kind: 'member',
-  },
-  'CancelReason.slice': {
-    sig: 'slice(start?: number, end?: number): string',
-    doc: 'Returns a section of a string.',
-    kind: 'member',
-  },
-  'CancelReason.split': {
-    sig: 'split(separator: string | RegExp, limit?: number): string[]\nsplit(splitter: { [Symbol.split](string: string, limit?: number): string[]; }, limit?: number): string[]',
-    doc: 'Split a string into substrings using the specified separator and return them as an array.',
-    kind: 'member',
-  },
-  'CancelReason.substring': {
-    sig: 'substring(start: number, end?: number): string',
-    doc: 'Returns the substring at the specified location within a String object.',
-    kind: 'member',
-  },
-  'CancelReason.toLowerCase': {
-    sig: 'toLowerCase(): string',
-    doc: 'Converts all the alphabetic characters in a string to lowercase.',
-    kind: 'member',
-  },
-  'CancelReason.toLocaleLowerCase': {
-    sig: 'toLocaleLowerCase(locales?: string | string[]): string\ntoLocaleLowerCase(locales?: Intl.LocalesArgument): string',
-    doc: "Converts all alphabetic characters to lowercase, taking into account the host environment's current locale.",
-    kind: 'member',
-  },
-  'CancelReason.toUpperCase': {
-    sig: 'toUpperCase(): string',
-    doc: 'Converts all the alphabetic characters in a string to uppercase.',
-    kind: 'member',
-  },
-  'CancelReason.toLocaleUpperCase': {
-    sig: 'toLocaleUpperCase(locales?: string | string[]): string\ntoLocaleUpperCase(locales?: Intl.LocalesArgument): string',
-    doc: "Returns a string where all alphabetic characters have been converted to uppercase, taking into account the host environment's current locale.",
-    kind: 'member',
-  },
-  'CancelReason.trim': {
-    sig: 'trim(): string',
-    doc: 'Removes the leading and trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'CancelReason.length': {
-    sig: 'length: number',
-    doc: 'Returns the length of a String object.',
-    kind: 'member',
-  },
-  'CancelReason.substr': {
-    sig: 'substr(from: number, length?: number): string',
-    doc: 'Gets a substring beginning at the specified location and having the specified length.',
-    kind: 'member',
-  },
-  'CancelReason.valueOf': {
-    sig: 'valueOf(): string',
-    doc: 'Returns the primitive value of the specified object.',
-    kind: 'member',
-  },
-  'CancelReason.codePointAt': {
-    sig: 'codePointAt(pos: number): number | undefined',
-    doc: 'Returns a nonnegative integer Number less than 1114112 (0x110000) that is the code point\nvalue of the UTF-16 encoded code point starting at the string element at position pos in\nthe String resulting from converting this object to a String.\nIf there is no element at that position, the result is undefined.\nIf a valid UTF-16 surrogate pair does not begin at pos, the result is the code unit at pos.',
-    kind: 'member',
-  },
-  'CancelReason.includes': {
-    sig: 'includes(searchString: string, position?: number): boolean',
-    doc: 'Returns true if searchString appears as a substring of the result of converting this\nobject to a String, at one or more positions that are\ngreater than or equal to position; otherwise, returns false.',
-    kind: 'member',
-  },
-  'CancelReason.endsWith': {
-    sig: 'endsWith(searchString: string, endPosition?: number): boolean',
-    doc: 'Returns true if the sequence of elements of searchString converted to a String is the\nsame as the corresponding elements of this object (converted to a String) starting at\nendPosition – length(this). Otherwise returns false.',
-    kind: 'member',
-  },
-  'CancelReason.normalize': {
-    sig: 'normalize(form: "NFC" | "NFD" | "NFKC" | "NFKD"): string\nnormalize(form?: string): string',
-    doc: 'Returns the String value result of normalizing the string into the normalization form\nnamed by form as specified in Unicode Standard Annex #15, Unicode Normalization Forms.',
-    kind: 'member',
-  },
-  'CancelReason.repeat': {
-    sig: 'repeat(count: number): string',
-    doc: 'Returns a String value that is made from count copies appended together. If count is 0,\nthe empty string is returned.',
-    kind: 'member',
-  },
-  'CancelReason.startsWith': {
-    sig: 'startsWith(searchString: string, position?: number): boolean',
-    doc: 'Returns true if the sequence of elements of searchString converted to a String is the\nsame as the corresponding elements of this object (converted to a String) starting at\nposition. Otherwise returns false.',
-    kind: 'member',
-  },
-  'CancelReason.anchor': {
-    sig: 'anchor(name: string): string',
-    doc: 'Returns an `<a>` HTML anchor element and sets the name attribute to the text value',
-    kind: 'member',
-  },
-  'CancelReason.big': {
-    sig: 'big(): string',
-    doc: 'Returns a `<big>` HTML element',
-    kind: 'member',
-  },
-  'CancelReason.blink': {
-    sig: 'blink(): string',
-    doc: 'Returns a `<blink>` HTML element',
-    kind: 'member',
-  },
-  'CancelReason.bold': {
-    sig: 'bold(): string',
-    doc: 'Returns a `<b>` HTML element',
-    kind: 'member',
-  },
-  'CancelReason.fixed': {
-    sig: 'fixed(): string',
-    doc: 'Returns a `<tt>` HTML element',
-    kind: 'member',
-  },
-  'CancelReason.fontcolor': {
-    sig: 'fontcolor(color: string): string',
-    doc: 'Returns a `<font>` HTML element and sets the color attribute value',
-    kind: 'member',
-  },
-  'CancelReason.fontsize': {
-    sig: 'fontsize(size: number): string\nfontsize(size: string): string',
-    doc: 'Returns a `<font>` HTML element and sets the size attribute value',
-    kind: 'member',
-  },
-  'CancelReason.italics': {
-    sig: 'italics(): string',
-    doc: 'Returns an `<i>` HTML element',
-    kind: 'member',
-  },
-  'CancelReason.link': {
-    sig: 'link(url: string): string',
-    doc: 'Returns an `<a>` HTML element and sets the href attribute value',
-    kind: 'member',
-  },
-  'CancelReason.small': {
-    sig: 'small(): string',
-    doc: 'Returns a `<small>` HTML element',
-    kind: 'member',
-  },
-  'CancelReason.strike': {
-    sig: 'strike(): string',
-    doc: 'Returns a `<strike>` HTML element',
-    kind: 'member',
-  },
-  'CancelReason.sub': {
-    sig: 'sub(): string',
-    doc: 'Returns a `<sub>` HTML element',
-    kind: 'member',
-  },
-  'CancelReason.sup': {
-    sig: 'sup(): string',
-    doc: 'Returns a `<sup>` HTML element',
-    kind: 'member',
-  },
-  'CancelReason.padStart': {
-    sig: 'padStart(maxLength: number, fillString?: string): string',
-    doc: 'Pads the current string with a given string (possibly repeated) so that the resulting string reaches a given length.\nThe padding is applied from the start (left) of the current string.',
-    kind: 'member',
-  },
-  'CancelReason.padEnd': {
-    sig: 'padEnd(maxLength: number, fillString?: string): string',
-    doc: 'Pads the current string with a given string (possibly repeated) so that the resulting string reaches a given length.\nThe padding is applied from the end (right) of the current string.',
-    kind: 'member',
-  },
-  'CancelReason.trimEnd': {
-    sig: 'trimEnd(): string',
-    doc: 'Removes the trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'CancelReason.trimStart': {
-    sig: 'trimStart(): string',
-    doc: 'Removes the leading white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'CancelReason.trimLeft': {
-    sig: 'trimLeft(): string',
-    doc: 'Removes the leading white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'CancelReason.trimRight': {
-    sig: 'trimRight(): string',
-    doc: 'Removes the trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'CancelReason.matchAll': {
-    sig: 'matchAll(regexp: RegExp): RegExpStringIterator<RegExpExecArray>',
-    doc: 'Matches a string with a regular expression, and returns an iterable of matches\ncontaining the results of that search.',
-    kind: 'member',
-  },
-  'CancelReason.replaceAll': {
-    sig: 'replaceAll(searchValue: string | RegExp, replaceValue: string): string\nreplaceAll(searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string',
-    doc: 'Replace all instances of a substring in a string, using a regular expression or search string.',
-    kind: 'member',
-  },
-  'CancelReason.at': {
-    sig: 'at(index: number): string | undefined',
-    doc: 'Returns a new String consisting of the single UTF-16 code unit located at the specified index.',
-    kind: 'member',
-  },
-  'CancelReason.__@iterator@104': {
-    sig: '__@iterator@104(): StringIterator<string>',
-    doc: 'Iterator',
-    kind: 'member',
   },
   TaskStatus: {
-    sig: 'type TaskStatus',
-    doc: '',
+    sig: "type TaskStatus = 'pending' | 'loading' | 'success' | 'error' | 'cancelled';",
+    doc: 'Observable lifecycle of a prototype task; cancellation and settlement are distinct.',
     kind: 'type',
-  },
-  'TaskStatus.toString': {
-    sig: 'toString(): string',
-    doc: 'Returns a string representation of a string.',
-    kind: 'member',
-  },
-  'TaskStatus.charAt': {
-    sig: 'charAt(pos: number): string',
-    doc: 'Returns the character at the specified index.',
-    kind: 'member',
-  },
-  'TaskStatus.charCodeAt': {
-    sig: 'charCodeAt(index: number): number',
-    doc: 'Returns the Unicode value of the character at the specified location.',
-    kind: 'member',
-  },
-  'TaskStatus.concat': {
-    sig: 'concat(...strings: string[]): string',
-    doc: 'Returns a string that contains the concatenation of two or more strings.',
-    kind: 'member',
-  },
-  'TaskStatus.indexOf': {
-    sig: 'indexOf(searchString: string, position?: number): number',
-    doc: 'Returns the position of the first occurrence of a substring.',
-    kind: 'member',
-  },
-  'TaskStatus.lastIndexOf': {
-    sig: 'lastIndexOf(searchString: string, position?: number): number',
-    doc: 'Returns the last occurrence of a substring in the string.',
-    kind: 'member',
-  },
-  'TaskStatus.localeCompare': {
-    sig: 'localeCompare(that: string): number\nlocaleCompare(that: string, locales?: string | string[], options?: Intl.CollatorOptions): number\nlocaleCompare(that: string, locales?: Intl.LocalesArgument, options?: Intl.CollatorOptions): number',
-    doc: 'Determines whether two strings are equivalent in the current locale.\nDetermines whether two strings are equivalent in the current or specified locale.',
-    kind: 'member',
-  },
-  'TaskStatus.match': {
-    sig: 'match(regexp: string | RegExp): RegExpMatchArray | null\nmatch(matcher: { [Symbol.match](string: string): RegExpMatchArray | null; }): RegExpMatchArray | null',
-    doc: 'Matches a string with a regular expression, and returns an array containing the results of that search.\nMatches a string or an object that supports being matched against, and returns an array\ncontaining the results of that search, or null if no matches are found.',
-    kind: 'member',
-  },
-  'TaskStatus.replace': {
-    sig: 'replace(searchValue: string | RegExp, replaceValue: string): string\nreplace(searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string\nreplace(searchValue: { [Symbol.replace](string: string, replaceValue: string): string; }, replaceValue: string): string\nreplace(searchValue: { [Symbol.replace](string: string, replacer: (substring: string, ...args: any[]) => string): string; }, replacer: (substring: string, ...args: any[]) => string): string',
-    doc: 'Replaces text in a string, using a regular expression or search string.\nPasses a string and {@linkcode replaceValue} to the `[Symbol.replace]` method on {@linkcode searchValue}. This method is expected to implement its own replacement algorithm.\nReplaces text in a string, using an object that supports replacement within a string.',
-    kind: 'member',
-  },
-  'TaskStatus.search': {
-    sig: 'search(regexp: string | RegExp): number\nsearch(searcher: { [Symbol.search](string: string): number; }): number',
-    doc: 'Finds the first substring match in a regular expression search.',
-    kind: 'member',
-  },
-  'TaskStatus.slice': {
-    sig: 'slice(start?: number, end?: number): string',
-    doc: 'Returns a section of a string.',
-    kind: 'member',
-  },
-  'TaskStatus.split': {
-    sig: 'split(separator: string | RegExp, limit?: number): string[]\nsplit(splitter: { [Symbol.split](string: string, limit?: number): string[]; }, limit?: number): string[]',
-    doc: 'Split a string into substrings using the specified separator and return them as an array.',
-    kind: 'member',
-  },
-  'TaskStatus.substring': {
-    sig: 'substring(start: number, end?: number): string',
-    doc: 'Returns the substring at the specified location within a String object.',
-    kind: 'member',
-  },
-  'TaskStatus.toLowerCase': {
-    sig: 'toLowerCase(): string',
-    doc: 'Converts all the alphabetic characters in a string to lowercase.',
-    kind: 'member',
-  },
-  'TaskStatus.toLocaleLowerCase': {
-    sig: 'toLocaleLowerCase(locales?: string | string[]): string\ntoLocaleLowerCase(locales?: Intl.LocalesArgument): string',
-    doc: "Converts all alphabetic characters to lowercase, taking into account the host environment's current locale.",
-    kind: 'member',
-  },
-  'TaskStatus.toUpperCase': {
-    sig: 'toUpperCase(): string',
-    doc: 'Converts all the alphabetic characters in a string to uppercase.',
-    kind: 'member',
-  },
-  'TaskStatus.toLocaleUpperCase': {
-    sig: 'toLocaleUpperCase(locales?: string | string[]): string\ntoLocaleUpperCase(locales?: Intl.LocalesArgument): string',
-    doc: "Returns a string where all alphabetic characters have been converted to uppercase, taking into account the host environment's current locale.",
-    kind: 'member',
-  },
-  'TaskStatus.trim': {
-    sig: 'trim(): string',
-    doc: 'Removes the leading and trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'TaskStatus.length': {
-    sig: 'length: number',
-    doc: 'Returns the length of a String object.',
-    kind: 'member',
-  },
-  'TaskStatus.substr': {
-    sig: 'substr(from: number, length?: number): string',
-    doc: 'Gets a substring beginning at the specified location and having the specified length.',
-    kind: 'member',
-  },
-  'TaskStatus.valueOf': {
-    sig: 'valueOf(): string',
-    doc: 'Returns the primitive value of the specified object.',
-    kind: 'member',
-  },
-  'TaskStatus.codePointAt': {
-    sig: 'codePointAt(pos: number): number | undefined',
-    doc: 'Returns a nonnegative integer Number less than 1114112 (0x110000) that is the code point\nvalue of the UTF-16 encoded code point starting at the string element at position pos in\nthe String resulting from converting this object to a String.\nIf there is no element at that position, the result is undefined.\nIf a valid UTF-16 surrogate pair does not begin at pos, the result is the code unit at pos.',
-    kind: 'member',
-  },
-  'TaskStatus.includes': {
-    sig: 'includes(searchString: string, position?: number): boolean',
-    doc: 'Returns true if searchString appears as a substring of the result of converting this\nobject to a String, at one or more positions that are\ngreater than or equal to position; otherwise, returns false.',
-    kind: 'member',
-  },
-  'TaskStatus.endsWith': {
-    sig: 'endsWith(searchString: string, endPosition?: number): boolean',
-    doc: 'Returns true if the sequence of elements of searchString converted to a String is the\nsame as the corresponding elements of this object (converted to a String) starting at\nendPosition – length(this). Otherwise returns false.',
-    kind: 'member',
-  },
-  'TaskStatus.normalize': {
-    sig: 'normalize(form: "NFC" | "NFD" | "NFKC" | "NFKD"): string\nnormalize(form?: string): string',
-    doc: 'Returns the String value result of normalizing the string into the normalization form\nnamed by form as specified in Unicode Standard Annex #15, Unicode Normalization Forms.',
-    kind: 'member',
-  },
-  'TaskStatus.repeat': {
-    sig: 'repeat(count: number): string',
-    doc: 'Returns a String value that is made from count copies appended together. If count is 0,\nthe empty string is returned.',
-    kind: 'member',
-  },
-  'TaskStatus.startsWith': {
-    sig: 'startsWith(searchString: string, position?: number): boolean',
-    doc: 'Returns true if the sequence of elements of searchString converted to a String is the\nsame as the corresponding elements of this object (converted to a String) starting at\nposition. Otherwise returns false.',
-    kind: 'member',
-  },
-  'TaskStatus.anchor': {
-    sig: 'anchor(name: string): string',
-    doc: 'Returns an `<a>` HTML anchor element and sets the name attribute to the text value',
-    kind: 'member',
-  },
-  'TaskStatus.big': {
-    sig: 'big(): string',
-    doc: 'Returns a `<big>` HTML element',
-    kind: 'member',
-  },
-  'TaskStatus.blink': {
-    sig: 'blink(): string',
-    doc: 'Returns a `<blink>` HTML element',
-    kind: 'member',
-  },
-  'TaskStatus.bold': {
-    sig: 'bold(): string',
-    doc: 'Returns a `<b>` HTML element',
-    kind: 'member',
-  },
-  'TaskStatus.fixed': {
-    sig: 'fixed(): string',
-    doc: 'Returns a `<tt>` HTML element',
-    kind: 'member',
-  },
-  'TaskStatus.fontcolor': {
-    sig: 'fontcolor(color: string): string',
-    doc: 'Returns a `<font>` HTML element and sets the color attribute value',
-    kind: 'member',
-  },
-  'TaskStatus.fontsize': {
-    sig: 'fontsize(size: number): string\nfontsize(size: string): string',
-    doc: 'Returns a `<font>` HTML element and sets the size attribute value',
-    kind: 'member',
-  },
-  'TaskStatus.italics': {
-    sig: 'italics(): string',
-    doc: 'Returns an `<i>` HTML element',
-    kind: 'member',
-  },
-  'TaskStatus.link': {
-    sig: 'link(url: string): string',
-    doc: 'Returns an `<a>` HTML element and sets the href attribute value',
-    kind: 'member',
-  },
-  'TaskStatus.small': {
-    sig: 'small(): string',
-    doc: 'Returns a `<small>` HTML element',
-    kind: 'member',
-  },
-  'TaskStatus.strike': {
-    sig: 'strike(): string',
-    doc: 'Returns a `<strike>` HTML element',
-    kind: 'member',
-  },
-  'TaskStatus.sub': {
-    sig: 'sub(): string',
-    doc: 'Returns a `<sub>` HTML element',
-    kind: 'member',
-  },
-  'TaskStatus.sup': {
-    sig: 'sup(): string',
-    doc: 'Returns a `<sup>` HTML element',
-    kind: 'member',
-  },
-  'TaskStatus.padStart': {
-    sig: 'padStart(maxLength: number, fillString?: string): string',
-    doc: 'Pads the current string with a given string (possibly repeated) so that the resulting string reaches a given length.\nThe padding is applied from the start (left) of the current string.',
-    kind: 'member',
-  },
-  'TaskStatus.padEnd': {
-    sig: 'padEnd(maxLength: number, fillString?: string): string',
-    doc: 'Pads the current string with a given string (possibly repeated) so that the resulting string reaches a given length.\nThe padding is applied from the end (right) of the current string.',
-    kind: 'member',
-  },
-  'TaskStatus.trimEnd': {
-    sig: 'trimEnd(): string',
-    doc: 'Removes the trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'TaskStatus.trimStart': {
-    sig: 'trimStart(): string',
-    doc: 'Removes the leading white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'TaskStatus.trimLeft': {
-    sig: 'trimLeft(): string',
-    doc: 'Removes the leading white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'TaskStatus.trimRight': {
-    sig: 'trimRight(): string',
-    doc: 'Removes the trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'TaskStatus.matchAll': {
-    sig: 'matchAll(regexp: RegExp): RegExpStringIterator<RegExpExecArray>',
-    doc: 'Matches a string with a regular expression, and returns an iterable of matches\ncontaining the results of that search.',
-    kind: 'member',
-  },
-  'TaskStatus.replaceAll': {
-    sig: 'replaceAll(searchValue: string | RegExp, replaceValue: string): string\nreplaceAll(searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string',
-    doc: 'Replace all instances of a substring in a string, using a regular expression or search string.',
-    kind: 'member',
-  },
-  'TaskStatus.at': {
-    sig: 'at(index: number): string | undefined',
-    doc: 'Returns a new String consisting of the single UTF-16 code unit located at the specified index.',
-    kind: 'member',
-  },
-  'TaskStatus.__@iterator@104': {
-    sig: '__@iterator@104(): StringIterator<string>',
-    doc: 'Iterator',
-    kind: 'member',
   },
   CancelError: {
     sig: 'CancelError: typeof CancelError',
@@ -1088,7 +338,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'value',
   },
   TaskContext: {
-    sig: 'type TaskContext',
+    sig: 'interface TaskContext {\n  /** The leaf wire format — hand it to fetch, to a worker call, to anything. */\n  readonly signal: AbortSignal;\n  /** Why, not just whether. `signal.reason` is `any`; a visualiser needs the word. */\n  reason(): CancelReason | null;\n  progress(fraction: number, info?: unknown): void;\n  spawn<R>(name: string, fn: (child: TaskContext) => Promise<R>): Task<R>;\n  /** Fail-fast group: one rejects, the siblings cancel. */\n  all<R>(tasks: Task<R>[]): Promise<R[]>;\n  /** First to settle wins, the rest cancel. */\n  race<R>(tasks: Task<R>[]): Promise<R>;\n  /** A region cancellation may not interrupt. The cancel lands after it returns. */\n  shield<R>(fn: () => Promise<R>): Promise<R>;\n  /** Finalisers run last-in-first-out — the order `addEventListener` gets wrong. */\n  onCancel(fn: () => void): void;\n}',
     doc: '',
     kind: 'type',
   },
@@ -1133,7 +383,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'member',
   },
   Task: {
-    sig: 'type Task',
+    sig: 'type Task<T> = {\n  readonly id: number;\n  readonly name: string;\n  /** Reactive: read inside `derive`/`watch` and it re-runs on transition. */\n  status(): TaskStatus;\n  progress(): number | null;\n  error(): unknown;\n  result(): T | undefined;\n  /** Resolves once every finaliser has run. Never rejects — the status carries the outcome. */\n  readonly settled: Promise<void>;\n  cancel(reason?: CancelReason): void;\n  children(): Task<unknown>[];\n};',
     doc: '',
     kind: 'type',
   },
@@ -1183,262 +433,12 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'member',
   },
   TaskPolicy: {
-    sig: 'type TaskPolicy',
+    sig: "type TaskPolicy = 'latest' | 'leading' | 'queue' | 'every';",
     doc: '',
     kind: 'type',
   },
-  'TaskPolicy.toString': {
-    sig: 'toString(): string',
-    doc: 'Returns a string representation of a string.',
-    kind: 'member',
-  },
-  'TaskPolicy.charAt': {
-    sig: 'charAt(pos: number): string',
-    doc: 'Returns the character at the specified index.',
-    kind: 'member',
-  },
-  'TaskPolicy.charCodeAt': {
-    sig: 'charCodeAt(index: number): number',
-    doc: 'Returns the Unicode value of the character at the specified location.',
-    kind: 'member',
-  },
-  'TaskPolicy.concat': {
-    sig: 'concat(...strings: string[]): string',
-    doc: 'Returns a string that contains the concatenation of two or more strings.',
-    kind: 'member',
-  },
-  'TaskPolicy.indexOf': {
-    sig: 'indexOf(searchString: string, position?: number): number',
-    doc: 'Returns the position of the first occurrence of a substring.',
-    kind: 'member',
-  },
-  'TaskPolicy.lastIndexOf': {
-    sig: 'lastIndexOf(searchString: string, position?: number): number',
-    doc: 'Returns the last occurrence of a substring in the string.',
-    kind: 'member',
-  },
-  'TaskPolicy.localeCompare': {
-    sig: 'localeCompare(that: string): number\nlocaleCompare(that: string, locales?: string | string[], options?: Intl.CollatorOptions): number\nlocaleCompare(that: string, locales?: Intl.LocalesArgument, options?: Intl.CollatorOptions): number',
-    doc: 'Determines whether two strings are equivalent in the current locale.\nDetermines whether two strings are equivalent in the current or specified locale.',
-    kind: 'member',
-  },
-  'TaskPolicy.match': {
-    sig: 'match(regexp: string | RegExp): RegExpMatchArray | null\nmatch(matcher: { [Symbol.match](string: string): RegExpMatchArray | null; }): RegExpMatchArray | null',
-    doc: 'Matches a string with a regular expression, and returns an array containing the results of that search.\nMatches a string or an object that supports being matched against, and returns an array\ncontaining the results of that search, or null if no matches are found.',
-    kind: 'member',
-  },
-  'TaskPolicy.replace': {
-    sig: 'replace(searchValue: string | RegExp, replaceValue: string): string\nreplace(searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string\nreplace(searchValue: { [Symbol.replace](string: string, replaceValue: string): string; }, replaceValue: string): string\nreplace(searchValue: { [Symbol.replace](string: string, replacer: (substring: string, ...args: any[]) => string): string; }, replacer: (substring: string, ...args: any[]) => string): string',
-    doc: 'Replaces text in a string, using a regular expression or search string.\nPasses a string and {@linkcode replaceValue} to the `[Symbol.replace]` method on {@linkcode searchValue}. This method is expected to implement its own replacement algorithm.\nReplaces text in a string, using an object that supports replacement within a string.',
-    kind: 'member',
-  },
-  'TaskPolicy.search': {
-    sig: 'search(regexp: string | RegExp): number\nsearch(searcher: { [Symbol.search](string: string): number; }): number',
-    doc: 'Finds the first substring match in a regular expression search.',
-    kind: 'member',
-  },
-  'TaskPolicy.slice': {
-    sig: 'slice(start?: number, end?: number): string',
-    doc: 'Returns a section of a string.',
-    kind: 'member',
-  },
-  'TaskPolicy.split': {
-    sig: 'split(separator: string | RegExp, limit?: number): string[]\nsplit(splitter: { [Symbol.split](string: string, limit?: number): string[]; }, limit?: number): string[]',
-    doc: 'Split a string into substrings using the specified separator and return them as an array.',
-    kind: 'member',
-  },
-  'TaskPolicy.substring': {
-    sig: 'substring(start: number, end?: number): string',
-    doc: 'Returns the substring at the specified location within a String object.',
-    kind: 'member',
-  },
-  'TaskPolicy.toLowerCase': {
-    sig: 'toLowerCase(): string',
-    doc: 'Converts all the alphabetic characters in a string to lowercase.',
-    kind: 'member',
-  },
-  'TaskPolicy.toLocaleLowerCase': {
-    sig: 'toLocaleLowerCase(locales?: string | string[]): string\ntoLocaleLowerCase(locales?: Intl.LocalesArgument): string',
-    doc: "Converts all alphabetic characters to lowercase, taking into account the host environment's current locale.",
-    kind: 'member',
-  },
-  'TaskPolicy.toUpperCase': {
-    sig: 'toUpperCase(): string',
-    doc: 'Converts all the alphabetic characters in a string to uppercase.',
-    kind: 'member',
-  },
-  'TaskPolicy.toLocaleUpperCase': {
-    sig: 'toLocaleUpperCase(locales?: string | string[]): string\ntoLocaleUpperCase(locales?: Intl.LocalesArgument): string',
-    doc: "Returns a string where all alphabetic characters have been converted to uppercase, taking into account the host environment's current locale.",
-    kind: 'member',
-  },
-  'TaskPolicy.trim': {
-    sig: 'trim(): string',
-    doc: 'Removes the leading and trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'TaskPolicy.length': {
-    sig: 'length: number',
-    doc: 'Returns the length of a String object.',
-    kind: 'member',
-  },
-  'TaskPolicy.substr': {
-    sig: 'substr(from: number, length?: number): string',
-    doc: 'Gets a substring beginning at the specified location and having the specified length.',
-    kind: 'member',
-  },
-  'TaskPolicy.valueOf': {
-    sig: 'valueOf(): string',
-    doc: 'Returns the primitive value of the specified object.',
-    kind: 'member',
-  },
-  'TaskPolicy.codePointAt': {
-    sig: 'codePointAt(pos: number): number | undefined',
-    doc: 'Returns a nonnegative integer Number less than 1114112 (0x110000) that is the code point\nvalue of the UTF-16 encoded code point starting at the string element at position pos in\nthe String resulting from converting this object to a String.\nIf there is no element at that position, the result is undefined.\nIf a valid UTF-16 surrogate pair does not begin at pos, the result is the code unit at pos.',
-    kind: 'member',
-  },
-  'TaskPolicy.includes': {
-    sig: 'includes(searchString: string, position?: number): boolean',
-    doc: 'Returns true if searchString appears as a substring of the result of converting this\nobject to a String, at one or more positions that are\ngreater than or equal to position; otherwise, returns false.',
-    kind: 'member',
-  },
-  'TaskPolicy.endsWith': {
-    sig: 'endsWith(searchString: string, endPosition?: number): boolean',
-    doc: 'Returns true if the sequence of elements of searchString converted to a String is the\nsame as the corresponding elements of this object (converted to a String) starting at\nendPosition – length(this). Otherwise returns false.',
-    kind: 'member',
-  },
-  'TaskPolicy.normalize': {
-    sig: 'normalize(form: "NFC" | "NFD" | "NFKC" | "NFKD"): string\nnormalize(form?: string): string',
-    doc: 'Returns the String value result of normalizing the string into the normalization form\nnamed by form as specified in Unicode Standard Annex #15, Unicode Normalization Forms.',
-    kind: 'member',
-  },
-  'TaskPolicy.repeat': {
-    sig: 'repeat(count: number): string',
-    doc: 'Returns a String value that is made from count copies appended together. If count is 0,\nthe empty string is returned.',
-    kind: 'member',
-  },
-  'TaskPolicy.startsWith': {
-    sig: 'startsWith(searchString: string, position?: number): boolean',
-    doc: 'Returns true if the sequence of elements of searchString converted to a String is the\nsame as the corresponding elements of this object (converted to a String) starting at\nposition. Otherwise returns false.',
-    kind: 'member',
-  },
-  'TaskPolicy.anchor': {
-    sig: 'anchor(name: string): string',
-    doc: 'Returns an `<a>` HTML anchor element and sets the name attribute to the text value',
-    kind: 'member',
-  },
-  'TaskPolicy.big': {
-    sig: 'big(): string',
-    doc: 'Returns a `<big>` HTML element',
-    kind: 'member',
-  },
-  'TaskPolicy.blink': {
-    sig: 'blink(): string',
-    doc: 'Returns a `<blink>` HTML element',
-    kind: 'member',
-  },
-  'TaskPolicy.bold': {
-    sig: 'bold(): string',
-    doc: 'Returns a `<b>` HTML element',
-    kind: 'member',
-  },
-  'TaskPolicy.fixed': {
-    sig: 'fixed(): string',
-    doc: 'Returns a `<tt>` HTML element',
-    kind: 'member',
-  },
-  'TaskPolicy.fontcolor': {
-    sig: 'fontcolor(color: string): string',
-    doc: 'Returns a `<font>` HTML element and sets the color attribute value',
-    kind: 'member',
-  },
-  'TaskPolicy.fontsize': {
-    sig: 'fontsize(size: number): string\nfontsize(size: string): string',
-    doc: 'Returns a `<font>` HTML element and sets the size attribute value',
-    kind: 'member',
-  },
-  'TaskPolicy.italics': {
-    sig: 'italics(): string',
-    doc: 'Returns an `<i>` HTML element',
-    kind: 'member',
-  },
-  'TaskPolicy.link': {
-    sig: 'link(url: string): string',
-    doc: 'Returns an `<a>` HTML element and sets the href attribute value',
-    kind: 'member',
-  },
-  'TaskPolicy.small': {
-    sig: 'small(): string',
-    doc: 'Returns a `<small>` HTML element',
-    kind: 'member',
-  },
-  'TaskPolicy.strike': {
-    sig: 'strike(): string',
-    doc: 'Returns a `<strike>` HTML element',
-    kind: 'member',
-  },
-  'TaskPolicy.sub': {
-    sig: 'sub(): string',
-    doc: 'Returns a `<sub>` HTML element',
-    kind: 'member',
-  },
-  'TaskPolicy.sup': {
-    sig: 'sup(): string',
-    doc: 'Returns a `<sup>` HTML element',
-    kind: 'member',
-  },
-  'TaskPolicy.padStart': {
-    sig: 'padStart(maxLength: number, fillString?: string): string',
-    doc: 'Pads the current string with a given string (possibly repeated) so that the resulting string reaches a given length.\nThe padding is applied from the start (left) of the current string.',
-    kind: 'member',
-  },
-  'TaskPolicy.padEnd': {
-    sig: 'padEnd(maxLength: number, fillString?: string): string',
-    doc: 'Pads the current string with a given string (possibly repeated) so that the resulting string reaches a given length.\nThe padding is applied from the end (right) of the current string.',
-    kind: 'member',
-  },
-  'TaskPolicy.trimEnd': {
-    sig: 'trimEnd(): string',
-    doc: 'Removes the trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'TaskPolicy.trimStart': {
-    sig: 'trimStart(): string',
-    doc: 'Removes the leading white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'TaskPolicy.trimLeft': {
-    sig: 'trimLeft(): string',
-    doc: 'Removes the leading white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'TaskPolicy.trimRight': {
-    sig: 'trimRight(): string',
-    doc: 'Removes the trailing white space and line terminator characters from a string.',
-    kind: 'member',
-  },
-  'TaskPolicy.matchAll': {
-    sig: 'matchAll(regexp: RegExp): RegExpStringIterator<RegExpExecArray>',
-    doc: 'Matches a string with a regular expression, and returns an iterable of matches\ncontaining the results of that search.',
-    kind: 'member',
-  },
-  'TaskPolicy.replaceAll': {
-    sig: 'replaceAll(searchValue: string | RegExp, replaceValue: string): string\nreplaceAll(searchValue: string | RegExp, replacer: (substring: string, ...args: any[]) => string): string',
-    doc: 'Replace all instances of a substring in a string, using a regular expression or search string.',
-    kind: 'member',
-  },
-  'TaskPolicy.at': {
-    sig: 'at(index: number): string | undefined',
-    doc: 'Returns a new String consisting of the single UTF-16 code unit located at the specified index.',
-    kind: 'member',
-  },
-  'TaskPolicy.__@iterator@104': {
-    sig: '__@iterator@104(): StringIterator<string>',
-    doc: 'Iterator',
-    kind: 'member',
-  },
   RunOpts: {
-    sig: 'type RunOpts',
+    sig: 'type RunOpts = {\n  /** What happens when a run begins while a previous one is in flight. Not debounce —\n   *  debounce decides whether a task starts at all, this decides what happens once two want to. */\n  policy?: TaskPolicy;\n  /** A cancel scope over the whole body. */\n  timeout?: number;\n  /** Supersession is per key; defaults to the task name. */\n  key?: string;\n};',
     doc: '',
     kind: 'type',
   },
@@ -1458,7 +458,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'member',
   },
   Scope: {
-    sig: 'type Scope',
+    sig: 'type Scope = {\n  readonly name: string;\n  readonly signal: AbortSignal;\n  /** Reactive — true while any task in this scope or a descendant is running. */\n  pending(): boolean;\n  tasks(): Task<unknown>[];\n  child(name: string): Scope;\n  run<T>(name: string, fn: (ctx: TaskContext) => Promise<T>, opts?: RunOpts): Task<T>;\n  end(reason?: CancelReason): void;\n};',
     doc: 'A scope owns tasks and ends them together. Route scope is the useful one:\nnearly every real cancellation on the client is "the user navigated away".',
     kind: 'type',
   },
@@ -1498,7 +498,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'member',
   },
   Codec: {
-    sig: 'type Codec',
+    sig: 'type Codec<V, W> = { encode(v: V): W; decode(w: W): V };',
     doc: 'store ↔ outside world. Total, pure, no ambient input: `decode(encode(v))` equals `v`.\nNote the absence of a context parameter — that absence is what keeps a locale\nout of the wire, and in the real toolkit the type system enforces it.',
     kind: 'type',
   },
@@ -1513,7 +513,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'member',
   },
   Presenter: {
-    sig: 'type Presenter',
+    sig: 'type Presenter<V, C> = {\n  format(v: V, ctx: C): string;\n  parse(text: string, ctx: C): { ok: true; value: V } | { ok: false; error: string };\n};',
     doc: 'store ↔ components. Lossy on purpose, depends on ambient state, and its\ninward half can fail while the user is still typing — which is why the\nfailure is state (R77) rather than an exception.',
     kind: 'type',
   },
@@ -1528,7 +528,7 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     kind: 'member',
   },
   CustomType: {
-    sig: 'type CustomType',
+    sig: 'type CustomType<V, W, C> = { name: string; codec: Codec<V, W>; present?: Presenter<V, C> };',
     doc: '',
     kind: 'type',
   },
@@ -1557,8 +557,13 @@ export const GENERATED_API: Record<string, GeneratedDoc> = {
     doc: '',
     kind: 'value',
   },
+  TypeMap: {
+    sig: 'type TypeMap = Record<string, CustomType<never, unknown, never>>;',
+    doc: 'Maps normalized field paths to their declared custom conversion types.',
+    kind: 'type',
+  },
   Field: {
-    sig: 'type Field',
+    sig: 'type Field<V> = {\n  /** Exactly what the person typed. Never rewritten while they are typing. */\n  text(): string;\n  /** The last value that parsed. Survives every invalid keystroke. */\n  value(): V;\n  error(): string | null;\n  /** A keystroke. */\n  input(text: string): void;\n  /** Blur or submit: canonicalises the text if it is valid. Returns whether it was. */\n  commit(): boolean;\n  /** Abandon the edit and go back to the last good value. */\n  reset(): void;\n};',
     doc: 'Inward across the view, and the reason parse failure cannot be an exception:\nit needs both representations at once — the raw text the person is still\ntyping, and the last value that was good (R77). A field that reformats under\nthe caret, or that throws away "1." on its way to "1.5", is the bug this\nshape exists to make unwritable.',
     kind: 'type',
   },

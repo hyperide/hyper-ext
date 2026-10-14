@@ -1,37 +1,58 @@
 /** R63 glossary — feeds the R54 tooltip system. `link` points at a fuller explainer where one exists. */
 export type Term = { def: string; link?: string; compare?: string };
 export const GLOSSARY: Record<string, Term> = {
-  "DAG": { def: "Directed acyclic dependency graph: arrows show imports and cycles are forbidden. Unlike strict layers, optional features may share dependencies.", link: "/concepts/practical#dag" },
-  "ALS": { def: "AsyncLocalStorage: host-provided async request context, owned by the SSR adapter, never a browser/core dependency.", link: "/concepts/practical#als" },
-  "FSM": { def: "Finite-state machine: explicit valid lifecycle transitions. The proposed fsm slice shares the normal command/patch pipeline; it is not a shipped XState runtime.", link: "/concepts/practical#fsm" },
-  "drained in a microtask": { def: "Bus listeners run after the current stack, not necessarily after rendering. Microtasks can starve a frame unless chained work is bounded.", link: "/concepts/practical#microtasks" },
-  "double-buffered": { def: "Deliver one fixed current event batch while newly generated events enter a separate next batch. This does not by itself prevent reaction cycles.", link: "/concepts/practical#double-buffering" },
-  "caret/IME correctness": { def: "Preserve insertion position and unfinished input-method composition; synchronous echo alone does not implement the complete editing contract.", link: "/concepts/practical#caret-ime" },
-  "differential dataflow": { def: "Maintain query results by propagating weighted changes through operators. General differential systems also track logical time; support must be checked for the selected engine version.", link: "/query-research" },
+  DAG: {
+    def: 'Directed acyclic dependency graph: arrows show imports and cycles are forbidden. Unlike strict layers, optional features may share dependencies.',
+    link: '/concepts/practical#dag',
+  },
+  ALS: {
+    def: 'AsyncLocalStorage: host-provided async request context, owned by the SSR adapter, never a browser/core dependency.',
+    link: '/concepts/practical#als',
+  },
+  FSM: {
+    def: 'Finite-state machine: explicit valid lifecycle transitions. The proposed fsm slice shares the normal command/patch pipeline; it is not a shipped XState runtime.',
+    link: '/concepts/practical#fsm',
+  },
+  'drained in a microtask': {
+    def: 'Bus listeners run after the current stack, not necessarily after rendering. Microtasks can starve a frame unless chained work is bounded.',
+    link: '/concepts/practical#microtasks',
+  },
+  'double-buffered': {
+    def: 'Deliver one fixed current event batch while newly generated events enter a separate next batch. This does not by itself prevent reaction cycles.',
+    link: '/concepts/practical#double-buffering',
+  },
+  'caret/IME correctness': {
+    def: 'Preserve insertion position and unfinished input-method composition; synchronous echo alone does not implement the complete editing contract.',
+    link: '/concepts/practical#caret-ime',
+  },
+  'differential dataflow': {
+    def: 'Maintain query results by propagating weighted changes through operators. General differential systems also track logical time; support must be checked for the selected engine version.',
+    link: '/query-research',
+  },
 
   'push-pull': {
     def: 'The converged reactivity algorithm: writes only mark dependents (push); recomputation happens lazily on read (pull). Glitch-free, minimal work.',
-    link: '/concepts',
+    link: '/concepts#push-pull',
     compare:
       'vs streams: see "Signals vs streams". vs two-phase batch: the same mechanism, not a second one — push-pull alone already covers one write\'s fan-out; two-phase batch is push-pull applied across a whole transaction instead of per write.',
   },
   'two-phase batch': {
     def: 'Phase 1: writes mark the graph. Phase 2: one lazy pull at batch end; every effect runs at most once, never on intermediate state.',
-    link: '/concepts',
+    link: '/concepts#two-phase',
     compare:
       "vs push-pull: not an alternative algorithm — the same push (mark) and pull (lazy recompute) steps, reordered so a whole transaction's writes mark first and there is one pull-and-notify for all of them, not one per write.",
   },
   'structural sharing': {
     def: 'A new immutable version shares every untouched subtree with the old one by reference — cheap versions, reference-equality change checks.',
-    link: '/concepts',
+    link: '/concepts#cow',
   },
   COW: {
     def: 'Copy-on-write: copy only the containers you touch plus the path to the root; share the rest (that sharing is structural sharing). How Immer, Mutative, our transactions — and LMDB at page level — work.',
-    link: '/concepts',
+    link: '/concepts#cow',
   },
   HAMT: {
     def: 'Hash array mapped trie — persistent hash map (Immutable.js, Clojure): hash consumed 5 bits/level, ≤32-slot bitmap nodes; O(log32 n) updates independent of container size. Pointer-heavy: great in RAM, bad on disk pages.',
-    link: '/concepts',
+    link: '/concepts#hamt',
     compare:
       'vs COW-of-plain-objects: HAMT wins on very large hot maps; COW wins on typical UI containers (no conversion tax).',
   },
@@ -57,7 +78,7 @@ export const GLOSSARY: Record<string, Term> = {
   },
   shape: {
     def: "ElectricSQL's unit of read sync: a table slice delivered as a resumable append-only HTTP log (offset-based, CDN-cacheable). Realtime without a socket tier.",
-    link: '/concepts',
+    link: '/concepts#shapes',
   },
   IVM: {
     def: 'Incremental view maintenance: derived views consume change deltas instead of recomputing from scratch (differential dataflow; TanStack DB db-ivm, Zero).',
@@ -67,11 +88,11 @@ export const GLOSSARY: Record<string, Term> = {
   },
   'event sourcing': {
     def: 'State = fold of an append-only event log; the log is the source of truth, state is derived. LiveStore is the purest client-side example.',
-    link: '/concepts',
+    link: '/concepts#livestore-git',
   },
   signal: {
     def: 'A reactive value holding current state; the graph tracks who read it and invalidates precisely. Pull-based.',
-    link: '/concepts',
+    link: '/concepts#signals-streams',
   },
   observable: {
     def: 'A push-based stream of events over time (RxJS). Great for time operators (debounce/retry); no consistency guarantees across a graph.',
@@ -79,19 +100,19 @@ export const GLOSSARY: Record<string, Term> = {
   },
   'operator fusion': {
     def: 'Collapsing operator chains (map∘map → one map) at composition/compile time — most.js did it at runtime; our compiler does it statically for derive chains.',
-    link: '/concepts',
+    link: '/spec#s4-13-4',
   },
   resumability: {
     def: "Qwik's alternative to hydration: serialise the signal graph + handler pointers into HTML so the client executes nothing upfront and 'resumes' on first interaction.",
-    link: '/concepts',
+    link: '/concepts#resumability',
   },
   hydration: {
     def: 'After SSR, the client re-executes all components to rebuild state and attach handlers — paying for the app twice.',
-    link: '/concepts',
+    link: '/concepts#resumability',
   },
   runes: {
     def: "Svelte 5's compiler macros ($state, $derived, $effect): plain-looking code rewritten into signal operations at build time.",
-    link: '/concepts',
+    link: '/concepts#runes',
   },
   RSC: {
     def: 'React Server Components: components that run only on the server, ship no JS, and pass serialisable props to client components. Stores live strictly on the client side of the boundary; server actions are the mutation channel.',
@@ -155,7 +176,7 @@ export const GLOSSARY: Record<string, Term> = {
   },
   HOX: {
     def: 'High-Order compleX — a reusable feature bundle: slices + collections + derived views + actions + effects + optional UI widgets, mounted as one unit and exposed as one hook. The successor of the Redux-era pattern of bundling reducers+selectors+actions+adapters+widgets per reused UI part.',
-    link: '/spec',
+    link: '/spec#s4-8',
   },
   slice: {
     def: 'A named, schema-typed region of the store: fields + collections + actions + per-slice policies (events mode, history, persistence). The unit of composition, migration and enforcement.',
@@ -163,15 +184,15 @@ export const GLOSSARY: Record<string, Term> = {
   },
   collection: {
     def: 'A keyed set of items stored as ids + byId with a reactive node per item — one item changes, one row re-renders; optionally fed by a source (REST/RPC/GraphQL/sync engine) via the TanStack-DB-compatible contract.',
-    link: '/spec',
+    link: '/spec#s4-5',
   },
   derived: {
     def: 'The successor of selectors: lazy computeds over paths, diff-aware collection views (filter/sort/map consuming patches), and — planned — Datalog queries wrapped as functions. Long mapping chains belong here, next to the data, not in components.',
-    link: '/concepts',
+    link: '/concepts#queries',
   },
   Datalog: {
     def: 'A declarative, logic-based query language (Datomic lineage): facts as [entity attribute value], queries as patterns with joins the engine plans for you. Our planned query layer over collections — replacing hand-memoized selector chains.',
-    link: '/concepts',
+    link: '/concepts#queries',
   },
   'migrate subcommands': {
     def: "state migrate from (another library/approach → state, whole or partial) · shape (hooks ↔ many stores ↔ one store) · slice (change one slice's options, e.g. auto-sync → manual handlers) · mode (react/events modes). Each: --analyze recommendation, ≥80% AST-automated, optional --llm finishing pass.",

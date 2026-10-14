@@ -1,38 +1,15 @@
-/** R93–R98 regressions against the actual served build, not a mocked component. */
+/** Served-source, query, API and contextual-figure regression coverage. */
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
-import { readFileSync, existsSync, mkdirSync } from 'node:fs';
-import { resolve, extname, sep } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from './browser.mts';
+import { serveStatic } from './static-server.mts';
 import { readEditorContents } from './editor-contents.mts';
 import { encodeSnippet, decodeSnippet } from '../src/lib/snippet-transfer.ts';
 import { GENERATED_API } from '../src/lib/api-docs.generated.ts';
-const root = fileURLToPath(new URL('../dist-served/', import.meta.url));
-const mime: Record<string, string> = {
-  '.js': 'application/javascript',
-  '.css': 'text/css',
-  '.html': 'text/html',
-  '.svg': 'image/svg+xml',
-};
-const server = createServer((req, res) => {
-  const pathname = new URL(req.url ?? '/', 'http://test').pathname;
-  const file = resolve(root, `.${pathname}`);
-  if (!file.startsWith(resolve(root) + sep) && file !== resolve(root)) {
-    res.writeHead(403).end();
-    return;
-  }
-  const asset = extname(pathname) !== '';
-  if (asset && !existsSync(file)) {
-    res.writeHead(404).end();
-    return;
-  }
-  const target = asset ? file : resolve(root, 'index.html');
-  res.setHeader('Content-Type', mime[extname(target)] ?? 'text/plain');
-  res.end(readFileSync(target));
-});
-await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+import { asciiToSvg, renderDiagram } from '../../../vector-cli/src/diagram';
+const server = await serveStatic(fileURLToPath(new URL('../dist-served/', import.meta.url)), false);
+const base = server.url;
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
 const errors: string[] = [];
@@ -53,12 +30,12 @@ try {
     ['/adapters', 'Framework adapters'],
     ['/concepts/practical', 'Practical concepts'],
     ['/query-research', 'Query syntax and TanStack DB'],
-    ['/diagrams', 'Diagrams, not screenshots'],
   ]) {
-    await page.goto(base + path);
+    assert.equal((await page.goto(base + path))?.status(), 200);
     assert.equal(await page.locator('h1').first().textContent(), title);
   }
-  console.log('ok — new routes cold-load the intended page, not the home fallback');
+  assert.equal((await fetch(`${base}/diagrams`)).status, 404, 'Unrequested diagram page is removed');
+  assert.equal((await fetch(`${base}/diagrams.md`)).status, 404);
   await page.goto(`${base}/api`);
   assert.equal(
     await page.locator('.api-entry .api-badge').filter({ hasText: 'prototype' }).count(),
@@ -68,19 +45,18 @@ try {
   assert((await page.locator('.api-entry').count()) < 40);
   assert((await page.locator('.api-entry').filter({ hasText: 'createScope' }).count()) > 0);
   await page.screenshot({ path: `${artifacts}api.png` });
-  console.log('ok — generated API inventory and search');
   await page.goto(`${base}/selectors-vs-datalog`);
   await page.locator('#query-right').selectOption('Lodash');
   const boxes = await page.locator('.query-pane').evaluateAll((es) =>
     es.map((e) => {
-      const r = e.getBoundingClientRect();
-      return { width: r.width, right: r.right };
+      const rect = e.getBoundingClientRect();
+      return { width: rect.width, right: rect.right };
     }),
   );
   assert(Math.abs(boxes[0].width - boxes[1].width) < 2);
   const toc = await page.locator('.toc').first().boundingBox();
   if (toc) assert(boxes[1].right <= toc.x);
-  for (const b of await page.getByRole('button', { name: 'Run fixture', exact: true }).all()) await b.click();
+  for (const button of await page.getByRole('button', { name: 'Run fixture', exact: true }).all()) await button.click();
   await page.waitForFunction(
     () =>
       document.querySelectorAll('.query-pane pre[aria-live="polite"]').length === 2 &&
@@ -94,16 +70,15 @@ try {
   assert((await page.locator('#query-hint').innerText()).length > 25);
   await page.locator('.query-panes').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${artifacts}query-pair.png` });
-  const tryLink = page.locator('.query-pane a').first();
-  const url = await tryLink.getAttribute('href');
-  assert(url);
-  const original = decodeSnippet(url.split('#code-')[1]).code;
-  await tryLink.click();
+  const inspectLink = page.locator('.query-pane .code-source').first();
+  const sourceUrl = await inspectLink.getAttribute('href');
+  assert(sourceUrl);
+  const original = decodeSnippet(sourceUrl.split('#code-')[1]).code;
+  await inspectLink.click();
   await page.locator('.cm-content').waitFor();
   assert.equal(await readEditorContents(page.locator('.cm-content')), original);
   await page.getByRole('button', { name: 'Run JavaScript', exact: true }).click();
   await expectOutput('g1');
-  console.log('ok — paired syntax, shared results, exact-source Try link and worker execution');
   const runSource = async (code: string, lang = 'ts') => {
     await page.goto(`${base}/repl/snippet#code-${encodeSnippet({ code, lang })}`);
     await page.locator('.cm-content').waitFor();
@@ -128,40 +103,47 @@ try {
   await expectOutput('Stopped after 2 seconds.');
   await runSource('.rows | map(.id)', 'jq');
   assert(await page.getByRole('button', { name: 'Run JavaScript', exact: true }).isDisabled());
-  console.log('ok — Unicode, no auto-run, explicit dependency errors, runaway termination and reference language');
   await page.goto(`${base}/concepts/practical#fsm`);
-  await page.waitForFunction(() =>
-    [...document.querySelectorAll('.md pre')].every((p) => p.querySelector('a.code-repl')),
+  await page.waitForFunction(() => {
+    const blocks = [...document.querySelectorAll('.md pre:not([data-no-try]), .md [data-code-source]')].filter(
+      (p) => !p.closest('[data-no-try]'),
+    );
+    return blocks.length > 0 && blocks.every((p) => p.querySelector('a.code-source'));
+  });
+  const refs = await page.locator('.md a.code-source').evaluateAll((links) =>
+    links.map((link) => ({
+      href: link.getAttribute('href') ?? '',
+      source:
+        link.closest('[data-code-source]')?.getAttribute('data-code-source') ??
+        link.closest('pre')?.querySelector('code')?.textContent,
+    })),
   );
-  assert((await page.locator('.md pre').count()) > 0);
-  const exact = await page
-    .locator('.md pre')
-    .evaluateAll((es) => es.every((p) => p.querySelector('.code-repl')?.getAttribute('href')?.includes('#code-')));
-  assert(exact);
-  console.log('ok — every Markdown snippet has an exact-source Try action');
-  await page.goto(`${base}/diagrams`);
-  assert((await page.locator('.diagram-preview svg path').count()) > 0);
-  await page.getByRole('button', { name: 'Transaction scene', exact: true }).click();
-  assert((await page.locator('.diagram-preview svg rect').count()) > 0);
-  await page.getByLabel('Diagram source').fill('[{"type":"label","x":0,"y":0,"text":"<script>alert(1)</script>"}]');
-  assert.equal(await page.locator('.diagram-preview script').count(), 0);
-  assert((await page.locator('.diagram-preview').innerHTML()).includes('&lt;script&gt;'));
-  await page.getByRole('button', { name: 'Transaction scene', exact: true }).click();
-  await page.locator('.diagram-preview').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `${artifacts}diagram.png` });
-  const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download SVG', exact: true }).click();
-  assert.equal((await download).suggestedFilename(), 'state-diagram.svg');
-  await page.getByLabel('Diagram source').fill('not json');
-  assert((await page.getByRole('alert').count()) > 0);
-  console.log('ok — the actual SVG renderer, escaped text, error display and downloadable SVG');
+  assert(refs.length > 0);
+  for (const ref of refs) assert.equal(decodeSnippet(ref.href.split('#code-')[1]).code, ref.source);
+  const guides = await page
+    .locator('.md a.code-repl')
+    .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+  assert(guides.every((url) => url?.includes('/repl/') && !url.includes('/repl/snippet')));
+  // Core safety/output tests survive removal of the unrequested editor page.
+  const hostile = renderDiagram([{ type: 'label', x: 0, y: 0, text: '<script>alert(1)</script>' }]);
+  assert(!hostile.includes('<script>'));
+  assert(hostile.includes('&lt;script&gt;'));
+  assert.throws(() => renderDiagram([{ type: 'unknown' } as never]));
+  assert.throws(() => asciiToSvg(''));
   await page.goto(`${base}/spec#h-3-architecture-overview`);
   await page.waitForTimeout(700);
-  assert((await page.locator('#h-3-architecture-overview').count()) === 1);
-  assert((await page.locator('.spec-vector svg').count()) === 1);
+  assert.equal(await page.locator('#h-3-architecture-overview').count(), 1);
+  const architecture = page.locator('.inline-diagram').filter({ hasText: 'build time' }).first();
+  assert.equal(await architecture.locator('svg').count(), 1);
+  assert.equal(await architecture.locator('script').count(), 0);
+  assert((await architecture.getAttribute('data-diagram-source'))?.includes('run time'));
+  await architecture.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${artifacts}diagram.png` });
   assert.deepEqual(errors, []);
-  console.log('ok — architecture SVG and legacy deep link; no application console/page errors');
+  console.info(
+    'PASS: API inventory, paired queries, source transfer, Unicode, explicit run/errors, worker stop, contextual SVG and removed route',
+  );
 } finally {
   await browser.close();
-  await new Promise<void>((r) => server.close(() => r()));
+  await server.close();
 }

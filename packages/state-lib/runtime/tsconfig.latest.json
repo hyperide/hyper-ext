@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "lib": ["ES2022", "DOM"] },
+  "include": ["src/core.ts", "src/latest-task.ts", "src/latest-task.types.fixture.ts"]
+}

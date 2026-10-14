@@ -1,3 +1,4 @@
+import { chooseScriptedDemo, expectVisibleExampleSource } from './workbench-fixture.mts';
 /**
  * Gate: the editor's hover answers what a debugger's would (R81).
  *
@@ -32,8 +33,11 @@ p.on('pageerror', (e: Error) => {
 });
 
 await p.goto(`file://${dist}#/repl/undo`);
+await expectVisibleExampleSource(p);
 await p.waitForTimeout(600);
-await (await p.$('button:has-text("run")'))!.click();
+await chooseScriptedDemo(p);
+await p.locator('.pane-primary .runall').click();
+await p.locator('.pane-primary .guide-debug > summary').click();
 await p.waitForTimeout(900);
 
 /** The scrubber is the debugger's cursor: a range input the page reads on `input`. */

@@ -153,7 +153,7 @@ nav.top a.on {
   background: var(--panel);
   color: var(--muted);
   font:
-    500 12px 'IBM Plex Sans',
+    500 13px 'IBM Plex Sans',
     sans-serif;
   cursor: pointer;
 }
@@ -163,7 +163,7 @@ nav.top a.on {
 }
 .searchbtn-kbd {
   font:
-    500 10px 'IBM Plex Mono',
+    500 13px 'IBM Plex Mono',
     monospace;
   color: var(--muted);
   border: 1px solid var(--line);
@@ -226,7 +226,7 @@ nav.top a.on {
 }
 .searchresult-kind {
   font:
-    600 10px 'IBM Plex Mono',
+    600 13px 'IBM Plex Mono',
     monospace;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -242,7 +242,7 @@ nav.top a.on {
   max-width: 100%;
   overflow: hidden;
   font:
-    400 12.5px 'IBM Plex Sans',
+    400 13px 'IBM Plex Sans',
     sans-serif;
   color: var(--muted);
   text-overflow: ellipsis;
@@ -270,7 +270,7 @@ header.page {
 }
 .kicker {
   font:
-    500 11px/1 'IBM Plex Mono',
+    500 13px/1 'IBM Plex Mono',
     monospace;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -307,7 +307,7 @@ a {
 }
 code {
   font:
-    400 0.88em 'IBM Plex Mono',
+    400 max(13px, 0.88em) 'IBM Plex Mono',
     monospace;
   background: var(--code);
   border-radius: 4px;
@@ -323,6 +323,7 @@ pre {
 pre code {
   background: none;
   padding: 0;
+  font-size: inherit;
 }
 table {
   border-collapse: collapse;
@@ -333,7 +334,7 @@ th {
   background: var(--line2);
   text-align: left;
   font:
-    600 11px/1.3 'IBM Plex Sans',
+    600 13px/1.3 'IBM Plex Sans',
     sans-serif;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -381,7 +382,7 @@ td {
 }
 .card .tag {
   font:
-    500 10px/1 'IBM Plex Mono',
+    500 13px/1 'IBM Plex Mono',
     monospace;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -407,7 +408,7 @@ td {
 }
 .fig figcaption {
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
   margin-top: 10px;
 }
 .why-us {
@@ -427,7 +428,7 @@ svg text {
 footer {
   margin-top: 44px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   border-top: 1px solid var(--line);
   padding-top: 14px;
 }
@@ -436,7 +437,7 @@ footer {
   border-radius: 4px;
   padding: 2px 8px;
   font:
-    600 11px/1.4 'IBM Plex Sans',
+    600 13px/1.4 'IBM Plex Sans',
     sans-serif;
 }
 .status.done {
@@ -477,7 +478,7 @@ footer {
   background: var(--panel);
   color: var(--muted);
   font:
-    500 12.5px/1 'IBM Plex Sans',
+    500 13px/1 'IBM Plex Sans',
     sans-serif;
   padding: 8px 12px;
   cursor: pointer;
@@ -485,7 +486,7 @@ footer {
 }
 .tab .n {
   font:
-    400 11px/1 'IBM Plex Mono',
+    400 13px/1 'IBM Plex Mono',
     monospace;
   opacity: 0.75;
   margin-left: 5px;
@@ -519,7 +520,7 @@ footer {
   border-radius: 999px;
   padding: 4px 10px;
   font:
-    500 11.5px/1.2 'IBM Plex Sans',
+    500 13px/1.2 'IBM Plex Sans',
     sans-serif;
   color: var(--muted);
   cursor: pointer;
@@ -547,11 +548,11 @@ section.layer {
 }
 .lnote {
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .spec {
   font:
-    400 11px/1 'IBM Plex Mono',
+    400 13px/1 'IBM Plex Mono',
     monospace;
   color: var(--accent-ink);
   border: 1px solid var(--line);
@@ -575,14 +576,14 @@ td.name {
 td.name small {
   display: block;
   font:
-    400 11px/1.4 'IBM Plex Mono',
+    400 13px/1.4 'IBM Plex Mono',
     monospace;
   color: var(--muted);
   margin-top: 2px;
 }
 td.num {
   font:
-    400 12px/1.5 'IBM Plex Mono',
+    400 13px/1.5 'IBM Plex Mono',
     monospace;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -600,7 +601,7 @@ td.take b {
 td.why {
   color: var(--muted);
   min-width: 230px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 td.why b {
   color: var(--ink);
@@ -610,7 +611,7 @@ td.why b {
   border-radius: 4px;
   padding: 3px 8px;
   font:
-    600 11px/1.3 'IBM Plex Sans',
+    600 13px/1.3 'IBM Plex Sans',
     sans-serif;
   white-space: nowrap;
 }
@@ -686,7 +687,7 @@ td.verdict small {
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
-  font-size: 11.5px;
+  font-size: 13px;
   line-height: 1.5;
   flex: 0 0 auto;
 }
@@ -698,13 +699,13 @@ td.verdict small {
   border-top: 1px solid var(--line);
   padding: 8px 14px;
   font:
-    400 12px 'IBM Plex Mono',
+    400 13px 'IBM Plex Mono',
     monospace;
   color: var(--muted);
 }
 .demo-head {
   font:
-    600 12px 'IBM Plex Mono',
+    600 13px 'IBM Plex Mono',
     monospace;
   color: var(--accent-ink);
   margin-bottom: 8px;
@@ -718,7 +719,7 @@ td.verdict small {
 }
 .rc {
   font:
-    500 10px/1 'IBM Plex Mono',
+    500 13px/1 'IBM Plex Mono',
     monospace;
   color: var(--amber);
   background: var(--amber-soft);
@@ -737,11 +738,11 @@ td.verdict small {
 .txrow {
   border-bottom: 1px solid var(--line2);
   padding: 6px 0;
-  font-size: 12px;
+  font-size: 13px;
 }
 .txrow .txname {
   font:
-    600 11px 'IBM Plex Mono',
+    600 13px 'IBM Plex Mono',
     monospace;
   color: var(--accent-ink);
   margin-right: 8px;
@@ -766,12 +767,12 @@ td.verdict small {
   padding: 5px 0;
 }
 .bb-name {
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .bb-name em {
   color: var(--muted);
   font-style: normal;
-  font-size: 11px;
+  font-size: 13px;
 }
 .bb-bar {
   height: 14px;
@@ -787,7 +788,7 @@ td.verdict small {
 }
 .bb-ms {
   font:
-    500 12px 'IBM Plex Mono',
+    500 13px 'IBM Plex Mono',
     monospace;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -825,7 +826,7 @@ a.g[data-tip]:focus-visible::after,
   background: var(--ink);
   color: var(--paper);
   font:
-    400 12px/1.5 'IBM Plex Sans',
+    400 13px/1.5 'IBM Plex Sans',
     sans-serif;
   padding: 9px 11px;
   border-radius: 6px;
@@ -836,7 +837,7 @@ a.g[data-tip]:focus-visible::after,
 a.gr,
 a.gs {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.92em;
+  font-size: max(13px, 0.92em);
 }
 .gloss div {
   border-bottom: 1px solid var(--line2);
@@ -877,7 +878,7 @@ details.insights {
 details.insights summary {
   cursor: pointer;
   font:
-    600 12.5px 'IBM Plex Sans',
+    600 13px 'IBM Plex Sans',
     sans-serif;
   color: var(--accent-ink);
 }
@@ -895,7 +896,7 @@ details.insights li {
 .backlinks {
   float: right;
   font:
-    400 10.5px 'IBM Plex Mono',
+    400 13px 'IBM Plex Mono',
     monospace;
   color: var(--muted);
 }
@@ -946,7 +947,7 @@ details.insights li {
   border-radius: 999px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
   font:
-    400 12.5px/1.4 'IBM Plex Sans',
+    400 13px/1.4 'IBM Plex Sans',
     sans-serif;
   color: var(--ink);
   animation: ut-in 180ms ease-out both;
@@ -974,7 +975,7 @@ body.touring {
 }
 .usetour .ut-id {
   font:
-    600 12.5px 'IBM Plex Mono',
+    600 13px 'IBM Plex Mono',
     monospace;
   color: var(--accent-ink);
 }
@@ -983,7 +984,7 @@ body.touring {
 }
 .usetour .ut-count {
   font:
-    400 11.5px 'IBM Plex Mono',
+    400 13px 'IBM Plex Mono',
     monospace;
   white-space: nowrap;
   min-width: 74px;
@@ -1015,7 +1016,7 @@ body.touring {
 .usetour .ut-doc {
   padding: 2px 9px;
   font:
-    400 11px 'IBM Plex Mono',
+    400 13px 'IBM Plex Mono',
     monospace;
   color: var(--muted);
 }
@@ -1121,7 +1122,7 @@ span[id^='R'] {
 .cmp-detail-in .pg-code {
   border: 1px solid var(--line);
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 13px;
   /* The panel is a fixed-width column and a code sketch is wider than it more
      often than not, so the sketch scrolls inside its own box. Without this the
      right-hand end of every line is simply cut off with no indication that
@@ -1189,7 +1190,7 @@ span[id^='R'] {
 }
 .cli-item .tag {
   font:
-    500 10px/1 'IBM Plex Mono',
+    500 13px/1 'IBM Plex Mono',
     monospace;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1209,7 +1210,7 @@ span[id^='R'] {
 }
 :root[data-theme='dark'] .pg-code.term,
 .pg-code.term {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
 }
 @media (max-width: 820px) {
@@ -1300,7 +1301,7 @@ span[id^='R'] {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
 }
 .cmp-side.cmp-ours {
@@ -1309,7 +1310,7 @@ span[id^='R'] {
 }
 .cmp-who {
   display: block;
-  font-size: 10.5px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -1321,11 +1322,11 @@ span[id^='R'] {
 }
 .cmp-why {
   margin: 10px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
 }
 .verdict {
-  font-size: 11px;
+  font-size: 13px;
   padding: 2px 7px;
   border-radius: 99px;
   border: 1px solid var(--line);
@@ -1347,7 +1348,7 @@ span[id^='R'] {
   background: var(--red-soft);
 }
 .tag {
-  font-size: 10px;
+  font-size: 13px;
   padding: 1px 6px;
   border-radius: 99px;
   border: 1px solid var(--line);
@@ -1366,7 +1367,7 @@ span[id^='R'] {
 .lib-block.honest ul {
   margin: 0;
   padding-left: 18px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.6;
 }
 
@@ -1391,7 +1392,7 @@ span[id^='R'] {
   background: var(--amber-soft);
   border-radius: 8px;
   padding: 12px 14px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.6;
   margin: 14px 0 4px;
 }
@@ -1425,13 +1426,13 @@ span[id^='R'] {
 }
 .pitch .lnote {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .pitch .pg-code {
   margin: 4px 0 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 13px;
   /* Same reasoning as .cmp-detail-in .pg-code: a pitch card is a narrow
      column, so a code sketch wraps inside its own box rather than getting
      cut off or forcing horizontal scroll on a phone. */
@@ -1452,7 +1453,7 @@ span[id^='R'] {
 }
 td.src {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   word-break: break-word;
   white-space: normal;
@@ -1489,7 +1490,7 @@ td.src {
   text-decoration: line-through;
 }
 .txhere {
-  font-size: 9.5px;
+  font-size: 13px;
   color: var(--accent-ink);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1513,7 +1514,7 @@ td.src {
   margin: 10px 0;
 }
 .pg-optim-row code {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 /* R80 — code samples */
@@ -1524,7 +1525,7 @@ td.src {
   position: absolute;
   top: 8px;
   right: 10px;
-  font-size: 11px;
+  font-size: 13px;
   padding: 2px 9px;
   border-radius: 99px;
   border: 1px solid var(--accent);
@@ -1591,7 +1592,7 @@ td.src {
   }
 }
 .repl-grid h3 {
-  font-size: 12px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -1612,7 +1613,7 @@ td.src {
 }
 .repl-out {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11.5px;
+  font-size: 13px;
   line-height: 1.65;
   white-space: pre-wrap;
   border: 1px solid var(--line);
@@ -1642,7 +1643,7 @@ td.src {
 .tracechip {
   position: relative;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11.5px;
+  font-size: 13px;
   padding: 3px 10px;
   border: 1px solid var(--accent);
   border-radius: 99px;
@@ -1670,7 +1671,7 @@ td.src {
 }
 .tracepop pre {
   margin: 0;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
   max-height: 320px;
   overflow: auto;
@@ -1704,12 +1705,12 @@ td.src {
   overflow: auto;
   border-left: 1px solid var(--line);
   padding-left: 14px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
 }
 .toc-head {
   margin: 0 0 8px;
-  font-size: 10.5px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--muted);
@@ -1728,7 +1729,7 @@ td.src {
 }
 .toc a.sub {
   padding-left: 26px;
-  font-size: 11.5px;
+  font-size: 13px;
 }
 .toc a.on {
   color: var(--accent-ink);
@@ -1843,7 +1844,7 @@ h4:hover > .heading-link-btn,
 .repl-state {
   max-height: 200px;
   overflow: auto;
-  font-size: 11px;
+  font-size: 13px;
 }
 .repl-txlog {
   display: flex;
@@ -1857,7 +1858,7 @@ h4:hover > .heading-link-btn,
   gap: 8px;
   align-items: baseline;
   font:
-    400 11.5px/1.6 ui-monospace,
+    400 13px/1.6 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -1963,7 +1964,7 @@ h4:hover > .heading-link-btn,
 }
 .repl-hover-sig {
   display: block;
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--accent-ink);
   margin-bottom: 6px;
   white-space: pre-wrap;
@@ -1971,7 +1972,7 @@ h4:hover > .heading-link-btn,
 }
 .repl-hover p {
   margin: 0 0 6px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
 }
 .repl-hover .kicker {
@@ -1981,7 +1982,7 @@ h4:hover > .heading-link-btn,
   margin: 0;
   max-height: 180px;
   overflow: auto;
-  font-size: 11px;
+  font-size: 13px;
   background: var(--code);
   border-radius: 5px;
   padding: 6px 8px;
@@ -2007,7 +2008,7 @@ h4:hover > .heading-link-btn,
 }
 .cm-editor {
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 12px;
+  font-size: 13px;
   background: transparent;
 }
 .cm-editor.cm-focused {
@@ -2051,7 +2052,7 @@ h4:hover > .heading-link-btn,
 }
 .cm-tooltip.cm-tooltip-autocomplete > ul {
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 11.5px;
+  font-size: 13px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -2074,7 +2075,7 @@ h4:hover > .heading-link-btn,
   padding: 8px 10px;
   max-width: 320px;
   font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 /* The hover keeps its own styling; inside a CodeMirror tooltip it must not be
@@ -2269,7 +2270,7 @@ h4:hover > .heading-link-btn,
   .stackable td::before {
     content: attr(data-label);
     display: block;
-    font-size: 10.5px;
+    font-size: 13px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--muted);
@@ -2449,7 +2450,7 @@ h4:hover > .heading-link-btn,
   }
   .navsheet-group {
     margin: 8px 8px 2px;
-    font-size: 10.5px;
+    font-size: 13px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--muted);

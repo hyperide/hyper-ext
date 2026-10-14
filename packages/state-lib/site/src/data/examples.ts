@@ -1,3 +1,4 @@
+import { SCREEN_EXAMPLES } from './screen-examples';
 import { LEARNING_EXAMPLES } from './learning-examples';
 import { OTHER_EXAMPLES } from './examples-other';
 import { UI } from './ui-samples';
@@ -30,9 +31,16 @@ export type Task = {
 
 export const TASKS: Task[] = [
   {
+    id: 'screen',
+    title: 'Build a complete React screen',
+    about:
+      'One checklist, the same interactions, different store APIs. Start with a screen, not individual signal primitives.',
+  },
+  {
     id: 'basics',
     title: 'A write: snapshot, change record, intent',
-    about: 'Three views of one named action: resulting state, forward/inverse patches, and the action name supplied by the author.',
+    about:
+      'Three views of one named action: resulting state, forward/inverse patches, and the action name supplied by the author.',
   },
   {
     id: 'derived',
@@ -59,11 +67,31 @@ export const TASKS: Task[] = [
     title: 'Data at the boundaries',
     about: 'Serialising outward, presenting inward, and not corrupting either on the way.',
   },
-  {id:'reactivity',title:'Reactivity and batching',about:'Lazy computations, eager subscribers, intermediate reads and transaction boundaries.'},
-  {id:'regions',title:'Regions and lifetime',about:'Which data belongs to this view, session, draft or durable domain?'},
-  {id:'persistence',title:'Persistence',about:'Which representation is retained and restored? Separate from synchronisation and optimism.'},
-  {id:'optimism',title:'Optimistic state',about:'Pending intent overlays confirmed data; acknowledgement or rejection resolves it.'},
-  {id:'sync',title:'Read synchronisation',about:'Snapshots, deltas, reconnect and refetch: six interactive models and a real HTTP reader.'},
+  {
+    id: 'reactivity',
+    title: 'Reactivity and batching',
+    about: 'Lazy computations, eager subscribers, intermediate reads and transaction boundaries.',
+  },
+  {
+    id: 'regions',
+    title: 'Regions and lifetime',
+    about: 'Which data belongs to this view, session, draft or durable domain?',
+  },
+  {
+    id: 'persistence',
+    title: 'Persistence',
+    about: 'Which representation is retained and restored? Separate from synchronisation and optimism.',
+  },
+  {
+    id: 'optimism',
+    title: 'Optimistic state',
+    about: 'Pending intent overlays confirmed data; acknowledgement or rejection resolves it.',
+  },
+  {
+    id: 'sync',
+    title: 'Read synchronisation',
+    about: 'Snapshots, deltas, reconnect and refetch: six interactive models and a real HTTP reader.',
+  },
 ];
 
 export type Example = {
@@ -96,9 +124,9 @@ export type Example = {
 };
 
 export const STATE_EXAMPLES: Example[] = [
-  // First on purpose: /repl with no example id lands here, and this is the
-  // claim the front page opens with. It used to land on the selector-pyramid
-  // example — the most advanced one on the page.
+  // Not first anymore: EXAMPLES prepends SCREEN_EXAMPLES, so bare /repl lands
+  // on task-screen and the front page opens with that claim. Kept order below
+  // is the suggested reading order within the state basics.
   {
     id: 'read-write',
     short: 'one write',
@@ -568,7 +596,8 @@ return <Search />`,
     title: 'React native hook versus prototype path hook',
     short: 'adapter ownership',
     tech: 'state',
-    about: 'useSyncExternalStore is native React. signal/createStore/store.usePath are the site prototype. Both buttons update the same named store action. No planned useSlice package is implied.',
+    about:
+      'useSyncExternalStore is native React. signal/createStore/store.usePath are the site prototype. Both buttons update the same named store action. No planned useSlice package is implied.',
     setup: `const store = createStore({count:0})
 const count = signal(0)
 const increment = store.action('counter.increment', s => { s.count++ })
@@ -579,7 +608,7 @@ increment()
 log('count', count.get())
 log('command', store.log.at(-1).name)`,
     ui: `function NativeCounter() {
-  const value = useSyncExternalStore(
+  const value = React.useSyncExternalStore(
     notify => count.subscribe(notify),
     () => count.get(),
     () => 0
@@ -593,13 +622,53 @@ function PrototypeCounter() {
 return <div><NativeCounter /><PrototypeCounter /></div>`,
   },
 
+  {
+    id: 'lifecycle',
+    task: 'async',
+    tech: 'state',
+    short: 'unsubscribe',
+    title: 'Disconnect a subscription on purpose',
+    about:
+      'Watch the source keep changing after its reader disconnects. This is the prototype watch unsubscribe function, not a claim that every dispose signature shares this API.',
+    setup: `const source = signal(0)
+const observed = signal(0)
+const connected = signal(false)
+let stop = () => {}
+const disconnect = () => { stop(); connected.set(false) }
+const connect = () => {
+  disconnect()
+  stop = watch(() => observed.set(source.get()))
+  connected.set(true)
+}
+const increment = () => source.set(source.get() + 1)`,
+    code: `// Connect a reader to the source. Its value follows while the watcher is active.
+connect()
+// Use Disconnect in the UI, then increment again. The source continues; the reader stays put.
+log('connected reader', observed.get())`,
+    ui: `function useValue(value) {
+  return React.useSyncExternalStore(listener => value.subscribe(listener), () => value.get(), () => value.get())
+}
+function LifecycleDemo() {
+  const count = useValue(source)
+  const lastSeen = useValue(observed)
+  const listening = useValue(connected)
+  React.useEffect(() => () => disconnect(), [])
+  return <div className="lifecycle-demo">
+    <div className="lifecycle-values"><div>Source<strong data-lifecycle-source>{count}</strong></div><span aria-hidden="true">{listening ? '→' : '×'}</span><div>Reader<strong data-lifecycle-reader>{lastSeen}</strong></div></div>
+    <p role="status">{listening ? 'Connected: the reader follows the source.' : 'Disconnected: only the source changes.'}</p>
+    <button onClick={increment}>Increment source</button>
+    <button onClick={listening ? disconnect : connect}>{listening ? 'Disconnect reader' : 'Reconnect reader'}</button>
+  </div>
+}
+return <LifecycleDemo />`,
+  },
 ];
 
 export const exampleById = (id: string) => EXAMPLES.find((e) => e.id === id);
 
 /** Everything the REPL can run: ours, plus the same tasks written against the
  *  other toolkits so the comparison is executable rather than asserted. */
-export const EXAMPLES: Example[] = [...STATE_EXAMPLES, ...LEARNING_EXAMPLES, ...OTHER_EXAMPLES];
+export const EXAMPLES: Example[] = [...SCREEN_EXAMPLES, ...STATE_EXAMPLES, ...LEARNING_EXAMPLES, ...OTHER_EXAMPLES];
 
 export const techOf = (e: Example): Tech => e.tech ?? 'state';
 

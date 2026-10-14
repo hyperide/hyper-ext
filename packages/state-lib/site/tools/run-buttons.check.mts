@@ -1,3 +1,4 @@
+import { isExampleBackedSource } from './example-source-contract.mts';
 /**
  * A "run it →" button must open exactly the code it sits under (R80).
  *
@@ -45,12 +46,29 @@ for (const file of readdirSync(pages).filter((f) => f.endsWith('.tsx'))) {
     );
     check(
       `${file}: repl="${id}" renders the example rather than a copy`,
-      /^\{\s*exampleById\(/.test(body),
+      !!id && isExampleBackedSource(body, id),
       'shows a literal snippet, which can (and did) drift from what the button opens',
     );
   }
 }
 check('at least one run button exists', seen > 0, String(seen));
+
+console.log('\n/init shows the whole task-screen example that Run executes');
+{
+  // Run executes setup + code and mounts ui; /init once displayed setup + ui only,
+  // silently dropping the prepared script. The block must reference all three fields
+  // of its own example id, so the script cannot be dropped again without failing here.
+  const init = readFileSync(join(pages, 'Init.tsx'), 'utf8');
+  const m = init.match(/<Code\s+repl="task-screen"\s*>([\s\S]*?)<\/Code>/);
+  check('Init renders a task-screen block', !!m);
+  const body = m?.[1] ?? '';
+  for (const field of ['setup', 'code', 'ui'])
+    check(
+      `Init task-screen block renders exampleById('task-screen')!.${field}`,
+      body.includes(`exampleById('task-screen')!.${field}`),
+      `the ${field} piece Run executes is not displayed`,
+    );
+}
 
 console.log('\nevery "see it live" on Compare opens the row it belongs to');
 {

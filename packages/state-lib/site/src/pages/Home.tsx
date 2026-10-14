@@ -1,256 +1,368 @@
 import { href } from '../lib/router';
-import { Code } from '../lib/Code';
-import type { ReactNode } from 'react';
-import { T } from '../lib/T';
-import { ROWS } from '../data/landscape';
-import { CATS } from '../data/compare';
-import { exampleById } from '../data/examples';
-import { DECISION_COUNT, PROTO_LINES, REQ_COUNT, REQ_MAX, SPEC_VERSION } from '../data/facts';
+import { LandingDemo } from '../lib/LandingDemo';
+import { SiteIcon } from '../lib/SiteIcon';
+import measurements from '../../tools/bench-results.json';
 
-/** Counts are derived from the sources so the front page cannot go stale (R64) — see data/facts.ts. */
-const AXIS_COUNT = CATS.reduce((n, c) => n + c.axes.length, 0);
-const LIB_COUNT = ROWS.length;
-
-const card = (to: string, tag: string, title: string, body: ReactNode, status?: [string, string]) => (
-  <a className="card" href={to} key={title}>
-    <span className="tag">{tag}</span>
-    <h3>{title}</h3>
-    <p>
-      {body} {status && <span className={`status ${status[0]}`}>{status[1]}</span>}
-    </p>
-  </a>
-);
-
+const measuredSuite = measurements.suites.find((suite) => suite.suite.startsWith('R66'));
+const recompute = measuredSuite?.rows.find((row) => row.name === 'recompute · 10,000 rows');
+const incremental = measuredSuite?.rows.find((row) => row.name.startsWith('deriveCollection · 10,000 rows'));
+const familiar = (path: string, text: string) => <a href={href(path)}>{text} →</a>;
 export default function Home() {
   return (
-    <div className="wrap">
-      <header className="page hero">
-        <p className="kicker">universal client-state toolkit</p>
-        <h1>
-          Reading is subscribing.
-          <br />
-          Writing is an event.
-        </h1>
-        <T as="p" className="lead big">
-          {
-            'state aims to be the default choice for client-side state — the way Postgres is for databases. Not one clever idea, but the boring-in-a-good-way universal one: every framework, every backend, every architecture, and out of your way.'
-          }
-        </T>
-
-        <div className="hero-code">
-          <Code repl="read-write">{exampleById('read-write')!.code}</Code>
+    <div className="landing-page model-landing">
+      <header className="landing-hero wrap">
+        <div className="landing-intro">
+          <span className="landing-status">
+            <span />
+            Working prototype · public design in progress
+          </span>
+          <p className="kicker">STATE MANAGEMENT · UX BY DEFAULT</p>
+          <h1>
+            One state model. <br />
+            <span>Fewer places for bugs to hide.</span>
+          </h1>
+          <p className="landing-lead">
+            state is a client-state library built around one inspectable model: your data, form drafts and async states
+            belong together. Components show values and send actions. The state layer coordinates the change.
+          </p>
+          <div className="landing-ctas">
+            <a className="landing-primary" href={href('/repl/task-screen')}>
+              Build a real screen <SiteIcon name="updates" />
+            </a>
+            <a className="landing-secondary" href={href('/landscape')}>
+              Find the model you know →
+            </a>
+          </div>
+          <p className="landing-subnote">
+            Familiar store ergonomics. Fine-grained reads. A path to coherent updates, replayable scenarios and safer
+            async UX.
+          </p>
+          <p className="landing-source-link">
+            <a href="https://github.com/hyperide/hyper-saas/tree/main/packages/state-lib">
+              Explore the source <SiteIcon name="updates" />
+            </a>
+            <span>Source available · Elastic-2.0 · not yet a stable v1 package</span>
+          </p>
         </div>
-
-        <div className="hero-honest">
-          <b>Read this before anything else.</b> There is no npm package yet. What exists today is a researched
-          specification ({REQ_COUNT} numbered requirements, {DECISION_COUNT} recorded decisions), a landscape of{' '}
-          {LIB_COUNT} libraries read mostly at source level, and a working ~{PROTO_LINES}-line core prototype you can
-          drive on the <a href={href('/playground')}>Playground</a>. Every claim on this site carries a status tag, and
-          &ldquo;designed&rdquo; means specified and unbuilt. No number appears here without saying where it came from.
-        </div>
-
-        <p className="lnote">
-          Not sure where to start? <a href={href('/init')}>Configure your setup</a> — the same questions the CLI will
-          ask, answered right here, with the real code behind every choice that already runs.
-        </p>
+        <LandingDemo />
       </header>
 
-      <h2>The three things that are actually different</h2>
-      <div className="pitch">
-        <section>
-          <h3>Selectors and memoization stop being your job</h3>
-          <T as="p">
-            {
-              'A component reads values and is subscribed to precisely the paths it read. No selector functions, no useMemo, no equality arguments, no stale-closure bugs. Redux’s real tax was never boilerplate — it was that every derived value had to be memoized by hand, and getting it wrong was slow, leaky, or silently stale.'
-            }
-          </T>
-          <Code repl="derived">{exampleById('derived')!.code}</Code>
-          <p className="lnote">
-            <T>
-              {
-                'The trap everyone else hits: Valtio, MobX and Legend track reads during render, which React Compiler breaks — documented, and silent when it happens ('
-              }
-            </T>
-            <a href="https://github.com/preactjs/signals/issues/652" target="_blank" rel="noreferrer">
-              Preact #652
-            </a>
-            <T>{'). We track reads and still hand React stable snapshots, so both halves hold at once.'}</T>
-          </p>
-          <p className="lnote">
-            <a href={href('/compare')}>Rated against seven libraries</a> ·{' '}
-            <a href={href('/playground')}>watch the render counters</a>
-          </p>
-        </section>
-        <section>
-          <h3>One write, and the event log comes free</h3>
-          <T as="p">
-            {
-              'Every transaction can record its intent (a named command) and its effect (an exact JSON Patch plus the inverse that undoes it). That single mechanism is undo/redo, time travel, replication between windows, persistence deltas, an offline outbox, and “reproduce the user’s exact session” — instead of six libraries that each solve one of them.'
-            }
-          </T>
-          <T as="p" className="lnote">
-            {
-              'And it is per slice: a slice that logs nothing compiles down to a plain signal write. You pay for the log where you consume it, which is the opposite of Redux charging every application forever.'
-            }
-          </T>
-          <p className="lnote">
-            <a href={href('/concepts')}>How patches and inverse patches work</a> ·{' '}
-            <a href={href('/repl/undo')}>watch undo/redo run</a>
-          </p>
-        </section>
-        <section>
-          <h3>A compiler, so the library shrinks as you use less of it</h3>
-          <T as="p">
-            {
-              'Svelte proved a framework can compile itself away; Qwik proved a compiler can restructure an application; React Compiler proved auto-memoisation is worth doing — we make it unnecessary instead, since per-path signals invalidate exactly and there is no memo cache to check. Nobody applied any of this to the state layer, which is where the wins are largest — the bundle ends up holding your application’s state machine rather than a framework. Unused modules are stripped, per-path reads lower to direct signal access, and a keystroke node with no external reader stops touching the patch log at all.'
-            }
-          </T>
-          <T as="p" className="lnote">
-            {
-              'The compiler is Rust (SWC/Oxc) behind a Python CLI, with a TypeScript sidecar only for what genuinely needs the type checker — because no Rust TypeScript type checker has shipped. A fact, not a preference.'
-            }
-          </T>
-          <p className="lnote">
-            <a href={href('/cli')}>state-cli: init · migrate · build · lint</a>
-          </p>
-        </section>
-      </div>
-
-      <h2>Honest about the hard parts</h2>
-      <div className="pitch two">
-        <section>
-          <h3>&ldquo;Global state for every keystroke&rdquo; already failed once</h3>
-          <T as="p">
-            {
-              'redux-form is the standing counter-example and it deserves a real answer rather than a slogan. Five specific mechanism defects made it slow: a root dispatch per character, no per-field granularity, whole-form validation, log noise, and permanent serialisability. Each has a mechanism answer here, and the conclusion runs the other way — keystrokes should be inspectable state, provided they are free.'
-            }
-          </T>
-          <p className="lnote">
-            <a href={`${href('/concepts')}#redux-form`}>The post-mortem, cause by cause</a>
-          </p>
-        </section>
-        <section>
-          <h3>Every idea here has a parent</h3>
-          <T as="p">
-            {
-              'The reactivity algorithm converged years ago and we vendor it rather than pretend to have invented it. Transient coalescing is Zustand’s name, Yjs and Loro’s merge window, LiveStore’s client-only split. The collection contract is TanStack DB’s, implemented natively so their adapters work unchanged. Assembled well is the craft claim; invented is not.'
-            }
-          </T>
-          <p className="lnote">
-            <a href={href('/landscape')}>{LIB_COUNT} libraries, what we take from each and why</a>
-          </p>
-        </section>
-      </div>
-
-      <h2>Where things stand</h2>
-      <div className="cards">
-        {card(
-          href('/spec'),
-          'spec',
-          `Master spec ${SPEC_VERSION}`,
-          'Core model, data modelling, layers and automations, tasks and cancellation, compiler, adapters, data layer, retention, remote protocol, CLI, budgets.',
-          ['done', 'draft for review'],
-        )}
-        {card(
-          href('/requirements'),
-          'source of truth',
-          `Requirements R1–R${REQ_MAX}`,
-          'Every request recorded in the owner’s own intent, in English; the spec traces to these ids.',
-          ['done', 'living'],
-        )}
-        {card(
-          href('/decisions'),
-          'log',
-          'Decision log',
-          `${DECISION_COUNT} decisions with reasons and explicit supersessions — overturned by adding a row, never by deleting one.`,
-          ['done', 'living'],
-        )}
-        {card(
-          href('/landscape'),
-          'comparison',
-          'The State of State',
-          `${LIB_COUNT} libraries · seven layers · what we take, why, and a verdict each. Filterable.`,
-          ['done', 'v3'],
-        )}
-        {card(
-          href('/concepts'),
-          'concepts',
-          'Concept explainers',
-          'Ten illustrated mechanisms, each showing the failure it prevents — validated by a comprehension protocol, not by taste.',
-          ['done', 'v2'],
-        )}
-        {card(
-          href('/brief'),
-          'research',
-          'Research brief',
-          'Codebase audit, landscape by layer, the tensions between requirements, three candidate architectures.',
-          ['done', 'done'],
-        )}
-      </div>
-
-      <h2>Compare, in detail</h2>
-      <div className="cards">
-        {card(
-          href('/compare'),
-          'R27',
-          'What you get that others don’t',
-          `${AXIS_COUNT} axes across five categories, rated against seven libraries, with how-it-works detail on hover and a head-to-head page per library.`,
-          ['wip', 'v2'],
-        )}
-        {card(
-          href('/dive-stores'),
-          'deep dive',
-          'Store prior art',
-          'Zustand (deepest), Valtio, Jotai and Legend-State read from their sources — idiom catalogues, footguns, and per-library codemod feasibility.',
-          ['done', 'v1'],
-        )}
-        {card(
-          href('/dive-data'),
-          'deep dive',
-          'Data & reactivity prior art',
-          'TanStack DB, signia/@tldraw/state and alien-signals at source level: module maps, code paths, adopt/adapt/avoid verdicts.',
-          ['done', 'v1'],
-        )}
-      </div>
-
-      <h2>Try it, measure it</h2>
-      <div className="cards">
-        {card(
-          href('/playground'),
-          'R38',
-          'Playground',
-          'The same UI in useState, Zustand and the core prototype, with live render counters and a real transaction log. One click, one row.',
-          ['wip', 'prototype'],
-        )}
-        {card(
-          href('/bench'),
-          'R28',
-          'Benchmarks',
-          'Runs in your browser on your hardware, plus static numbers that name their source. The full harness is not built yet and the page says so.',
-          ['wip', 'v1'],
-        )}
-        {card(
-          href('/devtools'),
-          'R39',
-          'Devtools compared',
-          'On the axes that made Redux DevTools freeze, with our own design entered as a row rather than exempted.',
-          ['wip', 'v1'],
-        )}
-        <div className="card">
-          <span className="tag">R32</span>
-          <h3>Query layer</h3>
+      <section className="landing-section wrap" aria-labelledby="one-model">
+        <div className="section-heading">
+          <p className="kicker">GLOBAL STATE. LOCAL INTEREST.</p>
+          <h2 id="one-model">Share the address. Not every update.</h2>
           <p>
-            A Datomic-like Rust→wasm database replacing hand-written selector pyramids —{' '}
-            <a href={`${href('/concepts')}#queries`}>what&rsquo;s designed so far</a>.{' '}
-            <span className="status todo">needs a session with its author</span>
+            The architectural choice is to keep application state in one model — including transient screen state. It
+            does not mean one process-wide singleton, one giant subscription, or persisting every keystroke.
           </p>
         </div>
-      </div>
+        <div className="model-comparison">
+          <div>
+            <h3>What stays familiar</h3>
+            <p>
+              Like Redux and Zustand, one store gives an update a home. Like tracked snapshots and signals, readers
+              should depend on the values they actually use. A component does not need to maintain another signal for
+              every store field.
+            </p>
+            {familiar('/lib/zustand', 'Compare the shared-store model')}{' '}
+            {familiar('/concepts#push-pull', 'Understand the dependency layer')}
+          </div>
+          <div>
+            <h3>What state is trying to make the default</h3>
+            <p>
+              Named changes, atomic publication, scoped ownership and inspectable history work together. A store is
+              created per app session, test or story; regions own shorter lifetimes. Shared does not mean immortal or
+              shared across users.
+            </p>
+            {familiar('/repl/task-screen', 'See two components read one model')}{' '}
+            {familiar('/spec#s4-7', 'Read the ownership contract')}
+          </div>
+        </div>
+      </section>
 
-      <footer>
-        Vite + React. Dev: <code>bun install &amp;&amp; bun run dev</code> in <code>packages/state-lib/site</code>. The
-        built <code>dist/index.html</code> also opens straight from disk.
-      </footer>
+      <section className="landing-playband" aria-labelledby="why-global">
+        <div className="wrap">
+          <div className="section-heading">
+            <p className="kicker">WHAT THE GLOBAL MODEL UNLOCKS</p>
+            <h2 id="why-global">A bug report, a test and a story can start from the same state.</h2>
+            <p>
+              The benefit is not centralization for its own sake. It is having a complete application-level context that
+              you can inspect, seed and deliberately change.
+            </p>
+          </div>
+          <div className="global-benefits">
+            <article>
+              <span className="readiness">WORKING BUILDING BLOCKS · CAPTURE PIPELINE PLANNED</span>
+              <h3>Turn a production failure into a reproducible scenario.</h3>
+              <p>
+                A snapshot plus named changes can preserve the state that led to a broken screen. Capture also needs the
+                application version and relevant inputs: responses, time, randomness and event order. A store alone
+                cannot reproduce every network, browser or timing bug.
+              </p>
+              {familiar('/devtools', 'Capture and replay boundaries')}{' '}
+              {familiar('/repl/undo', 'Inspect actual changes')}
+            </article>
+            <article>
+              <span className="readiness">RUNNABLE SCREEN FIXTURES</span>
+              <h3>Test behavior without reconstructing the whole app.</h3>
+              <p>
+                Create a fresh store for each test. Give a presentational component plain data and event callbacks; give
+                its connected wrapper an isolated model. Loading, validation failures and conflicts become fixtures
+                instead of click-through rituals.
+              </p>
+              {familiar('/init#react-screen', 'Read the real React component')}
+              <a href="https://storybook.js.org/docs/writing-stories/build-pages-with-storybook">
+                Storybook: containers and presentational views ↗
+              </a>
+            </article>
+            <article>
+              <span className="readiness">SHARED DATA · SCOPED LIFETIME</span>
+              <h3>Share a draft without lifting it out of a component.</h3>
+              <p>
+                When a summary, sidebar or another screen needs the field, subscribe to its existing address. The value
+                does not need to move up the React tree. You still choose the region lifetime and permissions; changing
+                who can read something is not the same as keeping it forever.
+              </p>
+              {familiar('/repl/task-screen', 'Use one model in several views')}{' '}
+              {familiar('/concepts#signals-streams', 'Stores, signals and streams')}
+            </article>
+            <article>
+              <span className="readiness">INSPECTION WORKS · FULL DEVTOOLS PLANNED</span>
+              <h3>See the state you normally lose between components.</h3>
+              <p>
+                Form drafts, modal state and request phases can share an inspectable timeline. The same boundaries can
+                support Undo, unsaved-work detection, navigation guards and recovery. DOM handles, secrets and
+                unrecorded external effects are not magically captured.
+              </p>
+              {familiar('/repl/undo', 'Explore history')} {familiar('/repl/lifecycle', 'Explore task lifetime')}
+            </article>
+          </div>
+          <p className="model-footnote">
+            These are not exclusive to state: Redux already supports centralized debugging and time travel. The
+            differentiator we are building is the combination of granular reads, coherent changes and lifecycle policies
+            without rebuilding the glue for every screen.{' '}
+            <a href="https://redux.js.org/">Redux’s own architectural overview ↗</a>
+          </p>
+        </div>
+      </section>
+
+      <section className="landing-section wrap" aria-labelledby="safe-async">
+        <div className="section-heading">
+          <p className="kicker">UX BY DEFAULT, NOT A REMINDER IN A CHECKLIST</p>
+          <h2 id="safe-async">Loading and error are states of the feature — not optional decorations.</h2>
+          <p>
+            The design goal is an exhaustive rendering boundary: idle, loading, success, empty, error and cancellation
+            have explicit behavior. An incomplete binding should be rejected or receive a defined fallback, not silently
+            ship a blank screen.
+          </p>
+        </div>
+        <div className="model-comparison">
+          <div>
+            <h3>What works today</h3>
+            <p>
+              The prototype and typed pilot provide task ownership, cancellation and protection against obsolete
+              results. The workbench lets you inspect live state while exercising real actions. You can build explicit
+              status models and test their visible outcomes.
+            </p>
+            {familiar('/repl/lifecycle', 'Run a cancellation scenario')}{' '}
+            {familiar('/repl/task-screen', 'Explore a complete screen')}
+          </div>
+          <div>
+            <h3>What is not yet a universal guarantee</h3>
+            <p>
+              Simply installing today’s package does not force every component to handle every state. A mandatory
+              exhaustive async binding and full capture/replay remain implementation work. A valid type cannot, by
+              itself, ensure an error message is useful or a retry policy is correct.
+            </p>
+            <a href="https://tanstack.com/query/latest/docs/framework/react/guides/queries">
+              TanStack Query also models pending, error and success ↗
+            </a>
+            {familiar('/spec#s4-15', 'Read the task contract')}
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section wrap" aria-labelledby="forms-without-broadcasts">
+        <div className="section-heading">
+          <p className="kicker">THE REDUX-FORM LESSON</p>
+          <h2 id="forms-without-broadcasts">A shared form must not become a global broadcast.</h2>
+          <p>
+            Keeping every draft in the model only helps if a keystroke does not copy the whole document, revalidate
+            every field or rerender the entire form. Those are mechanisms to measure, not problems solved by renaming a
+            store.
+          </p>
+        </div>
+        <div className="global-benefits on-light">
+          <article>
+            <h3>Subscribe to the field, not the universe.</h3>
+            <p>
+              Read tracking and targeted subscriptions should update only interested views. Selectors need stable
+              snapshots and dependencies; an unrelated write must leave them alone.
+            </p>
+            {familiar('/repl/derived', 'Inspect a patch-driven collection')}
+          </article>
+          <article>
+            <h3>Keep incomplete input intact.</h3>
+            <p>
+              A user can type a partial date or a trailing decimal point without immediately overwriting it with a
+              formatted domain value. Raw input, parsed value, validation and presentation need different
+              responsibilities.
+            </p>
+            {familiar('/repl/conversion', 'Try incomplete input')}
+          </article>
+          <article>
+            <h3>Apply policy at the right scope.</h3>
+            <p>
+              Persistence, expensive validation, cross-field derivation and history need explicit scheduling and
+              retention. A shared address does not require serializing or saving every keystroke.
+            </p>
+            {familiar('/repl/regions', 'Inspect region policies')}
+          </article>
+          <article>
+            <h3>Measure the typing path.</h3>
+            <p>
+              The common typed core, normalized data and structural sharing are still being integrated. Some measured
+              app paths remain slower and have more glue than their baseline. No claim that all Redux-form-era costs are
+              already eliminated.
+            </p>
+            {familiar('/bench', 'Review the measurements')}
+          </article>
+        </div>
+        <p className="lnote">
+          <a href="https://redux.js.org/faq/performance">
+            Redux also recommends normalization, granular subscriptions and shallow copies
+          </a>
+          . <a href="https://redux.js.org/faq/organizing-state">Its form-state guidance</a> is the tradeoff this
+          architecture must answer with evidence, not a claim that Redux inherently rerenders everything.
+        </p>
+      </section>
+
+      <section className="landing-section wrap model-evidence" aria-labelledby="measured-value">
+        <div className="section-heading">
+          <p className="kicker">MEASUREMENT BEFORE SUPERLATIVES</p>
+          <h2 id="measured-value">Show the mechanism. Show its cost.</h2>
+          <p>
+            A narrow improvement is not an application-wide speedup. The public harness records both wins and overhead,
+            with the workload and environment next to the result.
+          </p>
+        </div>
+        {recompute && incremental && (
+          <div className="evidence-pair">
+            <article>
+              <p>Full view recomputation</p>
+              <strong>{recompute.ms} ms</strong>
+            </article>
+            <article>
+              <p>Actual patch-driven prototype</p>
+              <strong>{incremental.ms} ms</strong>
+            </article>
+          </div>
+        )}
+        <p>
+          Historical isolated workload: 10,000 rows and 200 single-item updates. Source run{' '}
+          <code>{measurements.provenance.commit}</code>, {measurements.provenance.ranAt.slice(0, 10)},{' '}
+          {measurements.provenance.cpu}, headless Chromium. Different runs and devices are not comparable. This does not
+          measure a whole React screen, every selector, or the native kernel.
+        </p>
+        <p>
+          {familiar('/bench', 'Rerun the harness and inspect the method')}{' '}
+          {familiar('/query-research', 'Check where incremental queries actually help')}
+        </p>
+        <p className="contract-evidence">
+          <strong>Checked behavior, not just timing:</strong> the global-model fixture changes one form field and
+          observes one notification for its reader and zero for the unrelated preview reader. Separate story stores
+          remain isolated, incomplete input stays intact, and a same-version deterministic action fixture rebuilds the
+          same state. These are bounded prototype checks, not measurements of every React render or arbitrary production
+          replay.
+        </p>
+        <div className="model-comparison">
+          <div>
+            <h3>Correctness is observable too.</h3>
+            <p>
+              The workbench shows whether two views agree after one change, whether Undo restores values and whether old
+              async work can publish. These are executable contracts. A passing fixture is not a percentage of
+              production bugs prevented.
+            </p>
+          </div>
+          <div>
+            <h3>Native is a foundation, not a browser claim.</h3>
+            <p>
+              The Rust/Verus kernel has a narrow atomic-write contract. Today’s browser demonstrations run TypeScript.
+              End-to-end Wasm/GPU integration, universal performance wins and proof of the whole application are not
+              shipped claims.
+            </p>
+            <a href="https://github.com/hyperide/hyper-saas/tree/main/packages/state-lib/native">
+              Read the native source and proof boundary ↗
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section wrap" aria-labelledby="not-one-tool-for-everything">
+        <div className="section-heading">
+          <p className="kicker">A SYNTHESIS, NOT A CLAIM TO HAVE INVENTED EVERYTHING</p>
+          <h2 id="not-one-tool-for-everything">Keep the right boundary around each problem.</h2>
+        </div>
+        <div className="model-boundaries">
+          <article>
+            <h3>Immutable editing is not the whole store.</h3>
+            <p>
+              Immer is a useful model for immutable changes; state connects updates to subscriptions, commands and
+              history. These are additional responsibilities, not proof that an update helper is deficient.
+            </p>
+            <a href="https://immerjs.github.io/immer/">Immer’s model ↗</a>
+            {familiar('/landscape#h-immutability-patches', 'Immutability landscape')}
+          </article>
+          <article>
+            <h3>Client state is not server truth.</h3>
+            <p>
+              TanStack Query handles server-cache concerns. A state model coordinates the local experience; it does not
+              replace authorization, deduplication or cache freshness just by holding the response.
+            </p>
+            <a href="https://tanstack.com/query/latest/docs/framework/react/overview">Server-state boundary ↗</a>
+            {familiar('/landscape#h-api-layer', 'API and cache landscape')}
+          </article>
+          <article>
+            <h3>A named action is not a statechart.</h3>
+            <p>
+              XState models actors and orchestration, and XState Store supports event-driven state with extensions.
+              state’s FSM layer is a proposed integration with its transaction model, not a reason to hide useful
+              existing tools.
+            </p>
+            <a href="https://stately.ai/docs/xstate-store">XState Store ↗</a>
+            {familiar('/landscape#h-stores', 'Compare event and store models')}
+          </article>
+          <article>
+            <h3>Local Undo is not conflict-free collaboration.</h3>
+            <p>
+              Remote edits, optimistic responses and local history can overlap. Ownership and cancellation help, but
+              sync protocols and an explicit conflict policy still decide what is valid.
+            </p>
+            {familiar('/landscape#h-sync-local-first', 'Sync and local-first landscape')}{' '}
+            {familiar('/spec#s4-15', 'Cancellation and ownership')}
+          </article>
+        </div>
+      </section>
+      <section className="landing-finish wrap" aria-labelledby="start-with-a-screen">
+        <p className="kicker">START WITH THE APP, NOT THE PRIMITIVES</p>
+        <h2 id="start-with-a-screen">Use it. Inspect it. Challenge the difference.</h2>
+        <p>
+          Open a complete React screen with its state tree and editable code. Try manual changes, run the prepared
+          script, then switch to the equivalent Zustand example.
+        </p>
+        <div className="landing-ctas">
+          <a className="landing-primary" href={href('/repl/task-screen')}>
+            Open the workbench <SiteIcon name="updates" />
+          </a>
+          <a className="landing-secondary" href={href('/init#react-screen')}>
+            Read the screen-building path →
+          </a>
+        </div>
+        <p className="lnote">
+          Working prototype and implementation research. No npm installation or production-readiness promise is implied
+          by the playground.
+        </p>
+      </section>
     </div>
   );
 }

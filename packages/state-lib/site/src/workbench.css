@@ -1,0 +1,431 @@
+.repl-page {
+  max-width: 1580px;
+}
+.workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.35fr);
+  gap: 14px;
+  align-items: start;
+}
+.workbench-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  padding: 16px;
+  margin: 0 !important;
+}
+.workbench-panel > h3:first-child {
+  font-size: 17px;
+  margin: 0 0 14px;
+}
+.workbench-panel.guide-source {
+  padding: 16px;
+}
+.workbench-panel .cm-editor {
+  max-width: 100%;
+  font-size: 14px;
+}
+.workbench-panel .cm-scroller {
+  max-height: 300px;
+  overflow: auto;
+}
+.workbench-panel .lnote,
+.workbench-feedback {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.workbench-feedback {
+  padding: 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+}
+.workbench-mode,
+.quick-templates,
+.command-templates {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+.workbench-mode button,
+.command-templates button,
+.quick-templates a,
+.manual-command > button {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 14px;
+  min-height: 44px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.workbench-mode button[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 -2px var(--accent);
+}
+.lesson-actions .initialize-example {
+  background: var(--accent);
+  color: var(--paper);
+  font-weight: 650;
+}
+.manual-command {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.manual-command textarea {
+  display: block;
+  width: 100%;
+  min-height: 90px;
+  padding: 12px;
+  font: 15px/1.55 var(--mono, monospace);
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 8px;
+}
+.command-out {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: 14px/1.6 var(--mono, monospace);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.state-version {
+  font-size: 14px;
+  font-weight: 600;
+}
+.state-version span {
+  color: var(--muted);
+  font-weight: 400;
+}
+.state-path {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  margin: 14px 0;
+}
+.state-path input {
+  min-width: 0;
+  width: 100%;
+  font: 16px/1.4 var(--mono, monospace);
+  min-height: 44px;
+  padding: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.path-value {
+  display: block;
+  padding: 8px;
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.state-tree-root,
+.state-tree-root ul {
+  list-style: none;
+  padding-left: 14px;
+  margin: 0;
+}
+.state-tree-root {
+  padding-left: 0;
+  max-height: 550px;
+  overflow: auto;
+}
+.state-tree-root li {
+  margin: 4px 0;
+  font-size: 14px;
+}
+.state-tree-root summary {
+  min-height: 36px;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.state-tree-root small {
+  padding-left: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.state-leaf {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: start;
+  padding: 5px 0;
+}
+.state-leaf span {
+  color: var(--accent);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.example-screen {
+  padding: 10px 0;
+}
+.example-screen header h3 {
+  font-size: 22px;
+}
+.example-screen select {
+  min-height: 44px;
+  margin-left: 8px;
+  font: inherit;
+}
+.screen-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+  cursor: pointer;
+}
+.screen-task input {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+.screen-task small {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--muted);
+}
+.example-screen button {
+  margin-top: 16px;
+  min-height: 44px;
+  width: 100%;
+}
+.landscape-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.landscape-cards article {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+  background: var(--panel);
+}
+.landscape-cards h3 {
+  font-size: 23px;
+  margin: 12px 0;
+}
+.landscape-cards p {
+  font-size: 16px;
+  line-height: 1.6;
+}
+.landscape-cards nav {
+  display: flex;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+}
+.landscape-cards nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+}
+.repl-cols.two .workbench-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.repl-cols.two .guide-source {
+  grid-column: 1 / -1;
+}
+@media (max-width: 1100px) {
+  .workbench-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workbench-grid .guide-source {
+    grid-column: 1 / -1;
+  }
+  .landscape-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .workbench-grid,
+  .repl-cols.two .workbench-grid,
+  .landscape-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workbench-panel {
+    padding: 14px;
+  }
+  .state-tree-root {
+    max-height: 300px;
+  }
+  .state-tree-root summary {
+    min-height: 44px;
+  }
+  .landscape-cards article {
+    padding: 18px;
+  }
+  .manual-command textarea {
+    font-size: 16px;
+  }
+}
+
+/* The homepage tells one connected architectural story, not an appended comparison widget. */
+.model-landing .landing-hero {
+  align-items: start;
+}
+.model-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+}
+.model-comparison > div {
+  border-top: 2px solid var(--line);
+  padding-top: 22px;
+}
+.model-comparison h3,
+.global-benefits h3,
+.model-boundaries h3 {
+  font-size: clamp(22px, 2.2vw, 28px);
+  line-height: 1.2;
+}
+.model-comparison p,
+.global-benefits p,
+.model-boundaries p {
+  font-size: 17px;
+  line-height: 1.65;
+}
+.model-comparison a,
+.global-benefits a,
+.model-boundaries a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0 18px 6px 0;
+}
+.global-benefits,
+.model-boundaries {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.global-benefits article {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.global-benefits .readiness {
+  color: var(--muted);
+  font: 13px/1.5 var(--mono, monospace);
+}
+.model-boundaries article {
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+}
+.model-footnote {
+  font-size: 15px;
+  line-height: 1.65;
+  margin-top: 32px;
+}
+.evidence-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 24px 0;
+}
+.evidence-pair article {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+}
+.evidence-pair strong {
+  font-size: clamp(28px, 5vw, 54px);
+}
+.model-evidence > p {
+  line-height: 1.6;
+  font-size: 16px;
+}
+.lesson-actions [hidden] {
+  display: none !important;
+}
+.draft-status,
+.changed-paths {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+@media (min-width: 1101px) {
+  .repl-cols:not(.two) .workbench-grid {
+    height: min(75vh, 860px);
+    min-height: 470px;
+    align-items: stretch;
+  }
+  .repl-cols:not(.two) .workbench-panel {
+    overflow: auto;
+  }
+}
+@media (max-width: 640px) {
+  .model-comparison,
+  .global-benefits,
+  .model-boundaries {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .global-benefits article {
+    padding: 20px;
+  }
+  .model-comparison a,
+  .global-benefits a,
+  .model-boundaries a {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .repl-page > .page {
+    margin-bottom: 18px;
+    padding-bottom: 0;
+  }
+  .repl-page > .page h1 {
+    font-size: 30px;
+    line-height: 1.15;
+    margin: 12px 0;
+  }
+  .repl-page > .page .lead {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  .quick-templates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .quick-templates a {
+    min-width: 0;
+    padding: 8px;
+    font-size: 14px;
+    text-align: center;
+  }
+  .workbench-mode {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workbench-mode button {
+    min-width: 0;
+    padding: 8px;
+    font-size: 14px;
+  }
+  .lesson-actions {
+    margin: 14px 0;
+  }
+  .lesson-actions .initialize-example {
+    flex: 1 1 130px;
+    padding: 8px;
+  }
+  .lesson-actions .reset-session {
+    flex: 0 1 100px;
+    padding: 8px;
+  }
+}

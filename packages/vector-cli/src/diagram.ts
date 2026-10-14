@@ -1,3 +1,4 @@
+import { layoutAscii } from './ascii-layout';
 /** Deterministic, dependency-free SVG primitives for specifications.
  * No DOM, CanvasKit, font download or arbitrary SVG/CSS injection required. */
 export const DIAGRAM_PRESETS = {
@@ -121,7 +122,7 @@ function linesSvg(
   weight = 400,
   mono = false,
 ): string {
-  return `<text x="${fmt(x)}" y="${fmt(y)}" font-family="${mono ? 'ui-monospace, SFMono-Regular, Consolas, monospace' : 'system-ui, -apple-system, Segoe UI, sans-serif'}" font-size="${size}" font-weight="${weight}" fill="${fill}">${lines.map((line, i) => `<tspan x="${fmt(x)}" dy="${i ? fmt(size * 1.5) : 0}">${escapeXml(line)}</tspan>`).join('')}</text>`;
+  return `<text xml:space="preserve" x="${fmt(x)}" y="${fmt(y)}" font-family="${mono ? 'ui-monospace, SFMono-Regular, Consolas, monospace' : 'system-ui, -apple-system, Segoe UI, sans-serif'}" font-size="${size}" font-weight="${weight}" fill="${fill}">${lines.map((line, i) => `<tspan x="${fmt(x)}" dy="${i ? fmt(size * 1.5) : 0}">${escapeXml(line)}</tspan>`).join('')}</text>`;
 }
 function framePart(spec: FrameSpec, theme: Theme, size: number): Part {
   const x = finite(spec.x ?? 0, 'x'),
@@ -307,23 +308,14 @@ export const diagramArrow = (
 ) => renderDiagram([{ ...options, type: 'arrow', from, to }], options);
 
 /** Grid-based ASCII/Unicode box diagram renderer. Converts borders/connectors into
- * paths and arrowheads, preserving labels as editable SVG text. Not a terminal
+ * aligned paths and arrowheads, repairing unambiguous frame/table edges first. Not a terminal
  * emulator: tabs are expanded to four columns; wide/combined emoji layouts are not guaranteed. */
 export function asciiToSvg(source: string, options: DiagramOptions = {}): string {
   source = text(source)
     .replace(/\r\n?/g, '\n')
     .replace(/^\n|\n$/g, '');
   if (!source.trim()) throw new Error('ASCII diagram is empty');
-  const grid = source.split('\n').map((line) => {
-    const out: string[] = [];
-    for (const c of line) {
-      if (c === '\t') {
-        const n = 4 - (out.length % 4);
-        out.push(...Array(n).fill(' '));
-      } else out.push(c);
-    }
-    return out;
-  });
+  const { grid, frames } = layoutAscii(source);
   const cols = Math.max(...grid.map((r) => r.length));
   if (grid.length > 250 || cols > 400) throw new Error('ASCII diagram limit: 250 lines × 400 columns');
   const theme = themeOf(options),
@@ -335,7 +327,7 @@ export function asciiToSvg(source: string, options: DiagramOptions = {}): string
     key = (r: number, c: number) => `${r},${c}`;
   const hor = (v: string) => '-─━═_='.includes(v);
   const ver = (v: string) => '|│┃║'.includes(v);
-  const corners = '┌┐└┘┏┓┗┛╔╗╚╝├┤┬┴┼╠╣╦╩╬+';
+  const corners = '╭╮╰╯┌┐└┘┏┓┗┛╔╗╚╝├┤┬┴┼╠╣╦╩╬+';
   const arrows = '<>^v←→↑↓';
   const dirs: Record<string, string> = {
     '─': 'lr',
@@ -344,6 +336,10 @@ export function asciiToSvg(source: string, options: DiagramOptions = {}): string
     '│': 'ud',
     '┃': 'ud',
     '║': 'ud',
+    '╭': 'rd',
+    '╮': 'ld',
+    '╰': 'ru',
+    '╯': 'lu',
     '┌': 'rd',
     '┏': 'rd',
     '╔': 'rd',
@@ -399,19 +395,12 @@ export function asciiToSvg(source: string, options: DiagramOptions = {}): string
     path = '',
     heads = '',
     labels = '';
-  // Closed rectangular cells get soft panel fills; outer geometry remains the original grid.
-  for (let r = 0; r < grid.length; r++)
-    for (let c = 0; c < cols; c++)
-      if ('┌┏╔+'.includes(at(r, c)) && marked.has(key(r, c))) {
-        let right = c + 1;
-        while (right < cols && hor(at(r, right))) right++;
-        if (right <= c + 1 || !'┐┓╗+'.includes(at(r, right))) continue;
-        let bottom = r + 1;
-        while (bottom < grid.length && ver(at(bottom, c)) && ver(at(bottom, right))) bottom++;
-        if (bottom <= r + 1 || !'└┗╚+'.includes(at(bottom, c)) || !'┘┛╝+'.includes(at(bottom, right))) continue;
-        if (!Array.from({ length: right - c - 1 }, (_, i) => at(bottom, c + i + 1)).every(hor)) continue;
-        fills += `<rect x="${fmt(c * cw + cw / 2)}" y="${fmt(r * ch + ch / 2)}" width="${fmt((right - c) * cw)}" height="${fmt((bottom - r) * ch)}" rx="3" fill="${theme.panel}"/>`;
-      }
+  // Repaired closed frames are semantic rectangles, including inline-title borders.
+  for (const frame of frames) {
+    const right = frame.edges[0];
+    if (!frame.edges.every((edge) => edge === right)) continue;
+    fills += `<rect data-ascii-frame="true" x="${fmt(frame.left * cw + cw / 2)}" y="${fmt(frame.top * ch + ch / 2)}" width="${fmt((right - frame.left) * cw)}" height="${fmt((frame.bottom - frame.top) * ch)}" rx="3" fill="${theme.panel}"/>`;
+  }
   for (let r = 0; r < grid.length; r++) {
     let label = '',
       start = 0;
@@ -453,4 +442,11 @@ export function asciiToSvg(source: string, options: DiagramOptions = {}): string
   }
   const body = `${fills}<path d="${path}" stroke="${theme.accent}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>${heads}${labels}`;
   return svgDocument([{ body, bounds: [0, 0, cols * cw, grid.length * ch] }], options);
+}
+
+/** Normalize explicit frames/tables without rasterizing their text. @public */
+export function normalizeAsciiDiagram(source: string): string {
+  return layoutAscii(text(source))
+    .grid.map((row) => row.join('').trimEnd())
+    .join('\n');
 }

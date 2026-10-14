@@ -32,7 +32,6 @@ const ROUTES = [
   '/concepts/practical',
   '/query-research',
   '/selectors-vs-datalog',
-  '/diagrams',
 ];
 
 /** A resolved link: some page linked to (route, anchor). */

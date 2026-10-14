@@ -34,8 +34,17 @@ if (!specVersion) {
  * current spec version]. The second list is what catches a hardcoded badge:
  * any "spec v0.N" on the page that is not the version the spec itself declares.
  */
+const benchmark = JSON.parse(read('./bench-results.json')) as {
+  provenance: { commit: string; ranAt: string };
+  suites: { suite: string; rows: { name: string; ms: number }[] }[];
+};
+const timingRows = benchmark.suites.find((suite) => suite.suite.startsWith('R66'))!.rows;
+const timings = [
+  timingRows.find((row) => row.name === 'recompute · 10,000 rows')!,
+  timingRows.find((row) => row.name.startsWith('deriveCollection · 10,000 rows'))!,
+].map((row) => `${row.ms} ms`);
 const checks: [string, string[], RegExp[]][] = [
-  ['/', [`Master spec ${specVersion}`, `Requirements R1–R${reqMax}`, `~${protoLines}-line`], [/Master spec v[\d.]+/g]],
+  ['/', [benchmark.provenance.commit, benchmark.provenance.ranAt.slice(0, 10), ...timings], [/Master spec v[\d.]+/g]],
   ['/compare', [`spec ${specVersion}`], [/spec v[\d.]+/g]],
   ['/playground', [`~${protoLines}-line`], []],
   ['/repl', [`~${protoLines}-line`], []],
@@ -80,6 +89,8 @@ for (const [route, must, mustNot] of checks) {
   const p = await b.newPage();
   await p.goto(`file://${dist}#${route}`);
   await p.waitForTimeout(350);
+  const sourceDetails = p.locator('.repl-safety:not([open]) > summary');
+  if (await sourceDetails.count()) await sourceDetails.click();
   const text = (await p.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ');
   const missing = must.filter((m) => !text.includes(m.replace(/\s+/g, ' ')));
   const stale = mustNot.flatMap((re) => (text.match(re) ?? []).filter((h: string) => !h.includes(specVersion)));

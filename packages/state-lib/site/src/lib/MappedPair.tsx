@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { snippetHref } from './snippet-transfer';
+import { guideHref } from './learning';
 import type { SelectorCase } from '../data/selector-datalog-corpus';
 type Pair = { label: string; left: string[]; right: string[]; hint: string };
 const MAP: Record<string, Pair[]> = {
@@ -108,10 +109,19 @@ export function MappedPair({ item }: { item: SelectorCase }) {
     });
   };
   const code = (text: string, side: 'left' | 'right', lang: string) => (
-    <div className="codeblock">
-      <a className="code-repl" href={snippetHref(text, lang, item.what)}>
-        try it →
-      </a>
+    <div className="codeblock" data-code-source={text} data-source-lang={lang}>
+      <div className="sample-actions" data-no-export>
+        <a
+          className="code-repl"
+          href={guideHref('queries')}
+          title="Related complete query walkthrough in the state prototype"
+        >
+          Try query example →
+        </a>
+        <a className="code-source" href={snippetHref(text, lang, item.what)}>
+          View exact source
+        </a>
+      </div>
       <pre className={`pg-code lang-${lang}`}>
         <code>{render(text, side)}</code>
       </pre>

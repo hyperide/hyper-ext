@@ -42,7 +42,7 @@ export async function prerender(directory = 'dist-served', selectedRoutes = rout
       await page.goto(server.url + route, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => document.querySelector('#page-content h1') && !!window.__STATE_DOCS__);
       if ((route.startsWith('/repl') && route !== '/repl/snippet') || route === '/playground')
-        await page.waitForSelector('.cm-editor');
+        await page.waitForSelector('.cm-editor', { state: 'attached' }); // Editors intentionally begin inside collapsed advanced-source details.
       await page.waitForTimeout(100);
       if (errors.length) throw new Error(`${route}: ${errors.join('; ')}`);
       const markdown = await page.evaluate(() => window.__STATE_DOCS__!.markdown());

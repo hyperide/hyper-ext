@@ -1,6 +1,7 @@
+import { liveTable, orderedTableKeys } from './live-table.mjs';
 /** A tested access/transaction experiment, not a replacement for all existing lab features.
  * Physical rows contain scalar values and foreign keys only. Validators are injected AOT functions.
- * compile-access.mjs removes runtime table registration; fallback .state registers ordinary getters.
+ * compile-access.mjs removes runtime table registration; fallback .state uses stable live table handles with tracked membership.
  */
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const safeName = (n) => {
@@ -10,16 +11,16 @@ const safeName = (n) => {
 };
 const idKey = (table, id) => JSON.stringify([table, id]);
 const fieldKey = (table, id, field) => JSON.stringify([table, id, field]);
+const membershipKey = (table) => JSON.stringify([table, '$membership']);
 const viewInfo = new WeakMap();
 export class NormalizedStore {
   #schema;
   #tables = new Map();
+  #keyLists = new Map();
   #views = new Map();
   #generations = new Map();
   #draft = null;
   #state;
-  #shape = 0;
-  #stateShape = -1;
   #observers = new Set();
   #observer = null;
   #queue = new Set();
@@ -156,21 +157,39 @@ export class NormalizedStore {
       });
     Object.freeze(view);
     this.#views.set(key, view);
+    if (this.#draft && !this.#tables.get(table).has(id)) this.#draft.createdViews.set(key, { table, id });
     return view;
   }
-  /** Runtime fallback: O(N) membership registration on structural change; compiler path avoids this. */
+  /** Stable table handles; O(1) lookup and O(N) tracked membership enumeration. */
   get state() {
     if (this.compiled) throw new Error('This build requires compile-access; do not enumerate runtime tables');
-    if (this.#stateShape !== this.#shape) {
+    if (!this.#state) {
       const root = Object.create(null);
-      for (const [table, map] of this.#tables) {
-        const entries = Object.create(null);
-        for (const id of map.keys())
-          Object.defineProperty(entries, String(id), { enumerable: true, get: () => this.#view(table, id) });
-        root[table] = Object.freeze(entries);
+      for (const table of this.#tables.keys()) {
+        root[table] = liveTable(
+          this.#model(table).idType,
+          (id) => this.#view(table, id),
+          () => {
+            this.#track(membershipKey(table));
+            if (!this.#draft) {
+              let keys = this.#keyLists.get(table);
+              if (!keys) {
+                keys = orderedTableKeys(this.#tables.get(table).keys());
+                this.#keyLists.set(table, keys);
+              }
+              return keys;
+            }
+            const ids = new Set(this.#tables.get(table).keys());
+            for (const pending of this.#draft?.rows.values() ?? []) {
+              if (pending.table !== table) continue;
+              if (pending.row) ids.add(pending.id);
+              else ids.delete(pending.id);
+            }
+            return orderedTableKeys(ids);
+          },
+        );
       }
       this.#state = Object.freeze(root);
-      this.#stateShape = this.#shape;
     }
     return this.#state;
   }
@@ -234,7 +253,7 @@ export class NormalizedStore {
     if (this.#draft) throw new Error('Nested actions are not supported; reuse the outer action');
     if (typeof fn !== 'function' || fn.constructor.name === 'AsyncFunction')
       throw new TypeError('Synchronous action required; await outside');
-    this.#draft = { rows: new Map() };
+    this.#draft = { rows: new Map(), createdViews: new Map() };
     let pending, result;
     try {
       result = fn();
@@ -253,11 +272,18 @@ export class NormalizedStore {
           }
       pending = [...this.#draft.rows.values()];
     } finally {
+      // Aborted/net-zero creations have no persistent identity. Reusing their ID
+      // later must not revive an escaped view from an operation that never committed.
+      for (const key of this.#draft.createdViews.keys()) {
+        if (!pending || !this.#draft.rows.get(key)?.row) {
+          this.#generations.set(key, (this.#generations.get(key) ?? 0) + 1);
+          this.#views.delete(key);
+        }
+      }
       this.#draft = null;
     }
     const changed = new Set(),
       patches = [];
-    let structural = false;
     for (const p of pending) {
       const map = this.#tables.get(p.table),
         before = map.get(p.id),
@@ -268,7 +294,8 @@ export class NormalizedStore {
       if (after) map.set(p.id, after);
       else map.delete(p.id);
       if (!before !== !after) {
-        structural = true;
+        changed.add(membershipKey(p.table));
+        this.#keyLists.delete(p.table);
         changed.add(fieldKey(p.table, p.id, '$exists'));
         if (!after) {
           const key = idKey(p.table, p.id);
@@ -288,7 +315,6 @@ export class NormalizedStore {
       );
     }
     if (!patches.length) return result;
-    if (structural) this.#shape++;
     this.log.push(Object.freeze({ id: ++this.version, action: name, patches: Object.freeze(patches) }));
     if (this.log.length > this.logLimit) this.log.shift();
     for (const o of this.#observers) if ([...o.deps].some((k) => changed.has(k))) this.#queue.add(o);

@@ -1,3 +1,5 @@
+import ts from 'typescript';
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { encodeSnippet, decodeSnippet, snippetHref } from '../src/lib/snippet-transfer.ts';
@@ -23,7 +25,22 @@ assert.equal(lensAt(10, 600, 10).scale, 1);
 assert.equal(lensAt(590, 600, 590).angle, 0);
 assert(lensAt(10, 600, 590).scale < 1);
 assert(LEAVE_DELAY > EDGE_DWELL && EDGE_DWELL >= 100);
-assert(Object.keys(GENERATED_API).length > 300);
+const prototypePath = fileURLToPath(new URL('../src/lib/proto.ts', import.meta.url));
+const program = ts.createProgram([prototypePath], { target: ts.ScriptTarget.ES2022, skipLibCheck: true });
+const checker = program.getTypeChecker();
+const source = program.getSourceFile(prototypePath)!;
+const moduleSymbol = checker.getSymbolAtLocation(source)!;
+const expectedExports = checker
+  .getExportsOfModule(moduleSymbol)
+  .map((symbol) => symbol.getName())
+  .sort();
+assert.deepEqual(
+  Object.keys(GENERATED_API)
+    .filter((name) => !name.includes('.'))
+    .sort(),
+  expectedExports,
+  'Every real exported symbol must have one reference entry; prototype inheritance must not inflate coverage',
+);
 for (const [name, entry] of Object.entries(GENERATED_API)) {
   if (entry.kind === 'function' || entry.kind === 'method')
     assert(referenceDoc(name), `${name}: callable needs a reader-facing contract`);

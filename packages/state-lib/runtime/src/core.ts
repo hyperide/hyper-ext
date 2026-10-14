@@ -80,6 +80,13 @@ interface StagedRead {
 let activeRead: ReadFrame | undefined;
 let pureDepth = 0;
 
+/** @internal Shared purity guard for optional lifecycle modules, including cleanup. */
+export function assertSideEffectsAllowed(): void {
+  if (pureDepth !== 0) {
+    throw new StateError('STATE_IMPURE_DERIVE', 'Writing state from a derivation or equality predicate is forbidden');
+  }
+}
+
 function isThenable(value: unknown): value is PromiseLike<unknown> {
   return (
     value !== null &&
@@ -123,9 +130,7 @@ export class Runtime {
 
   private assertWrite(): void {
     this.assertOpen();
-    if (pureDepth !== 0) {
-      throw new StateError('STATE_IMPURE_DERIVE', 'Writing state from a derivation or equality predicate is forbidden');
-    }
+    assertSideEffectsAllowed();
     if (this.notifying) {
       throw new StateError(
         'STATE_REENTRANT_WRITE',

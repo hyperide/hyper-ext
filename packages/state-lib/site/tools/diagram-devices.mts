@@ -1,3 +1,5 @@
+import { chooseScriptedDemo, expectVisibleExampleSource } from './workbench-fixture.mts';
+import { checkDiagramLifecycle } from './diagram-lifecycle.mts';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,52 +12,7 @@ const browser = await chromium.launch();
 const url = `file://${process.cwd()}/dist/index.html#/concepts`;
 const errors: string[] = [];
 try {
-  const editing = await browser.newContext({ viewport: { width: 1000, height: 800 }, hasTouch: true });
-  await editing.addInitScript(() => {
-    const owned = new Set<Map<unknown, unknown>>();
-    const original = Map.prototype.set;
-    Map.prototype.set = function (this: Map<unknown, unknown>, key: unknown, value: unknown) {
-      if (key instanceof SVGSVGElement && value instanceof HTMLButtonElement) owned.add(this);
-      return original.call(this, key, value);
-    };
-    window.addEventListener('diagram-ownership-snapshot', () => {
-      const nodes = [...owned].flatMap((map) => [...map.keys()]);
-      document.documentElement.dataset.diagramOwnership = JSON.stringify({
-        entries: nodes.length,
-        detached: nodes.filter((node) => node instanceof SVGSVGElement && !node.isConnected).length,
-      });
-    });
-  });
-  const editor = await editing.newPage();
-  editor.on('pageerror', (e) => errors.push(e.message));
-  await editor.goto(`file://${process.cwd()}/dist/index.html#/diagrams`);
-  await editor.locator('.diagram-expand').waitFor();
-  const ownership = () =>
-    editor.evaluate(() => {
-      window.dispatchEvent(new Event('diagram-ownership-snapshot'));
-      return JSON.parse(document.documentElement.dataset.diagramOwnership ?? '{}') as {
-        entries: number;
-        detached: number;
-      };
-    });
-  assert.deepEqual(await ownership(), { entries: 1, detached: 0 });
-  const source = await editor.getByLabel('Diagram source').inputValue();
-  for (let i = 0; i < 200; i++) {
-    await editor.getByLabel('Diagram source').fill(`${source}\n${i}`);
-    await editor.waitForFunction(() => document.querySelectorAll('.diagram-preview .diagram-expand').length === 1);
-  }
-  assert.deepEqual(await ownership(), { entries: 1, detached: 0 }, 'repeated edits release owned SVG entries');
-  await editor.locator('.diagram-expand').click();
-  await editor.locator('.diagram-viewer').waitFor();
-  assert.equal(await editor.locator('.diagram-transform svg').count(), 1);
-  await editor.getByRole('button', { name: 'Close ✕', exact: true }).click();
-  await editor.evaluate(() => {
-    location.hash = '/init';
-  });
-  await editor.waitForFunction(() => !document.querySelector('.diagram-preview'));
-  assert.equal(await editor.locator('.diagram-expand').count(), 0);
-  assert.deepEqual(await ownership(), { entries: 0, detached: 0 }, 'route cleanup releases owned SVG entries');
-  await editing.close();
+  await checkDiagramLifecycle(browser, errors);
   const desktop = await browser.newContext({
     viewport: { width: 800, height: 700 },
     screen: { width: 1800, height: 1100 },
@@ -63,7 +20,8 @@ try {
   const page = await desktop.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`file://${process.cwd()}/dist/index.html#/repl/sync-kanban`);
-  await page.getByRole('button', { name: 'the component (JSX)' }).first().click();
+  await expectVisibleExampleSource(page);
+  assert(await page.locator('.pane-primary .cm-editor').nth(2).isVisible());
   const liveSource = `function GalleryFixture() {
     const [second, setSecond] = useState(true);
     return <div>
@@ -76,6 +34,7 @@ try {
   const jsxEditor = page.locator('.pane-primary .cm-content').last();
   await jsxEditor.fill(liveSource);
   assert.equal(await jsxEditor.innerText(), liveSource);
+  await chooseScriptedDemo(page);
   await page.locator('.pane-primary .runall').click();
   await page.waitForFunction(() => document.querySelectorAll('.diagram-expand').length === 2);
   const livePopupPromise = page.waitForEvent('popup');
@@ -140,6 +99,7 @@ try {
   assert.equal(livePopup.isClosed(), true);
   assert.equal(errors.length, 0);
   // An empty first expansion must not open a popup or modal either.
+  await chooseScriptedDemo(page);
   await page.locator('.pane-primary .runall').click();
   await page.waitForFunction(() => document.querySelectorAll('.diagram-expand').length === 2);
   await page.evaluate(() => {
@@ -250,7 +210,7 @@ try {
   const phone = await mobile.newPage();
   phone.on('pageerror', (e) => errors.push(e.message));
   await phone.goto(url);
-  await phone.locator('.toc-ribbon').waitFor();
+  await phone.locator('.navsection').waitFor();
   await phone.screenshot({ path: join(outputDir, 'concepts-phone.png') });
   await phone.locator('.diagram-expand').first().tap();
   await phone.locator('.diagram-viewer').waitFor();
@@ -284,6 +244,7 @@ try {
   await phone.getByRole('button', { name: 'Close ✕', exact: true }).tap();
   assert.equal(await phone.locator('.diagram-viewer').count(), 0);
   await phone.goto(`file://${process.cwd()}/dist/index.html#/repl/sync-kanban`);
+  await chooseScriptedDemo(phone);
   await phone.locator('.runall').first().tap();
   await phone.locator('.shape-lab').waitFor();
   await phone.locator('.shape-lab').scrollIntoViewIfNeeded();

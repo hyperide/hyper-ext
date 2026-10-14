@@ -1,4 +1,4 @@
-import Diagrams from './pages/Diagrams';
+import { SiteIcon } from './lib/SiteIcon';
 import { useEffect, useRef, useState } from 'react';
 import { DiagramViewer } from './lib/DiagramViewer';
 import Home from './pages/Home';
@@ -33,6 +33,10 @@ import { useRoute, useAnchor, href, installLinkInterceptor, scrollToAnchor } fro
 import { useDragScroll } from './lib/useDragScroll';
 import { ReferenceTour } from './lib/ReferenceTour';
 import { SearchButton, SearchPalette } from './lib/SearchPalette';
+import { useHeadings } from './lib/Toc';
+import { useActiveHeading } from './lib/useActiveHeading';
+import type { NavigationScope } from './lib/navigation-search';
+import './navigation.css';
 import { CopyPage } from './lib/CopyPage';
 import { HeadingLinks } from './lib/HeadingLinks';
 /** The brand is the home link, so `/` is deliberately not a menu item, and the
@@ -51,8 +55,13 @@ const isOn = (route: string, r: string) => route.startsWith(r) || (r === '/repl'
  *  pages (`/lib/*`, `/validation`), so they get an explicit label here rather
  *  than showing nothing. */
 function currentLabel(route: string): string | null {
-  if (route === '/') return null;
-  const hit = ROUTES.find(([r]) => isOn(route, r));
+  if (route === '/') return 'Home';
+  if (route.startsWith('/repl/snippet')) return 'Source reference';
+  if (route.startsWith('/concepts/practical')) return 'Practical concepts';
+  if (route === '/lib') return 'Libraries';
+  const hit = [...ROUTES]
+    .sort((a, b) => b[0].length - a[0].length)
+    .find(([r]) => route === r || route.startsWith(`${r}/`));
   if (hit) return hit[1];
   if (route.startsWith('/lib/')) return `Library: ${route.split('/')[2] ?? ''}`;
   if (route.startsWith('/validation')) return 'Landscape';
@@ -62,7 +71,17 @@ function currentLabel(route: string): string | null {
 export default function App() {
   const route = useRoute();
   const anchor = useAnchor();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMode, setMenuMode] = useState<NavigationScope | null>(null);
+  const [focusSearch, setFocusSearch] = useState(false);
+  const openMenu = (scope: NavigationScope, trigger: HTMLButtonElement, search = false) => {
+    trigger.focus({ preventScroll: true });
+    setFocusSearch(search);
+    setMenuMode(scope);
+  };
+  const headings = useHeadings('#page-content', [route]);
+  const activeHeading = useActiveHeading(headings);
+  const pageTitle = currentLabel(route) ?? 'Documentation';
+  const sectionTitle = headings.find((heading) => heading.id === activeHeading)?.text ?? 'On this page';
   const strip = useRef<HTMLDivElement>(null);
   useDragScroll(strip);
   useEffect(() => {
@@ -77,11 +96,9 @@ export default function App() {
     resize.observe(top);
     return () => resize.disconnect();
   }, []);
-  // Navigating closes the phone menu: the page does not reload under hash
-  // routing, so nothing else would.
   useEffect(() => {
-    setMenuOpen(false);
-  }, [route]);
+    setMenuMode(null);
+  }, [route, anchor]);
   // Keep the current page's link in view in the desktop strip.
   useEffect(() => {
     const on = strip.current?.querySelector<HTMLElement>('a.on');
@@ -99,8 +116,6 @@ export default function App() {
   }, [route, anchor]);
   const page = route.startsWith('/queries') ? (
     <OperatorCorpus />
-  ) : route.startsWith('/diagrams') ? (
-    <Diagrams />
   ) : route.startsWith('/repl/snippet') ? (
     <Snippet />
   ) : route.startsWith('/api') ? (
@@ -152,8 +167,17 @@ export default function App() {
     <Doc title="Master spec" md={spec} wide />
   ) : route.startsWith('/brief') ? (
     <Doc title="Research brief" md={brief} wide />
-  ) : (
+  ) : route === '/' ? (
     <Home />
+  ) : (
+    <div className="wrap">
+      <header className="page">
+        <p className="kicker">404</p>
+        <h1>Page not found</h1>
+        <p>This page is not part of the documentation.</p>
+        <a href={href('/')}>Back to state</a>
+      </header>
+    </div>
   );
   return (
     <>
@@ -162,6 +186,33 @@ export default function App() {
           <a className={`brand${route === '/' ? ' on' : ''}`} href={href('/')} title="state — home">
             state
           </a>
+          <div className="nav-identity">
+            <button
+              type="button"
+              className="navcurrent"
+              aria-label={`${pageTitle} — open site menu`}
+              aria-expanded={menuMode === 'site'}
+              aria-controls="site-menu"
+              aria-haspopup="dialog"
+              onClick={(event) => openMenu('site', event.currentTarget)}
+            >
+              <span>{pageTitle}</span>
+              <SiteIcon name="chevron" className="nav-chevron" />
+            </button>
+            <button
+              type="button"
+              className="navsection"
+              title={sectionTitle}
+              aria-label={`On this page: ${sectionTitle}`}
+              aria-expanded={menuMode === 'page'}
+              aria-controls="site-menu"
+              aria-haspopup="dialog"
+              onClick={(event) => openMenu('page', event.currentTarget)}
+            >
+              <span>{sectionTitle}</span>
+              <SiteIcon name="chevron" className="nav-chevron" />
+            </button>
+          </div>
           {/* Desktop: one row that scrolls when it does not fit — wheel, drag, or
               cursor position (useDragScroll) — with the first and last items fully
               visible at the ends. Which layout applies is a DEVICE question
@@ -179,50 +230,33 @@ export default function App() {
               </a>
             ))}
           </div>
-          <SearchButton className="searchbtn" />
-          {/* Phone: logo, the current section's name, a burger, and the full
-              list behind it — bulka.rs shows which section you're on next to
-              its logo instead of only after you open the menu; same here. */}
-          {currentLabel(route) && (
-            <button
-              type="button"
-              className="navcurrent"
-              onClick={() => setMenuOpen((o) => !o)}
-              aria-expanded={menuOpen}
-              aria-controls="site-menu"
-            >
-              {currentLabel(route)}
-            </button>
-          )}
-          <button
-            className="navtoggle"
-            aria-expanded={menuOpen}
-            aria-controls="site-menu"
-            aria-label={menuOpen ? 'close menu' : 'open menu'}
-            onClick={() => setMenuOpen((o) => !o)}
-          >
-            <span className="burger" aria-hidden="true" />
-          </button>
-          <div id="site-menu" className={`navsheet${menuOpen ? ' open' : ''}`}>
-            {PRIMARY.map(([r, label]) => (
-              <a key={r} href={href(r)} className={isOn(route, r) ? 'on' : ''}>
-                {label}
-              </a>
-            ))}
-            <div className="navsheet-group">Docs</div>
-            {DOCS.map(([r, label]) => (
-              <a key={r} href={href(r)} className={`doc${isOn(route, r) ? ' on' : ''}`}>
-                {label}
-              </a>
-            ))}
-          </div>
+          <SearchButton
+            className="searchbtn nav-menu-search"
+            expanded={menuMode !== null}
+            onClick={(event) => openMenu('site', event.currentTarget, true)}
+          />
         </div>
         <div id="page-toc-slot" />
       </nav>
-      <CopyPage />
+      <div className={route === '/' ? 'home-copy-actions' : undefined}>
+        <CopyPage />
+      </div>
       <main id="page-content">{page}</main>
       <ReferenceTour />
-      <SearchPalette />
+      <SearchPalette
+        mode={menuMode}
+        focusSearch={focusSearch}
+        route={route}
+        pageTitle={pageTitle}
+        headings={headings}
+        activeHeading={activeHeading}
+        onClose={() => setMenuMode(null)}
+        onScope={setMenuMode}
+        onOpen={() => {
+          setFocusSearch(true);
+          setMenuMode('site');
+        }}
+      />
       <HeadingLinks />
       <SnippetActions />
       <DiagramViewer />

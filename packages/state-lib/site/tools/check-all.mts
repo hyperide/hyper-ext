@@ -39,6 +39,14 @@ const page = [
   'experience-smoke.mts',
   'diagram-devices.mts',
   'repl-smoke-new.mts',
+  'navigation-panel.mts',
+  'site-feedback.mts',
+  'visible-workbench.mts',
+  'workbench-lifecycle.mts',
+  'reading-ux.mts',
+  'lesson-entry.mts',
+  'navigation-escape.mts',
+  'contextual-diagrams.mts',
 ];
 
 const run = (label: string, cmd: string, args: string[]) => {

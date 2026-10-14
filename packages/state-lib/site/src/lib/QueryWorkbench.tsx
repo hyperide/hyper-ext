@@ -9,6 +9,7 @@ import {
   type Stage,
 } from '../data/query-comparison';
 import { snippetHref } from './snippet-transfer';
+import { guideHref } from './learning';
 import { Code } from './Code';
 
 export function QueryWorkbench() {
@@ -79,7 +80,12 @@ export function QueryWorkbench() {
             </div>
             <p>{v.note}</p>
             <div className="snippet-controls">
-              <a href={snippetHref(fullSnippet(v), v.lang, c.title)}>try it → exact source + setup</a>
+              <a className="code-source" href={snippetHref(fullSnippet(v), v.lang, c.title)}>
+                View exact source + setup
+              </a>
+              <a href={guideHref('queries')} title="Related complete query walkthrough in the state prototype">
+                Try query example →
+              </a>
               {v.status === 'executable' && <button onClick={() => run(language)}>Run fixture</button>}
             </div>
             {results[language] && (

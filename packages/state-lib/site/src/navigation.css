@@ -1,0 +1,325 @@
+/* One navigation surface: page, section, and site search share the same panel. */
+nav.top .wrap {
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+.nav-identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 360px;
+  gap: 3px;
+}
+nav.top .navcurrent,
+nav.top .navsection {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  padding: 6px 8px;
+  font:
+    600 14px/1.3 'IBM Plex Sans',
+    sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+nav.top .navcurrent {
+  flex: 0 1 auto;
+  max-width: 44%;
+  margin: 0;
+}
+nav.top .navsection {
+  flex: 1 1 0;
+  color: var(--muted);
+  font-weight: 400;
+  border-left: 1px solid var(--line);
+  border-radius: 0 9px 9px 0;
+}
+.nav-identity button > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-identity button > span:last-child {
+  flex: none;
+}
+.nav-identity button:hover {
+  background: var(--accent-soft);
+}
+nav.top .nav-menu-search {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0 0 0 auto;
+  padding: 8px;
+}
+.nav-menu-search svg {
+  flex: none;
+}
+.nav-menu-search .searchbtn-label,
+.nav-menu-search .searchbtn-kbd {
+  display: none;
+}
+.navigation-dialog {
+  position: fixed;
+  inset: var(--menu-top, 64px) max(12px, calc((100vw - var(--page)) / 2)) auto auto;
+  margin: 8px 0 0;
+  padding: 0;
+  width: min(720px, calc(100vw - 24px));
+  max-width: none;
+  max-height: var(--menu-height, 80dvh);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 20px 70px rgb(0 0 0 / 20%);
+  overflow: hidden;
+}
+.navigation-dialog::backdrop {
+  background: rgb(14 28 24 / 22%);
+}
+.navigation-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--menu-height, 80dvh);
+  padding: 14px;
+}
+.navigation-panel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.menu-close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 24px;
+  cursor: pointer;
+}
+.navigation-search-field {
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-width: 0;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.navigation-search-field:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.navigation-search-field .searchinput {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: var(--ink);
+  font:
+    400 16px/1.5 'IBM Plex Sans',
+    sans-serif;
+}
+.search-scope {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  padding: 5px 8px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  white-space: nowrap;
+  font:
+    600 13px/1.5 'IBM Plex Sans',
+    sans-serif;
+  cursor: pointer;
+}
+.search-scope span {
+  font-size: 18px;
+  line-height: 1;
+}
+.search-scope-hint {
+  margin: 10px 2px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.navigation-results {
+  overflow: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 0 2px 6px;
+}
+.navigation-results-label {
+  margin: 8px 4px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.navigation-links {
+  display: grid;
+  gap: 3px;
+}
+.navigation-pages {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.navigation-links .searchresult {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.navigation-links .searchresult:hover,
+.navigation-links .searchresult:focus-visible {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  outline: none;
+}
+.navigation-links .searchresult[aria-current] {
+  background: var(--accent-soft);
+}
+.navigation-links .searchresult[data-level='3'] {
+  margin-left: 14px;
+}
+.navigation-links .searchresult-title {
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.navigation-links .searchresult-kind {
+  color: var(--accent-ink);
+  font-size: 13px;
+}
+.navigation-links .searchresult-body {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.navigation-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding: 12px 2px 0;
+  margin-top: 6px;
+  flex: none;
+  font-size: 13px;
+  color: var(--muted);
+}
+.navigation-footer button {
+  min-height: 34px;
+  text-align: left;
+}
+@media (max-width: 760px), (pointer: coarse) and (hover: none) {
+  nav.top .wrap {
+    padding: 6px 12px;
+    gap: 6px;
+    justify-content: flex-start;
+  }
+  nav.top .brand {
+    flex: none;
+    padding: 6px;
+  }
+  nav.top .navstrip {
+    display: none;
+  }
+  .nav-identity {
+    flex: 1;
+    max-width: none;
+  }
+  nav.top .navcurrent,
+  nav.top .navsection {
+    font-size: 13px;
+    padding: 6px;
+    gap: 4px;
+  }
+  nav.top .navcurrent {
+    max-width: 46%;
+  }
+  #page-toc-slot {
+    display: none;
+  }
+  .navigation-dialog {
+    inset-inline: 8px;
+    width: calc(100vw - 16px);
+    margin-top: 4px;
+    border-radius: 14px;
+  }
+  .navigation-panel {
+    padding: 12px;
+  }
+  .navigation-footer > span {
+    display: none;
+  }
+  .navigation-search-field .searchinput {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .navigation-dialog,
+  .navigation-dialog * {
+    scroll-behavior: auto;
+  }
+}
+
+/* Keep page/section identity readable instead of letting the desktop strip consume its width. */
+@media (min-width: 761px) and (pointer: fine) {
+  nav.top .nav-identity {
+    flex: 0 0 300px;
+    max-width: 34%;
+  }
+  nav.top .navstrip {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+.navigation-dialog .navigation-links .searchresult {
+  overflow-wrap: normal;
+}
+.navigation-dialog .navigation-links .searchresult-title {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Keep the strip's edge hit area separate from the shared search/menu control. */
+@media (min-width: 761px) and (pointer: fine) {
+  nav.top .navstrip {
+    margin-inline: 0;
+  }
+  nav.top > div.wrap {
+    padding-block: 9px;
+  }
+}
