@@ -1,3 +1,8 @@
+[install]
+# Dependency declarations need access to the root @types/react installation.
+# Keep the lockfile's hoisted layout even when a user's global config enables isolation.
+linker = "hoisted"
+
 [test]
 preload = ["./test/setup.ts", "./test/mock-vscode.ts"]
 coverage = false

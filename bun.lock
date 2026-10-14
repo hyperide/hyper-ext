@@ -33,6 +33,7 @@
         "isomorphic-dompurify": "^3.0.0",
         "jose": "^6.1.2",
         "monaco-editor": "^0.55.1",
+        "playwright-core": "1.59.0-alpha-1771104257000",
         "postgres": "3.4.8",
         "posthog-js": "^1.396.3",
         "react-hotkeys-hook": "^5.2.1",

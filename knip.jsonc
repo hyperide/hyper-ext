@@ -170,25 +170,12 @@
       //   and pulls in the `bun` npm peer that scripts/fix-bun-shim.ts repairs in
       //   postinstall. Not a static module import in this repo, so knip can't see the
       //   dependency — keep it declared and silenced.
-      // playwright-core: imported (lazily) by lib/visual-verify/capture-and-verify.ts
-      //   for the headless-Chrome style-presence proof guard (HYP-733). It is the
-      //   library half of the same transitive Playwright copy pinned by @playwright/mcp
-      //   (1.59.0-alpha-…); declaring it directly would conflict with that pin, so we
-      //   rely on the transitive copy and silence the unlisted-dependency flag — same
-      //   rationale as the `playwright` binary below.
       // lefthook: git-hook-manager CLI, driven entirely by lefthook.yml + .lefthook/*
       //   scripts via core.hooksPath — never a static JS/TS import, so knip always
       //   flags it as unused. Found blocking `bun run lint` (and therefore
       //   ci/local-checks.sh's gh-ship billing-block fallback, HYP-1126) via a fresh
       //   clone; discovered because real CI hasn't gated a merge in over a week.
-      "ignoreDependencies": [
-        "@playwright/mcp",
-        "playwright-core",
-        "@swc/core",
-        "@hookform/resolvers",
-        "bun-plugin-tailwind",
-        "lefthook",
-      ],
+      "ignoreDependencies": ["@playwright/mcp", "@swc/core", "@hookform/resolvers", "bun-plugin-tailwind", "lefthook"],
       // The `playwright` binary (postinstall: `npx playwright install chromium`) is
       // provided transitively by @playwright/mcp, which pins a prerelease
       // (1.59.0-alpha-…). Declaring `playwright` directly would conflict with that pin,
