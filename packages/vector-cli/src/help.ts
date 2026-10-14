@@ -1,3 +1,4 @@
+import { DIAGRAM_HELP } from './diagram-cli';
 /**
  * @file Help system — brief and detailed help for all vecli commands
  *
@@ -20,6 +21,7 @@ Usage:
   vecli                              Interactive TUI mode (input + live preview)
   vecli 'expression'                 Evaluate inline expression
   vecli -e script.js                 Execute script file
+  vecli diagram <mode>                Frames, tables, arrows, ASCII → SVG
   echo 'expr' | vecli               Pipe stdin
 
 Flags:
@@ -38,10 +40,12 @@ Quick examples:
 
 Run vecli --help <topic> for details. Topics:
   generators  style  transform  ops  boolean  deformation
-  history  files  helpers  wordart  examples  all`;
+  history  files  helpers  wordart  diagram  examples  all`;
 }
 
 const TOPICS: Record<string, string> = {
+  diagram: DIAGRAM_HELP,
+  diagrams: DIAGRAM_HELP,
   generators: `GENERATORS — Create shapes
 
   rect(w, h)                     Rectangle at origin
@@ -250,7 +254,9 @@ One-liners:
   radial(12, 80, (a,i,x,y) => star(5,12,6).translate(x+100,y+100).rotate(a).fill(rainbow(i,12)))
   repeat(20, (i,t) => circle(lerp(3,15,t)).translate(i*10,50).fill(hsl(t*360,80,50)))`,
 
-  wordart: `WORD ART & DECORATIVE HELPERS
+  wordart: `For specification tables/frames/arrows, see vecli --help diagram.
+
+WORD ART & DECORATIVE HELPERS
 
   arcText(str, radius, start?, spread?, size?, outline?)   Text along arc
   wavyText(str, amplitude?, frequency?, size?, outline?)   Wavy text

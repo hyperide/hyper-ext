@@ -1,0 +1,863 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Research brief</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="state.css"></head><body><nav class="top"><div class="wrap">
+  <a class="brand" href="index.html">state-lib</a>
+  <a href="index.html">Home</a>
+  <a href="concepts.html">Concepts</a>
+  <a href="../docs/state-landscape.html">Landscape</a>
+  <a href="requirements.html">Requirements</a>
+  <a href="decisions.html">Decisions</a>
+  <a href="spec.html">Master spec</a>
+  <a class="on" href="brief.html">Research brief</a>
+</div></nav>
+<div class="wrap wide"><header class="page"><p class="kicker">state-lib · docs</p></header><div class="tblwrap"><h1>State Management Research Brief</h1>
+<p><strong>Scope:</strong> a state layer for Hyper (VS Code extension + SaaS sharing one React codebase) and for the apps users build inside Hyper (Next.js / Remix / Vite / Bun templates).
+<strong>Status:</strong> research phase complete → this brief → briefing session → master spec + full competitor matrix + build-setup fit check.
+<strong>Date:</strong> 2026-09-01. All versions, sizes and dates below were verified against npm / project docs on this date. Sizes are min+gzip of the whole package unless noted.</p>
+<hr />
+<h2>0. TL;DR</h2>
+<ol>
+<li><strong>The reactivity algorithm is solved; don't reinvent it.</strong> alien-signals, Preact Signals, Svelte 5, Solid 2, Vue 3.6, Angular and the TC39 proposal all converge on the same push-pull, three-state (clean/check/dirty), lazy-computed, auto-tracking design. alien-signals is 1.9 kB / 0 deps and exposes <code>createReactiveSystem()</code> for custom node types. Wrap it behind a 5-function internal interface so it can be swapped for native <code>Signal</code> later. Do <strong>not</strong> build on <code>signal-polyfill</code> (Stage 1 since 2024, "not for production", no batch/effect).</li>
+<li><strong>"No selectors, no memoization" collides with the React Compiler.</strong> Every library that gives hooks-like ergonomics without selectors tracks reads during render (Valtio <code>useSnapshot</code>, MobX <code>observer</code>, Legend <code>observer</code>, Preact <code>useSignals</code>, tldraw <code>track</code>). React Compiler v1 (Oct 2025) memoizes on reference identity and its lint flags this pattern as "interior mutability"; Preact's babel transform already conflicts with it. The compiler-safe contract is: <strong>hook returns a new immutable snapshot reference when the read slice changes</strong> (uSES style), and fine-grainedness lives in the <em>subscription</em> (per-property signals under a proxy, subscribe only to paths read in the last render). Keep render-time proxy tracking as an opt-in ergonomic layer, not the foundation.</li>
+<li><strong>"Every change is an event" and "mutable proxy ergonomics" are compatible</strong> if the store treats a mutation as a transaction that emits <strong>patches</strong> (Immer/Mutative-style JSON patches + inverse patches). Commands (intent, named + args) go in one log, patches (effect) in another. That single decision gives undo/redo, devtools time-travel, cross-webview replication, persistence deltas and sync outbox for free.</li>
+<li><strong>The data layer already exists: TanStack DB (0.8.7, MIT, still beta).</strong> Its collection-options contract (<code>sync(begin/write/commit/markReady)</code> + <code>onInsert/onUpdate/onDelete</code> + <code>utils</code>), two-store model (synced truth + optimistic overlay, rebased on confirmation), differential-dataflow live queries, and <code>@tanstack/offline-transactions</code> outbox are exactly the middleware design described in the braindump. Either adopt it or copy its contract; don't design a third one.</li>
+<li><strong>Hyper's codebase already runs a leader/replica store</strong> (<code>StateHub</code> in the extension host broadcasting <code>SharedEditorState</code> patches to panels, with a hand-written race fix in <code>mergeInitState</code>). The new core should formalise that: patch-based replication with sequence numbers, transport drivers for VS Code <code>postMessage</code> / <code>BroadcastChannel</code> / <code>MessagePort</code> / <code>chrome.runtime</code>.</li>
+<li><strong>Things in the braindump that reality pushes back on:</strong> "faster than vanilla JS" (only Legend-State claims it, on krausest swap/replace rows, in beta); wasm for structural sharing (no evidence it beats V8 for object graphs once marshaling is paid — wasm belongs to CRDT/SQLite plugins only); Proxy <code>get</code> is ~13× slower than plain property access on current V8, so proxies stay off hot loops and need <code>snapshot()/toRaw()</code> escapes; per-item list updates in React bottom out at component granularity (no <code>mapArray</code> equivalent); uSES-driven updates are always synchronous (never time-sliced).</li>
+<li><strong>Preliminary recommendation:</strong> build a small own core (~4–6 kB) = alien-signals-class algorithm + lazy per-property proxy store + patch-emitting transactions + keyed collections, with a first-class adapter contract copied from TanStack DB; ship React/Vue/Solid/Svelte bindings as ~10-line uSES / <code>from()</code> / <code>createSubscriber</code> / <code>shallowRef</code> bridges; reuse existing libraries for the periphery (TanStack DB or its contract for server collections, nuqs/TanStack Router for URL, Dexie/IndexedDB persister, birpc/vscode-messenger transport, TanStack Devtools shell + Redux DevTools bridge). Details in §6; open questions in §7.</li>
+</ol>
+<hr />
+<h2>1. Where Hyper is today (codebase audit)</h2>
+<p>Numbers from <code>hyperide</code> on 2026-09-01 (client + extension webviews, tests excluded):</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Client TS/TSX lines</td>
+<td>~76 k</td>
+</tr>
+<tr>
+<td>React / TS / build</td>
+<td>React 18.3, TypeScript 5.9, Vite, Bun; React Compiler not enabled</td>
+</tr>
+<tr>
+<td>Hook files (<code>use*.ts[x]</code>)</td>
+<td>145</td>
+</tr>
+<tr>
+<td><code>useState(</code> / <code>useEffect(</code> / <code>useCallback(</code> / <code>useMemo(</code> call sites</td>
+<td>278 / 329 / 398 / 70</td>
+</tr>
+<tr>
+<td><code>useSyncExternalStore</code></td>
+<td>11</td>
+</tr>
+<tr>
+<td>Zustand stores</td>
+<td>8 in <code>client/stores</code> (~1.7 k lines: auth, editor, connection, git, diagnostic, network, nudge, projectActivation) + <code>shared-editor-state</code> + <code>canvas-engine/store</code> + <code>nodepodRuntimeStore</code></td>
+</tr>
+<tr>
+<td><code>@tanstack/react-query</code></td>
+<td>in <code>package.json</code>, imported by 1 file</td>
+</tr>
+<tr>
+<td>REST hooks</td>
+<td>hand-rolled <code>useState</code>+<code>useEffect</code>+<code>authFetch</code> (e.g. <code>useGitHubRepositories</code>: 7 <code>useState</code>, 3 refs, manual pagination)</td>
+</tr>
+<tr>
+<td>Platform layer</td>
+<td><code>PlatformMessage</code> discriminated union (~40+ message types), <code>BrowserAdapter</code> / <code>VSCodeAdapter</code>, <code>requestId</code>-correlated request/response, SSE and <code>fetch</code> proxied through the extension host</td>
+</tr>
+<tr>
+<td>Cross-panel state</td>
+<td><code>StateHub</code> (extension host) = source of truth for <code>SharedEditorState</code>; broadcasts patches to all webviews; webviews hold a Zustand replica; <code>mergeInitState</code> patches a selection race on reconnect</td>
+</tr>
+<tr>
+<td>Undo/redo</td>
+<td><code>canvas-engine</code> (OOP, command pattern, own history, Zustand bridge) — separate from everything else</td>
+</tr>
+<tr>
+<td>Persistence</td>
+<td>ad-hoc <code>loadPersistedState/savePersistedState</code> in <code>editorStore</code>; VS Code <code>getState/setState</code> in webviews</td>
+</tr>
+</tbody>
+</table>
+<p><strong>What this tells us</strong></p>
+<ul>
+<li>There are at least <strong>four state mechanisms</strong> coexisting (local hooks, Zustand stores, StateHub replica, canvas-engine) plus a fifth (TanStack Query) barely used. The pain is not any one of them; it is that data fetching, RPC, cross-panel sync, persistence and undo are each solved locally, per hook, with no shared event stream.</li>
+<li>The <strong>leader/replica topology is already the right shape</strong> for VS Code (extension host = leader, webviews = replicas). It just lacks sequence numbers, patch semantics, buffering while a webview is hidden, and a transport interface — hence the race hack.</li>
+<li>The <code>PlatformMessage</code> union is effectively an untyped-at-runtime RPC protocol. It is a good candidate for the transport driver layer (<code>{post, onMessage}</code>), not something the new store should replace wholesale.</li>
+<li>278 <code>useState</code> + 329 <code>useEffect</code> is the "hooks abstracting REST/RPC" problem in numbers: each is a private cache with private loading/error state that devtools, tests and Storybook cannot see.</li>
+</ul>
+<hr />
+<h2>2. Requirements (normalised from the braindump)</h2>
+<p>Numbered so the master spec can reference them.</p>
+<p><strong>Ergonomics</strong>
+- R1. Global store as convenient as local React hooks; no selectors or manual memoization in the common case.
+- R2. Mutable-looking writes (<code>store.user.name = 'x'</code>, <code>items.push(...)</code>) with immutable, structurally shared snapshots underneath.
+- R3. Colocation: state + logic + UI decomposable per page / per reusable "HOX" (reducers + selectors + actions + adapters + widgets), reusable and sliceable into hooks; no <code>_.get(state, 'a.b.c')</code>.
+- R4. Per-item updates in <code>items.map(&lt;Card/&gt;)</code> / <code>&lt;For&gt;</code> without re-running the loop.
+- R5. Familiar, invisible, universal — no Solid-style prop-splitting utilities required.</p>
+<p><strong>Model</strong>
+- R6. All state global — including pure UI state and per-keystroke form state (while acknowledging redux-form was a mistake: the <em>mechanism</em> must be cheap enough that this is not a regression).
+- R7. Every change is an event (Danny). Event sourcing + FSM concepts retained from Redux.
+- R8. Signals as the reactivity primitive.
+- R9. Structural sharing; memory-conscious.
+- R10. Undo/redo and optimistic updates as toolkit features, not app code.</p>
+<p><strong>Data / middleware toolkit (all optional, all interoperable, all replaceable)</strong>
+- R11. Auto-sync with backends via pluggable data-source middlewares: REST, GraphQL, RPC (incl. VS Code postMessage), WebSockets/SSE, RxJS, CRDT, TanStack.
+- R12. Local persistence with filtering of what persists (IndexedDB etc.).
+- R13. Browser history / routing / URL query as store-backed state.
+- R14. Middlewares may use Web Workers, Service Workers, wasm where it pays.</p>
+<p><strong>Engineering qualities</strong>
+- R15. Easy unit tests for dumb components; per-test store instances.
+- R16. Easy debugging of user problems (reproducible event logs).
+- R17. Easy Storybook stories.
+- R18. Clean separation UI / UI logic / business logic.
+- R19. Framework-agnostic core; adapters for React, Vue, Solid, Svelte, web components; works with SSR, RSC, meta-frameworks.
+- R20. Zero dependencies, tiny ESM, tree-shakable, subpath exports; "faster than vanilla" as an aspiration, "never slower than Zustand/Valtio" as the bar.
+- R21. Devtools that do not freeze and are not "the Redux DevTools UI".
+- R22. Old browsers not supported (Proxy, ES2022+, OPFS/Web Locks may be assumed where present).</p>
+<p><strong>Two audiences</strong>: Hyper itself (webviews + SaaS, React 18 today) and user apps generated by Hyper (Next.js/Remix/Vite/Bun templates with shadcn/tamagui → SSR/RSC are concrete, not theoretical).</p>
+<hr />
+<h2>3. Landscape by layer</h2>
+<h3>3.1 Reactivity core (signals)</h3>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>Version (date)</th>
+<th>Size</th>
+<th>Deps</th>
+<th>Deep proxy</th>
+<th>React adapter</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>alien-signals</td>
+<td>3.2.1 (2026-05)</td>
+<td>1.94 kB</td>
+<td>0</td>
+<td>no</td>
+<td>DIY</td>
+<td>Vue 3.6 core; <code>createReactiveSystem()</code>; 1.2–3.6× faster, −13 % memory vs old Vue core</td>
+</tr>
+<tr>
+<td>@preact/signals-core</td>
+<td>1.14.4 (2026-07)</td>
+<td>1.95 kB</td>
+<td>0</td>
+<td>no (deepsignal)</td>
+<td>official <code>signals-react</code> 3.12 + babel transform</td>
+<td>best-tested React bridge; transform conflicts with React Compiler (#652)</td>
+</tr>
+<tr>
+<td>@vue/reactivity</td>
+<td>3.5.42 / 3.6.0-rc.6</td>
+<td>7.8 kB</td>
+<td>1</td>
+<td>yes</td>
+<td>DIY</td>
+<td>most mature deep+shallow standalone runtime</td>
+</tr>
+<tr>
+<td>@solidjs/signals (Solid 2)</td>
+<td>2.0.0-rc.4 (2026-08)</td>
+<td>8.6 kB core / 27.7 kB full</td>
+<td>0</td>
+<td>yes (<code>createStore</code>, projections, <code>createOptimistic</code>)</td>
+<td><code>enableExternalSource</code></td>
+<td>microtask batching, async-aware memos; RC</td>
+</tr>
+<tr>
+<td>Svelte 5 runtime</td>
+<td>5.57</td>
+<td>n/a</td>
+<td>—</td>
+<td>yes (<code>$state</code>)</td>
+<td>—</td>
+<td>compiler-bound, not standalone</td>
+</tr>
+<tr>
+<td>signia / @tldraw/state</td>
+<td>0.1.5 frozen / 5.3.2</td>
+<td>~3 kB</td>
+<td>0/1</td>
+<td>no</td>
+<td><code>track()</code> HOC</td>
+<td><strong>epoch clock + <code>getDiffSince</code> incremental computeds</strong> — the only runtime that maintains derived collections from diffs</td>
+</tr>
+<tr>
+<td>TC39 signal-polyfill</td>
+<td>0.2.2 (2025-01)</td>
+<td>3.2 kB</td>
+<td>0</td>
+<td>no</td>
+<td>—</td>
+<td>Stage 1, "not for production"</td>
+</tr>
+<tr>
+<td>MobX 7</td>
+<td>7.0.3 (2026-08)</td>
+<td>15.5 kB (10.3 shaken)</td>
+<td>0</td>
+<td>yes</td>
+<td><code>observer</code></td>
+<td>Proxy-only now; <code>observer</code> is exactly what React Compiler flags</td>
+</tr>
+<tr>
+<td>Valtio</td>
+<td>2.3.2</td>
+<td>5.8 kB</td>
+<td>1</td>
+<td>yes</td>
+<td><code>useSnapshot</code></td>
+<td>render-time access tracking via proxy-compare</td>
+</tr>
+<tr>
+<td>TanStack Store</td>
+<td>0.11.1</td>
+<td>2.1 kB</td>
+<td>0</td>
+<td>no</td>
+<td>yes</td>
+<td>internal primitive of Router/Form; no middleware</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Insights</strong>
+- Sync, glitch-free reads + batched notification to frameworks is the scheduling split that "feels like <code>useState</code>" (Preact/Vue/alien). Solid 2 / Svelte 5 microtask batching requires <code>flush()</code> for sync reads — unfamiliar for React devs (R5).
+- Deep proxies create one signal per property lazily on first tracked read (Svelte, Solid, Vue, MobX, deepsignal), so an untouched 50 k-row table costs nothing. Known gotchas to design around: class instances / <code>Map</code> / <code>Set</code> / <code>Date</code> need wrappers; destructuring loses reactivity; proxy vs raw identity (<code>toRaw</code>/<code>unwrap</code>/<code>$state.snapshot</code>); array <code>length</code> as its own signal.
+- R4 (per-item list updates) exists at two layers. View layer: Solid <code>mapArray</code>/<code>&lt;For&gt;</code>, Svelte keyed <code>each</code>, Lit <code>watch()</code>. React has no equivalent — the practical floor is <em>component-level</em>: parent subscribes to the ordered id list only, each <code>&lt;Card id&gt;</code> subscribes to its own row signal; with TanStack Virtual, rows subscribe independently. Store layer: signia's <code>getDiffSince</code>/<code>withDiff</code> and Solid 2 <code>createProjection</code> + keyed <code>reconcile</code> are the only "derived list without re-running the loop" mechanisms; a derived-collection API in our store must be diff-aware.
+- SSR: only Qwik serialises a live signal graph; everyone else serialises raw values and rebuilds computeds on the client. Snapshot the raw tree, never proxies; per-request store instances.</p>
+<h3>3.2 Store shape: proxy mutation, immutability, events</h3>
+<table>
+<thead>
+<tr>
+<th>Library</th>
+<th>Version</th>
+<th>Size</th>
+<th>Change tracking</th>
+<th>Undo / patches</th>
+<th>Event log</th>
+<th>Devtools</th>
+<th>Per-test isolation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Immer 11</td>
+<td>11.1.18</td>
+<td>6.9 kB</td>
+<td>—</td>
+<td>patches + inverse</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Mutative</td>
+<td>1.3.0 (2025-09)</td>
+<td>7.3 kB</td>
+<td>—</td>
+<td>JSON-Patch + inverse, no auto-freeze</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Valtio</td>
+<td>2.3.2</td>
+<td>5.8 kB</td>
+<td>property access</td>
+<td>valtio-history (snapshots)</td>
+<td><code>ops</code> in subscribe (opt-in)</td>
+<td>Redux DevTools bridge</td>
+<td>proxy instances</td>
+</tr>
+<tr>
+<td>MobX 7 + mobx-keystone</td>
+<td>7.0.3 / 1.24.1</td>
+<td>15.5 / 64.5 kB</td>
+<td>property access</td>
+<td>UndoManager, JSON patches</td>
+<td>serialisable actions</td>
+<td>Redux bridge</td>
+<td>tree per test</td>
+</tr>
+<tr>
+<td>Legend-State v3</td>
+<td>3.0.0-beta.48 (beta 2+ yrs)</td>
+<td>11 kB</td>
+<td>property access, fine-grained</td>
+<td>undoRedo / trackHistory</td>
+<td>change arrays (path/prev)</td>
+<td>none</td>
+<td>instances</td>
+</tr>
+<tr>
+<td>Zustand 5</td>
+<td>5.0.15</td>
+<td>3.5 kB (core ~1 kB)</td>
+<td>selector + <code>useShallow</code></td>
+<td>zundo (&lt;700 B, <code>diff</code>)</td>
+<td>—</td>
+<td>Redux bridge (#926 stalls)</td>
+<td>vanilla <code>createStore</code> + Context</td>
+</tr>
+<tr>
+<td>Jotai</td>
+<td>2.20.3 (v3 alpha)</td>
+<td>7.2 kB</td>
+<td>atom subscription</td>
+<td>jotai-history</td>
+<td>—</td>
+<td>jotai-devtools 0.14 (time travel)</td>
+<td><code>createStore</code> + Provider</td>
+</tr>
+<tr>
+<td>Reatom v1001</td>
+<td>1001.3.0</td>
+<td>32 kB (shakes)</td>
+<td>atom subscription</td>
+<td>—</td>
+<td><strong>cause tracking</strong></td>
+<td>logger; devtools "soon"</td>
+<td><code>clearStack()</code> / <code>context.start()</code></td>
+</tr>
+<tr>
+<td>Effector</td>
+<td>23.4.4 (dormant 12 mo)</td>
+<td>12.8 kB</td>
+<td>store subscription</td>
+<td>—</td>
+<td><code>inspect({trace})</code> causal chain</td>
+<td>stale (2023)</td>
+<td><code>fork()</code> scopes — best in class</td>
+</tr>
+<tr>
+<td>@xstate/store 4</td>
+<td>4.2.3</td>
+<td>3.5 kB</td>
+<td>select</td>
+<td><code>.with(undoRedo())</code>, <code>persist</code></td>
+<td><code>inspect()</code>, <code>emits</code></td>
+<td>Stately Inspector</td>
+<td>factory</td>
+</tr>
+<tr>
+<td>XState 5</td>
+<td>5.32.6</td>
+<td>16.9 kB</td>
+<td>snapshot</td>
+<td>persisted snapshots</td>
+<td>full inspection events</td>
+<td>Stately Inspector</td>
+<td><code>createActor</code></td>
+</tr>
+<tr>
+<td>RTK</td>
+<td>2.12.0</td>
+<td>15.1 kB</td>
+<td>reselect 5</td>
+<td>immer patches</td>
+<td>yes, by design</td>
+<td>Redux DevTools</td>
+<td><code>configureStore</code></td>
+</tr>
+<tr>
+<td>Nanostores</td>
+<td>1.5.2</td>
+<td>&lt;1 kB brotli</td>
+<td>store subscription</td>
+<td>—</td>
+<td>logger</td>
+<td>Vue devtools</td>
+<td><code>cleanStores</code></td>
+</tr>
+<tr>
+<td>statebus (smoothbricks)</td>
+<td>0.8.0 (2024-11, 0★)</td>
+<td>14 kB (dep: @tldraw/state 3)</td>
+<td>signal-level</td>
+<td>—</td>
+<td>queue only</td>
+<td>—</td>
+<td><code>new StateBus()</code></td>
+</tr>
+<tr>
+<td>Recoil</td>
+<td>archived 2025-01</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Insights</strong>
+- Immer 11 (Nov 2025 rewrite) closed most of the gap to Mutative (+21–26 % avg, up to 59 % on update-reuse) but still defaults to auto-freeze, which dominates cost on big trees; RTK measured 37–408× slowdowns on 10 k-item arrays before fixes. Mutative's "10×" holds only with freeze off. Copy-on-write proxies are O(size of touched container); &gt;10 k hot arrays should be normalised (<code>ids</code> + <code>byId</code>) — which R4 wants anyway. No mainstream store ships a HAMT backend; not needed.
+- <strong>Event log for free</strong> today: XState v5 / <code>@xstate/store</code> (typed inspection events), RTK (by design), Effector (<code>inspect</code> with causal chain), mobx-keystone (serialisable actions + patches). Reatom's <em>cause tracking</em> (every update records why) is the best debugging idea in the field (R16). None combine this with proxy ergonomics — that gap is the product opportunity.
+- <strong>statebus</strong> (Danny) is a proof of concept of the right architecture: typed <code>States</code>/<code>Events</code> augmentation, rAF-drained double-buffered queue, all reducers then all listeners, <code>ByID&lt;T&gt;</code> lazy atom maps, <code>substateInterest</code> ref-counting so providers fetch on demand, <code>useBus()</code> Proxy for typed publish. Gaps: reducers' README vs types disagree, no middleware despite the diagram, no log/replay/undo/persistence/devtools/test helpers, exact <code>react@18.3.0</code> peer, site DNS dead. Worth keeping: the interest-counting idea (lazy connect/disconnect of data sources per key) and the phase ordering.
+- Best per-test isolation: Effector <code>fork()</code> (overrides values <em>and</em> effect handlers), then Jotai/Zustand-vanilla/xstate factories. Module-level singletons (default Zustand <code>create</code>, Legend globals) are what break Storybook and SSR (R15, R17, R19).
+- Devtools: Redux DevTools serialises whole state per action across a process boundary → freezes (#282, #619, zustand #926); Pinia had the same failure (#721). Jotai devtools 0.14 and Stately Inspector are the current best; TanStack Devtools (alpha) is a framework-agnostic shell with a Vite plugin that strips to zero bytes in production — a good host for our panel.</p>
+<h3>3.3 Data layer: sync, optimistic, undo, persistence, URL</h3>
+<table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Version / licence</th>
+<th>Model</th>
+<th>Optimistic</th>
+<th>Undo</th>
+<th>Event log</th>
+<th>Persistence</th>
+<th>Offline writes</th>
+<th>Live queries</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TanStack Query</td>
+<td>5.102 MIT</td>
+<td>keyed cache</td>
+<td>manual</td>
+<td>—</td>
+<td>—</td>
+<td>persistQueryClient (+ <code>shouldDehydrateQuery</code> filter)</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>TanStack DB</strong></td>
+<td>0.8.7 MIT (beta)</td>
+<td>normalised collections + pluggable sync</td>
+<td>built-in tx, merge, auto-rollback</td>
+<td>—</td>
+<td>tx list</td>
+<td>SQLite/OPFS (1 tab); IndexedDB outbox</td>
+<td><code>@tanstack/offline-transactions</code></td>
+<td>IVM (d2ts), joins, <code>includes</code></td>
+</tr>
+<tr>
+<td>ElectricSQL</td>
+<td>1.5 Apache</td>
+<td>Postgres shapes over HTTP</td>
+<td>your store</td>
+<td>—</td>
+<td>shape log</td>
+<td>resumable offset</td>
+<td>via PGlite</td>
+<td>pair with DB</td>
+</tr>
+<tr>
+<td>Zero (Rocicorp)</td>
+<td>1.9 Apache (1.0 Jun 2026)</td>
+<td>zero-cache + ZQL + mutators</td>
+<td>rebase</td>
+<td>—</td>
+<td>mutation queue</td>
+<td>local cache</td>
+<td><strong>rejected by design</strong></td>
+<td>IVM</td>
+</tr>
+<tr>
+<td>PowerSync</td>
+<td>2.2 Apache SDK / FSL service</td>
+<td>SQLite + sync rules + upload queue</td>
+<td>local SQLite</td>
+<td>—</td>
+<td>CRUD queue</td>
+<td>wa-sqlite IDB/OPFS</td>
+<td>yes</td>
+<td><code>watch()</code></td>
+</tr>
+<tr>
+<td>LiveStore</td>
+<td>0.4 Apache (pre-1.0)</td>
+<td><strong>event sourcing → SQLite wasm</strong></td>
+<td>events applied locally</td>
+<td>compensating events</td>
+<td>first-class</td>
+<td>OPFS, leader worker</td>
+<td>yes (rebase)</td>
+<td>reactive SQL</td>
+</tr>
+<tr>
+<td>TinyBase</td>
+<td>9.6 MIT, 0 deps, 7–16 kB</td>
+<td>reactive tables + LWW CRDT</td>
+<td>—</td>
+<td><strong>Checkpoints</strong></td>
+<td>—</td>
+<td>15+ persisters (IDB, SQLite, Yjs, Automerge…)</td>
+<td>CRDT</td>
+<td>TinyQL</td>
+</tr>
+<tr>
+<td>RxDB</td>
+<td>17.5 Apache + premium</td>
+<td>document DB + generic replication protocol</td>
+<td>local writes</td>
+<td>—</td>
+<td>—</td>
+<td>Dexie free; OPFS/IDB/SQLite <strong>paid</strong></td>
+<td>yes</td>
+<td>RxJS</td>
+</tr>
+<tr>
+<td>Jazz</td>
+<td>0.20 MIT</td>
+<td>CoJSON CRDT + groups + E2EE</td>
+<td>CRDT</td>
+<td>—</td>
+<td>CRDT history</td>
+<td>IDB/SQLite</td>
+<td>yes</td>
+<td>reactive</td>
+</tr>
+<tr>
+<td>Yjs / Automerge 3 / Loro</td>
+<td>13.6 / 3.4 / 1.15 MIT</td>
+<td>doc CRDT</td>
+<td>CRDT</td>
+<td>Yjs, Loro yes; Automerge community</td>
+<td>yes</td>
+<td>adapters</td>
+<td>yes</td>
+<td>doc-level</td>
+</tr>
+<tr>
+<td>Replicache / Triplit / Instant</td>
+<td>maint. / stalled (AGPL) / sunset 2027</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>avoid</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Patterns worth stealing</strong> (each maps to a toolkit middleware)
+1. <strong>Two-store split</strong> — immutable synced truth + optimistic overlay, rebased when truth changes, dropped on confirmation (TanStack DB, Electric "shared persistent optimistic state", Zero). Rows expose <code>$synced/$origin</code>.
+2. <strong>Adapter contract</strong> = <code>sync({begin, write, commit, markReady, markError})</code> + <code>onInsert/onUpdate/onDelete</code> + source <code>utils</code>; rule: subscribe to the live channel <em>before</em> the initial fetch and buffer. Fits REST polling, GraphQL subscriptions (graphql-ws), WebSocket, RxJS and VS Code RPC identically (R11).
+3. <strong>Handlers resolve only after sync-back</strong> (Electric <code>txid</code>, RxDB <code>awaitInSync</code>, Zero ack) — otherwise the UI flickers. Our RPC must return a monotonic version the store can await.
+4. <strong>Intent-based mutators</strong> (Zero/Replicache): ship <code>name + validated args</code>, rerun on server, natural command log for undo/replay/idempotent retry (R7, R10).
+5. <strong>Outbox before dispatch</strong>: persist to IndexedDB first, FIFO, backoff + jitter, <code>NonRetriableError</code>, idempotency keys, leader election via Web Locks (<code>@tanstack/offline-transactions</code> is small enough to copy). Background Sync API is Chromium-only, so the queue must live in-app.
+6. <strong>Event-sourcing hygiene</strong> (LiveStore): past-tense versioned event names, never delete an event definition, pure materialisers, <code>clientOnly</code> vs <code>synced</code> events, soft deletes, globally unique ids; undo = inverse event (sound under concurrent remote edits; snapshot undo is sound only for local-only state).
+7. <strong>Origin-scoped undo</strong> (Yjs <code>trackedOrigins</code>, Loro <code>excludeOriginPrefixes</code>, <code>mergeInterval</code> ~500–1000 ms, <code>onPush</code> captures selection).
+8. <strong>Incremental view maintenance</strong> — derived collections consume <code>ChangeMessage[]</code> deltas, not snapshots (TanStack DB <code>createEffect</code> enter/exit/update; Zero IVM).
+9. <strong>Persistence as per-collection policy</strong> — what / where / transform / TTL / <code>buster</code> / <code>version+migrate</code> (Zustand <code>partialize</code>, Query <code>shouldDehydrateQuery</code>, TinyBase subsets, Legend <code>synced({persist})</code>) (R12).
+10. <strong>Storage spectrum</strong> — localStorage → IndexedDB (Dexie 4.4, multi-tab safe) → SQLite wasm on OPFS (fast; needs worker + COOP/COEP or single-connection sahpool + leader election). Keep the persister interface storage-agnostic so the VS Code webview and SaaS can differ.
+11. <strong>URL as a persister</strong> — nuqs 2.10 (Next, React Router 6–8, TanStack Router), TanStack Router <code>validateSearch</code> (Standard Schema, <code>retainSearchParams</code>/<code>stripSearchParams</code>), Reatom <code>withSearchParamsPersist</code>, jotai-location <code>atomWithLocation</code> with <code>updateFromSource</code> to avoid router cycles (R13).
+12. <strong>Transport</strong> — birpc 4.2 (~0.5 kB, needs only <code>post</code>/<code>on</code>) or penpal 8; <strong>not Comlink</strong> (VS Code <code>postMessage</code> cannot transfer <code>MessagePort</code>, discussion #2392). oRPC 1.15 has a MessagePort adapter; tRPC 11 has SSE subscriptions with <code>tracked()</code> resumption — one typed contract can serve SaaS (HTTP/SSE) and extension (MessagePort). vscode-messenger 0.6.1 gives typed request/notification + broadcast + diagnostics.
+13. <strong>Sync engine in a worker</strong> (LiveStore SharedWorker leader, PowerSync, TanStack DB persistence). SharedWorker is missing on Chrome Android → Worker + leader election fallback. Design the core transport-agnostic so the same engine runs in a worker, the extension host, or the page (R14).</p>
+<h3>3.4 Integration: React, other frameworks, SSR/RSC, VS Code, devtools, workers, bundling</h3>
+<p><strong>React</strong>
+- <code>useSyncExternalStore</code>: updates are rendered synchronously even inside <code>startTransition</code> (RFC 0214) — store updates never time-slice. <code>getSnapshot</code> must return a cached reference; <code>getServerSnapshot</code> is mandatory for hydration. A PR to add proxy access-tracking to <code>useSyncExternalStoreWithSelector</code> (react #32040) was closed stale in June 2025.
+- React 19: <code>use(promise)</code> needs a <em>cached</em> promise per key; <code>useOptimistic</code> / actions are React-local — the store should expose "apply optimistic patch / reconcile on settle" rather than own that layer; <code>&lt;Activity&gt;</code> keeps hidden subtrees subscribed, so "subscribed ≠ visible".
+- React Compiler v1: memoises on reference identity; MobX <code>observer</code>, TanStack Table v8, Preact transform all documented as breaking. Escape hatches (<code>"use no memo"</code>) are debt. With the compiler on, inline selectors become cheap — the <em>cost</em> argument against selectors weakens, the <em>correctness</em> requirement (stable snapshot refs) stays. Hyper does not use the compiler yet; user apps on Next.js will.
+- Per-item lists: parent subscribes to id list; <code>&lt;Item id&gt;</code> subscribes to <code>store.get(id)</code>; flame graphs show one component reconciling instead of the list.</p>
+<p><strong>Vue / Solid / Svelte / Angular / Lit / Qwik</strong>
+- Vue: <code>shallowRef</code> + subscribe → assign snapshot (<code>triggerRef</code> for in-place); build against the public surface, not internals (3.6 swapped them). Pinia = per-app container, <code>devalue</code> serialisation, restore before first <code>useStore()</code>.
+- Solid: <code>from(subscribable)</code> → signal; object graphs via <code>setStore(reconcile(next, {key:'id'}))</code>.
+- Svelte 5: <code>createSubscriber(start)</code> from <code>svelte/reactivity</code> (≥5.7) + <code>$state.raw</code>; module-level <code>$state</code> exports are frozen at import; SvelteKit forbids shared mutable server state.
+- Angular 22: zoneless + <code>OnPush</code> default; <code>toSignal</code>/<code>toObservable</code> at boundaries; <code>@ngrx/signals</code> is the convention.
+- Lit: <code>@lit-labs/signals</code> binds to the TC39 polyfill — <strong>one copy per page</strong> or the graph partitions; cross-shadow-root sharing via the Context Community Protocol (<code>context-request</code> event), implemented by <code>@lit/context</code>.
+- Qwik: only serialisable data crosses <code>$</code> boundaries; a store instance is not portable — expose snapshot + id-based re-attach.</p>
+<p><strong>SSR / RSC / meta-frameworks</strong> (concrete for Hyper's Next.js / Remix templates)
+- Universal doctrine: no module-level store; <code>createStore()</code> factory in a Provider created once per tree; RSC never reads/writes the store; per-request <code>QueryClient</code>-style scoping (<code>cache()</code>), <code>HydrationBoundary</code> per route, <code>shouldDehydrateQuery</code> incl. pending promises (streaming), <code>serializeData/deserializeData</code> for non-JSON; derived state recomputed on the client, not serialised.
+- Effector <code>fork/serialize/hydrate</code> (needs SIDs via babel/SWC), Reatom <code>ctx</code>, Jotai <code>Provider + useHydrateAtoms</code>, Zustand Next.js guide — all the same pattern.
+- Streaming SSR: stores must not mutate during render; hydrate before first subscription. Astro islands: nanostores, client-only.</p>
+<p><strong>VS Code webview</strong>
+- <code>postMessage</code> is JSON-serialisable data; ArrayBuffer transfer exists (#115807) but zero-copy is impossible remotely and <code>MessagePort</code> transfer does not work. Design for JSON + optional binary blobs.
+- Without <code>retainContextWhenHidden</code> the webview is destroyed when hidden and messages are lost; <code>getState/setState</code> (+ <code>WebviewPanelSerializer</code>) is the sanctioned persistence. <code>@vscode/webview-ui-toolkit</code> is deprecated (Jan 2025).
+- Extension host = leader, webviews = replicas receiving patches; buffer while hidden, replay on <code>onDidChangeViewState</code>; resync from sequence number on reconnect. Browser-extension analogues: webext-redux, webext-bridge.</p>
+<p><strong>Devtools</strong>
+- Non-freezing design: log events/patches, not snapshots; time travel = replay patches; lazy serialisation on inspect (send handles/paths); <code>filter</code>/sampling for high-frequency events; diff in a Worker; virtualised tree; cap history by bytes; versioned protocol. <code>window.devtoolsFormatters</code> (Chrome + Firefox) is a cheap win for console inspection of proxies/atoms. Ship a TanStack Devtools plugin plus a Redux DevTools bridge (familiarity) with <code>maxAge</code> + sanitisers by default.</p>
+<p><strong>Workers / wasm / service workers</strong>
+- <code>postMessage</code> cost scales with payload: ≤10 KiB fits a 16 ms frame on slow phones — send patches, chunk big patch sets, transfer <code>ArrayBuffer</code>s. Structured clone rejects Proxies (<code>DataCloneError</code>) — snapshot before crossing.
+- SharedArrayBuffer/wasm threads need COOP/COEP (Chrome 137 adds Document-Isolation-Policy; Firefox/Safari still need both) — deployment friction a state library should not impose.
+- wasm: no general-purpose wasm state manager exists; CRDTs are the wasm players (Loro 894 kB gz, Automerge 591 kB gz vs Yjs 25 kB gz; parse times dominated by the JS↔wasm boundary). Mutative in plain JS does 6,783 ops/s with patches. <strong>Keep the core single-threaded pure JS; wasm and SQLite are plugin boundaries.</strong></p>
+<p><strong>Bundling / Proxy performance</strong>
+- "Tiny, zero-dep, tree-shakable" concretely: <code>"type":"module"</code>, ESM-only, <code>"sideEffects":false</code>, subpath <code>exports</code> per adapter (<code>jotai/react</code>, <code>tinybase/persisters/*</code>), <code>/*#__PURE__*/</code> on factories, size-limit CI (nanostores gates <code>atom</code> at 372 B).
+- V8 Proxy costs (2026 re-run): <code>get</code> ~13×, <code>set</code> ~27×, <code>has</code> ~7×, <code>ownKeys</code> ~89× vs plain access. Keep traps monomorphic (one handler object), never <code>ownKeys</code>/spread proxies in hot paths, cache proxies per target in a <code>WeakMap</code>, always offer <code>snapshot()</code>/<code>toRaw()</code>. Draft-style proxies (Mutative) pay the cost only inside the mutation window — which is why "mutate inside a transaction, read plain snapshots outside" is the fast shape.</p>
+<hr />
+<h2>4. Condensed comparison against the requirements</h2>
+<p>Legend: ● strong, ◐ partial, ○ none/weak, — n/a. Columns are requirement clusters from §2.</p>
+<table>
+<thead>
+<tr>
+<th>Candidate</th>
+<th>R1 no-selector ergonomics</th>
+<th>R2 proxy writes + immutable snapshots</th>
+<th>R4 per-item lists</th>
+<th>R7 event log</th>
+<th>R10 undo / optimistic</th>
+<th>R11 pluggable sync</th>
+<th>R12–13 persist / URL</th>
+<th>R15/R17 test isolation</th>
+<th>R19 multi-framework</th>
+<th>R20 size / deps</th>
+<th>R21 devtools</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Zustand 5 (+zundo, persist)</td>
+<td>○ selectors + <code>useShallow</code></td>
+<td>○ (immer mw)</td>
+<td>◐</td>
+<td>○</td>
+<td>◐ / ○</td>
+<td>○</td>
+<td>◐ / ○</td>
+<td>● vanilla</td>
+<td>◐ vanilla</td>
+<td>● 3.5 kB</td>
+<td>◐ Redux bridge</td>
+</tr>
+<tr>
+<td>Jotai 2</td>
+<td>◐ atoms</td>
+<td>○</td>
+<td>◐ atomFamily</td>
+<td>○</td>
+<td>◐ history / ○</td>
+<td>○</td>
+<td>◐ / ◐ location</td>
+<td>●</td>
+<td>○ React</td>
+<td>◐ 7 kB</td>
+<td>● devtools 0.14</td>
+</tr>
+<tr>
+<td>Valtio 2</td>
+<td>● tracking (compiler-unsafe)</td>
+<td>●</td>
+<td>◐</td>
+<td>◐ ops</td>
+<td>◐ history / ○</td>
+<td>○</td>
+<td>○</td>
+<td>●</td>
+<td>◐ vanilla</td>
+<td>● 5.8 kB</td>
+<td>◐</td>
+</tr>
+<tr>
+<td>MobX 7 + keystone</td>
+<td>● observer (compiler-unsafe)</td>
+<td>●</td>
+<td>◐</td>
+<td>● actions+patches</td>
+<td>● / ○</td>
+<td>○</td>
+<td>◐</td>
+<td>●</td>
+<td>◐</td>
+<td>○ 15–65 kB</td>
+<td>◐</td>
+</tr>
+<tr>
+<td>Legend-State v3</td>
+<td>● fine-grained</td>
+<td>●</td>
+<td>● <code>&lt;For&gt;</code></td>
+<td>◐ change arrays</td>
+<td>◐ / ◐</td>
+<td>● persist+sync plugins</td>
+<td>● / ○</td>
+<td>◐</td>
+<td>○ React(+RN)</td>
+<td>◐ 11 kB, <strong>beta 2 yrs</strong></td>
+<td>○</td>
+</tr>
+<tr>
+<td>Reatom v1001</td>
+<td>◐ explicit atoms</td>
+<td>○ (rejects Proxy)</td>
+<td>◐</td>
+<td>● cause tracking</td>
+<td>○ / ◐ async</td>
+<td>◐</td>
+<td>● / ●</td>
+<td>◐ ctx discipline</td>
+<td>◐</td>
+<td>◐ 32 kB shakes</td>
+<td>○ "soon"</td>
+</tr>
+<tr>
+<td>Effector</td>
+<td>◐</td>
+<td>○</td>
+<td>◐</td>
+<td>● inspect trace</td>
+<td>○ / ○</td>
+<td>○</td>
+<td>◐</td>
+<td>● fork</td>
+<td>◐</td>
+<td>◐ 12.8 kB</td>
+<td>○ stale</td>
+</tr>
+<tr>
+<td>@xstate/store 4</td>
+<td>◐</td>
+<td>○</td>
+<td>◐</td>
+<td>● inspect</td>
+<td>● undoRedo / ○</td>
+<td>○</td>
+<td>● persist / ○</td>
+<td>●</td>
+<td>● adapters</td>
+<td>● 3.5 kB</td>
+<td>● Stately</td>
+</tr>
+<tr>
+<td>TanStack DB</td>
+<td>◐ live queries</td>
+<td>○</td>
+<td>● keyed rows, IVM</td>
+<td>◐ tx</td>
+<td>○ / ●</td>
+<td>● contract</td>
+<td>◐ SQLite, outbox / ○</td>
+<td>●</td>
+<td>● 5 frameworks</td>
+<td>○ large, beta</td>
+<td>◐</td>
+</tr>
+<tr>
+<td>TinyBase 9</td>
+<td>◐ tabular API</td>
+<td>○</td>
+<td>● cell-level</td>
+<td>○</td>
+<td>● checkpoints / ○</td>
+<td>● persisters+synchronizers</td>
+<td>● / ○</td>
+<td>●</td>
+<td>●</td>
+<td>● 7–16 kB, 0 deps</td>
+<td>● inspector</td>
+</tr>
+<tr>
+<td>LiveStore 0.4</td>
+<td>○ SQL</td>
+<td>○</td>
+<td>◐</td>
+<td>● first-class</td>
+<td>◐ compensating / ◐</td>
+<td>◐ own backend</td>
+<td>● OPFS / ○</td>
+<td>◐</td>
+<td>◐ React/Vue</td>
+<td>○ ~480 kB</td>
+<td>● (paid)</td>
+</tr>
+<tr>
+<td>statebus 0.8</td>
+<td>◐</td>
+<td>○</td>
+<td>◐ ByID</td>
+<td>◐ queue only</td>
+<td>○</td>
+<td>◐ interest</td>
+<td>○</td>
+<td>◐</td>
+<td>○ React 18.3 pinned</td>
+<td>○</td>
+<td>○</td>
+</tr>
+<tr>
+<td><strong>Own core (§6 option B)</strong></td>
+<td>● snapshot-based, compiler-safe</td>
+<td>●</td>
+<td>● keyed collections + diff-aware derived</td>
+<td>● commands + patches</td>
+<td>● / ●</td>
+<td>● TanStack-DB contract</td>
+<td>● / ●</td>
+<td>● factories only</td>
+<td>●</td>
+<td>● target 4–6 kB</td>
+<td>● patch stream</td>
+</tr>
+</tbody>
+</table>
+<p>No existing library scores ● on R1+R2+R7+R11+R19+R20 together; the closest combinations are Valtio/Legend (ergonomics) + xstate-store/keystone (events) + TanStack DB (sync), which is three incompatible reactivity models.</p>
+<hr />
+<h2>5. Tensions the spec must resolve (braindump vs reality)</h2>
+<ol>
+<li><strong>"No selectors" vs React Compiler.</strong> Decide: snapshot-returning hooks with fine-grained <em>subscriptions</em> (compiler-safe, default) + optional render-time proxy tracking behind an explicit flag and lint rule. This is the single most consequential design decision.</li>
+<li><strong>"All state global, even per keystroke" vs input semantics.</strong> Technically fine with per-property signals + component-level subscription (a keystroke updates one signal → one <code>&lt;Input&gt;</code> re-renders); but controlled inputs in React 18 need the write to be synchronous within the event to avoid caret jumps and IME breakage — uSES's sync semantics actually help here. Cost lives in the <em>event log</em> and <em>persistence</em> middlewares, not the store: they must debounce/coalesce (<code>mergeInterval</code>), mark keystroke transactions as <code>clientOnly</code>/non-persisted by default, and undo must group them. Redux-form failed on mechanism (top-level re-render per keystroke + serialisation), not on the principle.</li>
+<li><strong>"Events for everything" vs "mutable writes".</strong> Resolved by transactions emitting patches; but decide the <em>granularity of the command</em>: is <code>store.user.name = 'x'</code> outside a named action an anonymous command (allowed, logged as <code>set /user/name</code>) or an error in strict mode (MobX <code>enforceActions</code> style)?</li>
+<li><strong>"Faster than vanilla."</strong> Not a goal a store can meet in general; adopt measurable bars instead: ≤ Zustand/Valtio on js-reactivity-benchmark scenarios, krausest "swap/replace rows" parity with Legend, zero allocations on untouched subtrees, ≤10 KiB patch batches over <code>postMessage</code>.</li>
+<li><strong>Framework-agnostic vs "familiar and invisible".</strong> The core can be agnostic; the <em>ergonomic</em> layer is per framework (React hook that returns snapshots; Solid that returns store proxies; Svelte via <code>createSubscriber</code>). Accept that the API surface will differ slightly per framework rather than force Solid-style utilities on React devs (R5).</li>
+<li><strong>wasm / workers.</strong> Core stays pure JS single-thread; a <code>worker</code> host is an optional middleware; wasm only via CRDT/SQLite plugins. Anything else is scope creep.</li>
+<li><strong>Adopt vs build for the data layer.</strong> TanStack DB is beta, large, and React-Query-shaped; but its contract is the right one and it ships 5 framework bindings + SSR. Options: (a) depend on it, (b) implement its collection contract natively in our core so its adapters (Electric, PowerSync, RxDB, Query) plug in, (c) ignore. (b) preserves R20 and interoperability.</li>
+<li><strong>Backwards path for 145 hooks.</strong> The migration story must let a hook like <code>useGitHubRepositories</code> become a collection + live query in one step, with the rest of the app untouched — otherwise adoption stalls inside Hyper itself.</li>
+</ol>
+<hr />
+<h2>6. Candidate architectures</h2>
+<h3>Option A — Assemble from existing libraries</h3>
+<p>alien-signals or <code>@preact/signals-core</code> (reactivity) + Mutative (patches) + <code>@xstate/store</code> or Valtio (store) + TanStack DB (server collections, outbox) + zundo-style history + nuqs (URL) + Dexie (persist) + birpc/vscode-messenger (transport) + Redux DevTools bridge.
+<em>Pros:</em> fastest to prototype; each piece maintained. <em>Cons:</em> three reactivity models (signals vs xstate-store vs TanStack DB's own store) that do not share a dependency graph → glue code, double subscriptions, no unified event stream; R20 lost (dozens of kB); R1 still needs selectors at the seams.</p>
+<h3>Option B — Own small core + adapters, borrow contracts (preliminary recommendation)</h3>
+<ul>
+<li><strong>Core (~4–6 kB, 0 deps):</strong> push-pull signal graph (alien-signals-class; possibly vendored <code>createReactiveSystem</code>), lazy per-property proxy store (<code>store.a.b.c</code> reads track; writes only inside <code>tx()</code>/actions), transactions emit <code>{txId, cause, command?, patches, inversePatches}</code>; keyed collections (<code>ids</code> + <code>byId</code>) as a primitive; diff-aware derived collections (signia epochs or IVM-lite); <code>snapshot()</code>/<code>toRaw()</code>; factories only, no singletons.</li>
+<li><strong>Adapters (~10–40 lines each):</strong> React (uSES snapshot hook + optional tracked mode), Vue (<code>shallowRef</code>), Solid (<code>from</code> + <code>reconcile</code>), Svelte (<code>createSubscriber</code>), Angular (<code>toSignal</code>), Lit (Context Protocol + signals), SSR (<code>dehydrate/hydrate</code>, per-request scope via AsyncLocalStorage).</li>
+<li><strong>Toolkit middlewares (each a subpath export):</strong> <code>history</code> (patch-based, origin-scoped, <code>mergeInterval</code>), <code>optimistic</code> (overlay + rebase, handlers await sync-back), <code>collections/*</code> implementing the TanStack DB collection contract (REST/Query, GraphQL, RPC, WebSocket, RxJS, Electric, PowerSync, CRDT), <code>outbox</code> (IndexedDB, Web Locks leader), <code>persist</code> (per-collection policy; localStorage / IndexedDB / OPFS-SQLite / VS Code <code>setState</code>), <code>url</code> (nuqs-style parsers, router-aware), <code>remote</code> (patch replication over <code>{post,onMessage}</code>; drivers: VS Code, BroadcastChannel, MessagePort, chrome.runtime), <code>worker</code> host, <code>devtools</code> (event stream → TanStack Devtools panel + Redux bridge + <code>devtoolsFormatters</code>), <code>fsm</code> (xstate-store-like typed transitions on a slice).</li>
+<li><strong>Ergonomic layer per audience:</strong> Hyper: <code>defineComplex()</code> (HOX) = slice + actions + collections + adapters + widgets, mounted per page; user apps: same API, template presets for Next/Remix/Vite.
+<em>Pros:</em> meets R1–R21 by construction; one dependency graph → one event stream → one devtools; interoperable with the TanStack ecosystem via the contract. <em>Cons:</em> we own a reactivity runtime (mitigated: the algorithm is small and settled; vendoring alien-signals is ~600 lines); adapters × frameworks maintenance; needs a benchmark suite from day one.</li>
+</ul>
+<h3>Option C — Adopt TanStack DB + a signals lib, thin layer</h3>
+<p>TanStack DB for all server and most client data (local-only collections), a signals library for UI state, a thin <code>defineComplex</code> on top.
+<em>Pros:</em> least code, rides TanStack's SSR/devtools/framework work. <em>Cons:</em> beta with breaking minors; bundle far above R20; UI state and DB state still two worlds; no proxy ergonomics; no patch/event stream for UI state; devtools not ours.</p>
+<p><strong>Recommendation for the briefing:</strong> pursue <strong>B</strong>, prototyped in two weeks as a spike: core + React adapter + <code>remote</code> driver for VS Code + one collection (GitHub repositories via the TanStack DB contract) + devtools event stream, measured on js-reactivity-benchmark and krausest, and used to replace <code>shared-editor-state</code> + <code>StateHub</code> + <code>useGitHubRepositories</code> inside Hyper as the acceptance test. Keep <strong>A</strong> as the fallback if the spike misses the size/perf bars.</p>
+<hr />
+<h2>7. Open questions for the briefing</h2>
+<ol>
+<li><strong>Compiler stance (R1):</strong> default to compiler-safe snapshot hooks with opt-in tracked mode — agreed? Will Hyper enable React Compiler (currently off)?</li>
+<li><strong>Command granularity (R7):</strong> are anonymous writes outside named actions allowed (logged as <code>set</code> patches), or strict-mode errors? Does Danny's "events for all changes" mean <em>commands</em> (intent), <em>patches</em> (effect), or both logs?</li>
+<li><strong>Keystroke policy (R6):</strong> default <code>clientOnly</code> + non-persisted + undo-grouped with <code>mergeInterval</code> ≈ 500 ms — acceptable? Any state that must <em>never</em> be global (e.g. Monaco editor buffers, canvas drag transients at 60 fps)?</li>
+<li><strong>Data layer (tension 7):</strong> depend on TanStack DB, implement its contract natively, or ignore it?</li>
+<li><strong>Leader for SaaS:</strong> in VS Code the extension host is the leader; in SaaS is the leader the tab, a SharedWorker, or the server (Electric/Zero-style)? Does Hyper need multi-tab consistency today?</li>
+<li><strong>Undo scope:</strong> one global history or per-domain stacks (canvas vs inspector vs file edits)? Must undo survive reload (persisted inverse patches)?</li>
+<li><strong>User apps:</strong> which templates are first-class (Next.js App Router with RSC? Remix/React Router 7? Vite SPA?) — this fixes the SSR/RSC scope for v1. Are Vue/Solid/Svelte adapters v1 or v2?</li>
+<li><strong>Framework versions:</strong> Hyper on React 18.3 — is React 19 (use/useOptimistic/Activity) in plan? Bun/Vite-only builds or also webpack/Next's Turbopack in user apps?</li>
+<li><strong>Devtools UX:</strong> in-app panel (TanStack Devtools shell), VS Code panel, or browser extension? Is a Redux DevTools bridge wanted for familiarity?</li>
+<li><strong>Size/perf bars (tension 4):</strong> concrete numbers to sign off (core ≤ 6 kB? React adapter ≤ 1 kB? ≥ Zustand on benchmark X?).</li>
+<li><strong>statebus:</strong> does Danny want to evolve it into this (keep name/API ideas like <code>ByID</code>, <code>substateInterest</code>) or treat it as a reference?</li>
+<li><strong>Licensing/positioning:</strong> internal to Hyper, or an open-source library that user apps depend on (implies semver discipline, docs, and a name)?</li>
+<li><strong>Migration:</strong> big-bang or per-page HOX migration starting with <code>shared-editor-state</code> / <code>StateHub</code>?</li>
+</ol>
+<hr />
+<h2>8. Next steps</h2>
+<ol>
+<li>Briefing on §5 tensions and §7 questions (Mextner + Danny) → decisions recorded.</li>
+<li><strong>Master spec</strong> (proposed outline): goals &amp; non-goals; core model (signals, proxy store, transactions, patches, collections, derived); adapter contracts (framework, collection/sync, persister, transport, devtools); toolkit middleware specs; SSR/RSC/webview topologies; performance &amp; size budgets with benchmark plan; testing/Storybook story; migration plan for Hyper; API sketches for both audiences.</li>
+<li><strong>Full competitor matrix</strong> (expanding §4 to ~30 libraries × ~40 criteria) as a shareable page.</li>
+<li><strong>Build-setup fit check:</strong> Vite SPA, Bun, Next.js App Router (RSC + Turbopack), Remix/React Router 7, SolidStart, SvelteKit, Nuxt, Astro islands, VS Code webview (esbuild), web components.</li>
+<li>Two-week spike per §6 with go/no-go on measured bars.</li>
+</ol>
+<hr />
+<h2>Appendix — Sources</h2>
+<p><strong>Signals / reactivity:</strong> TC39 proposal <a href="https://github.com/tc39/proposal-signals">https://github.com/tc39/proposal-signals</a>; signal-polyfill <a href="https://github.com/proposal-signals/signal-polyfill">https://github.com/proposal-signals/signal-polyfill</a>; alien-signals <a href="https://github.com/stackblitz/alien-signals">https://github.com/stackblitz/alien-signals</a>; Vue PR #12349 <a href="https://github.com/vuejs/core/pull/12349">https://github.com/vuejs/core/pull/12349</a>; Vue reactivity API <a href="https://vuejs.org/api/reactivity-core.html">https://vuejs.org/api/reactivity-core.html</a>; Solid 2 beta notes <a href="https://github.com/solidjs/solid/releases/tag/v2.0.0-beta.0">https://github.com/solidjs/solid/releases/tag/v2.0.0-beta.0</a>; Solid mapArray <a href="https://docs.solidjs.com/reference/reactive-utilities/map-array">https://docs.solidjs.com/reference/reactive-utilities/map-array</a>; Solid stores <a href="https://docs.solidjs.com/concepts/stores">https://docs.solidjs.com/concepts/stores</a>; Preact Signals <a href="https://github.com/preactjs/signals">https://github.com/preactjs/signals</a>; Preact/React Compiler conflict <a href="https://github.com/preactjs/signals/issues/652">https://github.com/preactjs/signals/issues/652</a>; deepsignal <a href="https://github.com/luisherranz/deepsignal">https://github.com/luisherranz/deepsignal</a>; React Compiler incompatible-library lint <a href="https://react.dev/reference/eslint-plugin-react-hooks/lints/incompatible-library">https://react.dev/reference/eslint-plugin-react-hooks/lints/incompatible-library</a>; Svelte <code>$state</code> <a href="https://svelte.dev/docs/svelte/$state">https://svelte.dev/docs/svelte/$state</a>; Angular signals <a href="https://angular.dev/guide/signals">https://angular.dev/guide/signals</a>; signia incremental <a href="https://signia.tldraw.dev/docs/incremental">https://signia.tldraw.dev/docs/incremental</a>; @tldraw/state <a href="https://github.com/tldraw/tldraw/blob/main/packages/state/README.md">https://github.com/tldraw/tldraw/blob/main/packages/state/README.md</a>; Reactively algorithm <a href="https://milomg.dev/2022-12-01/reactivity">https://milomg.dev/2022-12-01/reactivity</a>; js-reactivity-benchmark <a href="https://github.com/milomg/js-reactivity-benchmark">https://github.com/milomg/js-reactivity-benchmark</a>; ts-reactive-comparison <a href="https://github.com/transitive-bullshit/ts-reactive-comparison">https://github.com/transitive-bullshit/ts-reactive-comparison</a>; Qwik state <a href="https://qwik.dev/docs/core/state/">https://qwik.dev/docs/core/state/</a>; Lit signals <a href="https://lit.dev/docs/data/signals/">https://lit.dev/docs/data/signals/</a>; MobX changelog <a href="https://github.com/mobxjs/mobx/blob/main/packages/mobx/CHANGELOG.md">https://github.com/mobxjs/mobx/blob/main/packages/mobx/CHANGELOG.md</a>; Valtio <a href="https://github.com/pmndrs/valtio">https://github.com/pmndrs/valtio</a>.</p>
+<p><strong>Stores / immutability:</strong> Immer v11 <a href="https://github.com/immerjs/immer/releases/tag/v11.0.0">https://github.com/immerjs/immer/releases/tag/v11.0.0</a>, PR #1183 <a href="https://github.com/immerjs/immer/pull/1183">https://github.com/immerjs/immer/pull/1183</a>, performance <a href="https://immerjs.github.io/immer/performance/">https://immerjs.github.io/immer/performance/</a>, patches <a href="https://immerjs.github.io/immer/patches/">https://immerjs.github.io/immer/patches/</a>; RTK #4793 <a href="https://github.com/reduxjs/redux-toolkit/issues/4793">https://github.com/reduxjs/redux-toolkit/issues/4793</a>, #5159 <a href="https://github.com/reduxjs/redux-toolkit/issues/5159">https://github.com/reduxjs/redux-toolkit/issues/5159</a>; Mutative <a href="https://github.com/unadlib/mutative">https://github.com/unadlib/mutative</a>; limu <a href="https://github.com/tnfe/limu">https://github.com/tnfe/limu</a>; structura <a href="https://github.com/giusepperaso/structura.js">https://github.com/giusepperaso/structura.js</a>; Valtio docs <a href="https://valtio.dev/docs/introduction/getting-started">https://valtio.dev/docs/introduction/getting-started</a>; MST <a href="https://github.com/mobxjs/mobx-state-tree">https://github.com/mobxjs/mobx-state-tree</a>; mobx-keystone <a href="https://mobx-keystone.js.org/">https://mobx-keystone.js.org/</a>; Legend-State v3 <a href="https://legendapp.com/open-source/state/v3/intro/introduction/">https://legendapp.com/open-source/state/v3/intro/introduction/</a>, persist &amp; sync <a href="https://legendapp.com/open-source/state/v3/sync/persist-sync/">https://legendapp.com/open-source/state/v3/sync/persist-sync/</a>; Zustand v5 migration <a href="https://zustand.docs.pmnd.rs/migrations/migrating-to-v5">https://zustand.docs.pmnd.rs/migrations/migrating-to-v5</a>, testing <a href="https://zustand.docs.pmnd.rs/guides/testing">https://zustand.docs.pmnd.rs/guides/testing</a>, devtools issue #926 <a href="https://github.com/pmndrs/zustand/issues/926">https://github.com/pmndrs/zustand/issues/926</a>; zundo <a href="https://github.com/charkour/zundo">https://github.com/charkour/zundo</a>; Jotai rework <a href="https://www.infoq.com/news/2026/07/jotai-rework-performance/">https://www.infoq.com/news/2026/07/jotai-rework-performance/</a>, jotai-devtools <a href="https://github.com/jotaijs/jotai-devtools">https://github.com/jotaijs/jotai-devtools</a>, jotai-history <a href="https://github.com/jotaijs/jotai-history">https://github.com/jotaijs/jotai-history</a>; Reatom v1001 <a href="https://v1001.reatom.dev/start/base/">https://v1001.reatom.dev/start/base/</a>, async context <a href="https://v1001.reatom.dev/handbook/async-context/">https://v1001.reatom.dev/handbook/async-context/</a>, tooling <a href="https://v1001.reatom.dev/start/tooling/">https://v1001.reatom.dev/start/tooling/</a>; Effector fork <a href="https://effector.dev/en/api/effector/fork/">https://effector.dev/en/api/effector/fork/</a>, inspect <a href="https://effector.dev/en/api/effector/inspect/">https://effector.dev/en/api/effector/inspect/</a>; XState store <a href="https://stately.ai/docs/xstate-store">https://stately.ai/docs/xstate-store</a>, inspection <a href="https://stately.ai/docs/inspection">https://stately.ai/docs/inspection</a>; TanStack Store <a href="https://tanstack.com/store/latest/docs/overview">https://tanstack.com/store/latest/docs/overview</a>; statebus <a href="https://github.com/smoothbricks/statebus">https://github.com/smoothbricks/statebus</a>; Nanostores <a href="https://github.com/nanostores/nanostores">https://github.com/nanostores/nanostores</a>; Redux DevTools troubleshooting <a href="https://github.com/reduxjs/redux-devtools/blob/main/extension/docs/Troubleshooting.md">https://github.com/reduxjs/redux-devtools/blob/main/extension/docs/Troubleshooting.md</a>, #282 <a href="https://github.com/zalmoxisus/redux-devtools-extension/issues/282">https://github.com/zalmoxisus/redux-devtools-extension/issues/282</a>; Recoil archived <a href="https://github.com/facebookexperimental/Recoil/issues/2324">https://github.com/facebookexperimental/Recoil/issues/2324</a>; proxy-memoize <a href="https://github.com/dai-shi/proxy-memoize">https://github.com/dai-shi/proxy-memoize</a>.</p>
+<p><strong>Sync / local-first:</strong> TanStack DB overview <a href="https://tanstack.com/db/latest/docs/overview">https://tanstack.com/db/latest/docs/overview</a>, mutations <a href="https://tanstack.com/db/latest/docs/guides/mutations">https://tanstack.com/db/latest/docs/guides/mutations</a>, live queries <a href="https://tanstack.com/db/latest/docs/guides/live-queries">https://tanstack.com/db/latest/docs/guides/live-queries</a>, collection options creator <a href="https://tanstack.com/db/latest/docs/guides/collection-options-creator">https://tanstack.com/db/latest/docs/guides/collection-options-creator</a>, 0.6 blog <a href="https://tanstack.com/blog/tanstack-db-0.6-app-ready-with-persistence-and-includes">https://tanstack.com/blog/tanstack-db-0.6-app-ready-with-persistence-and-includes</a>, offline-transactions <a href="https://github.com/TanStack/db/tree/main/packages/offline-transactions">https://github.com/TanStack/db/tree/main/packages/offline-transactions</a>, d2ts <a href="https://github.com/electric-sql/d2ts">https://github.com/electric-sql/d2ts</a>; TanStack Query optimistic <a href="https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates">https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates</a>, persistQueryClient <a href="https://tanstack.com/query/latest/docs/framework/react/plugins/persistQueryClient">https://tanstack.com/query/latest/docs/framework/react/plugins/persistQueryClient</a>, advanced SSR <a href="https://tanstack.com/query/v5/docs/react/guides/advanced-ssr">https://tanstack.com/query/v5/docs/react/guides/advanced-ssr</a>; Electric shapes <a href="https://electric.ax/docs/guides/shapes">https://electric.ax/docs/guides/shapes</a>, writes <a href="https://electric.ax/docs/guides/writes">https://electric.ax/docs/guides/writes</a>; Zero 1.0 <a href="https://www.infoq.com/news/2026/06/zero-version-1/">https://www.infoq.com/news/2026/06/zero-version-1/</a>, mutators <a href="https://zero.rocicorp.dev/docs/mutators">https://zero.rocicorp.dev/docs/mutators</a>, offline <a href="https://zero.rocicorp.dev/docs/offline">https://zero.rocicorp.dev/docs/offline</a>; Replicache <a href="https://replicache.dev/">https://replicache.dev/</a>; PowerSync Web SDK <a href="https://docs.powersync.com/client-sdk-references/javascript-web">https://docs.powersync.com/client-sdk-references/javascript-web</a>; LiveStore changelog <a href="https://docs.livestore.dev/changelog/">https://docs.livestore.dev/changelog/</a>, event sourcing <a href="https://docs.livestore.dev/evaluation/event-sourcing/">https://docs.livestore.dev/evaluation/event-sourcing/</a>, syncing <a href="https://docs.livestore.dev/reference/syncing/">https://docs.livestore.dev/reference/syncing/</a>; TinyBase <a href="https://tinybase.org/">https://tinybase.org/</a>, checkpoints <a href="https://tinybase.org/api/checkpoints/">https://tinybase.org/api/checkpoints/</a>; RxDB replication <a href="https://rxdb.info/replication.html">https://rxdb.info/replication.html</a>, premium <a href="https://rxdb.info/premium/">https://rxdb.info/premium/</a>; Jazz <a href="https://jazz.tools/docs">https://jazz.tools/docs</a>; Instant joins OpenAI <a href="https://www.instantdb.com/essays/instant_team_joins_openai">https://www.instantdb.com/essays/instant_team_joins_openai</a>; Automerge 3 <a href="https://automerge.org/blog/automerge-3/">https://automerge.org/blog/automerge-3/</a>; Yjs UndoManager <a href="https://docs.yjs.dev/api/undo-manager">https://docs.yjs.dev/api/undo-manager</a>; Loro undo <a href="https://loro.dev/docs/advanced/undo">https://loro.dev/docs/advanced/undo</a>, performance <a href="https://loro.dev/docs/performance">https://loro.dev/docs/performance</a>; SQLite wasm persistence <a href="https://sqlite.org/wasm/doc/trunk/persistence.md">https://sqlite.org/wasm/doc/trunk/persistence.md</a>; nuqs <a href="https://nuqs.dev/docs">https://nuqs.dev/docs</a>; TanStack Router search params <a href="https://tanstack.com/router/latest/docs/framework/react/guide/search-params">https://tanstack.com/router/latest/docs/framework/react/guide/search-params</a>; birpc <a href="https://github.com/antfu-collective/birpc">https://github.com/antfu-collective/birpc</a>; penpal <a href="https://github.com/Aaronius/penpal">https://github.com/Aaronius/penpal</a>; Comlink in VS Code <a href="https://github.com/microsoft/vscode-discussions/discussions/2392">https://github.com/microsoft/vscode-discussions/discussions/2392</a>; oRPC message port <a href="https://orpc.dev/docs/adapters/message-port">https://orpc.dev/docs/adapters/message-port</a>; tRPC subscriptions <a href="https://trpc.io/docs/server/subscriptions">https://trpc.io/docs/server/subscriptions</a>; workbox-background-sync <a href="https://developer.chrome.com/docs/workbox/modules/workbox-background-sync">https://developer.chrome.com/docs/workbox/modules/workbox-background-sync</a>; Background Sync support <a href="https://caniuse.com/background-sync">https://caniuse.com/background-sync</a>.</p>
+<p><strong>Integration / SSR / devtools / workers / bundling:</strong> uSES RFC <a href="https://github.com/reactjs/rfcs/blob/main/text/0214-use-sync-external-store.md">https://github.com/reactjs/rfcs/blob/main/text/0214-use-sync-external-store.md</a>; react #32040 <a href="https://github.com/react/react/pull/32040">https://github.com/react/react/pull/32040</a>; React Compiler + MobX <a href="https://littlepotato.me/posts/react-compiler-mobx-memoization/">https://littlepotato.me/posts/react-compiler-mobx-memoization/</a>; compiler &amp; tables <a href="https://medium.com/@kshahbaghi/react-compiler-broke-our-tables-and-use-no-memo-is-not-the-fix-f8d849f6eb79">https://medium.com/@kshahbaghi/react-compiler-broke-our-tables-and-use-no-memo-is-not-the-fix-f8d849f6eb79</a>; Legend fine-grained <a href="https://legendapp.com/open-source/state/v3/react/fine-grained-reactivity/">https://legendapp.com/open-source/state/v3/react/fine-grained-reactivity/</a>; react-tracked caveats <a href="https://github.com/dai-shi/react-tracked/blob/main/website/docs/caveats.md">https://github.com/dai-shi/react-tracked/blob/main/website/docs/caveats.md</a>; uSES per-item isolation <a href="https://philparsons.co.uk/blog/isolating-react-component-updates-with-usesyncexternalstore/">https://philparsons.co.uk/blog/isolating-react-component-updates-with-usesyncexternalstore/</a>; Pinia SSR <a href="https://pinia.vuejs.org/ssr/">https://pinia.vuejs.org/ssr/</a>; Solid <code>from</code> <a href="https://docs.solidjs.com/reference/reactive-utilities/from">https://docs.solidjs.com/reference/reactive-utilities/from</a>, <code>reconcile</code> <a href="https://docs.solidjs.com/reference/store-utilities/reconcile">https://docs.solidjs.com/reference/store-utilities/reconcile</a>; Svelte reactivity <a href="https://svelte.dev/docs/svelte/svelte-reactivity">https://svelte.dev/docs/svelte/svelte-reactivity</a>, SvelteKit state <a href="https://svelte.dev/docs/kit/state-management">https://svelte.dev/docs/kit/state-management</a>; Angular 22 <a href="https://blog.codewithahsan.dev/whats-new-angular-v22/">https://blog.codewithahsan.dev/whats-new-angular-v22/</a>; Context Community Protocol <a href="https://github.com/webcomponents-cg/community-protocols/blob/main/proposals/context.md">https://github.com/webcomponents-cg/community-protocols/blob/main/proposals/context.md</a>; Qwik serialization <a href="https://qwik.dev/docs/guides/serialization/">https://qwik.dev/docs/guides/serialization/</a>; Zustand Next.js <a href="https://zustand.docs.pmnd.rs/learn/guides/nextjs">https://zustand.docs.pmnd.rs/learn/guides/nextjs</a>; Jotai Next.js <a href="https://jotai.org/docs/guides/nextjs">https://jotai.org/docs/guides/nextjs</a>; Effector SSR <a href="https://effector.dev/en/guides/server-side-rendering/">https://effector.dev/en/guides/server-side-rendering/</a>; Astro shared state <a href="https://docs.astro.build/en/recipes/sharing-state-islands/">https://docs.astro.build/en/recipes/sharing-state-islands/</a>; VS Code webview guide <a href="https://code.visualstudio.com/api/extension-guides/webview">https://code.visualstudio.com/api/extension-guides/webview</a>, #115807 <a href="https://github.com/microsoft/vscode/issues/115807">https://github.com/microsoft/vscode/issues/115807</a>; vscode-messenger <a href="https://github.com/TypeFox/vscode-messenger">https://github.com/TypeFox/vscode-messenger</a>; webext-redux <a href="https://github.com/tshaddix/webext-redux">https://github.com/tshaddix/webext-redux</a>; Pinia #721 <a href="https://github.com/vuejs/pinia/issues/721">https://github.com/vuejs/pinia/issues/721</a>; Stately Inspector <a href="https://stately.ai/docs/inspector">https://stately.ai/docs/inspector</a>; TanStack Devtools <a href="https://tanstack.com/devtools/latest/docs/architecture">https://tanstack.com/devtools/latest/docs/architecture</a>; Firefox custom formatters <a href="https://firefox-source-docs.mozilla.org/devtools-user/custom_formatters/index.html">https://firefox-source-docs.mozilla.org/devtools-user/custom_formatters/index.html</a>; postMessage cost <a href="https://surma.dev/things/is-postmessage-slow/">https://surma.dev/things/is-postmessage-slow/</a>; RxDB SharedWorker <a href="https://rxdb.info/rx-storage-shared-worker.html">https://rxdb.info/rx-storage-shared-worker.html</a>; COOP/COEP <a href="https://web.dev/articles/coop-coep">https://web.dev/articles/coop-coep</a>; Document-Isolation-Policy <a href="https://developer.chrome.com/blog/document-isolation-policy">https://developer.chrome.com/blog/document-isolation-policy</a>; Mutative performance <a href="https://mutative.js.org/docs/getting-started/performance/">https://mutative.js.org/docs/getting-started/performance/</a>; nanostores package.json <a href="https://github.com/nanostores/nanostores/blob/main/package.json">https://github.com/nanostores/nanostores/blob/main/package.json</a>; TinyBase importing <a href="https://tinybase.org/guides/the-basics/importing-tinybase/">https://tinybase.org/guides/the-basics/importing-tinybase/</a>; rollup #5987 <a href="https://github.com/rollup/rollup/issues/5987">https://github.com/rollup/rollup/issues/5987</a>; Proxy benchmark <a href="https://gist.github.com/indexzero/5b195523b81b1449eff8e87c13dab79b">https://gist.github.com/indexzero/5b195523b81b1449eff8e87c13dab79b</a>.</p></div>
+<footer>Generated from markdown — edit the .md, rerun build.py.</footer></div></body></html>

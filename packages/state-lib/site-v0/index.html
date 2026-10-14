@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>state-lib</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="state.css">
+</head>
+<body>
+<nav class="top"><div class="wrap">
+  <a class="brand" href="index.html">state-lib</a>
+  <a class="on" href="index.html">Home</a>
+  <a href="concepts.html">Concepts</a>
+  <a href="../docs/state-landscape.html">Landscape</a>
+  <a href="requirements.html">Requirements</a>
+  <a href="decisions.html">Decisions</a>
+  <a href="spec.html">Master spec</a>
+  <a href="brief.html">Research brief</a>
+</div></nav>
+<div class="wrap">
+<header class="page">
+  <p class="kicker">Hyper · universal state toolkit</p>
+  <h1>state-lib</h1>
+  <p class="lead">Working home of the universal state toolkit (working name <code>state</code>): a small signal core, patch-emitting transactions, pluggable sync — specialised per project by a compiler, enforced by <code>state lint</code>, migrated into by <code>state migrate</code>. This site collects the research, the spec, the decisions and — coming — interactive comparisons, concept illustrations and REPL examples.</p>
+</header>
+
+<h2>Where things stand</h2>
+<div class="cards">
+  <a class="card" href="brief.html"><span class="tag">research</span><h3>Research brief</h3><p>Codebase audit, landscape by layer, tensions, 3 candidate architectures. <span class="status done">done</span></p></a>
+  <a class="card" href="spec.html"><span class="tag">spec</span><h3>Master spec v0.4</h3><p>Core model, compiler, adapters, data layer, remote protocol, CLI, budgets, Hyper migration. <span class="status done">draft for review</span></p></a>
+  <a class="card" href="../docs/state-landscape.html"><span class="tag">comparison</span><h3>The State of State</h3><p>71 libraries · six layers · what we take, why, verdicts. Filterable. <span class="status done">v3</span></p></a>
+  <a class="card" href="concepts.html"><span class="tag">concepts</span><h3>Concept explainers</h3><p>Push-pull, two-phase batch, COW &amp; structural sharing, HAMT, resumability, runes, shapes, event-log sync — illustrated. <span class="status wip">first batch</span></p></a>
+  <a class="card" href="requirements.html"><span class="tag">source of truth</span><h3>Requirements R1–R52</h3><p>Every braindump consolidated in English; the spec traces to these IDs. <span class="status done">living</span></p></a>
+  <a class="card" href="decisions.html"><span class="tag">log</span><h3>Decision log</h3><p>19 decisions with reasons and explicit supersessions. <span class="status done">living</span></p></a>
+</div>
+
+<h2>Coming next</h2>
+<div class="cards">
+  <div class="card"><span class="tag">R27</span><h3>Deep comparisons</h3><p>Library vs library, feature by feature — comparable features and different-approach features per use case. Zustand first. <span class="status todo">todo</span></p></div>
+  <div class="card"><span class="tag">R28</span><h3>Benchmark suite</h3><p>Data types × volumes × operations × real-world scenarios, results shown next to examples. <span class="status todo">todo</span></p></div>
+  <div class="card"><span class="tag">R38</span><h3>REPL examples</h3><p>Runnable snippets with live state visualisation, approach switching, inline perf/bundle numbers. <span class="status todo">todo</span></p></div>
+  <div class="card"><span class="tag">R29</span><h3>Validation survey</h3><p>typia (adopted direction), ArkType, TypeBox, valibot, zod — with honest benches. <span class="status todo">todo</span></p></div>
+  <div class="card"><span class="tag">R39</span><h3>Devtools comparison</h3><p>Every tool that has devtools, compared on the axes that made Redux DevTools freeze. <span class="status todo">todo</span></p></div>
+  <div class="card"><span class="tag">R32</span><h3>Danny-DB integration</h3><p>Datomic-like Rust→wasm DB as the query layer; needs a session with Danny. <span class="status todo">blocked on Danny</span></p></div>
+</div>
+
+<footer>Static site — works from <code>file://</code>; open <code>packages/state-lib/site/index.html</code>. Fonts load when online and fall back to system faces offline.</footer>
+</div>
+</body>
+</html>

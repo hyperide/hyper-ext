@@ -1,0 +1,33 @@
+=== 1:before
+useEffect(() => {
+  let alive = true
+  fetch(`/api/todos?f=${filter}`)
+    .then(r => r.json())
+    .then(d => { if (alive) setTodos(d) })
+  return () => { alive = false }
+}, [filter])
+=== 1:after
+const todos = collection({
+  source: rest('/api/todos'),
+  where: () => ({ f: filter() }),
+})
+=== 2:before
+const [total, setTotal] = useState(0)
+useEffect(() => {
+  setTotal(items.reduce((n, i) => n + i.price, 0))
+}, [items])
+=== 2:after
+const total = derive(() =>
+  items().reduce((n, i) => n + i.price, 0))
+=== 5:before
+const [online, setOnline] = useState(navigator.onLine)
+useEffect(() => {
+  const on = () => setOnline(true), off = () => setOnline(false)
+  addEventListener('online', on); addEventListener('offline', off)
+  return () => { removeEventListener('online', on)
+                 removeEventListener('offline', off) }
+}, [])
+=== 5:after
+const online = env.online   // one shared subscription
+=== 12:after
+useDomEffect(rowRef, el => el.scrollIntoView(), [selectedId])

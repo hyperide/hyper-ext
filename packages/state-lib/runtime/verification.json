@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "implementation": "src/core.ts",
+  "status": "reference",
+  "formalProof": null,
+  "checks": [
+    { "kind": "example-tests", "source": "src/core.test.ts" },
+    { "kind": "regression-tests", "source": "src/core.regression.test.ts" },
+    { "kind": "seeded-differential-tests", "source": "src/core.regression.test.ts", "seeds": 32, "eventsPerSeed": 250 },
+    { "kind": "strict-type-contracts", "source": "src/core.types.fixture.ts", "config": "tsconfig.json" }
+  ],
+  "unverifiedBoundaries": [
+    "mutable signal payloads",
+    "cross-runtime dependencies",
+    "foreign JavaScript effects",
+    "compiler lowering",
+    "native backend",
+    "framework adapters"
+  ]
+}

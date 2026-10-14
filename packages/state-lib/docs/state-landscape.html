@@ -1,0 +1,370 @@
+<title>The State of State</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#F5F8F7; --panel:#FFFFFF; --ink:#17211F; --muted:#5C6B68; --line:#DCE5E2; --line2:#EAF0EE;
+  --accent:#0E7A6D; --accent-ink:#0B5F55; --accent-soft:#E2F0ED;
+  --blue:#28618F; --blue-soft:#E3EDF5; --amber:#A66A1F; --amber-soft:#F6EDDD; --red:#A63B33; --red-soft:#F6E4E2;
+  --grey:#6B7472; --grey-soft:#ECEFEE; --thead:#F0F5F3;
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1413; --panel:#151D1B; --ink:#E4ECE9; --muted:#93A29E; --line:#26312E; --line2:#1D2725;
+    --accent:#3FB3A2; --accent-ink:#5BC9B8; --accent-soft:#123430;
+    --blue:#6FA8D6; --blue-soft:#152A3B; --amber:#D9A05B; --amber-soft:#33270F; --red:#D97D74; --red-soft:#381D1A;
+    --grey:#8A9694; --grey-soft:#1E2826; --thead:#18221F;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1413; --panel:#151D1B; --ink:#E4ECE9; --muted:#93A29E; --line:#26312E; --line2:#1D2725;
+  --accent:#3FB3A2; --accent-ink:#5BC9B8; --accent-soft:#123430;
+  --blue:#6FA8D6; --blue-soft:#152A3B; --amber:#D9A05B; --amber-soft:#33270F; --red:#D97D74; --red-soft:#381D1A;
+  --grey:#8A9694; --grey-soft:#1E2826; --thead:#18221F;
+}
+*{box-sizing:border-box}
+body{background:var(--paper); color:var(--ink); font:14px/1.5 "IBM Plex Sans",system-ui,sans-serif; margin:0; padding:0 0 64px;}
+.wrap{max-width:1200px; margin:0 auto; padding:0 20px;}
+header.mast{padding:28px 0 14px; border-bottom:1px solid var(--line);}
+.kicker{font:500 11px/1 "IBM Plex Mono",monospace; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 10px;}
+h1{font-size:30px; font-weight:700; letter-spacing:-.01em; margin:0 0 8px; text-wrap:balance;}
+.sub{color:var(--muted); max-width:72ch; margin:0;}
+.sub b{color:var(--ink); font-weight:600;}
+.meta{display:flex; gap:18px; flex-wrap:wrap; margin-top:14px; font:400 12px/1.4 "IBM Plex Mono",monospace; color:var(--muted);}
+.meta span b{color:var(--ink); font-weight:500;}
+.toolbar{position:sticky; top:0; z-index:5; background:var(--paper); border-bottom:1px solid var(--line); padding:10px 0;}
+.toolrow{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+.tabs{display:flex; gap:2px; flex-wrap:wrap;}
+.tab{border:1px solid var(--line); background:var(--panel); color:var(--muted); font:500 12.5px/1 "IBM Plex Sans",sans-serif; padding:8px 12px; cursor:pointer; border-radius:6px;}
+.tab .n{font:400 11px/1 "IBM Plex Mono",monospace; opacity:.75; margin-left:5px;}
+.tab.on{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+.tab:focus-visible,.chip:focus-visible,#q:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+#q{margin-left:auto; border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:6px; padding:8px 10px; font:400 13px "IBM Plex Sans",sans-serif; width:200px;}
+#q::placeholder{color:var(--muted);}
+.chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+.chip{border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:4px 10px; font:500 11.5px/1.2 "IBM Plex Sans",sans-serif; color:var(--muted); cursor:pointer;}
+.chip.on{border-color:currentColor;}
+.chip .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:1px;}
+section.layer{margin-top:26px;}
+section.layer[hidden]{display:none;}
+.lhead{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:4px;}
+h2{font-size:19px; font-weight:600; margin:0;}
+.lnote{color:var(--muted); font-size:12.5px;}
+.spec{font:400 11px/1 "IBM Plex Mono",monospace; color:var(--accent-ink); border:1px solid var(--line); border-radius:4px; padding:3px 6px;}
+.tblwrap{overflow-x:auto; border:1px solid var(--line); border-radius:8px; background:var(--panel); margin-top:10px;}
+table{border-collapse:collapse; width:100%; min-width:1180px;}
+th{background:var(--thead); text-align:left; font:600 10.5px/1.3 "IBM Plex Sans",sans-serif; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap;}
+td{padding:9px 10px; border-bottom:1px solid var(--line2); vertical-align:top;}
+tr:last-child td{border-bottom:0;}
+td.name{font-weight:600; white-space:nowrap;}
+td.name small{display:block; font:400 11px/1.4 "IBM Plex Mono",monospace; color:var(--muted); margin-top:2px;}
+td.num{font:400 12px/1.5 "IBM Plex Mono",monospace; white-space:nowrap; font-variant-numeric:tabular-nums; color:var(--ink);}
+td.traits{color:var(--ink); min-width:260px;}
+td.take{color:var(--muted); min-width:200px;}
+td.take b{color:var(--accent-ink); font-weight:600;}
+td.why{color:var(--muted); min-width:230px; font-size:12.5px;}
+td.why b{color:var(--ink); font-weight:600;}
+.v{display:inline-block; border-radius:4px; padding:3px 8px; font:600 11px/1.3 "IBM Plex Sans",sans-serif; white-space:nowrap;}
+.v.core{background:var(--accent-soft); color:var(--accent-ink);}
+.v.protocol{background:var(--blue-soft); color:var(--blue);}
+.v.steal{background:var(--accent-soft); color:var(--accent-ink); outline:1px dashed var(--accent);}
+.v.interop{background:var(--blue-soft); color:var(--blue); outline:1px dashed var(--blue);}
+.v.watch{background:var(--amber-soft); color:var(--amber);}
+.v.avoid{background:var(--red-soft); color:var(--red);}
+.v.superseded{background:var(--grey-soft); color:var(--grey);}
+td.verdict small{display:block; color:var(--muted); font-weight:400; margin-top:4px; max-width:230px; white-space:normal;}
+.legend{display:flex; gap:14px; flex-wrap:wrap; margin-top:14px; font-size:12px; color:var(--muted);}
+.legend .v{margin-right:4px;}
+.empty{padding:22px; color:var(--muted); font-size:13px; display:none;}
+footer{margin-top:34px; color:var(--muted); font-size:12px; border-top:1px solid var(--line); padding-top:14px;}
+footer code{font:400 11.5px "IBM Plex Mono",monospace; color:var(--ink);}
+@media (max-width:720px){ #q{width:100%; margin-left:0;} h1{font-size:24px;} }
+</style>
+
+<div class="wrap">
+<header class="mast">
+  <p class="kicker">Hyper · state toolkit research</p>
+  <h1>The State of State</h1>
+  <p class="sub">The competitive landscape behind the <b>master spec</b>: 71 libraries and systems across six layers, surveyed and version-checked <b>2026-09-01/02</b>. Verdicts say what the <code>state</code> toolkit does with each — build on it, implement its protocol, steal its idea, interop with it, watch it, or avoid it.</p>
+  <div class="meta">
+    <span>sizes: <b>min+gzip, whole package</b></span>
+    <span>sources: <b>5 research reports</b> → packages/state-lib/docs/</span>
+    <span>spec refs: <b>§ = master spec section</b></span>
+  </div>
+</header>
+
+<div class="toolbar"><div class="toolrow">
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <input id="q" type="search" placeholder="Filter libraries…" aria-label="Filter libraries">
+</div>
+<div class="chips" id="chips"></div>
+</div>
+
+<div id="layers"></div>
+
+<div class="legend">
+  <span><span class="v core">core basis</span> we build on it / vendor it</span>
+  <span><span class="v protocol">protocol</span> we implement its contract</span>
+  <span><span class="v steal">steal ideas</span> concepts in, dependency out</span>
+  <span><span class="v interop">interop</span> adapter / coexists</span>
+  <span><span class="v watch">watch</span> promising, not a bet</span>
+  <span><span class="v avoid">avoid</span> dead, dying or wrong-shaped</span>
+  <span><span class="v superseded">context</span> the thing we replace</span>
+</div>
+
+<footer>
+Companion pages: research brief (<code>2026-09-01-state-management-research-brief.md</code>) · master spec (<code>2026-09-01-state-master-spec.md</code>) · <code>REQUIREMENTS.md</code> · <code>DECISIONS.md</code> in <code>hyperide/packages/state-lib/</code>. Facts verified against npm registry &amp; project docs on the survey date; sizes are upper bounds (tree-shaken cores are smaller).
+</footer>
+</div>
+
+<script>
+const V = {
+  core:'core basis', protocol:'protocol', steal:'steal ideas', interop:'interop', watch:'watch', avoid:'avoid', superseded:'context'
+};
+// Optional second badge per row (verdicts are not mutually exclusive — R51).
+const V2 = {
+'Zustand':['steal','middleware packaging, vanilla-store idiom'],
+'Immutable.js':['steal','HAMT node design; fast if you never toJS()'],
+'statebus':['superseded','as a package'],
+'TanStack DB':['interop','collections exchanged both directions'],
+'ElectricSQL':['steal','resumable shape-log; agent-workload angle'],
+'MobX 7 (+MST/keystone)':['interop','adapter for MobX codebases'],
+'structura.js':['steal','freeze-by-types, circular refs, draft moves'],
+'RxJS':['steal','operator fusion (most.js) → compiler fuses derive chains'],
+};
+const LAYERS = [
+ {id:'reactivity', title:'Reactivity runtimes', spec:'§4.1', note:'Push-pull signal graphs. The algorithm converged; the pick is about size, deps and swap-ability.'},
+ {id:'stores', title:'Stores', spec:'§4.2–4.8', note:'Global state containers: ergonomics, events, undo, devtools, test isolation.'},
+ {id:'immutability', title:'Immutability & patches', spec:'§4.4', note:'Structural sharing, drafts, JSON patches — the transaction engine.'},
+ {id:'sync', title:'Sync & local-first', spec:'§8–9', note:'Server truth, optimistic overlays, offline, CRDT, persistence.'},
+ {id:'api', title:'API layer', spec:'§8.4', note:'How the app talks to backends: typed requests, caches, subscriptions — what our source adapters must speak to.'},
+ {id:'transport', title:'Transport & tooling', spec:'§9–11', note:'Not backend traffic — the plumbing and DX around our own modules: in-app message bridges (webview/worker/tab), URL state, undo helpers, devtools hosts.'}
+];
+// [layer, name, pkg, ver+date, size, lic, traits, take, verdict, note]
+const ROWS = [
+['reactivity','alien-signals','stackblitz/alien-signals','3.2.1 · 05/26','1.9 kB','MIT','Vue 3.6 core. Push-pull, bit flags, linked lists; createReactiveSystem() for custom node types; 0 deps.','<b>vendored core</b>: the graph algorithm behind our internal signal interface','core','vendored with upstream-sync script'],
+['reactivity','Preact Signals','@preact/signals-core','1.14.4 · 07/26','2.0 kB','MIT','Version counters, lazy computeds, batch(); best-tested React bridge (signals-react 3.12 + babel transform).','<b>useSignals mechanics</b> for our opt-in tracked mode','steal','transform conflicts with React Compiler (#652) — why tracked is opt-in'],
+['reactivity','Vue reactivity','@vue/reactivity','3.5.42 / 3.6-rc · 08/26','7.8 kB','MIT','Most mature standalone deep+shallow runtime; effectScope, onTrack/onTrigger debugging.','<b>deep-proxy semantics</b>: lazy per-property signals, toRaw, scheduler flush hints','steal','public API stable across 3.5→3.6 core swap'],
+['reactivity','Solid 2 signals','@solidjs/signals','2.0.0-rc.4 · 08/26','8.6–27.7 kB','MIT','Microtask batching, async-aware memos, createStore + createProjection + createOptimistic, mapArray keyed lists.','<b>mapArray / projection</b> model for keyed &lt;For&gt; and derived views','steal','RC; microtask-batched reads rejected for our core (§4.1)'],
+['reactivity','Svelte 5 runes','svelte (internal)','5.57 · 08/26','—','MIT','$state deep proxies, two-phase batch; topped reactivity benchmarks; compiler-bound, not standalone.','<b>compiler-wraps-usage</b> pattern — the “disappearing framework” precedent','steal','integration target via createSubscriber, not a dependency'],
+['reactivity','signia / @tldraw/state','tldraw','5.3.2 · 08/26','~3 kB','MIT','Epoch clock; computeds pull diffs via getDiffSince — incremental derived collections.','<b>diff-aware computeds</b> for derive.collection (§4.5)','steal','signia frozen; lives on inside tldraw SDK'],
+['reactivity','TC39 Signals','signal-polyfill','0.2.2 · 01/25','3.2 kB','Apache-2.0','Stage 1 since 04/24; “not for production”; no batch/effect; slow.','<b>future native target</b> behind our signal interface','watch','design reference only'],
+['reactivity','Angular signals','@angular/core','22.1 · 08/26','—','MIT','signal/computed/effect/linkedSignal/resource; zoneless default; not extractable.','spec reference for resource() shape','interop','adapter via toSignal'],
+['reactivity','Reactively','@reactively/core','0.0.8 · 03/23','1.0 kB','ISC','Origin of the three-color push-pull algorithm; author maintains js-reactivity-benchmark.','the algorithm write-up; the benchmark suite','superseded','read, don’t depend'],
+['reactivity','Qwik 2 signals','@qwik.dev/core','2.0-beta · 09/26','56.9 kB','MIT','Only runtime that serialises the live signal graph into HTML (resumability).','serialisation ideas for SSR; out of scope v1','watch','tied to $-optimizer'],
+
+['stores','Zustand','zustand','5.0.15 · 08/26','3.5 kB','MIT','54M dl/wk. Selector store + middlewares (persist, devtools, immer); vanilla createStore for isolation.','<b>middleware-as-subpath</b> packaging; migrate codemod source #1','superseded','what Hyper uses today; selectors + useShallow are the pain we remove'],
+['stores','Jotai','jotai','2.20.3 · 08/26','7.2 kB','MIT','Bottom-up atoms, async atoms, atomFamily; createStore+Provider isolation; best in-app devtools (0.14).','<b>devtools UX</b> (atom viewer, time travel); provider-scoping discipline','steal','v3 alpha drops CJS'],
+['stores','Valtio','valtio','2.3.2 · 05/26','5.8 kB','MIT','Deep proxy + immutable snapshots; useSnapshot render tracking via proxy-compare.','<b>proxy-compare read tracking</b> for our snapshot hook — with monotonic read-set fix','steal','render-time tracking as foundation is compiler-unsafe'],
+['stores','MobX 7 (+MST/keystone)','mobx','7.0.3 · 08/26','15.5–64.5 kB','MIT','Proxy-only since v7; keystone adds snapshots, JSON patches, serialisable actions, UndoManager.','<b>patch+action tree model</b> (keystone) validated at scale','steal','observer HOC is the React Compiler poster-child conflict'],
+['stores','Legend-State v3','@legendapp/state','3.0.0-beta.48 · 07/26','11 kB','MIT','Fine-grained observables, &lt;Memo&gt;/&lt;For&gt;, persist+sync plugins; krausest near-vanilla claims.','<b>fine-grained React primitives</b>; persist/sync plugin taxonomy; our perf bar','watch','beta for 2+ years, React-only, no devtools'],
+['stores','Reatom v1001','@reatom/core','1001.3.0 · 07/26','32 kB','MIT','Atoms + implicit ctx; cause tracking (every update records why); url/persist/forms built in.','<b>cause chains</b> → our tx.cause (§4.4); withSearchParamsPersist ideas','steal','explicitly rejects Proxy; small community, epoch churn'],
+['stores','Effector','effector','23.4.4 · 09/25','12.8 kB','MIT','Events/stores/effects graph; fork() scopes are best-in-class test/SSR isolation; needs SID plugin.','<b>fork/scope semantics</b> → our scopes (§4.7); inspect trace','steal','core dormant ~12 months'],
+['stores','@xstate/store v4','@xstate/store','4.2.3 · 08/26','3.5 kB','MIT','Event→transition store; .with(undoRedo, persist); inspect() typed event log; 5 framework adapters.','<b>typed event log + FSM surface</b> → our fsm() primitive (§4.6)','steal','closest existing shape to “events for everything”'],
+['stores','XState 5','xstate','5.32.6 · 08/26','16.9 kB','MIT','Statecharts + actors; Stately Inspector (sequence diagrams).','statechart escalation path for complex flows','interop','a slice can host a machine; not the core model'],
+['stores','Redux Toolkit','@reduxjs/toolkit','2.12.0 · 05/26','15.1 kB','MIT','The event-log-by-design store; RTK Query; listener middleware; Immer overhead history (#4793).','<b>the lesson</b>: serialisable commands, and everything that made it heavy','superseded','migrate codemod source; devtools bridge kept for familiarity'],
+['stores','TanStack Store','@tanstack/store','0.11.1 · 08/26','2.1 kB','MIT','Internal primitive of Router/Form; Store/Derived/Effect + batch; no middleware/devtools.','proof that 2 kB store+derived is enough for a core','interop','v0, library-internal by design'],
+['stores','Nanostores','nanostores','1.5.2 · 08/26','<1 kB br','MIT','Smallest cross-framework atoms; lazy mount lifecycle; sideEffects:false discipline.','<b>packaging discipline</b>: size-limit CI, per-atom budgets','steal','no proxies, events, undo'],
+['stores','statebus','@smoothbricks/statebus','0.8.0 · 11/24','14 kB','MIT','Danny’s PoC: typed States/Events augmentation, rAF double-buffered queue, ByID lazy atom maps, substateInterest ref-counting.','<b>substateInterest</b> → collection interest counting (§4.5); phase ordering → bus (§4.6); ByID → collections','steal','superseded as a package; ideas credited — needs Danny’s sign-off'],
+['stores','Recoil','recoil','archived 01/25','—','MIT','Meta’s atom store; repo read-only.','—','avoid','migration-from target only'],
+
+['immutability','Immer 11','immer','11.1.18 · 08/26','6.9 kB','MIT','v11 rewrite: +21–26% vs v10; produceWithPatches → patches + inverse; auto-freeze default is the cost.','<b>patches + inverse patches</b> as the undo/replication currency','steal','we generate patches in our own draft proxy, no dep'],
+['immutability','Mutative','mutative','1.3.0 · 09/25','7.3 kB','MIT','2.5–83× Immer in no-freeze configs; RFC 6902 patches; mark() for custom classes.','<b>draft-proxy implementation playbook</b>: COW of touched containers, no auto-freeze','steal','1 yr since release; our tx engine follows this design'],
+['immutability','limu','limu','4.1.3 · 04/26','7.5 kB','MIT','Tencent; readable drafts; confirms all proxy rewrites beat Immer 10 by ~10× unfrozen.','independent benchmark confirmation','avoid','~130 dl/wk — unadopted'],
+['immutability','structura.js','structurajs','0.12.9 · 04/26','4.8 kB','MIT','Compile-time freezing via readonly types; circular refs; self-declared alpha.','<b>freeze-by-types</b> idea (readonly instead of Object.freeze)','avoid','alpha by its own README'],
+['immutability','Immutable.js','immutable','5.1.9 · 06/26','19.4 kB','MIT','HAMT Map / vector-trie List; maintained; foreign types + toJS() conversion tax.','why we chose COW-of-plain-objects over persistent structures','superseded','Mextner’s past pain, formally retired'],
+
+['sync','TanStack Query','@tanstack/react-query','5.102 · 08/26','~12 kB','MIT','65M dl/wk. The universal async cache; queryOptions is the ecosystem’s narrow waist; manual optimistic.','<b>persist filtering</b> (shouldDehydrateQuery), SSR dehydrate/hydrate patterns','interop','our query source wraps it for teams that have it'],
+['sync','TanStack DB','@tanstack/db','0.8.7 · 08/26','~20 kB+','MIT','Collections + pluggable sync(begin/write/commit) + d2ts live queries + transactional optimistic rollback + offline outbox pkg.','<b>the collection contract itself</b> (§8.1) + outbox semantics (§8.7)','protocol','we implement its contract natively; shim pinned to 0.8.x'],
+['sync','ElectricSQL','@electric-sql/client','1.5.27 · —','—','Apache-2.0','Postgres shapes over resumable HTTP; CDN-cacheable reads; writes stay yours; four documented write patterns.','<b>resumable-offset reads</b>; “shared persistent optimistic state” pattern (§4.11)','interop','electric source via its TanStack adapter'],
+['sync','Zero (Rocicorp)','@rocicorp/zero','1.9.0 · 08/26','232 kB','Apache-2.0','1.0 06/26. zero-cache SQLite replica + ZQL IVM; mutators rerun server-side, rebase; offline writes rejected by design.','<b>intent-based mutators</b> → §8.3; IVM per-view','steal','718 kB client + zero-cache infra ≠ universal toolkit dep'],
+['sync','PowerSync','@powersync/web','2.2.0 · —','—','Apache SDK / FSL svc','Sync rules → buckets → client SQLite; CRUD upload queue; wa-sqlite VFS zoo in shared worker.','worker/VFS topology lessons (§9.3)','interop','powersync source via TanStack adapter; service required'],
+['sync','LiveStore','@livestore/livestore','0.4.0 · 06/26','~480 kB','Apache-2.0','Purest event sourcing: versioned events → materialisers → SQLite wasm; git-like pull/rebase/push; devtools sponsor-only.','<b>event-log hygiene rules</b> (§4.6, §4.10): versioned past-tense events, clientOnly vs synced, compensating undo','steal','pre-1.0, heavy, own-backend'],
+['sync','TinyBase','tinybase','9.6.0 · 08/26','7–16 kB','MIT','0 deps, 100% coverage; reactive tables + LWW CRDT; 15+ persisters, synchronizers, built-in Checkpoints undo.','<b>persister/synchronizer interface taxonomy</b> (§8.5); modular “master package” packaging','steal','tabular model, not object graphs'],
+['sync','RxDB','rxdb','17.5.0 · 03/26','—','Apache + paid','Document DB, generic replication protocol (pull/push/stream + conflictHandler); OPFS/IDB storages premium.','<b>replication protocol shape</b>; awaitInSync ack rule (§8.3)','interop','rxdb source via TanStack adapter; premium storage lock'],
+['sync','Yjs','yjs','13.6.32 · —','~25 kB','MIT','The CRDT workhorse; UndoManager with trackedOrigins + captureTimeout; y-indexeddb stale (2023).','<b>origin-scoped undo</b> (§4.10)','interop','crdt source adapter, v1'],
+['sync','Automerge 3','@automerge/automerge','3.4.1 · —','591 kB gz wasm','MIT','3.0 cut memory 10×; automerge-repo storage/network adapters; no built-in undo.','columnar storage ideas','interop','crdt source adapter; wasm stays in worker (§8.8)'],
+['sync','Loro','loro-crdt','1.15.1 · —','~180 kB wasm','MIT','Fast CRDT; UndoManager with mergeInterval, excludeOriginPrefixes, onPush cursor capture.','<b>mergeInterval + cursor capture</b> → history defaults (§4.10)','interop','crdt source adapter'],
+['sync','Jazz','jazz-tools','0.20.19 · —','—','MIT','CoJSON CRDT CoValues, group permissions, E2EE; cloud or self-host; 0.x.','permission-groups model for later','watch','pre-1.0'],
+['sync','InstantDB','@instantdb/react','1.0.67 · —','—','Apache-2.0','Team joined OpenAI; cloud shuts down 2027-08-31; signups closed.','—','avoid','sunset'],
+['sync','Replicache','replicache','15.3 · 07/25','—','free','Maintenance mode; migrate-to-Zero; mutator model lives on in Zero.','(via Zero)','avoid','maintenance mode'],
+['sync','Triplit','@triplit/client','1.0.50 · 07/25','—','AGPL-3.0','13 months without a release; AGPL.','—','avoid','stalled + licence'],
+['sync','Dexie (+Cloud)','dexie','4.4.5 · —','—','Apache-2.0','Best IndexedDB wrapper; liveQuery; Dexie Cloud adds sync + native Yjs docs.','<b>IndexedDB layer</b> under persist/indexeddb (§8.5)','interop','likely the actual IDB dependency-or-pattern'],
+['sync','PouchDB / CouchDB','pouchdb','9.0.0 · 05/24','—','Apache-2.0','The ancestor replication protocol (rev trees, _changes, checkpoints); now Apache incubator.','historical model behind RxDB’s protocol','superseded','Apache incubation ≈ retirement home; ideas already inherited via RxDB'],
+['sync','Convex','convex','1.45.0 · —','—','Apache client / FSL','Reactive server queries over WS; withOptimisticUpdate auto-rerun+rollback; no offline.','optimistic-update auto-rerun ergonomics','watch','server platform, not a client toolkit'],
+
+['api','tRPC 11','@trpc/server','11.18.0 · 06/26','5–10 kB','MIT','5.7M dl/wk. Monorepo inference; SSE-first subscriptions; new integration emits TanStack queryOptions.','<b>queryOptions as the narrow waist</b> — our rpc source accepts anything {queryKey,queryFn,streamFn}','interop','rpc source speaks tRPC contracts natively'],
+['api','oRPC','@orpc/server','1.15.0 · 08/26','5–10 kB','MIT','Contract-first + OpenAPI out; typed SSE iterators; WS; the only MessagePort adapter — store↔worker/webview RPC.','<b>MessagePort adapter pattern</b> (§9.2); contract-first mode for our rpc source','interop','rising fast; solo maintainer risk'],
+['api','ts-rest','@ts-rest/core','3.52.1 · 03/25','—','MIT','Contract-first REST, Zod; “Future of ts-rest” issue open, users migrating to oRPC.','—','avoid','stalled 03/25'],
+['api','Hono RPC (hc)','hono','4.13.5 · —','tiny','MIT','59.6M dl/wk infra-tier; typed fetch from app type; TS perf pain at scale.','typed-fetch inference limits (why contracts beat app-type inference)','interop','source works over hc clients'],
+['api','openapi-fetch stack','openapi-typescript','7.13 / 0.17 · 02/26','~2 kB','MIT','8.4M dl/wk; spec → pure d.ts; compile-time only; TQ bindings.','<b>rest source’s default typing regime</b> (codegen types pass-through)','interop','the typed-REST default'],
+['api','hey-api / orval / kubb','@hey-api/openapi-ts','0.99 / 8.27 / 5.0 · 06–08/26','gen','MIT','Generators: SDK + TanStack hooks + opt-in Zod + MSW mocks.','<b>MSW mock generation</b> precedent for state.mock (§11.5)','interop','state init consumes their specs'],
+['api','Apollo Client 4','@apollo/client','4.2.12 · 08/26','30–40 kB','MIT','v4 modularised, RxJS peer; normalized cache + optimisticResponse; company focus shifted server-side.','<b>normalized-cache tradeoffs</b>: we normalize into collections instead (§8.4)','interop','graphql source coexists; we don’t wrap its cache'],
+['api','urql + gql.tada','@urql/core','6.0.3 · 06/26','12–20 kB','MIT','Exchange middleware model; gql.tada types documents by inference, no codegen.','<b>gql.tada inference</b> for our graphql source typing; exchange composition','interop','cleanest GraphQL client design'],
+['api','Relay 21','relay-runtime','21 · 05/26','30 kB+','MIT','Fragment colocation + compiler; Meta-scale; narrow outside adoption.','fragment-driven data masking ideas','watch','compiler-mandatory workflow'],
+['api','graphql-ws / graphql-sse','graphql-ws','6.2.1 · —','3–4 kB','MIT','Transport standards; SSE variant mirrors the ecosystem-wide SSE shift.','<b>async-iterable-of-deltas + resume cursor</b> as our one realtime abstraction','interop','subscriptions channel of graphql source'],
+['api','RxJS','rxjs','7.8.2 · 02/25','shaken','Apache-2.0','104M dl/wk plumbing; v8 abandoned, 9.0-beta 08/26; Apollo 4 peer.','rx source: Observable&lt;ChangeBatch&gt; adapter','interop','streams for events, signals for state'],
+['api','Effect','effect','3.22 / 4.0-rc · 08/26','large','MIT','HttpApi contract-first server+client+OpenAPI; 4.0 promises 20× streams; whole-paradigm buy-in.','contract source candidate once 4.0 stabilises (Q4/26)','watch','watch item, not a dep'],
+['api','socket.io','socket.io','4.8.3 · 12/25','~15 kB','MIT','v5 stalled since 2022; effectively one maintainer.','—','avoid','native WS + reconnect layer instead'],
+['api','Server functions','Next/TanStack Start','— · 2026','0 client','MIT','Monorepo-inferred RPC with zero client bundle; TanStack createServerFn typed for queries+mutations.','<b>server-actions source</b> (§8.4) treats them as mutators','interop','the newest RPC'],
+
+['transport','birpc','birpc','4.2.0 · 08/26','~0.5 kB','MIT','Typed RPC needing only post/on; no MessagePort transfer requirement.','<b>the transport-driver floor</b> (§9.2)','core','our rpc bridge follows its shape'],
+['transport','vscode-messenger','vscode-messenger','0.6.1 · 05/26','—','MIT','Typed request/notification, per-view + broadcast routing, diagnostics extension.','<b>VS Code driver</b> target when present (§9.2)','interop','optional driver'],
+['transport','Comlink','comlink','4.4.2 · 2024','1.1 kB','Apache-2.0','MessagePort transfer breaks over VS Code postMessage (discussion #2392).','the failure mode our driver design avoids','avoid','for the VS Code path'],
+['transport','penpal','penpal','8.0.1 · —','—','MIT','Window/Worker/Port messengers, promises, transferables.','iframe messenger reference','watch','birpc suffices'],
+['transport','nuqs','nuqs','2.10.1 · 08/26','~4 kB','MIT','Typed search params: Next, RR 6–8, TanStack Router; parser API.','<b>parser API compatibility</b> for url module (§8.6)','protocol','our url parsers are nuqs-compatible'],
+['transport','zundo','zundo','2.3.0 · 11/24','<0.7 kB','MIT','Temporal middleware: partialize, limit, diff, handleSet throttle.','<b>history option surface</b> (limit/partialize/diff) (§4.10)','steal','tiny API worth mirroring'],
+['transport','Redux DevTools','extension','— · —','—','MIT','Ubiquitous; serialises whole state cross-process → freezes (#282, #619, zustand #926).','<b>the anti-pattern</b> our patch-stream devtools avoid (§10)','interop','bridge kept, maxAge+sanitizers default'],
+['transport','TanStack Devtools','@tanstack/devtools','alpha · 2026','strips to 0','MIT','Framework-agnostic shell; event bus; Vite plugin strips prod bytes.','<b>host shell</b> for our panel (§10)','interop','plus VS Code webview host'],
+['transport','jotai-devtools','jotai-devtools','0.14.0 · 05/26','—','MIT','Atom viewer, time-travel snapshots with limit, babel debug labels.','snapshotHistoryLimit UX; debug-label plugin idea','steal','best current in-app panel'],
+['transport','Stately Inspector','@statelyai/inspect','0.7.2 · 06/26','—','MIT','Sequence diagrams + live charts from typed inspection events.','<b>sequence-diagram view</b> over our command log (§10)','steal','richest event-log visualisation'],
+];
+
+// Why each verdict/take: the evidence behind the call, from the research reports.
+const WHY = {
+'alien-signals':'Smallest correct implementation of the converged algorithm (1.9 kB, 0 deps) and the only one exposing <b>createReactiveSystem()</b> to build custom node types; proven at Vue scale (1.2–3.6× perf, −13% memory vs old Vue core). Vendoring keeps zero deps and lets us swap to native Signal later.',
+'Preact Signals':'Its React bridge is the most battle-tested render-tracking mechanism — but issue #652 (transform vs React Compiler, changes silently stop re-rendering) proves render tracking cannot be the <i>default</i>; that conflict is why tracked mode is opt-in.',
+'Vue reactivity':'Most mature standalone deep-proxy runtime and its public API survived a full core swap (3.5→3.6) — evidence that “stable surface over replaceable graph” works; too big (7.8 kB, 1 dep) to be our core.',
+'Solid 2 signals':'mapArray runs the mapping fn once per retained item — the only view-layer answer to R4 — and createProjection/createOptimistic mirror our derived/optimistic design; but 8.6–27.7 kB, RC status, and microtask-batched reads (needs flush()) break the “feels like useState” rule R5.',
+'Svelte 5 runes':'Topped the reactivity benchmarks and proves a compiler can specialise state code per usage — the exact “disappearing framework” we promise — but the runtime is compiler-bound and unsupported standalone, so it can only be an integration target.',
+'signia / @tldraw/state':'getDiffSince is the only shipped mechanism where a derived collection consumes diffs instead of recomputing (add 1 of 5 names → map runs once) — the store-layer answer to R4; signia itself is frozen since 01/24, so we take the idea, not the package.',
+'TC39 Signals':'Still Stage 1 (since 04/24), polyfill says “not for production”, no batch/effect, bottom of benchmarks — unbuildable today; but it is the future native target, which is why our signal interface must stay swappable.',
+'Angular signals':'Solid design that shaped the TC39 text, but buried in @angular/core (~7 MB) and non-extractable — nothing to reuse except the resource() API shape.',
+'Reactively':'The origin of the three-colour push-pull algorithm every 2026 runtime uses; unmaintained as a package (0.0.8, 03/23) — its value is the write-up and the benchmark suite, not a dependency.',
+'Qwik 2 signals':'Only runtime that serialises a live signal graph (resumability) — the hardest SSR problem pre-solved — but inseparable from the $-optimizer and 57 kB; watch for ideas, unusable as a dep.',
+'Zustand':'What Hyper runs today (8 stores): proves the vanilla-store+middleware packaging but its selector+useShallow discipline is exactly the manual-memoization pain R1 removes; module-level create() singletons break tests/SSR (own docs recommend mocking resets).',
+'Jotai':'Its devtools (atom viewer, time travel, debug labels) are the best in-app panel shipped — the UX bar for §10; atom granularity still means composing selectors by hand, and no proxy writes (R2 unmet).',
+'Valtio':'proxy-compare read-tracking is the best implementation of “subscribe to what you read” — we reuse the technique inside a snapshot-returning hook; as shipped, useSnapshot tracks during render, the interior-mutability pattern React Compiler’s lint flags, so it can’t be the foundation.',
+'MobX 7 (+MST/keystone)':'keystone’s snapshot+JSON-patch+serialisable-action tree is the most production-proven “proxy ergonomics with events” — validating our §4.4 design; but 15–65 kB, and observer is the documented React Compiler breakage case (cached JSX, missed renders).',
+'Legend-State v3':'Fastest fine-grained React rendering claims (krausest near-vanilla) and the richest persist+sync plugin set — our performance bar and plugin taxonomy; 2+ years in beta with no devtools and React-only bindings make it a reference, not a bet.',
+'Reatom v1001':'Cause tracking (every update records its cause chain) is the single best debugging idea in the field — adopted as tx.cause for R16; but it explicitly rejects Proxy (R2 unmet), 32 kB, small mostly-RU community, and epoch-numbered API churn.',
+'Effector':'fork()/Scope is best-in-class isolation (overrides values <i>and</i> effect handlers per scope) — the model for our §4.7; no release in ~12 months, SID babel plugin required, devtools stale since 2023.',
+'@xstate/store v4':'At 3.5 kB it already ships typed event→transition stores with .with(undoRedo, persist) and a full inspect() log — the closest existing shape to Danny’s “events for everything”; no proxy writes, no sync layer, so we absorb its surface as our fsm() rather than depend.',
+'XState 5':'Statecharts earn their weight only for genuinely stateful flows; Stately Inspector’s typed event stream and sequence diagrams set the devtools bar; 16.9 kB and a different core model — escalation path, not foundation.',
+'Redux Toolkit':'The proof that a serialisable command log pays off (R7) — and the proof of the costs: Immer freeze overhead measured 37–408× on 10k arrays (#4793), reselect memoization discipline, cross-process devtools freezes; we keep the lesson and the devtools bridge, drop the model.',
+'TanStack Store':'2.1 kB Store/Derived/Effect running inside Router/Form at 29M dl/wk proves the minimal core is enough — size validation for §13; deliberately has no middleware/devtools, so nothing else to take.',
+'Nanostores':'372-byte size-limit CI gates, sideEffects:false, per-atom budgets — the packaging discipline §14 copies; feature-wise (no proxy, no events, no undo) it can’t carry our requirements.',
+'statebus':'Danny’s architecture PoC: substateInterest ref-counting (sources connect only while someone subscribes) and all-reducers-then-all-listeners phase ordering solve real problems and are adopted (§4.5, §4.6); but 0★, single 2024 release, exact react@18.3 pin, dead docs site, and no log/undo/devtools — superseded as a package.',
+'Recoil':'Repo archived read-only 01/25 — only relevant as a migrate-from codemod target.',
+'Immer 11':'produceWithPatches → patches + inverse patches is the currency our whole event/undo/replication design runs on; v11 closed most of the perf gap (+21–26%) but auto-freeze-by-default still dominates big-tree cost — so we emit the same patch format from our own draft proxy instead of depending.',
+'Mutative':'Proves the winning configuration: COW of touched containers, no auto-freeze, RFC 6902 patches — 2.5–83× Immer 10 in its benchmarks; one release in 12 months means we follow the design, not the package.',
+'limu':'Independent confirmation that every proxy rewrite beats frozen Immer ~10×; ~130 dl/wk after 3 years — no adoption, no reason to depend.',
+'structura.js':'Freeze-by-readonly-types (compile-time immutability, zero runtime cost) is worth stealing conceptually; the package calls itself alpha with unstable APIs.',
+'Immutable.js':'HAMT gives O(log32) updates but foreign types + toJS() conversion tax at every boundary — Mextner’s own bad experience, and Immer’s docs note equal speed without conversion; the formal reason our core uses COW of plain objects (§4.4).',
+'TanStack Query':'65M dl/wk and every typed transport now emits its queryOptions — the ecosystem’s narrow waist; adapters that accept {queryKey,queryFn} get tRPC/oRPC/OpenAPI interop free. Document cache only, manual optimistic — which is the gap we fill.',
+'TanStack DB':'Its collection contract (sync begin/write/commit/markReady + handlers + utils) is exactly the pluggable-data-source middleware R11 describes, already implemented by Electric/PowerSync/RxDB/Query adapters — implementing the protocol buys that adapter ecosystem without the beta runtime, the 20 kB+, or the two-reactivity-models problem.',
+'ElectricSQL':'Resumable-offset HTTP reads (CDN-cacheable, no socket tier) and the documented “shared persistent optimistic state” pattern independently validate our two-store overlay (§4.11); reads-only scope means it slots in as a source, not a competitor.',
+'Zero (Rocicorp)':'Mutators — named intent + args, run optimistically, rerun authoritatively, rebased — are the cleanest optimistic model and became our §8.3; but a 232 kB gz client plus mandatory zero-cache infra disqualifies it as a universal-toolkit dependency, and it rejects offline writes by design.',
+'PowerSync':'Its wa-sqlite VFS matrix + shared-worker topology is the best field guide to browser SQLite (§9.3); the sync service is FSL-licensed and required — fine as an optional source, wrong as a core dependency.',
+'LiveStore':'The purest “every change is an event” system running in production shape — its event hygiene rules (versioned past-tense names, clientOnly vs synced, compensating-event undo) are adopted wholesale in §4.6/§4.10; pre-1.0 with breaking minors, ~480 kB with SQLite wasm, devtools behind sponsorship.',
+'TinyBase':'0 deps, 100% coverage, 15+ persisters and pluggable synchronizers — the cleanest persister/synchronizer interface taxonomy, copied in §8.5; its tabular (tables/rows/cells) model can’t express our object-graph slices.',
+'RxDB':'Its generic replication protocol (pull/push/stream + conflictHandler + awaitInSync) distilled years of CouchDB experience — the ack-before-drop rule in §8.3 comes from it; OPFS/IDB/SQLite storages are paid, which caps it at optional-source status.',
+'Yjs':'UndoManager’s trackedOrigins + captureTimeout is the reference for origin-scoped undo under concurrency (§4.10); 25 kB JS (no wasm) makes it the default crdt source; y-indexeddb unmaintained since 2023 — persistence goes through our persister instead.',
+'Automerge 3':'3.0’s columnar runtime cut memory 10× — serious engineering — but 591 kB gz wasm and 1.1 s parse times mean it only ever runs inside the worker host as an optional source; no built-in undo.',
+'Loro':'mergeInterval grouping + onPush cursor capture became our history defaults (§4.10); ~180 kB wasm keeps it an optional source in the worker, not core.',
+'Jazz':'Permission groups + E2EE on CRDTs is a differentiated model worth tracking; 0.x versioning and cloud-centric economics make it premature to integrate.',
+'InstantDB':'Team joined OpenAI, signups closed, cloud shuts down 2027-08-31 — building on it now is building on a countdown.',
+'Replicache':'Officially maintenance mode with a migrate-to-Zero notice; its mutator idea already lives on in Zero (and in our §8.3).',
+'Triplit':'13 months without a release plus AGPL — both a health and a licence blocker for a universal toolkit.',
+'Dexie (+Cloud)':'The proven multi-tab-safe IndexedDB layer with liveQuery — persist/indexeddb follows its patterns (or wraps it); Dexie Cloud shows sync-on-IDB is viable but is a paid silo.',
+'PouchDB / CouchDB':'The ancestor of every pull/push/checkpoint replication protocol — worth knowing, but requires a CouchDB-compatible server and moved to Apache incubation; history, not future.',
+'Convex':'withOptimisticUpdate auto-rerun-and-rollback is great ergonomics to learn from; it’s a hosted reactive backend with no offline/local persistence — a platform choice, not a toolkit layer.',
+'tRPC 11':'5.7M dl/wk incumbent whose v11 moved subscriptions to SSE and re-based itself on TanStack queryOptions — both confirm our transport bets (§8.3, SSE-first); monorepo-only inference and no OpenAPI keep it one source among several, not the model.',
+'oRPC':'The only client with a MessagePort adapter — the published precedent for our store↔worker/webview RPC (§9.2) — plus contract-first with OpenAPI out, which is the richest typing regime for a source; solo maintainer is the counted risk.',
+'ts-rest':'Last publish 03/25 and an open “Future of ts-rest” issue with users migrating to oRPC — adopting a stalling contract library would transfer its risk to us.',
+'Hono RPC (hc)':'59.6M dl/wk makes it unavoidable as a peer, and its documented TS-perf pain on large apps is the argument for contract objects over whole-app type inference in our rpc source.',
+'openapi-fetch stack':'8.4M dl/wk, ~2 kB, types-only — the de facto standard for typed REST against a spec; compile-time-only validation is precisely why collection-boundary runtime validation (§4.12) adds value rather than duplicating.',
+'hey-api / orval / kubb':'All three generate TanStack hooks + MSW mocks from OpenAPI — the working precedent for state init consuming a spec and state.mock emitting MSW handlers (§11.5); churn (hey-api pre-1.0) says consume their output, don’t depend on their internals.',
+'Apollo Client 4':'The normalized cache + optimisticResponse remains GraphQL’s real client value — and 30–40 kB plus an RxJS peer is its price; TanStack DB’s includes-projections show denormalised collections can substitute, so we normalise into collections and refuse to wrap Apollo’s cache.',
+'urql + gql.tada':'gql.tada types GraphQL documents by pure TS inference (no codegen step) — the best-DX typing regime for our graphql source; the exchange middleware model is the cleanest composition design in the GraphQL world.',
+'Relay 21':'Fragment colocation/data masking is conceptually right and Meta-proven, but the mandatory compiler workflow explains its narrow adoption — a warning for how demanding our own compiler is allowed to be.',
+'graphql-ws / graphql-sse':'12.4M dl/wk transport standards; graphql-sse mirrors tRPC’s SSE shift — three ecosystems landing on “async iterable of deltas + resume cursor” is what makes that our single realtime abstraction.',
+'RxJS':'104M dl/wk of plumbing that v8’s abandonment (2022–24) proved is infrastructure, not a data-layer bet; observables stay the right shape for event streams, so the rx source adapts Observable<ChangeBatch> without the core depending on it.',
+'Effect':'HttpApi (schema contract → server + typed client + OpenAPI) is the most complete contract-first stack and a future contract source for us; whole-paradigm buy-in (generators, Layers) and bundle weight rule it out as a dependency until 4.0 stabilises.',
+'socket.io':'v5 roadmap open since 2022, near-single-maintainer, and the SSE shift removed its main use case — native WebSocket + a small reconnect layer covers what remains.',
+'Server functions':'Zero-client-bundle typed RPC built into Next/TanStack Start — the newest transport our users will already have; treating them as mutators (§8.4) means we ride it instead of competing.',
+'birpc':'~0.5 kB and requires only post/on — no MessagePort transfer, which is exactly the constraint VS Code postMessage imposes; that fit is why our transport driver interface follows its shape.',
+'vscode-messenger':'Typed request/notification with per-view + broadcast routing built specifically for the multi-webview topology we run — better to target when present than to reinvent.',
+'Comlink':'Depends on MessagePort transfer, which VS Code postMessage silently drops (discussion #2392, no workaround) — the documented failure our driver design must avoid.',
+'penpal':'Solid iframe/worker messenger with transferables — kept as reference; birpc already covers our needs at a fifth of the surface.',
+'nuqs':'The de facto typed-URL-state standard across Next/RR/TanStack Router — making our url parsers nuqs-compatible means zero migration cost for the largest existing user base (§8.6).',
+'zundo':'<700 B proves undo-middleware surface can be tiny: partialize/limit/diff/handleSet is the whole option set users actually need — mirrored in §4.10.',
+'Redux DevTools':'Its freezes are structural (full-state serialisation across a process per action; #282, #619, zustand #926) — the negative proof for our patch-stream design; kept only as a familiarity bridge with maxAge + sanitizers.',
+'TanStack Devtools':'A framework-agnostic devtools shell whose Vite plugin strips to zero production bytes — hosting our panel there inherits distribution and the strip guarantee instead of building a shell (§10).',
+'jotai-devtools':'Time travel with an explicit snapshotHistoryLimit and babel debug labels — the concrete UX patterns (bounded history, source-mapped names) our panel copies.',
+'Stately Inspector':'Sequence diagrams generated from a typed event stream — the strongest existing visualisation of exactly the command log we emit; we render the same view over our own protocol.',
+};
+
+const tabsEl = document.getElementById('tabs');
+const chipsEl = document.getElementById('chips');
+const layersEl = document.getElementById('layers');
+const q = document.getElementById('q');
+let activeLayer = 'all';
+let activeVerdicts = new Set();
+
+const tabAll = document.createElement('button');
+function makeTabs(){
+  const counts = {};
+  ROWS.forEach(r => counts[r[0]] = (counts[r[0]]||0)+1);
+  tabAll.className = 'tab on'; tabAll.setAttribute('role','tab');
+  tabAll.innerHTML = 'All <span class="n">' + ROWS.length + '</span>';
+  tabAll.onclick = () => { activeLayer='all'; syncTabs(); render(); };
+  tabsEl.appendChild(tabAll);
+  LAYERS.forEach(L => {
+    const b = document.createElement('button');
+    b.className = 'tab'; b.dataset.layer = L.id; b.setAttribute('role','tab');
+    b.innerHTML = L.title + ' <span class="n">' + (counts[L.id]||0) + '</span>';
+    b.onclick = () => { activeLayer = L.id; syncTabs(); render(); };
+    tabsEl.appendChild(b);
+  });
+}
+function syncTabs(){
+  tabsEl.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t===tabAll ? activeLayer==='all' : t.dataset.layer===activeLayer));
+}
+function makeChips(){
+  const colors = {core:'var(--accent)', protocol:'var(--blue)', steal:'var(--accent)', interop:'var(--blue)', watch:'var(--amber)', avoid:'var(--red)', superseded:'var(--grey)'};
+  Object.keys(V).forEach(k => {
+    const c = document.createElement('button');
+    c.className = 'chip'; c.dataset.v = k;
+    c.innerHTML = '<span class="dot" style="background:' + colors[k] + '"></span>' + V[k];
+    c.onclick = () => {
+      activeVerdicts.has(k) ? activeVerdicts.delete(k) : activeVerdicts.add(k);
+      c.classList.toggle('on'); render();
+    };
+    chipsEl.appendChild(c);
+  });
+}
+function rowHtml(r){
+  const [,name,pkg,ver,size,lic,traits,take,verdict,note] = r;
+  const why = WHY[name] || '';
+  return '<tr><td class="name">' + name + '<small>' + pkg + '</small></td>'
+   + '<td class="num">' + ver + '</td><td class="num">' + size + '</td><td class="num">' + lic + '</td>'
+   + '<td class="traits">' + traits + '</td><td class="take">' + take + '</td>'
+   + '<td class="why">' + why + '</td>'
+   + '<td class="verdict"><span class="v ' + verdict + '">' + V[verdict] + '</span>'
+   + (V2[name] ? ' <span class="v ' + V2[name][0] + '">' + V[V2[name][0]] + '</span>' : '')
+   + '<small>' + note + (V2[name] ? ' · ' + V2[name][1] : '') + '</small></td></tr>';
+}
+function render(){
+  const term = q.value.trim().toLowerCase();
+  layersEl.innerHTML = '';
+  LAYERS.forEach(L => {
+    if(activeLayer!=='all' && activeLayer!==L.id) return;
+    const rows = ROWS.filter(r => r[0]===L.id)
+      .filter(r => !activeVerdicts.size || activeVerdicts.has(r[8]) || (V2[r[1]] && activeVerdicts.has(V2[r[1]][0])))
+      .filter(r => !term || (r[1]+' '+r[2]+' '+r[6]+' '+r[7]+' '+r[9]+' '+(WHY[r[1]]||'')).toLowerCase().includes(term));
+    if(!rows.length) return;
+    const sec = document.createElement('section');
+    sec.className = 'layer';
+    sec.innerHTML = '<div class="lhead"><h2>' + L.title + '</h2><span class="spec">spec ' + L.spec + '</span><span class="lnote">' + L.note + '</span></div>'
+      + '<div class="tblwrap"><table><thead><tr><th>Library</th><th>Version</th><th>Size</th><th>Licence</th><th>What it is</th><th>What we take</th><th>Why</th><th>Verdict</th></tr></thead><tbody>'
+      + rows.map(rowHtml).join('') + '</tbody></table></div>';
+    layersEl.appendChild(sec);
+  });
+  if(!layersEl.children.length){
+    layersEl.innerHTML = '<div class="empty" style="display:block">Nothing matches — clear the search or verdict filters.</div>';
+  }
+}
+q.addEventListener('input', render);
+makeTabs(); makeChips(); render();
+</script>

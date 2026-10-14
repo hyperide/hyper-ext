@@ -1,0 +1,13 @@
+PASS: zero / normal
+PASS: zero / -O
+PASS: zero / PYTHONOPTIMIZE=1
+PASS: zero / PYTHONOPTIMIZE=2
+PASS: wrong / normal
+PASS: wrong / -O
+PASS: wrong / PYTHONOPTIMIZE=1
+PASS: wrong / PYTHONOPTIMIZE=2
+PASS: correct / normal
+PASS: correct / -O
+PASS: correct / PYTHONOPTIMIZE=1
+PASS: correct / PYTHONOPTIMIZE=2
+PASS: 12 conformance harness controls (not native verification)

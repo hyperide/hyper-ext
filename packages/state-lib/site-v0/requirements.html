@@ -1,0 +1,106 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Requirements</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="state.css"></head><body><nav class="top"><div class="wrap">
+  <a class="brand" href="index.html">state-lib</a>
+  <a href="index.html">Home</a>
+  <a href="concepts.html">Concepts</a>
+  <a href="../docs/state-landscape.html">Landscape</a>
+  <a class="on" href="requirements.html">Requirements</a>
+  <a href="decisions.html">Decisions</a>
+  <a href="spec.html">Master spec</a>
+  <a href="brief.html">Research brief</a>
+</div></nav>
+<div class="wrap"><header class="page"><p class="kicker">state-lib · docs</p></header><div class="tblwrap"><h1>Requirements — canonical list</h1>
+<p>Consolidated from Mextner's braindumps and decisions (2026-09-01 → 2026-09-03), cleaned up and translated to English. This file is the source of truth for requirement IDs; the master spec traces to them. Status: <strong>spec</strong> = covered by master spec v0.3, <strong>partial</strong> = spec covers part, <strong>backlog</strong> = not yet in spec.</p>
+<h2>Product frame</h2>
+<ul>
+<li><strong>F1.</strong> A universal state toolkit for any project's state — a new, opinionated, universal product, not a Hyper-internal library. Hyper (VS Code extension + SaaS sharing one React codebase) and apps users build in Hyper are the first customers and the acceptance test. <em>(spec §1)</em></li>
+<li><strong>F2.</strong> Disappearing framework: a compiler specialises the library per project usage (Svelte-style); the bundle contains only what the project uses; a CLI scaffolds per project needs. <em>(spec §5)</em></li>
+<li><strong>F3.</strong> Toolkit, not monolith: every capability is an optional, replaceable module; everything works well together and without any part, or with parts swapped for what a project already uses. <em>(spec §1, §3)</em></li>
+</ul>
+<h2>Ergonomics</h2>
+<ul>
+<li><strong>R1.</strong> Global store as convenient as local React hooks; no selectors or manual memoization in the common case. Redux's real pain was not boilerplate but constant memoization — easy bugs, slow, memory-hungry. <em>(spec §4.3)</em></li>
+<li><strong>R2.</strong> Mutable-looking writes over immutable, structurally shared snapshots. <em>(spec §4.2, §4.4)</em></li>
+<li><strong>R3.</strong> Colocation and reuse: state + logic + UI decomposable per page and per reusable "HOX" (high-order compleXes: reducers + selectors + actions + adapters/providers + widgets for a reused UI part — Mextner's Redux-era invention); sliceable into hooks; no <code>_.get(state,'a.b.c')</code>. Hooks proved that uniting ui+state+logic enables easy decomposition; reducers/thunks implicitly relying on state made them hard to test and detached logic from components. <em>(spec §4.8)</em></li>
+<li><strong>R4.</strong> Per-item updates in <code>items.map(&lt;Card/&gt;)</code> / <code>&lt;For&gt;</code> without re-running the loop. <em>(spec §4.5, §6.1)</em></li>
+<li><strong>R5.</strong> Familiar, invisible, universal, fast — no Solid-style special utilities (e.g. prop-splitting) required of the user. <em>(spec §5, §6)</em></li>
+</ul>
+<h2>Model</h2>
+<ul>
+<li><strong>R6.</strong> All state global — including pure UI state and per-keystroke form state. redux-form was a mistake of mechanism, not principle: the mechanism must make this free. <em>(spec §4.9)</em></li>
+<li><strong>R7.</strong> Events for all changes (Danny's requirement). Event sourcing + FSM are the useful concepts inside Redux. <em>(spec §4.4, §4.6)</em></li>
+<li><strong>R8.</strong> Signals as the reactivity primitive. <em>(spec §4.1)</em></li>
+<li><strong>R9.</strong> Structural sharing; memory-conscious. <em>(spec §4.4)</em></li>
+<li><strong>R10.</strong> Undo/redo and optimistic updates as toolkit features. <em>(spec §4.10, §4.11)</em></li>
+</ul>
+<h2>Data / middleware toolkit</h2>
+<ul>
+<li><strong>R11.</strong> Pluggable data-source middlewares with auto-sync: REST, GraphQL, RPC (incl. VS Code postMessage), WebSockets/SSE, RxJS, CRDT, TanStack; combinable heterogeneous sources. <em>(spec §8)</em></li>
+<li><strong>R12.</strong> Local persistence with filtering of what persists (IndexedDB etc.). <em>(spec §8.5)</em></li>
+<li><strong>R13.</strong> Browser history / routing / URL query as store-backed state. <em>(spec §8.6)</em></li>
+<li><strong>R14.</strong> Middlewares (and core where it pays) may use wasm, web workers, service workers. Decision so far: core stays pure JS; wasm only in CRDT/SQLite plugins inside the worker host. <em>(spec §8.8, §9.3)</em></li>
+</ul>
+<h2>Engineering qualities</h2>
+<ul>
+<li><strong>R15.</strong> Easy unit tests for dumb components; per-test store instances. <em>(spec §12.1)</em></li>
+<li><strong>R16.</strong> Easy debugging of user problems — reproducible event logs, recordings. <em>(spec §11.4)</em></li>
+<li><strong>R17.</strong> Easy Storybook stories. <em>(spec §12.2)</em></li>
+<li><strong>R18.</strong> Clean separation: UI / UI logic / business logic. <em>(spec §4.8, §17)</em></li>
+<li><strong>R19.</strong> Framework-agnostic core; adapters for React/Vue/Solid/Svelte/web components; works with SSR, server components, meta-frameworks (front+back in one framework). <em>(spec §6, §7)</em></li>
+<li><strong>R20.</strong> Zero dependencies, tiny bundle, ESM, tree-shaking; "faster than vanilla JS" as aspiration, measured bars as the enforceable form. Old browsers can be dropped. <em>(spec §13, §14)</em></li>
+<li><strong>R21.</strong> Devtools that are pleasant and never freeze — unlike Redux DevTools' UI. <em>(spec §10)</em></li>
+<li><strong>R22.</strong> Modern browsers only. <em>(spec §13)</em></li>
+</ul>
+<h2>Compiler, CLI, tooling</h2>
+<ul>
+<li><strong>R23.</strong> Compiler ("disappearing framework"): per-project specialisation; all React integration modes available, selected per component; event-logging mode per slice. <em>(spec §5)</em></li>
+<li><strong>R24.</strong> <code>state-cli</code>: <code>init</code> (interactive scaffolding), <code>migrate</code>, <code>build</code> (compiler), <code>doctor</code>, <code>bench</code>. <em>(spec §11.2)</em></li>
+<li><strong>R25.</strong> Agent tooling (MCP): search/edit of state definitions, dumping states from a backend into fixtures, generating dev-server mocks from snapshots and recorded event logs. <em>(spec §11.3)</em></li>
+<li><strong>R26.</strong> <code>state.config.yaml</code> records the approach chosen at <code>state init</code> as explicit invariants; <code>state lint</code> guarantees the project uses that one approach (no conflicting or bundle-bloating mixes); <code>state migrate</code> is the fix/normaliser. Invariants change only by explicit edits. <em>(spec §5.1, §11.2)</em></li>
+</ul>
+<h2>Added 2026-09-03</h2>
+<ul>
+<li><strong>R27 (backlog).</strong> Detailed cross-library comparisons: features and performance and other criteria, library vs library. Features are of two kinds — comparable ("better here, worse there") and <em>different-approach</em> features that win in different use cases; both must be represented. With visualizations, and easy navigation between tools, features, and concepts.</li>
+<li><strong>R28 (backlog).</strong> Benchmark suite covering different data types, data volumes, operation kinds, and real-world scenarios — not just microbenchmarks. Results surfaced next to examples (see R38).</li>
+<li><strong>R29 (backlog).</strong> Runtime type checking section and integration: survey the new generation of validators that are many times faster than zod/ajv (candidates to verify: ArkType's JIT set-theory engine, typia's compile-time codegen, TypeBox/valibot), pick the story for validating at collection/action boundaries, and compare honestly.</li>
+<li><strong>R30 (partial — spec §11.2).</strong> <code>state migrate</code> must migrate code <em>from other libraries and approaches</em> to our system, ≥80% automated via AST/LSP, targeting the project's chosen usage variant; whole-project or piece-by-piece; must also switch between our own usage shapes (hooks ↔ multiple stores ↔ single store); must analyse the repository to help choose the target configuration; <strong>every migration offers an optional LLM post-processing step</strong> to finish what AST rules could not.</li>
+<li><strong>R31 (backlog — separate utility, not inside state-cli).</strong> A compile-React tool inspired by (and compared against) React Compiler, which "only removes useMemo" — we should aim higher: optionally compile React code into something Solid-/Qwik-like and super-optimised, with optional runtime type checks injected; components keep using <code>useState</code> while the compiler turns it into global state under the hood — giving full-state testing, user-problem debugging, recordings, and the rest of the global-state benefits without changing component code.</li>
+<li><strong>R32 (backlog).</strong> Danny's database as the query layer: a Datomic-like DB written in Rust compiled to wasm, with a powerful query language. Complex derived state moves from hand-written, slow, test-heavy selectors into declarative queries against it. Datomic's other relevant idea: history/versions as a first-class citizen (Redux never made this convenient even with middleware) — aligns with our patch-log design and should shape it.</li>
+<li><strong>R33 (backlog).</strong> Assess Hyper-side benefits before/while migrating: which whole classes of Hyper bugs the new state engine eliminates; whether it gives the right path to collaborative editing; indexing all code and worktrees; fast editing/navigation; blast-radius view; possible benefits for the style-editing-core master spec.</li>
+<li><strong>R34 (backlog).</strong> Illustrations for all concepts, found/inspired/made in one unified style; validated for comprehensibility by an iterative protocol: show another model/subagent the illustration with minimal context, see what it understands, add hints, iterate and improve the illustration.</li>
+<li><strong>R35 (this package).</strong> All state work lives in <code>packages/state-lib</code>: documentation site with comparisons, specs, accepted decisions, etc. — and the site must be interactive.</li>
+<li><strong>R36 (backlog).</strong> <code>state cli</code> provides documentation search (so agents can help a human get oriented fast); every command works both as a pretty interactive TUI and in machine-readable mode.</li>
+<li><strong>R37 (backlog).</strong> <code>state cli</code> implemented in Python, in the style of the rig ecosystem tools. (Tension to resolve: the analyzer/compiler must live in TypeScript to use the TS compiler API — the likely shape is a Python CLI/TUI shell in rig style driving a TS analyzer service; see DECISIONS.)</li>
+<li><strong>R38 (backlog).</strong> Interactive examples, not just visualisations (animated and clickable): code examples as REPLs with live state visualisation, easy switching between approaches/examples, with perf and bundle-size benchmarks shown in place.</li>
+<li><strong>R39 (backlog).</strong> Devtools comparison across every tool that has them.</li>
+</ul>
+<h2>Decision changes (2026-09-03)</h2>
+<ul>
+<li><strong>D-react-mode.</strong> React tracked mode (<code>useSignals</code>-style render tracking) should be <strong>opt-out, not opt-in</strong>: enabled by default and <em>recommended instead of React Compiler</em>, since our compiler + fine-grained subscriptions aim to make React Compiler unnecessary. Snapshot mode remains the automatic fallback where React Compiler is detected and active. (Supersedes the v0.2 "snapshot is the only inferred mode" default; the config invariant records the choice per project.)</li>
+<li><strong>D-zustand.</strong> Zustand is upgraded from "context/superseded" to a <strong>primary competitor deserving deep comparison</strong>: it has many strong ideas and APIs and many usage variants (actions in the store or not, direct writes vs actions, slices, vanilla, middlewares) — the comparison must cover its variants, not one caricature.</li>
+<li><strong>D-rxjs.</strong> RxJS is not only an API-layer item: compare it as a reactivity system too (push streams vs pull signals), and study operator fusion (e.g. most.js merging consecutive <code>map</code>s into one) as an optimisation our compiler should apply to derived chains.</li>
+<li><strong>D-legend.</strong> Legend-State's fine-grained React primitives deserve a feature-level comparison against Solid and others (are they more convenient/faster?), not just a "watch" verdict.</li>
+</ul>
+<h2>Confirmed formulations</h2>
+<ul>
+<li>Redux ≈ event sourcing + FSM: yes, with nuance — actions are events and the state is their fold (event-sourcing shape), but the events are not the persisted source of truth and reducers are transition functions without explicit states/guards (implicit FSM). Our design makes both aspects explicit and optional: the command/patch logs are real logs, and <code>fsm()</code> is a real state machine.</li>
+</ul>
+<h2>Added 2026-09-03 (second batch)</h2>
+<ul>
+<li><strong>R40 (spec update pending).</strong> <code>state migrate</code> gets <strong>subcommands</strong>, not one command with every option: the described scenarios are entirely different migrations — <code>migrate from &lt;lib&gt;</code> (other library/approach → ours), <code>migrate shape &lt;hooks|multi-store|single-store&gt;</code>, <code>migrate slice &lt;name&gt; --sync &lt;a&gt;→&lt;b&gt;</code> (e.g. auto DB sync → manual handlers), <code>migrate mode</code> (react mode / events mode changes), each with <code>--analyze</code>, partial scope, and the optional <code>--llm</code> post-process step.</li>
+<li><strong>R41.</strong> The push-pull reactivity core must exist as an <strong>isolated, pure, well-tested dependency</strong>. If no library offers that shape (alien-signals is isolated and pure but carries modest test coverage), we publish our own standalone package with a serious test suite. Additionally: benchmark the implementation variants against each other — linked lists vs arrays for dependency storage, dirty flags vs version counters — and either pick the winner or make the variant switchable (statically per build, possibly dynamically per workload) behind the same interface.</li>
+<li><strong>R42 (extends R31).</strong> Our own TS/React compiler direction: an agnostic version plus variants for any JSX and for specific rendering engines (React first). It must understand where reactive boundaries are crossed and inject the required code automatically, so application code looks completely familiar — deep-proxy ergonomics without manual wiring (no special utilities, per R5).</li>
+<li><strong>R43 (research).</strong> wasm state research: can the whole state live in wasm memory — shared memory (SharedArrayBuffer/threads), zero-copy or copy-avoiding schemes, layouts that exploit our immutability/structural sharing; alternatively invent algorithms that give deep-proxy ergonomics without Proxy overhead, or rethink the approach to avoid Proxy entirely. Compile-target variants: js and wasm builds of the core (R46).</li>
+<li><strong>R44.</strong> <code>state build</code> should also <em>optimise</em>: simplify generated code, reduce deoptimisations (hidden-class stability, monomorphism), use asm.js-style patterns where they help, and emit performance hints for developers/agents; where transpilation alone cannot achieve an optimisation, <code>state migrate</code> applies it as a refactor.</li>
+<li><strong>R45.</strong> Devtools name fidelity: React DevTools notoriously fails to show hook names (even the "parse hook names" button usually fails). In our devtools names and internal values must <strong>always</strong> resolve — with zero runtime overhead, via a separate build-time metadata file ("devtools maps", analogous to source maps) shipped next to the bundle.</li>
+<li><strong>R46.</strong> Compile-target variants: js and wasm outputs of the core (see R43).</li>
+<li><strong>R47 (research section).</strong> Offline-first collaboration: the concrete pattern for working without internet, accumulating local edits, and syncing to the backend when connectivity returns — as its own section alongside collaborativity, CRDTs and adjacent approaches (relates to spec §8.7 outbox and §4.11, but needs the full comparative treatment).</li>
+<li><strong>R48 (research).</strong> redux-form post-mortem: analyse in detail why exactly it was slow and inconvenient, and document point-by-point how our design avoids each cause.</li>
+<li><strong>R49 (decision).</strong> typia-style compile-time validation is adopted as the default validation story in our compiler (validators generated from TS types at build time, zero runtime schema cost); runtime schema libraries (zod/ArkType/valibot) remain supported via Standard Schema for interop.</li>
+<li><strong>R50 (research).</strong> ElectricSQL ideas beyond the state toolkit: evaluate its resumable-shape-log model for Hyper itself and for the code factory inside Hyper (today the rig+lmao/axe ecosystem) and the agent-orchestration system — they position it for agent workloads.</li>
+<li><strong>R51 (matrix conventions).</strong> The comparison matrix may assign <strong>multiple verdict badges</strong> per row with per-badge notes (e.g. "steal ideas" + "interop"); PouchDB/CouchDB is reclassified as <em>context</em>; the API layer vs Transport &amp; tooling split needs clearer layer descriptions (API layer = how the app talks to backends: typed requests, caches, subscriptions; Transport &amp; tooling = the plumbing and DX around our own modules: message bridges, URL state, undo helpers, devtools hosts).</li>
+<li><strong>R52.</strong> Immutable.js is not fully discarded: mine and possibly improve its ideas (HAMT node design; it can beat Immer when staying inside its structures and skipping <code>toJS</code>); likewise structura.js ideas (compile-time freezing via readonly types, circular/multi-reference support, moves/transpositions inside drafts) are candidate features.</li>
+</ul></div>
+<footer>Generated from markdown — edit the .md, rerun build.py.</footer></div></body></html>

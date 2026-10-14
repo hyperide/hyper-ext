@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "scope": "native/src/kernel.rs executable source contracts",
+  "sourceSha256": "08527d8bf34c3419fb6adb4ac7553a49aff9d015cc78053478b5ac62b6071af6",
+  "executableSha256": "6032baa65bff877f24f8be137e4b09becff92913f30b0be5e0c59f7e0987d30d",
+  "verifier": "Verus\n  Version: 0.2026.09.06.8dea4a2\n  Profile: release\n  Platform: linux_x86_64\n  Toolchain: 1.98.0-x86_64-unknown-linux-gnu (overridden by environment variable RUSTUP_TOOLCHAIN)",
+  "solver": "Z3 version 4.16.0 - 64 bit",
+  "verifiedItems": 9,
+  "verifierErrors": 0,
+  "conformance": "PASS: 16082 native command results, including 16,000 seeded transactions and edge cases",
+  "negativeProofControls": "PASS: verifier rejected missing-publication\nPASS: verifier rejected missing-revision",
+  "trusted": [
+    "Verus",
+    "SMT solver",
+    "vstd specifications",
+    "Rust compiler and standard library"
+  ],
+  "notProved": [
+    "driver parser and I/O",
+    "compiler correctness",
+    "TS lowering and canonicalisation",
+    "Wasm/FFI",
+    "concurrency or crash durability",
+    "reactivity and framework adapters"
+  ],
+  "evidenceCommit": "44a347ed225e66cfb6fd739a117b15a6159a4803",
+  "ciRun": "https://github.com/hyperide/hyper-saas/actions/runs/34649516983"
+}

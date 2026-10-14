@@ -1,0 +1,162 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Decision log</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="state.css"></head><body><nav class="top"><div class="wrap">
+  <a class="brand" href="index.html">state-lib</a>
+  <a href="index.html">Home</a>
+  <a href="concepts.html">Concepts</a>
+  <a href="../docs/state-landscape.html">Landscape</a>
+  <a href="requirements.html">Requirements</a>
+  <a class="on" href="decisions.html">Decisions</a>
+  <a href="spec.html">Master spec</a>
+  <a href="brief.html">Research brief</a>
+</div></nav>
+<div class="wrap wide"><header class="page"><p class="kicker">state-lib · docs</p></header><div class="tblwrap"><h1>Decision log</h1>
+<p>Format: date · decision · why · status. Supersessions are edits here plus a note, never silent.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Date</th>
+<th>Decision</th>
+<th>Why</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>09-01</td>
+<td>Research → brief → master spec + competitor matrix + build-setup fit check as the working order</td>
+<td>Mextner's plan</td>
+<td>active</td>
+</tr>
+<tr>
+<td>2</td>
+<td>09-01</td>
+<td>Vendor alien-signals' algorithm behind an internal signal interface</td>
+<td>1.9 kB, 0 deps, <code>createReactiveSystem</code>, swappable to native TC39 Signal later</td>
+<td>active</td>
+</tr>
+<tr>
+<td>3</td>
+<td>09-01</td>
+<td>Every change is a transaction emitting RFC 6902 patches + inverse patches; commands (intent) and patches (effect) are separate logs</td>
+<td>Reconciles proxy ergonomics with "events for everything"; one mechanism feeds undo, devtools, replication, persistence, outbox</td>
+<td>active</td>
+</tr>
+<tr>
+<td>4</td>
+<td>09-01</td>
+<td>Implement the TanStack DB collection contract natively AND interop both directions</td>
+<td>Briefing answer: "both — protocol and interop"; buys their adapter ecosystem without their runtime</td>
+<td>active</td>
+</tr>
+<tr>
+<td>5</td>
+<td>09-01</td>
+<td>The state manager is a universal open product (MIT), not Hyper-internal; disappearing-framework compiler; CLI scaffolding</td>
+<td>Briefing answers</td>
+<td>active</td>
+</tr>
+<tr>
+<td>6</td>
+<td>09-01</td>
+<td>Event-log mode is per-slice (<code>commands</code>/<code>patches</code>/<code>both</code>/<code>none</code>), compiled away when unused</td>
+<td>Briefing answer: "any sensible variant; bundle holds only what's used"</td>
+<td>active</td>
+</tr>
+<tr>
+<td>7</td>
+<td>09-02</td>
+<td>v0.2 review defaults: one sync scheduling pipeline; actions bound via <code>useActions</code>/<code>store.actions</code>; core split <code>state</code> + <code>state/collections</code>; remote has one <code>command</code> mode; ALS in <code>state/ssr</code>; no directive insertion by compiler</td>
+<td>43-finding consistency review</td>
+<td>active</td>
+</tr>
+<tr>
+<td>8</td>
+<td>09-02</td>
+<td>~~Snapshot is the only inferred React mode; tracked strictly opt-in~~</td>
+<td>React Compiler flags render tracking as interior mutability</td>
+<td><strong>superseded by #12</strong></td>
+</tr>
+<tr>
+<td>9</td>
+<td>09-03</td>
+<td><code>state.config.yaml</code> fixes invariants at <code>init</code>; <code>state lint</code> enforces single-approach (CI error); <code>state migrate</code> is the fix</td>
+<td>Prevent conflicting/bundle-bloating mixes; explicit invariant changes</td>
+<td>active</td>
+</tr>
+<tr>
+<td>10</td>
+<td>09-03</td>
+<td>Home = <code>hyperide/packages/state-lib</code> with an interactive docs site (comparisons, specs, decisions, REPL examples)</td>
+<td>Mextner</td>
+<td>active</td>
+</tr>
+<tr>
+<td>11</td>
+<td>09-03</td>
+<td>Danny's Rust→wasm Datomic-like DB is the intended query layer replacing complex selectors; history first-class à la Datomic</td>
+<td>Powerful query language &gt; hand-written tested-by-hand selectors; aligns with patch-log design</td>
+<td>active — needs integration spec</td>
+</tr>
+<tr>
+<td>12</td>
+<td>09-03</td>
+<td>React tracked mode is <strong>opt-out</strong>: default on and recommended instead of React Compiler; snapshot mode auto-selected where React Compiler is detected/active; the per-project choice is a config invariant</td>
+<td>Mextner: our compiler + fine-grained subscriptions should replace RC, not defer to it</td>
+<td>active — supersedes #8</td>
+</tr>
+<tr>
+<td>13</td>
+<td>09-03</td>
+<td>Every <code>state migrate</code> run offers an optional LLM post-processing step; migrate covers other-library → ours (≥80% via AST/LSP), partial adoption, and hooks/multi-store/single-store switching with repo analysis</td>
+<td>Mextner</td>
+<td>active</td>
+</tr>
+<tr>
+<td>14</td>
+<td>09-03</td>
+<td>CLI: Python, rig-ecosystem style, TUI + machine mode, built-in docs search. Analyzer/compiler stay TypeScript (TS compiler API); Python shell drives the TS analyzer as a service</td>
+<td>Mextner (Python/rig); technical constraint (tsc API is TS-only)</td>
+<td>proposed — confirm the split</td>
+</tr>
+<tr>
+<td>15</td>
+<td>09-03</td>
+<td>Zustand elevated to primary competitor; RxJS also compared as reactivity (operator fusion → compiler idea); Legend-State primitives get feature-level comparison</td>
+<td>Mextner</td>
+<td>active</td>
+</tr>
+<tr>
+<td>16</td>
+<td>09-03</td>
+<td><code>state migrate</code> becomes a family of subcommands (<code>from</code>, <code>shape</code>, <code>slice</code>, <code>mode</code>), each with <code>--analyze</code>, partial scope, optional <code>--llm</code> step</td>
+<td>Too many fundamentally different migration scenarios for one flag soup</td>
+<td>active</td>
+</tr>
+<tr>
+<td>17</td>
+<td>09-03</td>
+<td>typia-style compile-time validation is the compiler's default validation story; runtime schema libs stay as Standard Schema interop</td>
+<td>Mextner: "нам надо"; zero runtime schema cost fits the disappearing-framework thesis</td>
+<td>active</td>
+</tr>
+<tr>
+<td>18</td>
+<td>09-03</td>
+<td>The interactive docs site in <code>packages/state-lib/site</code> is the canonical home of comparisons/concepts; the Claude artifact stays as a shareable mirror</td>
+<td>Mextner asked for a real site running on his machine</td>
+<td>active</td>
+</tr>
+<tr>
+<td>19</td>
+<td>09-03</td>
+<td>Reactivity core ships as an isolated, well-tested standalone package; internal variants (lists vs arrays, flags vs counters) benchmarked and switchable behind one interface</td>
+<td>Mextner; also de-risks vendoring</td>
+<td>active</td>
+</tr>
+</tbody>
+</table></div>
+<footer>Generated from markdown — edit the .md, rerun build.py.</footer></div></body></html>

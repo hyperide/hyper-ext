@@ -1,0 +1,8 @@
+[
+  {"type":"frame","x":0,"y":0,"width":210,"title":"Intent","text":"Named command\nValidated arguments"},
+  {"type":"arrow","from":[220,65],"to":[320,65],"label":"dispatch"},
+  {"type":"frame","x":330,"y":0,"width":230,"title":"Transaction","text":"Validate → commit\nPatches + inverse patches"},
+  {"type":"arrow","from":[570,65],"to":[670,65],"label":"publish"},
+  {"type":"frame","x":680,"y":0,"width":210,"title":"Subscribers","text":"Committed snapshot\nFine-grained invalidation"},
+  {"type":"table","x":330,"y":180,"rows":[["Result","Owner"],["command","intent / replay"],["patch","change / undo"],["notification","view adapter"]],"widths":[130,240]}
+]

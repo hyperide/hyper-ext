@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "provenance": {
+    "ranAt": "2026-09-04T13:02:40.210Z",
+    "commit": "26a9872b",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/146.0.7680.0 Safari/537.36",
+    "cpu": "Apple M4 Pro",
+    "cores": 14,
+    "note": "Headless Chromium on a developer machine. Absolute values are not comparable across machines; ratios within one run are."
+  },
+  "suites": [
+    {
+      "suite": "R66 — selector pyramid vs incremental maintenance",
+      "rows": [
+        {
+          "name": "recompute · 100 rows",
+          "ms": 0.9
+        },
+        {
+          "name": "incremental · 100 rows",
+          "ms": 0
+        },
+        {
+          "name": "deriveCollection · 100 rows — real primitive · 66 in view",
+          "ms": 0.2
+        },
+        {
+          "name": "recompute · 1,000 rows",
+          "ms": 7
+        },
+        {
+          "name": "incremental · 1,000 rows",
+          "ms": 0
+        },
+        {
+          "name": "deriveCollection · 1,000 rows — real primitive · 534 in view",
+          "ms": 0.6
+        },
+        {
+          "name": "recompute · 10,000 rows",
+          "ms": 117.3
+        },
+        {
+          "name": "incremental · 10,000 rows",
+          "ms": 0.4
+        },
+        {
+          "name": "deriveCollection · 10,000 rows — real primitive · 5856 in view",
+          "ms": 1.9
+        }
+      ]
+    },
+    {
+      "suite": "Signal write → 1 000 subscribers",
+      "rows": [
+        {
+          "name": "state proto signal",
+          "ms": 0
+        },
+        {
+          "name": "zustand store",
+          "ms": 0
+        },
+        {
+          "name": "vanilla callbacks (floor)",
+          "ms": 0
+        }
+      ]
+    },
+    {
+      "suite": "Immutable update: 10 000-item array, change 1 item ×100",
+      "rows": [
+        {
+          "name": "hand-written map+spread",
+          "ms": 5.2
+        },
+        {
+          "name": "immer produce",
+          "ms": 43.6
+        },
+        {
+          "name": "mutative create",
+          "ms": 0.2
+        },
+        {
+          "name": "normalized byId + spread of 1 item — why collections are ids+byId",
+          "ms": 0.1
+        }
+      ]
+    },
+    {
+      "suite": "Proxy read vs plain read (1M reads)",
+      "rows": [
+        {
+          "name": "plain o.a.b.c",
+          "ms": 1.1
+        },
+        {
+          "name": "proxy o.a.b.c (1 trap level)",
+          "ms": 11.3
+        }
+      ]
+    },
+    {
+      "suite": "state proto: 1 000 writes in one transaction",
+      "rows": [
+        {
+          "name": "1000 proxy writes in one action",
+          "ms": 0.3
+        },
+        {
+          "name": "1000 plain object writes (floor)",
+          "ms": 0
+        }
+      ]
+    }
+  ]
+}

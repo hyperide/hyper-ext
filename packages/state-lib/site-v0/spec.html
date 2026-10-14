@@ -1,0 +1,888 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Master spec</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="state.css"></head><body><nav class="top"><div class="wrap">
+  <a class="brand" href="index.html">state-lib</a>
+  <a href="index.html">Home</a>
+  <a href="concepts.html">Concepts</a>
+  <a href="../docs/state-landscape.html">Landscape</a>
+  <a href="requirements.html">Requirements</a>
+  <a href="decisions.html">Decisions</a>
+  <a class="on" href="spec.html">Master spec</a>
+  <a href="brief.html">Research brief</a>
+</div></nav>
+<div class="wrap wide"><header class="page"><p class="kicker">state-lib · docs</p></header><div class="tblwrap"><h1>Master Spec — Universal State Toolkit (working name: <code>state</code>)</h1>
+<p><strong>Status:</strong> draft v0.4 for review (Mextner, Danny). v0.2: 43 review findings folded in (Appendix D). v0.3: <code>state lint</code> + <code>state.config.yaml</code> invariants (R26). v0.4: tracked mode opt-out by default (decision #12), Danny-DB query layer (R32), migrate LLM step + repo analysis (R30), Python TUI CLI + docs search (R36-R37). Requirement IDs now live in packages/state-lib/REQUIREMENTS.md. Follows the research brief <code>2026-09-01-state-management-research-brief.md</code>; requirement ids R1–R22 are defined there, R23–R25 are added here.
+<strong>Date:</strong> 2026-09-01.</p>
+<hr />
+<h2>1. Vision and positioning</h2>
+<p>A <strong>universal state toolkit for any project's state</strong> — not a Hyper-internal library. Three properties define it:</p>
+<ol>
+<li><strong>One small core</strong> (signals + proxy store + patch-emitting transactions + keyed collections) that is framework-agnostic and runs in a browser tab, a Web Worker, a VS Code extension host, Node/Bun on the server, or an edge runtime.</li>
+<li><strong>A disappearing framework.</strong> A compiler (<code>state build</code>, shipped as a Vite/Rollup/esbuild/Babel/SWC plugin) analyses how the project uses the toolkit and emits only what is used: the React integration mode per component, the event-logging mode per slice, only the middlewares that are referenced, no runtime feature-detection. Without the compiler everything still works via plain runtime imports — the compiler is an optimisation and an ergonomics layer, never a requirement.</li>
+<li><strong>A toolkit, not a monolith.</strong> Sync, persistence, history, optimistic updates, URL state, remote replication, devtools, workers are subpath exports with one shared contract each; every one can be omitted or replaced by something the project already uses (TanStack Query/DB, Electric, PowerSync, RxDB, Yjs, nuqs, Redux DevTools).</li>
+</ol>
+<p>Two audiences, one API: Hyper itself (VS Code extension + SaaS sharing React code) and every app scaffolded by Hyper (Next.js, Remix/React Router, Vite, Bun, later Vue/Solid/Svelte). Hyper is the first customer and the acceptance test, not the design centre.</p>
+<p><strong>Non-goals (v1):</strong> a CRDT implementation (plug Yjs/Automerge/Loro); a database (plug SQLite-wasm/IndexedDB via persisters); a router (integrate with TanStack Router/React Router/Next); a form library (forms are a recipe on top of slices, see §12.4); Qwik resumability; browsers without Proxy/ES2022.</p>
+<hr />
+<h2>2. Requirements and traceability</h2>
+<p>R1–R22 from the brief, plus:</p>
+<ul>
+<li><strong>R23 Compiler (disappearing framework).</strong> Per-project specialisation of the library; bundle contains only used features; all three React integration modes available and selected per component; event-logging mode per slice.</li>
+<li><strong>R24 CLI.</strong> <code>state init</code> (interactive scaffolding), <code>state migrate</code> (AST + LSP-driven refactors between modes, e.g. auto-DB-sync → manual control), <code>state build</code> (compiler), plus <code>state doctor</code> and <code>state bench</code>.</li>
+<li><strong>R25 Agent tooling.</strong> MCP server exposing: search/edit of state definitions, dumping states from a backend into fixtures, generating dev-server mocks from snapshots and recorded event logs.</li>
+<li><strong>R26 Invariant enforcement.</strong> <code>state.config.yaml</code> records the approach chosen at <code>state init</code>; <code>state lint</code> guarantees the project uses that one approach (no conflicting or bundle-bloating mixes); <code>state migrate</code> is the fix that normalises violations.</li>
+</ul>
+<p>Traceability matrix (which section satisfies which requirement):</p>
+<table>
+<thead>
+<tr>
+<th>Req</th>
+<th>Sections</th>
+<th>Req</th>
+<th>Sections</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1 no selectors</td>
+<td>§4.3, §5.3, §6.1</td>
+<td>R13 URL/routing</td>
+<td>§8.6</td>
+</tr>
+<tr>
+<td>R2 proxy writes / immutable snapshots</td>
+<td>§4.2, §4.4</td>
+<td>R14 workers/wasm</td>
+<td>§9.3, §8.7, §8.8</td>
+</tr>
+<tr>
+<td>R3 colocation / HOX</td>
+<td>§4.8, §17.3</td>
+<td>R15 tests</td>
+<td>§12.1</td>
+</tr>
+<tr>
+<td>R4 per-item lists</td>
+<td>§4.5, §6.1.4</td>
+<td>R16 debug user problems</td>
+<td>§4.6, §10, §11.4</td>
+</tr>
+<tr>
+<td>R5 familiar/invisible</td>
+<td>§5, §6</td>
+<td>R17 Storybook</td>
+<td>§12.2</td>
+</tr>
+<tr>
+<td>R6 all state global</td>
+<td>§4.9, §12.4, §17.2</td>
+<td>R18 UI/logic separation</td>
+<td>§4.8, §17</td>
+</tr>
+<tr>
+<td>R7 events for everything</td>
+<td>§4.6</td>
+<td>R19 agnostic + adapters + SSR</td>
+<td>§6, §7</td>
+</tr>
+<tr>
+<td>R8 signals</td>
+<td>§4.1</td>
+<td>R20 size/ESM/tree-shaking</td>
+<td>§13, §14</td>
+</tr>
+<tr>
+<td>R9 structural sharing</td>
+<td>§4.4</td>
+<td>R21 devtools</td>
+<td>§10</td>
+</tr>
+<tr>
+<td>R10 undo / optimistic</td>
+<td>§4.10, §4.11</td>
+<td>R22 modern browsers only</td>
+<td>§13</td>
+</tr>
+<tr>
+<td>R11 pluggable sync</td>
+<td>§8</td>
+<td>R23 compiler</td>
+<td>§5</td>
+</tr>
+<tr>
+<td>R12 persistence filtering</td>
+<td>§8.5</td>
+<td>R24 CLI, R25 agent tools</td>
+<td>§11</td>
+</tr>
+<tr>
+<td>R26 invariants/lint</td>
+<td>§5.1, §11.2</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>3. Architecture overview</h2>
+<pre><code>┌──────────────────────────────── build time ────────────────────────────────┐
+│  state-cli:  init · migrate · build · doctor · bench          agent MCP     │
+│                    └──────── shared analyzer (TS program + AST + LSP) ──────┤
+│  compiler plugin (vite/rollup/esbuild/babel/swc): specialises runtime       │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────── run time ──────────────────────────────────┐
+│  adapters/react · vue · solid · svelte · angular · lit · (qwik constraints) │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  toolkit: history · optimistic · persist · url · remote · worker · devtools │
+│           collections/* (REST, GraphQL, RPC, WS/SSE, RxJS, Electric, …)     │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  core: signals graph · store (proxy) · transactions/patches · collections   │
+│        scopes · schema · event bus                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>Layering is a DAG, not strict layers: <code>core</code> imports nothing and has no environment assumptions (no ALS, no Web Locks, no <code>window</code>); <code>collections</code> → core; <code>optimistic</code> → collections; <code>outbox</code> → optimistic + persist; <code>persist/opfs</code> → persist + worker; <code>url</code> → core (+ optional <code>history</code>); <code>remote</code> → core; <code>worker</code> → remote; adapters → core (+ framework as peer; <code>@vue/devtools-api</code> is an optional peer); <code>ssr</code> → core (+ <code>node:async_hooks</code> where available); sources → collections (+ third-party SDK as peer). The compiler and CLI never ship in the runtime bundle; devtools are stripped in production by the compiler and are a no-op export otherwise.</p>
+<hr />
+<h2>4. Core model</h2>
+<h3>4.1 Reactivity graph</h3>
+<ul>
+<li>Algorithm: push-pull, three-state (clean / check / dirty), lazy computeds, dynamic dependency tracking, glitch-free, batched — the design shared by alien-signals, Preact, Svelte 5, Solid 2, Vue 3.6 and the TC39 proposal. Implementation: vendor alien-signals' <code>createReactiveSystem</code> (MIT, ~600 lines) behind an internal interface <code>{ signal, computed, effect, batch, untrack, scope }</code> so it can be replaced by a native <code>Signal</code> or another runtime without touching the rest of the core.</li>
+<li><strong>Scheduling (one pipeline, no exceptions):</strong> every write belongs to a transaction (explicit <code>tx()</code>/action, or an implicit single-write transaction). At commit of the outermost transaction, synchronously and in this order: (1) computeds are marked, (2) <code>effect()</code>s run, (3) framework subscribers are notified (uSES <code>subscribe</code> callbacks, Vue <code>triggerRef</code>, Solid signals, Svelte <code>update</code>), (4) bus listeners (§4.6) are enqueued and drained in a microtask, double-buffered. Reads are always consistent: <code>store.count</code> reflects the last write in the same tick. Synchronous notification is required for controlled inputs (caret/IME correctness, §4.9) and by uSES's consistent-<code>getSnapshot</code> contract. This is the Preact/Vue split, chosen over Solid 2/Svelte 5 microtask-batched <em>reads</em> because it "feels like <code>useState</code>" (R5).</li>
+<li><strong>uSES constraint (React):</strong> updates observed through <code>useSyncExternalStore</code> are rendered synchronously and never time-sliced, even inside <code>startTransition</code> (RFC 0214). Consequences are designed around, not hidden: large <code>&lt;For&gt;</code> lists rely on per-item subscriptions so a write touches one component; 60 fps transients coalesce per frame (§4.9); <code>useOptimisticSlice</code> (§6.1) is a thin bridge because React's <code>useOptimistic</code> is transition-scoped while our overlay (§4.11) is ack-scoped.</li>
+<li>Effects: owned by a scope and disposed with it; <code>effect.pre</code>/<code>effect.post</code> hints let adapters run before/after framework notification.</li>
+<li><strong>Async actions:</strong> an action's transaction ends at its first <code>await</code>; writes after <code>await</code> start new transactions whose <code>cause</code> is the closure-captured action context (so cause chains survive without <code>AsyncContext</code>); in <code>strict</code> mode a write after <code>await</code> outside an explicit <code>tx()</code> is an error.</li>
+<li>Async: computeds may return promises; the core tracks <code>pending</code>/<code>latest</code>/<code>error</code> per async node (Solid 2 style) but v1 keeps this behind <code>computed.async()</code> — plain <code>computed</code> stays sync.</li>
+<li>Equality: default <code>Object.is</code>; per-node <code>equals</code> for structural compare; collections use key identity.</li>
+</ul>
+<h3>4.2 Store and slices</h3>
+<pre><code class="language-ts">const app = createStore({ scope })                          // never a module singleton (R15, R19)
+const todos = defineSlice('todos', {
+  fields: { filter: z.enum(['all','done']) },               // any Standard Schema
+  collections: { items: collection(Todo, { key: 'id' }) },  // collections are declared beside fields, not inside the schema
+  initial: { filter: 'all', items: [] },                    // arrays are accepted as initial collection data
+  actions: (s) =&gt; ({
+    add: (text: string) =&gt; s.items.insert({ id: uid(), text, done: false }),
+    toggle: (id: string) =&gt; { s.items.get(id).done = !s.items.get(id).done },
+  }),
+  // optional, declarative, statically analysable (see §5 and §11.2):
+  history: { scope: 'slice', mergeInterval: 500 },
+  persist: { where: 'indexeddb', include: ['items'] },
+  sync: rest({ url: '/api/todos' }),
+})
+app.use(todos)
+</code></pre>
+<ul>
+<li><strong>Schema-first, declarative definition.</strong> Every option of <code>defineSlice</code> is data (Standard Schema for types, plain objects for policies). This is what makes the compiler, <code>state migrate</code>, the LSP plugin and the agent tools possible from one analyser (§11.1). Runtime-only imperative middleware wrapping remains possible (<code>app.use(plugin)</code>) but is outside what the tooling can reason about.</li>
+<li><strong>Proxy store.</strong> <code>s.items.get(id).done = true</code> inside an action goes through a lazily created per-property signal graph: an object node creates child signals on first tracked read/write; untouched subtrees cost nothing (Svelte/Solid/Vue model). Handler objects are shared and monomorphic; proxies are cached per target in a <code>WeakMap</code>; <code>ownKeys</code>/spread on proxies is discouraged by lint and never used internally on hot paths (Proxy cost numbers in the brief §3.4).</li>
+<li><strong>Definitions vs instances.</strong> <code>defineSlice</code> returns a <em>definition</em> (data + types). Actions are invoked on an <em>instance</em> bound to a store: in UI code via <code>useActions(todos)</code> (React), <code>injectActions</code> (Angular) etc.; outside UI via <code>store.actions(todos).add(...)</code> or <code>store.run(() =&gt; …)</code>. Calling an action on the definition object is a <code>doctor</code> error — this is what keeps "no singletons" true in event handlers.</li>
+<li><strong>Escape hatches:</strong> <code>snapshot(x)</code> → plain structural-sharing copy (frozen in dev builds only); <code>raw(x)</code> → underlying object without tracking; <code>ref(x)</code> → opaque non-reactive value (Monaco models, DOM nodes, class instances); <code>state.map/set</code> for reactive collections; <code>Date</code>/<code>URL</code>/class instances are <code>ref</code> by default (no deep proxying of non-plain objects).</li>
+</ul>
+<h3>4.3 Reads: no selectors by default</h3>
+<p>Three read paths, all equivalent in semantics; the first is the default, the others are chosen per call site by the developer and validated by the compiler (§5.3):</p>
+<ol>
+<li><code>useSlice(todos)</code> — returns an <strong>immutable snapshot</strong>; during render it is a thin tracking proxy that records which paths were read (proxy-compare style); the set of read paths is a <strong>monotonic union over the component's lifetime</strong> (never re-narrowed — under React Compiler a memoised subtree may skip reads in a given render, so re-narrowing would drop subscriptions); on change the hook returns a <em>new</em> snapshot reference (compiler-safe, uSES-based). Proxy <code>get</code> cost is paid only for reads during render; the compiler removes it where it can prove shapes (§5.2). This is the default in React.</li>
+<li><code>todos.$.items</code> — a signal accessor; reading <code>.value</code> inside a tracked context (Solid/Svelte/Vue adapter, or React tracked mode) subscribes fine-grained.</li>
+<li><code>useSlice(todos, s =&gt; s.items.length)</code> — explicit selector for the cases where a derived primitive is wanted; equality <code>Object.is</code> by default, <code>shallow</code> opt-in.</li>
+</ol>
+<p>Derived state: <code>derive(() =&gt; ...)</code> (lazy computed, cached, owned by the slice scope). For collections, <code>derive.collection(source, { filter, sort, map })</code> is <strong>diff-aware</strong> (§4.5) — it consumes patches, not snapshots.</p>
+<h3>4.4 Writes, transactions, patches</h3>
+<ul>
+<li>All writes happen inside a <strong>transaction</strong>. Actions are transactions; a bare write outside an action is an implicit transaction with command <code>{ name: 'set', args: [path, value] }</code> (mode <code>loose</code>, the default everywhere), or rejected (mode <code>strict</code>, a per-slice flag, MobX <code>enforceActions</code>), or allowed but flagged by <code>state doctor</code> (mode <code>warn</code>).</li>
+<li>A transaction produces <code>{ id, ts, cause, command?, patches, inversePatches, meta }</code>. Patches are RFC 6902 JSON Patch operations (<code>add/replace/remove/move</code>) with <strong>string JSON-Pointer paths</strong> (interop with Immer/Mutative tooling, Redux DevTools bridge and any JSON Patch library); array-path helpers are provided for hot paths. They are generated by the draft proxy during the write (Mutative-style: copy-on-write of touched containers, no auto-freeze; freeze in dev only). <strong>Patch generation is enabled only when a consumer is attached</strong> (history, remote, delta persist, devtools, recorder — derived by the compiler from the manifest, or at runtime by subscription count); without consumers a write is a plain signal update. <code>cause</code> links to the transaction/effect/adapter that triggered it (Reatom-style cause chain, R16).</li>
+<li><strong>Structural sharing:</strong> the committed snapshot shares every untouched subtree with the previous one; equality checks by reference are valid on snapshots. Memory budget: one extra object per touched container per transaction, nothing for untouched ones.</li>
+<li>Nested transactions merge into the outermost; <code>tx.rollback()</code> applies inverse patches; a thrown error in an action rolls back automatically.</li>
+</ul>
+<h3>4.5 Collections</h3>
+<p><code>collection(Item, { key })</code> is a first-class node: <code>ids: string[]</code> (ordered, stable identity per change) + <code>byId: Map&lt;id, node&gt;</code>. Semantics:</p>
+<ul>
+<li><code>get(id)</code> returns a per-item node with its own signal subtree; a change in one item notifies only that item's subscribers and the <code>ids</code> signal only on insert/remove/reorder (R4).</li>
+<li>Patches for collections are item-scoped (<code>/items/byId/&lt;id&gt;/done</code>) so remote replication, persistence and history stay O(changed items).</li>
+<li><code>derive.collection</code> maintains filtered/sorted/mapped views <strong>incrementally</strong>: it subscribes to the source patch stream and applies enter/update/exit deltas (<code>ChangeMessage[]</code>, TanStack DB / IVM style) instead of recomputing; a <code>RESET</code> fallback re-runs the full function when a delta cannot be applied (signia's <code>RESET_VALUE</code>). Complexity target: O(log n) per update for sorted views (B-tree/skip list), O(1) for filter/map.</li>
+<li><code>collection.query({ where, orderBy, limit, offset })</code>, indexes, <code>relations</code>/<code>include</code> and joins live in <code>@state/db-ivm</code> (§8.2), not in the core budget; the core ships <code>ids/byId</code>, per-item nodes and diff-aware <code>derive.collection</code> (filter/sort/map) only.</li>
+<li><strong>Query-layer endgame (R32):</strong> complex derived state is intended to move out of hand-written selectors into declarative queries against <strong>Danny's Datomic-like database</strong> (Rust → wasm, powerful query language, history first-class) mounted through the worker host as a query engine over collections; <code>@state/db-ivm</code> is the pure-JS stopgap with the same query surface, so slices can migrate query-by-query. Integration spec TBD with Danny.</li>
+<li><strong>Source lifecycle</strong> (for collections with a source, §8): connect on first subscriber (<code>interest</code> ref-counting, the statebus <code>substateInterest</code> idea), disconnect after <code>gcTime</code> (default 5 min) with no subscribers, <code>staleTime</code> 0 by default, pagination via <code>loadSubset({ cursor | offset, limit, where, orderBy })</code> with <code>hasMore</code>; <code>refetch()</code> and <code>invalidate()</code> on the collection handle.</li>
+</ul>
+<h3>4.6 Event bus: commands and patches</h3>
+<p>Two logs, both optional, both configurable per slice (briefing decision on Q2 "what do we log": any sensible variant, selected per slice, compiled away when unused):</p>
+<ul>
+<li><strong>Command log</strong> — intent: <code>{ name: 'todos.add', args, actorId, ts, txId }</code>. Produced by actions. Serialisable by construction (args validated by the action's schema if declared). This is what sync mutators (§8.3), replay (§11.4) and audit consume.</li>
+<li><strong>Patch log</strong> — effect: the transaction's patches/inverse patches. This is what history (§4.10), remote replication (§9), persistence deltas (§8.5) and devtools time travel consume.</li>
+<li>Modes: <code>events: 'commands' | 'patches' | 'both' | 'none'</code> control which logs are <strong>retained</strong> (default <code>both</code> in dev, <code>commands</code> in production unless a consumer needs patches); <code>none</code> compiles the bus away (§5.2) and is incompatible with <code>history</code>, <code>remote</code>, delta <code>persist</code>, <code>record</code> — <code>doctor</code> reports the conflict. Patch <em>generation</em> is governed separately by consumers (§4.4). <code>transient</code> transactions (§4.9) are excluded from the command log and coalesced in the patch log.</li>
+<li>Listeners: <code>app.on('todos.add', handler)</code>, <code>app.on(patch =&gt; …)</code>, <code>app.on.tx(tx =&gt; …)</code>; listeners run after the transaction commits, may start new transactions (queued, double-buffered — statebus phase ordering: all reducers, then all listeners, then next iteration).</li>
+<li>FSM (R7, "event sourcing + FSM"): <code>fsm({ states, on })</code> is a slice primitive typed like <code>@xstate/store</code> (<code>on: { event: (ctx, ev, enq) =&gt; next }</code>) whose transitions are commands and whose state changes are patches — no separate machine runtime; <code>state migrate</code> can promote a plain slice with <code>status</code> fields into an <code>fsm</code> slice.</li>
+</ul>
+<h3>4.7 Scopes</h3>
+<ul>
+<li><code>createScope()</code> owns signals, effects, slices, subscriptions, and can be disposed. <code>createStore({ scope })</code> per app instance; per request on the server (§7.1); per test (§12.1); per Storybook story (§12.2).</li>
+<li>No module-level singletons anywhere in the toolkit; every export that needs a store takes it explicitly or reads it from the framework context (React Provider, Vue <code>provide</code>, Solid context, Svelte context, Angular DI, Lit Context Protocol).</li>
+<li><code>state/ssr</code> (not core) provides an <code>AsyncLocalStorage</code>-based <code>currentScope()</code> for Node/Bun/edge so server code can call <code>useStore()</code> without threading it. In browsers there is no ALS: the scope comes from framework context, and async actions carry their scope by closure (§4.1). The single sanctioned client-only exception to "no singletons" is the Astro-islands registry (§7.2).</li>
+</ul>
+<h3>4.8 Composition unit: <code>complex</code> (HOX)</h3>
+<p><code>defineComplex(name, { slices, collections, derived, actions, effects, history, persist, events, widgets })</code> bundles a reusable feature: its state, its data sources, its derived views, its policies, and optionally its UI fragments (framework-specific <code>widgets</code> live beside it and import only the complex). A complex is mounted into a store (<code>app.use(complex)</code>) and exposed as one hook / accessor (<code>useComplex(cart)</code>); <code>history.scope: 'complex'</code> groups its slices into one undo stack (§4.10). The compiler splits <code>useComplex</code> reads into per-slice subscriptions (§5.2). Complexes can be nested and parameterised (<code>defineComplex.family(key =&gt; …)</code> for per-page/per-entity instances). This is the formalisation of Mextner's HOX with the <code>_.get(state, 'a.b.c')</code> problem removed by proxies and types.</p>
+<h3>4.9 All state global, including transient UI state</h3>
+<p>The rule "no local state" holds for <strong>ownership</strong>, not for <strong>cost</strong>:</p>
+<ul>
+<li>Any <code>useState</code> candidate becomes <code>useLocal(slice, key?)</code> → a slice node scoped to the component instance but registered in the store under <code>/ui/&lt;component&gt;/&lt;instanceId&gt;</code> (<code>instanceId</code> derives from React <code>useId()</code> — stable across SSR and StrictMode double-mount — or an explicit <code>key</code> for replayable stories); visible to devtools, tests, Storybook, remote replication (opt-in), but flagged <code>transient</code> by default: not persisted, not synced, not in the command log, coalesced in the patch log (one patch per animation frame), grouped in history by <code>mergeInterval</code> (500 ms default).</li>
+<li>Per-keystroke: the write is synchronous inside the event (controlled inputs in React 18 need this for caret/IME correctness); only the one <code>&lt;Input&gt;</code> subscriber re-renders; the event log sees one coalesced patch per frame. This is why the redux-form failure (top-level re-render + serialisation per keystroke) does not recur.</li>
+<li>High-frequency transients (canvas drag at 60 fps) use <code>transient: 'frame'</code> (patches coalesced per frame, history disabled until <code>commit()</code>); the compiler can lower a <code>useLocal</code> with no external readers back to a plain signal that never touches the patch log (§5.2).</li>
+</ul>
+<h3>4.10 History (undo/redo)</h3>
+<p>Patch-based, in the <code>history</code> toolkit module: stacks are <code>slice</code> by default, <code>complex</code> (§4.8) or <code>global</code> optional, <code>custom</code> groups by a <code>historyKey</code>. Each entry stores inverse patches + forward patches + command reference. Origin-scoped (<code>origin: actorId</code>) so collaborative sessions undo only their own changes (Yjs/Loro model); <code>mergeInterval</code> groups rapid transactions; <code>capture()</code> captures selection/cursor for restore (<code>onPush/onPop</code> hooks). Under sync, undo is committed as a <strong>new inverse transaction</strong> (never a rewind) so it stays correct with concurrent remote edits (LiveStore compensating-event rule). Persistable (<code>history.persist: true</code> stores inverse patches in the persister) so undo survives reload.</p>
+<h3>4.11 Optimistic overlay</h3>
+<p>Two-store model (TanStack DB / Electric / Zero): a slice with a <code>sync</code> adapter keeps <strong>synced truth</strong> (immutable, written only by the adapter) and an <strong>optimistic overlay</strong> of pending transactions. Reads see <code>overlay ∘ truth</code>; each row exposes <code>$synced</code>, <code>$origin</code>, <code>$pending</code>. Confirmation drops the overlay entry; failure rolls it back (inverse patches) and emits <code>sync.failed</code>; a truth change rebases pending overlay patches (re-applied on top of the new truth). <strong>Conflict policy:</strong> operations that no longer apply (target removed, <code>test</code> precondition failed) are dropped, the rest of the transaction is kept, the transaction is marked <code>conflicted</code> and <code>sync.conflict</code> is emitted with the dropped ops; actions that cannot tolerate partial application declare <code>optimistic: false</code> and wait for confirmation. This module is what React's <code>useOptimistic</code> maps onto in the React adapter (§6.1).</p>
+<h3>4.12 Schema and types</h3>
+<ul>
+<li>Any Standard Schema library (zod, valibot, arktype, effect/schema) for slice/collection/action schemas; types are inferred end-to-end (<code>Infer&lt;typeof todos&gt;</code>).</li>
+<li>Schema drives: validation in dev, <code>persist</code> migrations (<code>version</code> + <code>migrate</code>), serialisation (<code>dehydrate/hydrate</code>, non-JSON types via codecs), devtools labels, <code>state migrate</code> refactors, agent tooling introspection, and mock generation (§11.5).</li>
+</ul>
+<hr />
+<h2>5. Compiler (disappearing framework)</h2>
+<h3>5.1 Contract</h3>
+<ul>
+<li>Input: the project's TS program + <code>state.config.yaml</code>. Output: rewritten modules plus a generated <code>state.manifest.json</code> (slices, modes, adapters, budgets) used by devtools, <code>doctor</code>, <code>lint</code>, <code>bench</code>, and agent tools.</li>
+<li><strong><code>state.config.yaml</code> is the invariants file</strong>, written by <code>state init</code> and changed only by explicit edits or <code>state migrate</code>: chosen framework(s) and React mode policy, allowed toolkit modules and sources, event/history/persist defaults, strictness level, budgets. It is declarative and diffable (YAML, schema-validated) precisely so that <code>lint</code> can enforce it and a PR reviewer can see an invariant change as a one-line diff. Per-file/per-slice overrides live in code (directives, slice options) but must stay within what the config allows.</li>
+<li>Zero semantic change: everything the compiler emits is expressible with runtime imports; the compiled and uncompiled builds must pass the same test suite (this is a CI gate). This is the invariant that makes "opt-in compiler" true and keeps Storybook/tests/SSR working without it. Two documented, observable exceptions: <code>useLocal</code> lowering (§5.2, disabled when <code>record</code> is in the manifest) and devtools stripping. The compiler never inserts framework directives (<code>"use client"</code>) or moves module boundaries — <code>doctor</code> reports what a human must change.</li>
+<li>Ships as <code>@state/compiler</code> with entry points for Vite/Rollup (<code>vite-plugin</code>), esbuild, Babel, SWC (Next.js/Turbopack), and <code>state build</code> (standalone). The analysis is shared with the CLI (§11.1); only the emit step differs per bundler.</li>
+</ul>
+<h3>5.2 What it specialises</h3>
+<table>
+<thead>
+<tr>
+<th>Analysis</th>
+<th>Emit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Which toolkit modules are referenced</td>
+<td>Only those imports remain; <code>events: 'none'</code> slices get no bus; unused adapters are dropped even if installed</td>
+</tr>
+<tr>
+<td>Per-slice <code>events</code>/<code>history</code>/<code>persist</code>/<code>sync</code> options</td>
+<td>Static plugin wiring instead of runtime option parsing; dead branches removed</td>
+</tr>
+<tr>
+<td><code>useLocal</code> nodes with no external readers (no devtools/remote/<code>record</code> in the manifest)</td>
+<td>Lowered to plain signals (no patch log, no store registration)</td>
+</tr>
+<tr>
+<td><code>useComplex(x)</code> reads</td>
+<td>Split into per-slice/per-collection subscriptions so a complex-level hook costs the same as individual <code>useSlice</code> calls</td>
+</tr>
+<tr>
+<td>Proxy reads on known-shape objects in hot paths (loops, <code>derive.collection</code> mappers)</td>
+<td>Rewritten to direct signal reads (<code>s.items.byId[id].done</code> → <code>sig_done.value</code>), removing Proxy traps</td>
+</tr>
+<tr>
+<td>Per-item render bodies inside <code>map</code>/<code>For</code></td>
+<td>Extracted into keyed item components subscribing to their own node (§6.1.4) when the framework lacks <code>mapArray</code></td>
+</tr>
+<tr>
+<td>React integration mode per component (§5.3)</td>
+<td>Snapshot hook, tracked component, or signal-in-JSX</td>
+</tr>
+<tr>
+<td>Framework detection</td>
+<td>Only the matching adapter is linked; SSR-only code (<code>dehydrate</code>) stripped from client bundles and vice versa</td>
+</tr>
+<tr>
+<td>Devtools</td>
+<td>Stripped in production unless <code>devtools: 'production'</code></td>
+</tr>
+</tbody>
+</table>
+<h3>5.3 React mode selection</h3>
+<p>Per component, decided in this order (explicit annotation &gt; config &gt; inference):</p>
+<ol>
+<li><strong>The default is a config invariant, and out of the box it is <code>tracked</code> (opt-out)</strong> — decision #12: our compiler + fine-grained subscriptions position tracked mode as the <em>recommended alternative to React Compiler</em>, not a guest in its world. <code>state init</code> records the choice in <code>state.config.yaml</code>; projects that prefer the compiler-safe conservative profile set <code>react.mode: snapshot</code>.</li>
+<li><strong>Where React Compiler is detected and active</strong> (<code>babel-plugin-react-compiler</code>, or <code>reactCompiler: true</code> in Next config), tracked and signals modes are automatically demoted to <strong>snapshot</strong> for the components RC will memoise (those not marked <code>"use no memo"</code>) — <code>lint</code> reports the demotions, and running both RC and default-tracked is flagged as a conflicting mix (R26). Because snapshot mode emits ordinary hook outputs (stable references), ordering relative to RC's own pass (uncontrollable under Next/Turbopack) does not matter; this resolves the Preact #652 class of conflicts by construction. <code>'use state:tracked'</code> / <code>'use state:signals'</code> / <code>'use state:snapshot'</code> directives pin single components either way.</li>
+<li><strong>Signals-in-JSX</strong> is <code>experimental</code> in v1: it requires runtime support for text-node binding, is unavailable under React Compiler and under SSR hydration, and is only emitted with the explicit directive.</li>
+<li>The chosen mode is reported in the manifest and by <code>state doctor --explain &lt;Component&gt;</code>.</li>
+</ol>
+<h3>5.4 Non-React frameworks</h3>
+<p>Vue/Solid/Svelte/Angular already have compilers or fine-grained runtimes; our plugin only (a) links the adapter, (b) strips unused toolkit code, (c) rewrites proxy reads to signal reads where it can prove shapes. No render-mode selection needed.</p>
+<h3>5.5 Dev mode</h3>
+<p>In dev the compiler keeps everything (no lowering, no stripping) and injects source-map-accurate labels, <code>cause</code> capture with stack frames, and <code>devtoolsFormatters</code>. Production is where it disappears.</p>
+<hr />
+<h2>6. Framework adapters</h2>
+<p>Every adapter is built on the same four core primitives — <code>subscribe(node|selector, cb)</code>, <code>getSnapshot(node)</code> (cached reference), <code>signal(node)</code> (accessor), <code>scope</code> — so each is small (target ≤ 1.5 kB gz; React includes the uSES shim for 18) and testable against one conformance suite (<code>@state/adapter-tests</code>: subscription, batching, unmount cleanup, SSR hydration, StrictMode double-render, keyed lists).</p>
+<h3>6.1 React (18.3+ and 19)</h3>
+<ol>
+<li><strong>Snapshot mode (default):</strong> <code>useSlice(node)</code> = <code>useSyncExternalStore(subscribeToReadPaths, getSnapshot, getServerSnapshot)</code>; the snapshot records read paths during render, the read set is a monotonic union (§4.3), and the <em>value</em> is a new reference on change, so React Compiler and <code>memo</code> see it. Tearing-safe, concurrent-safe, StrictMode-safe. Actions via <code>useActions(slice)</code>, bound to the provider store.</li>
+<li><strong>Tracked mode (opt-in):</strong> <code>'use state:tracked'</code> → <code>useTracked()</code> opens an effect around render; any signal read subscribes; version-counter store via uSES. Same mechanics as <code>@preact/signals-react</code> <code>useSignals</code>. Rejected under React Compiler unless <code>"use no memo"</code>.</li>
+<li><strong>Signals-in-JSX (experimental, opt-in):</strong> <code>{todos.$.count}</code> as a JSX child binds a text node (no component re-render); <code>&lt;Show when={sig}&gt;</code>. Not available under React Compiler or SSR hydration in v1.</li>
+<li><strong>Keyed lists:</strong> <code>&lt;For each={todos.items}&gt;{(item) =&gt; &lt;Card item={item}/&gt;}&lt;/For&gt;</code> renders one memoised <code>Card</code> per key subscribed to its own node; the parent subscribes to <code>ids</code> only. Works with TanStack Virtual/react-window (<code>ids.slice(range)</code> + per-key subscription). Without the compiler, <code>useItems(coll)</code> returns stable <code>ids</code> and <code>useItem(coll, id)</code> per row.</li>
+<li>React 19: <code>useOptimistic</code> bridges to §4.11 (<code>useOptimisticSlice</code>), <code>use(promise)</code> works on <code>computed.async</code> nodes because promises are cached per node, <code>&lt;Activity&gt;</code> hidden subtrees keep subscriptions (the store never assumes subscribed = visible), server actions are a <code>sync</code> adapter (§8.4).</li>
+<li>Provider: <code>&lt;StateProvider store={store}&gt;</code>; <code>createStore</code> in <code>useState</code> initialiser or router loader — never at module scope.</li>
+</ol>
+<h3>6.2 Vue 3.5 / 3.6</h3>
+<p><code>useSlice</code> returns <code>shallowRef</code> updated by subscription (<code>triggerRef</code> for in-place); <code>toSignal</code> bridges signals to <code>computed</code>. Pinia coexistence: a slice can be exposed as a Pinia store (<code>definePiniaStore(slice)</code>) for teams already on Pinia; devtools timeline integration via <code>@vue/devtools-api</code>. Built against public APIs only (3.6 changed internals).</p>
+<h3>6.3 Solid 1.9 / 2.0</h3>
+<p>Signals map 1:1 (<code>from(node)</code>); object graphs via <code>setStore(reconcile(snapshot, { key }))</code> or, better, direct node signals — Solid's <code>&lt;For&gt;</code> consumes our <code>ids</code> directly. Solid 2 <code>createOptimistic</code>/<code>action</code> map onto §4.11.</p>
+<h3>6.4 Svelte 5</h3>
+<p><code>createSubscriber</code> bridge (<code>svelte/reactivity</code>); store contract (<code>subscribe</code>) for legacy; <code>$state.raw</code> snapshots. Module-level <code>$state</code> export limitation is documented; slices live in context (<code>setContext</code>) in SvelteKit.</p>
+<h3>6.5 Angular 20+</h3>
+<p><code>toSignal(node)</code> and <code>injectSlice(slice)</code> via DI; <code>@ngrx/signals</code> <code>signalStoreFeature</code> adapter for teams on NgRx; zoneless-safe.</p>
+<h3>6.6 Web Components / Lit</h3>
+<p><code>@state/lit</code>: <code>StateController</code> (ReactiveController) + <code>watch()</code> directive for pinpoint updates; store discovery across shadow roots via the Context Community Protocol (<code>context-request</code>), never <code>window</code>. We do not depend on <code>signal-polyfill</code>; if a page also uses <code>@lit-labs/signals</code>, a bridge exposes our signals through its <code>Signal</code> interface.</p>
+<h3>6.7 Qwik</h3>
+<p>Not a v1 adapter. Constraint documented: only serialisable data crosses <code>$</code> boundaries — a snapshot + id-based re-attach recipe is provided.</p>
+<hr />
+<h2>7. Rendering modes: SSR, RSC, streaming, islands</h2>
+<h3>7.1 Universal rules</h3>
+<ul>
+<li>One store per request (<code>createStore</code> inside the request handler / loader / <code>cache()</code>), disposed after render; <code>currentScope()</code> via <code>AsyncLocalStorage</code> on Node/Bun/edge with ALS support.</li>
+<li><code>dehydrate(store, { include, exclude, serializer })</code> → JSON (or superjson/devalue codec) of <strong>raw values only</strong>; derived nodes are recomputed on the client; async nodes serialise as pending promises where the framework supports streaming (React 19 RSC/TanStack Start) or as resolved values otherwise.</li>
+<li>Hydration is <strong>per boundary</strong>: <code>&lt;Hydrate payload&gt;</code> (React) / equivalent applies its payload before its subtree renders, so streamed routes hydrate independently; <code>getServerSnapshot</code> reads from the boundary's dehydrated payload, which is what makes uSES's <code>getSnapshot === getServerSnapshot</code> check pass on the first client render. Subscriptions are never queued; a subscription created inside an un-hydrated boundary reads the payload synchronously.</li>
+<li>No <code>window</code>/<code>localStorage</code>/<code>BroadcastChannel</code> at module init; persisters and remote drivers attach on <code>mount()</code> only.</li>
+</ul>
+<h3>7.2 Framework recipes (shipped as templates in <code>state init</code>)</h3>
+<ul>
+<li><strong>Next.js App Router:</strong> Provider in a client component created per tree; RSC pass initial payload as props; server actions as <code>sync</code> mutators; <code>"use client"</code> boundaries are the developer's (the compiler never inserts them; <code>doctor</code> flags a tracked-mode component imported from a server component); Turbopack via the SWC plugin.</li>
+<li><strong>Remix / React Router 7:</strong> loader returns <code>dehydrate()</code> (promises returned directly for streaming — <code>defer</code> no longer exists in RR7); <code>&lt;StateProvider initial={useLoaderData()}&gt;</code>; actions as mutators.</li>
+<li><strong>TanStack Start:</strong> router context holds the store; <code>HydrationBoundary</code>-style per-route hydration.</li>
+<li><strong>Vite SPA / Bun:</strong> single client store; optional SSR via <code>renderToString</code> + <code>dehydrate</code>.</li>
+<li><strong>SolidStart / SvelteKit / Nuxt:</strong> per-request store in <code>event.locals</code> / <code>load</code> / <code>useState</code>-payload; same dehydrate/hydrate pair.</li>
+<li><strong>Astro islands:</strong> slices exported from a shared module create their store lazily on the client only through an in-page registry — the one sanctioned module-level singleton (client-only, documented as such).</li>
+</ul>
+<h3>7.3 Streaming</h3>
+<p>The store never mutates during render on the server; on the client, per-boundary hydration (§7.1) means later-streamed boundaries hydrate their own slices without touching already-live ones.</p>
+<hr />
+<h2>8. Data layer</h2>
+<h3>8.1 Collection source contract (TanStack DB compatible)</h3>
+<p>A <strong>source</strong> is <code>{ sync, onInsert?, onUpdate?, onDelete?, utils?, getKey }</code> where <code>sync({ begin, write, commit, markReady, markError })</code> pushes batches into the collection's synced truth. This is intentionally the TanStack DB <em>collection options creator</em> contract so that:</p>
+<ul>
+<li>their adapters (<code>queryCollectionOptions</code>, <code>electricCollectionOptions</code>, <code>powerSyncCollectionOptions</code>, <code>rxdbCollectionOptions</code>, <code>trailBaseCollectionOptions</code>) plug into our collections through a thin shim (<code>fromTanStack(options)</code>) that synthesises the objects their handlers expect — <code>{ transaction: { mutations: PendingMutation[] }, collection }</code> with row-level <code>original/modified/changes</code>, <code>utils.awaitTxId/refetch</code>, and the <code>SyncConfig</code> params incl. <code>truncate</code> — by lowering our mutator's patches into <code>PendingMutation</code>s per row; and</li>
+<li>our collections can be handed to TanStack DB as a source (<code>toTanStack(coll)</code>), so a project already on TanStack DB can adopt our store for UI state without migrating its data layer.</li>
+<li>The targeted TanStack DB contract version is pinned in our manifest (initially 0.8.x); a breaking change upstream means a new shim version, never a change to our own contract.</li>
+</ul>
+<p>Rules enforced by the base implementation: subscribe to the live channel <strong>before</strong> the initial fetch and buffer; dedupe by key + version; chunk provider batch limits; <code>markReady</code> gates <code>suspense</code>/<code>isReady</code>.</p>
+<h3>8.2 Live queries and interop</h3>
+<p><code>collection.query(...)</code> compiles to §4.5's incremental engine. Joins across collections and <code>include</code> hierarchies are supported in-core for the common cases; <code>@state/db-ivm</code> (optional) swaps in a full differential-dataflow engine (d2ts) for complex joins/aggregates and is the bridge to TanStack DB live queries.</p>
+<h3>8.3 Mutations and sync-back</h3>
+<ul>
+<li>Actions on a synced collection become <strong>mutators</strong>: <code>name + validated args</code> are sent (not diffs), executed optimistically locally (§4.11), re-executed by the server (which may diverge), and confirmed by an ack carrying a monotonic version/txid. The overlay entry is dropped only on ack (<code>awaitTxId</code>/<code>awaitMatch</code>/refetch) — the flicker-free invariant.</li>
+<li>Handlers <code>onInsert/onUpdate/onDelete</code> are the escape for REST-style per-row writes; <code>optimistic: false</code> waits.</li>
+<li>Retry policy is a per-source option (<code>retry: { attempts, backoff, jitter, nonRetriable }</code>); default: no retry (explicit is better than surprising). When the <code>outbox</code> (§8.7) is enabled it owns retry and the source's <code>retry</code> is ignored (<code>doctor</code> warns if both are set).</li>
+</ul>
+<h3>8.4 Built-in sources (<code>@state/collections/*</code>)</h3>
+<p><code>rest</code> (fetch + polling/ETag; pagination <code>loadSubset</code>), <code>query</code> (wraps TanStack Query for teams on it), <code>graphql</code> (queries + <code>graphql-ws</code> subscriptions), <code>rpc</code> (typed contract over a transport — tRPC/oRPC/custom; serves SaaS over HTTP/SSE and VS Code over MessagePort with the same contract), <code>ws</code>/<code>sse</code> (raw streams), <code>rx</code> (any <code>Observable&lt;ChangeBatch&gt;</code>), <code>server-actions</code> (Next/Remix actions as mutators), <code>electric</code>, <code>powersync</code>, <code>rxdb</code> (via their TanStack adapters), <code>crdt</code> (Yjs/Automerge/Loro doc → collection with <code>origin</code> mapping for history), <code>local</code> (in-memory), <code>storage</code> (localStorage/IndexedDB cross-tab, no server).</p>
+<h3>8.5 Persistence</h3>
+<p><code>persist</code> is a per-slice/collection <strong>policy</strong>: <code>{ where: 'memory'|'localStorage'|'indexeddb'|'opfs-sqlite'|'vscode'|custom persister, include, exclude, transform, version, migrate, ttl, buster, debounce, skipHydration }</code>. Persisters implement <code>{ load, save(patches|snapshot), subscribe? }</code>; delta persisters receive patches, snapshot persisters receive <code>snapshot()</code>. Multi-tab: IndexedDB persister is multi-tab safe; OPFS-SQLite requires the worker host (§9.3) and leader election. <code>transient</code> nodes never persist unless <code>include</code>d explicitly.</p>
+<h3>8.6 URL and routing</h3>
+<p><code>url</code> module: typed search-param parsers (nuqs-compatible parser API), <code>push|replace</code> policy, throttling, <code>updateFromSource</code> to avoid cycles; router bindings for TanStack Router (<code>validateSearch</code> schema shared with the slice), React Router/Remix, Next App Router, Vue Router, SvelteKit. Browser history entries can carry a <code>historyKey</code> so back/forward maps onto §4.10 history groups when desired (opt-in).</p>
+<h3>8.7 Offline outbox</h3>
+<p><code>outbox</code> module (port of <code>@tanstack/offline-transactions</code> semantics): persist the command before dispatch (IndexedDB, localStorage fallback), FIFO replay on reconnect, exponential backoff + jitter, <code>NonRetriableError</code>, idempotency keys, leader election via Web Locks so one tab drains; <code>workbox-background-sync</code> integration as progressive enhancement only (Chromium-only API).</p>
+<h3>8.8 wasm and workers in the data layer</h3>
+<p>The core and every toolkit module are pure single-threaded JS. wasm appears only inside plugins that need it — <code>crdt</code> (Automerge/Loro wasm; Yjs is JS), <code>persist/opfs-sqlite</code> (SQLite wasm) — and those plugins run in the <code>worker</code> host (§9.3) so wasm instantiation and I/O never block the main thread. No SharedArrayBuffer/COOP/COEP requirement anywhere in the toolkit (brief §3.4).</p>
+<hr />
+<h2>9. Remote replication and topologies</h2>
+<h3>9.1 Protocol</h3>
+<p><code>remote</code> module replicates a slice between one <strong>leader</strong> and N <strong>replicas</strong>. v1 has exactly one mode: <code>command</code> — replicas forward commands to the leader, the leader applies them and broadcasts patches <code>{ seq, txId, patches, cause, origin }</code>; replicas apply them as <code>origin: 'remote'</code> transactions (excluded from local history by default). Replicas may apply a command optimistically (§4.11 overlay) and reconcile on the leader's patch carrying the same <code>txId</code> — this is what removes Hyper's <code>mergeInitState</code> race: a replica's local selection is an overlay entry until the leader's echo confirms or supersedes it, so a stale <code>state:init</code> can never wipe it. Peer-to-peer patch exchange without a leader is out of scope (no clock to order patches); multi-tab always elects a leader (§9.3). Full wire protocol in Appendix B.</p>
+<h3>9.2 Transport drivers</h3>
+<p><code>{ post(msg), onMessage(cb), close() }</code> with drivers: VS Code webview (<code>acquireVsCodeApi().postMessage</code> / <code>webview.postMessage</code>, JSON only, binary as separate <code>ArrayBuffer</code> messages), <code>BroadcastChannel</code>, <code>MessagePort</code>/Worker, <code>chrome.runtime</code> (browser extensions), WebSocket, and <code>vscode-messenger</code> (typed request/notification + broadcast) when present. Payload budget: ≤ 10 KiB per steady-state patch message, larger patch sets chunked per frame; snapshots/resync payloads are sent whole up to 4 MB (VS Code JSON limit headroom) and chunked at 256 KiB above that without frame pacing.</p>
+<h3>9.3 Topologies</h3>
+<ul>
+<li><strong>VS Code:</strong> extension host = leader (formalising today's <code>StateHub</code>); each webview = replica; <code>retainContextWhenHidden</code> not required. A hidden, non-retained webview is <em>destroyed</em>, so the leader keeps a bounded buffer per replica (default 500 patches / 256 KiB) only for the <code>retainContextWhenHidden</code> case; a re-created webview sends <code>hello { lastSeq }</code> (its <code>lastSeq</code> kept in <code>vscode.setState</code>) and receives either <code>resync(fromSeq)</code> patches if still buffered or a full <code>snapshot</code>. <code>vscode.setState</code> otherwise receives only the small persisted UI slice.</li>
+<li><strong>SaaS single tab:</strong> no remote; optional <code>worker</code> host runs collections + persisters + outbox in a dedicated Worker (patches over MessagePort) to keep the main thread free.</li>
+<li><strong>SaaS multi-tab (opt-in):</strong> <code>worker: 'shared'</code> runs the leader in a SharedWorker (no election needed — the browser guarantees a single instance); where SharedWorker is unavailable (Chrome Android) the fallback is a dedicated Worker per tab with a Web Locks-elected leader tab; UI slices replicate in <code>command</code> mode over <code>BroadcastChannel</code>/<code>MessagePort</code>. Single-tab is the default.</li>
+<li><strong>Server-authoritative (Electric/Zero/PowerSync):</strong> the collection source is the leader; <code>remote</code> is not involved.</li>
+</ul>
+<hr />
+<h2>10. Devtools</h2>
+<ul>
+<li>Everything the devtools show comes from the <strong>transaction stream</strong> (§4.4) plus the manifest (§5.1). No whole-state serialisation per action; state is inspected lazily by path (<code>inspect(path)</code> returns a handle; expanding a node fetches its snapshot). Diffs are computed from patches, in a Worker for large transactions.</li>
+<li>Panels: transaction timeline with cause chains (Reatom idea) and command/patch toggle; slice/collection tree with virtualised rendering; time travel by replaying patches (with <code>transient</code> filtering and sampling for high-frequency events); subscription map (which components subscribe to which paths — the answer to "why did this re-render"); sync/outbox status; history stacks; replication seq/lag per replica.</li>
+<li>Hosts: TanStack Devtools shell plugin (in-app, framework-agnostic, stripped by their Vite plugin), a VS Code webview panel (reuses the same UI over the §9 transport — this is Hyper's native home for it), a Redux DevTools bridge for familiarity (<code>maxAge</code> + sanitisers on by default), and <code>window.devtoolsFormatters</code> for console inspection of proxies/nodes.</li>
+<li>Protocol is versioned; history capped by bytes, not count.</li>
+</ul>
+<hr />
+<h2>11. CLI, analyser, agent tooling</h2>
+<h3>11.1 Shared analyser</h3>
+<p>One package (<code>@state/analyzer</code>) wraps the TypeScript program: it finds <code>defineSlice/defineComplex/collection</code> call sites, extracts their declarative options into the manifest, resolves which toolkit modules and adapters are referenced, classifies components by read pattern (§5.3), and exposes AST edit operations (add/remove/replace slice options, rename slices, move fields, extract complexes). The compiler, the CLI, the LSP plugin and the MCP server are all thin clients of it — the TypeScript language-service model.</p>
+<h3>11.2 <code>state-cli</code></h3>
+<ul>
+<li><code>state init</code> — interactive: detects framework/bundler/package manager, asks which toolkit parts to enable (sync source, persistence, history, URL, devtools host, worker topology), <strong>records every choice as an invariant in <code>state.config.yaml</code></strong>, installs adapter packages, adds the compiler plugin and <code>state lint</code> to CI, scaffolds a first complex from a template (or from an existing REST endpoint / OpenAPI / GraphQL schema → typed collection).</li>
+<li><code>state migrate &lt;from&gt; &lt;to&gt;</code> — planned, implementation pending under HYP-1457; targets ≥80% automation via AST + LSP; <code>--analyze</code> first inspects the repository and recommends the target configuration; migrations run whole-project or per-directory/per-slice; every run offers an <strong>optional LLM post-processing step</strong> (<code>--llm</code>) that finishes what AST rules could not, constrained to the diffs the codemod could not complete and reviewed as a normal diff. Also switches between our own usage shapes (<code>--shape hooks|multi-store|single-store</code>). Codemods driven by the analyser, e.g. <code>--slice todos --sync electric --to manual</code> (removes the source, generates explicit <code>onInsert/onUpdate/onDelete</code> typed handler declarations requiring manual implementation of write logic the codemod cannot infer), <code>--events none --to both</code>, <code>--from zustand|jotai|valtio|redux-toolkit|react-query</code> (adoption codemods: Zustand store → slice, RTK slice → slice with <code>events: 'commands'</code>, React Query <code>useQuery</code> → <code>rest</code> collection, plain <code>useState</code>+<code>useEffect</code>+<code>fetch</code> hooks → collection — the <code>useGitHubRepositories</code> pattern), <code>--react-mode tracked --to snapshot</code>. Each codemod is reversible where information is not lost, and every one prints what it could not migrate automatically.</li>
+<li><code>state build</code> — the compiler as a standalone step (for bundlers without a plugin) and for producing the manifest.</li>
+<li><code>state lint</code> — <strong>enforces the invariants in <code>state.config.yaml</code></strong>: exactly one approach per axis is in use (no mixing tracked and snapshot modes outside configured globs, no second store library creeping in, no source type outside the allowed list, no ad-hoc <code>fetch</code>+<code>useState</code> data fetching where collections are mandated, no toolkit module imported that the config doesn't allow — the mixes that conflict semantically and bloat the bundle). Violations are errors in CI; <code>state migrate</code> is its <code>--fix</code>: normalising a violation means running the corresponding codemod (e.g. rewrite a stray Zustand store into a slice, rewrite a hand-rolled fetch hook into a collection). Ships as both a CLI command and an ESLint plugin (<code>@state/eslint-plugin</code>) so violations surface in the editor.</li>
+<li><code>state doctor</code> — advisory checks (warnings, not gate): module-level singletons, proxies in hot loops, <code>ownKeys</code>/spread on proxies, React Compiler conflicts (tracked mode under compiler), missing <code>getServerSnapshot</code>, <code>transient</code> state persisted, sync handlers resolving before ack, unbounded history; <code>--explain &lt;Component|slice&gt;</code> prints the compiler's decisions. Rule of thumb: <code>lint</code> = "this violates what this project chose", <code>doctor</code> = "this is probably a mistake anywhere".</li>
+<li><code>state bench</code> — runs the §13 budgets against the real project: bundle size per entry, js-reactivity-benchmark scenarios on the project's own slices, krausest-style list ops on its largest collection, <code>postMessage</code> payload sizes, and fails CI on regression.</li>
+<li><code>state lsp</code> — language-service plugin: hover shows a slice's modes/sources, code actions call <code>migrate</code> codemods, diagnostics from <code>doctor</code>.</li>
+<li><code>state docs &lt;query&gt;</code> — full-text + semantic search over the toolkit docs and the project's manifest, for humans and agents (R36).</li>
+<li><strong>CLI shape (R36/R37):</strong> every command runs as an interactive TUI (rig-ecosystem style) and in machine mode (<code>--json</code>); the CLI shell is Python in the rig style, driving the TypeScript analyzer/compiler as a long-lived service over JSON-RPC — the analyzer must be TS (TS compiler API), the UX layer need not be (decision #14, split to confirm).</li>
+</ul>
+<h3>11.3 Agent MCP server (<code>state mcp</code>)</h3>
+<p>Tools exposed over MCP (usable from Hyper's own MCP setup, Claude Code, Cursor, etc.):
+- <code>state.search({ query })</code> / <code>state.describe({ slice })</code> — manifest + types + sources + which components read what.
+- <code>state.edit({ op, target, args })</code> — the analyser's AST operations (add field, change source, enable history, extract complex), returning a diff.
+- <code>state.dump({ collection, source: 'backend'|'dev'|'snapshot', filter })</code> — pulls data through the collection's <code>sync</code> into a fixture file (JSON/TS), redacting by schema annotations (<code>sensitive: true</code>).
+- <code>state.mock({ collections, from: fixture|recording })</code> — generates a dev-server mock (MSW handlers or a <code>local</code> source) from fixtures or from a recorded session's command log (§11.4), including latency/failure injection.
+- <code>state.replay({ recording })</code> / <code>state.record()</code> — drive the store from a recorded transaction stream in a headless scope for reproduction and tests.
+- <code>state.doctor()</code> / <code>state.bench()</code> — same as CLI, structured output.</p>
+<h3>11.4 Recordings (debugging user problems, R16)</h3>
+<p><code>record()</code> captures the transaction stream (commands + patches, transients sampled), the manifest hash, and adapter events (sync acks, failures), with schema-driven redaction. A recording replays into a fresh scope (<code>replay()</code>), in tests, in Storybook, or in devtools time travel. Hyper attaches recordings to bug reports and telemetry (PostHog already in the stack) behind consent.</p>
+<h3>11.5 Mocks and fixtures</h3>
+<p>Fixtures are typed by the collection schema; <code>state.mock</code> and <code>state init --mock</code> generate MSW handlers (browser + Node) or a <code>local</code> source pre-filled from fixtures, with <code>faker</code>-style generators derived from the schema for empty collections.</p>
+<hr />
+<h2>12. Testing, Storybook, forms</h2>
+<h3>12.1 Unit and integration tests</h3>
+<ul>
+<li><code>createTestStore(complexes, { initial, sources: mocks, now })</code> gives an isolated scope per test; no module singletons means no reset hooks. Dumb components are tested by rendering them with a <code>&lt;StateProvider store={testStore}&gt;</code> and asserting on snapshots or emitted commands (<code>expect(store.commands).toContainEqual(...)</code>) — actions and UI can be tested in isolation because logic lives in slices/complexes, not in components (R15, R18).</li>
+<li><code>store.tick()</code> drains the bus listener queue (effects and framework notification are already synchronous, §4.1); fake timers cooperate with <code>mergeInterval</code>/debounce.</li>
+<li>Property/replay tests: any recording is a test input.</li>
+</ul>
+<h3>12.2 Storybook</h3>
+<p><code>withState(complexes, { initial | recording })</code> decorator creates a store per story; <code>argTypes</code> map onto slice fields; a Storybook addon shows the transaction stream. Stories can start from a recording at a given transaction (R17).</p>
+<h3>12.3 Contract tests</h3>
+<p>Adapter conformance suite (§6), source conformance suite (buffer-before-fetch, ack-before-drop, retry policy), persister suite, transport suite. Third-party integrations run the same suites.</p>
+<h3>12.4 Forms</h3>
+<p>A recipe, not a module: a form is a <code>useLocal</code> slice with schema validation and <code>transient</code> keystroke nodes, <code>commit()</code> producing one command; history groups per field; TanStack Form/Standard Schema interop for validation.</p>
+<hr />
+<h2>13. Performance and size budgets</h2>
+<p>Measured, CI-gated (<code>state bench</code>, size-limit). Numbers are targets for v1 GA; the spike (§18) must land within 1.5× of them or the architecture is revisited.</p>
+<table>
+<thead>
+<tr>
+<th>Budget</th>
+<th>Target</th>
+<th>Reference point (brief §3)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>state</code> core (signals + proxy store + tx/patches + scopes + bus), min+gz</td>
+<td>≤ 4 kB</td>
+<td>Valtio 5.8, Zustand 3.5, alien-signals 1.9</td>
+</tr>
+<tr>
+<td><code>state/collections</code> (ids/byId, per-item nodes, diff-aware derive)</td>
+<td>≤ 3 kB</td>
+<td>—</td>
+</tr>
+<tr>
+<td>React adapter</td>
+<td>≤ 1.5 kB</td>
+<td><code>@preact/signals-react</code> 6.1 incl. uSES shim</td>
+</tr>
+<tr>
+<td>Each toolkit module (history, persist, url, remote, optimistic)</td>
+<td>≤ 2 kB</td>
+<td>zundo 0.7, nuqs core</td>
+</tr>
+<tr>
+<td>Minimal app, <strong>uncompiled</strong> (core + React adapter, one slice, no collections)</td>
+<td>≤ 6 kB</td>
+<td>must hold without the compiler (§1)</td>
+</tr>
+<tr>
+<td>Minimal app, compiled</td>
+<td>≤ 4.5 kB</td>
+<td>compiler strips unused paths</td>
+</tr>
+<tr>
+<td>Runtime deps</td>
+<td>0 (peers only for adapters/sources)</td>
+<td>nanostores, alien-signals</td>
+</tr>
+<tr>
+<td>js-reactivity-benchmark (17 scenarios)</td>
+<td>≥ Preact on every scenario</td>
+<td>milomg bench; Zustand/Valtio are not in it</td>
+</tr>
+<tr>
+<td>React store microbench (1k subscribed components, 1 write; 10k-row collection, select 1 row; 100 keystrokes into one input)</td>
+<td>≤ 1.0× Zustand and ≤ 1.0× Valtio on each</td>
+<td>new bench, baselines recorded before the spike</td>
+</tr>
+<tr>
+<td>krausest: swap rows / replace all rows / partial update (every 10th)</td>
+<td>≤ Legend-State (≈ vanilla) with compiler <code>&lt;For&gt;</code>; ≤ 1.3× Legend without</td>
+<td>brief §5.4; create-1k is React-bound, not a store bar</td>
+</tr>
+<tr>
+<td>Untouched subtree cost on write</td>
+<td>0 allocations</td>
+<td>structural sharing</td>
+</tr>
+<tr>
+<td>Per-transaction overhead (patch generation)</td>
+<td>≤ 2× a hand-written immutable update; ≤ Mutative no-freeze</td>
+<td>Immer 11 ≈ 2–3× handwritten</td>
+</tr>
+<tr>
+<td>Proxy read on hot path after compiler</td>
+<td>0 Proxy traps (rewritten to signal reads)</td>
+<td>V8 Proxy get ≈ 13×</td>
+</tr>
+<tr>
+<td><code>postMessage</code> patch message</td>
+<td>≤ 10 KiB default, chunked above</td>
+<td>Surma 16 ms frame budget</td>
+</tr>
+<tr>
+<td>Devtools overhead (dev)</td>
+<td>≤ 5 % on the transaction path; 0 in prod</td>
+<td>stripped</td>
+</tr>
+<tr>
+<td>Memory per collection item</td>
+<td>≤ 1 lazily-created signal per read property + 1 node object</td>
+<td>Svelte/Solid lazy model</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Spike bars (measurable without the compiler, §18):</strong> uncompiled minimal app ≤ 6 kB; js-reactivity-benchmark ≥ Preact; React microbench ≤ 1.0× Zustand/Valtio; krausest swap/replace ≤ 1.3× Legend; zero allocations on untouched subtrees (heap snapshot diff); <code>postMessage</code> patch messages ≤ 10 KiB in the VS Code replacement. Compiler-dependent bars are re-measured in weeks 7–10.</p>
+<p>Browser floor (R22): last 2 versions of Chromium/Firefox/Safari; Node ≥ 20, Bun ≥ 1.2; Proxy, WeakRef, <code>structuredClone</code> assumed everywhere; Web Locks/OPFS/SharedWorker are browser-only and optional with fallbacks; <code>AsyncLocalStorage</code> is server-only (<code>state/ssr</code>).</p>
+<hr />
+<h2>14. Packaging</h2>
+<ul>
+<li>One npm scope, one core package with subpath exports: <code>state</code> (core), <code>state/collections</code>, <code>state/react</code>, <code>state/vue</code>, <code>state/solid</code>, <code>state/svelte</code>, <code>state/angular</code>, <code>state/lit</code>, <code>state/history</code>, <code>state/persist</code>, <code>state/persist/indexeddb|opfs|vscode</code>, <code>state/url</code>, <code>state/url/tanstack-router|react-router|next</code>, <code>state/remote</code>, <code>state/remote/vscode|broadcast|worker|chrome</code>, <code>state/worker</code>, <code>state/optimistic</code>, <code>state/outbox</code>, <code>state/collections/rest|graphql|rpc|ws|rx|electric|powersync|rxdb|crdt|server-actions</code>, <code>state/devtools</code>, <code>state/testing</code>, <code>state/ssr</code>. Separate packages only for build-time tools (<code>@state/compiler</code>, <code>@state/cli</code>, <code>@state/analyzer</code>, <code>@state/mcp</code>, <code>@state/storybook</code>) and heavy optional engines (<code>@state/db-ivm</code>).</li>
+<li><code>"type":"module"</code>, ESM-only, <code>"sideEffects": false</code>, <code>/*#__PURE__*/</code> on every factory, no barrel re-exports of side-effectful modules, <code>exports</code> map with <code>types</code> conditions, <code>development</code>/<code>production</code> conditions for devtools/no-op swaps.</li>
+<li>size-limit per entry in CI; API extractor for public types; conformance suites published for third-party adapters/sources.</li>
+<li>Versioning: semver from 0.x with a stability tag per module (<code>stable | preview | experimental</code>), mirroring TanStack/Solid-primitives; compiler manifest version pinned to runtime version.</li>
+<li>Licence: MIT (interop with the whole ecosystem depends on it; FSL/AGPL would kill adoption for a universal library).</li>
+</ul>
+<hr />
+<h2>15. Migration plan for Hyper</h2>
+<p>Ordered so each step is independently shippable and the acceptance test is Hyper's own product.</p>
+<ol>
+<li><strong>Spike (2 weeks, §18, Appendix C):</strong> core + collections + React adapter (snapshot + tracked) + <code>remote/vscode</code> + <code>collections/rest</code> + devtools transaction stream. Replace <code>shared-editor-state</code> + <code>StateHub</code> with a <code>remote</code> slice (leader = extension host) and <code>useGitHubRepositories</code> with a <code>rest</code> collection. Measure the spike bars (§13). <code>persist</code> follows in weeks 3–6.</li>
+<li><strong>Zustand stores → slices</strong> (auth, connection, git, diagnostic, network, nudge, projectActivation) via <code>state migrate --from zustand</code>; keep hook names as thin aliases for one release.</li>
+<li><strong>REST/RPC hooks → collections + <code>rpc</code> source</strong> over the existing <code>PlatformMessage</code> bus (the union becomes the typed contract; <code>requestId</code> correlation moves into the <code>rpc</code> transport; SSE/<code>api:fetch</code> proxying becomes a transport driver). Target: the 145 hook files shrink to complexes per page.</li>
+<li><strong>canvas-engine undo → <code>history</code></strong> with per-slice stacks and <code>historyKey</code> per canvas; the command pattern maps 1:1 onto commands; snapshots become <code>snapshot()</code>.</li>
+<li><strong>Transient UI state → <code>useLocal</code></strong>; <code>state doctor</code> drives the long tail of <code>useState</code>.</li>
+<li><strong>Templates:</strong> <code>state init</code> presets for <code>nextjs-shadcn</code>, <code>nextjs-tamagui</code>, <code>remix-shadcn</code>, <code>vite-shadcn</code>, <code>bun-shadcn</code>; the Hyper generator emits complexes per page for user apps.</li>
+<li><strong>Agent tooling:</strong> wire <code>@state/mcp</code> into <code>extension-mcp-setup.ts</code> so Hyper's agents edit user-app state through the analyser; recordings attached to Hyper bug reports.</li>
+</ol>
+<hr />
+<h2>16. Risks and mitigations</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Owning a reactivity runtime</td>
+<td>Vendored, settled algorithm (~600 lines); internal interface allows swapping to native <code>Signal</code>; bench in CI</td>
+</tr>
+<tr>
+<td>Compiler + React Compiler conflicts</td>
+<td>Run first, emit compiler-safe code, force snapshot mode under RC; conformance test matrix with RC on/off; <code>doctor</code> warns</td>
+</tr>
+<tr>
+<td>Proxy tracking bugs (leaks, identity, destructuring)</td>
+<td>Snapshot mode default; lint rules; <code>raw/snapshot/ref</code> escapes; react-tracked's caveat list as test cases</td>
+</tr>
+<tr>
+<td>Scope creep (8 frameworks × 3 modes × N sources)</td>
+<td>v1 GA = React + Vue + Solid + Svelte adapters via one conformance suite; <code>preview</code> tag for the rest; sources beyond rest/rpc/graphql/ws/query ship as <code>experimental</code></td>
+</tr>
+<tr>
+<td>TanStack DB contract churn (0.x)</td>
+<td>Contract pinned to a version in our manifest; adapter shim per breaking change; our own collections do not depend on their runtime</td>
+</tr>
+<tr>
+<td>Patch-based history under sync producing surprising merges</td>
+<td>Inverse-transaction semantics, origin scoping, conflict reports in devtools; documented as the Yjs/Loro model</td>
+</tr>
+<tr>
+<td>Compiled vs uncompiled divergence</td>
+<td>CI runs the suite both ways; compiler emits nothing not expressible at runtime</td>
+</tr>
+<tr>
+<td>Adoption friction from "all state global"</td>
+<td><code>useLocal</code> keeps the <code>useState</code> ergonomics; doctor + migrate make it incremental; transient defaults make it free</td>
+</tr>
+<tr>
+<td>Devtools freezing on big state</td>
+<td>Lazy path inspection, patch-based diffs in a Worker, byte caps, sampling</td>
+</tr>
+<tr>
+<td>Two-audience tension (Hyper vs universal)</td>
+<td>Hyper is the acceptance test; anything Hyper-specific lives in Hyper's complexes, never in the toolkit</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>17. API sketches</h2>
+<h3>17.1 Minimal app (any framework)</h3>
+<pre><code class="language-yaml"># state.config.yaml — invariants chosen at `state init`, enforced by `state lint`, changed explicitly
+framework: react
+react: { mode: snapshot, tracked: [&quot;src/canvas/**&quot;] }   # tracked allowed only here
+events: { default: both, production: commands }
+sources: { allowed: [rest, rpc] }                        # a graphql import fails lint until added
+persist: { allowed: [indexeddb, vscode] }
+forbid: [zustand, jotai, redux]                          # migration completed — lint keeps it that way
+devtools: dev
+</code></pre>
+<pre><code class="language-ts">
+// store.ts
+export const createAppStore = () =&gt; createStore().use(todos, session)
+
+// React
+&lt;StateProvider create={createAppStore}&gt;&lt;App/&gt;&lt;/StateProvider&gt;
+function TodoList() {
+  const t = useSlice(todos)                 // snapshot; reads tracked → subscribes to t.items.ids, t.filter
+  return &lt;For each={t.items} filter={t.filter === 'done' ? i =&gt; i.done : undefined}&gt;
+    {(item) =&gt; &lt;TodoCard item={item}/&gt;}     // one component per key, subscribed to its own node
+  &lt;/For&gt;
+}
+function TodoCard({ item }: { item: Node&lt;Todo&gt; }) {
+  const i = useSlice(item)
+  const { toggle } = useActions(todos)      // bound to the provider store — never the definition
+  return &lt;label&gt;&lt;input type=&quot;checkbox&quot; checked={i.done} onChange={() =&gt; toggle(i.id)}/&gt;{i.text}&lt;/label&gt;
+}
+</code></pre>
+<h3>17.2 Per-keystroke, global, cheap</h3>
+<pre><code class="language-ts">function Search() {
+  const q = useLocal(searchQuery)           // registered under /ui/Search/&lt;useId()&gt;, transient by default
+  return &lt;input value={q.value} onInput={e =&gt; q.set(e.currentTarget.value)}/&gt;  // sync write → one subscriber re-renders
+}
+</code></pre>
+<h3>17.3 A complex (HOX)</h3>
+<pre><code class="language-ts">export const cart = defineComplex('cart', {
+  slices: { coupon },
+  collections: {
+    items: collection(CartItem, { key: 'productId' }),
+    products: collection(Product, { key: 'id', source: rest({ url: '/api/products' }) }),
+  },
+  derived: (s) =&gt; ({ total: derive(() =&gt; sum(s.items.map(i =&gt; i.qty * s.products.get(i.productId).price))) }),
+  actions: (s) =&gt; ({ add: (id: string) =&gt; s.items.upsert(id, i =&gt; ({ productId: id, qty: (i?.qty ?? 0) + 1 })) }),
+  history: { scope: 'complex' },
+  events: 'both',
+})
+// React widgets shipped beside it, importing only the complex
+export const CartBadge = () =&gt; { const c = useComplex(cart); return &lt;Badge n={c.items.ids.length}/&gt; }
+</code></pre>
+<h3>17.4 VS Code leader/replica</h3>
+<pre><code class="language-ts">// extension host
+const host = createStore().use(editorState)
+remote.lead(host, editorState, { transport: vscodeHost(panels) })
+// webview
+const ui = createStore().use(editorState)
+remote.follow(ui, editorState, { transport: vscodeWebview(), mode: 'command' })
+</code></pre>
+<h3>17.5 Sync source with optimistic mutator</h3>
+<pre><code class="language-ts">const todos = collection(Todo, {
+  key: 'id',
+  source: rpc(api.todos, { subscribe: api.todos.changes }),   // tRPC/oRPC contract, MessagePort or HTTP
+  mutators: { toggle: { args: z.string(), run: (s, id) =&gt; { s.get(id).done = !s.get(id).done } } },
+})
+// UI: const { toggle } = useActions(todos); toggle(id) → optimistic overlay → rpc → ack(txid) → overlay dropped
+</code></pre>
+<h3>17.6 Tests and Storybook</h3>
+<pre><code class="language-ts">const store = createTestStore([cart], { sources: { products: local(fixtures.products) } })
+render(&lt;StateProvider store={store}&gt;&lt;CartBadge/&gt;&lt;/StateProvider&gt;)
+store.actions(cart).add('p1')
+expect(store.commands.at(-1)).toMatchObject({ name: 'cart.add', args: ['p1'] })
+
+export const Loaded: Story = { decorators: [withState([cart], { recording: recordings.cartFull })] }
+</code></pre>
+<hr />
+<h2>18. Roadmap and spike plan</h2>
+<ul>
+<li><strong>Weeks 1–2 — Spike.</strong> Core (vendored signals, proxy store, transactions/patches), collections (<code>ids/byId</code>, per-item nodes), React adapter (snapshot + tracked), <code>remote/vscode</code> (Appendix B protocol), <code>collections/rest</code>, devtools transaction stream to console + Redux bridge. Replace <code>shared-editor-state</code>+<code>StateHub</code> and <code>useGitHubRepositories</code> in Hyper (Appendix C). Bench against the spike bars in §13. <strong>Go/no-go.</strong></li>
+<li><strong>Weeks 3–6 — Toolkit v0.</strong> history, persist (localStorage/IndexedDB/vscode), optimistic + outbox, url (TanStack Router + React Router), worker host, SSR dehydrate/hydrate, Next.js and Remix recipes; conformance suites; <code>state doctor</code>.</li>
+<li><strong>Weeks 7–10 — Compiler v0 + CLI.</strong> Analyzer, Vite/Babel plugins, React mode selection, unused-module stripping, <code>state init</code>, <code>state migrate --from zustand|react-query</code>, manifest; TanStack Devtools panel + VS Code panel.</li>
+<li><strong>Weeks 11–14 — Adapters + sources.</strong> Vue, Solid, Svelte adapters through the conformance suite; graphql/ws/rpc/electric/powersync sources; <code>@state/mcp</code> with search/edit/dump/mock/replay; Storybook addon.</li>
+<li><strong>Then:</strong> Angular/Lit adapters, <code>@state/db-ivm</code>, SWC plugin for Turbopack, LSP plugin, public 0.x release and docs; full competitor matrix page and build-setup fit check are produced alongside (next deliverables after this spec).</li>
+</ul>
+<hr />
+<h2>19. Open decisions</h2>
+<p>Decided in this draft (defaults an engineer can build against; overturn by editing the spec, not in chat): alien-signals is vendored with an upstream-sync script (§4.1); <code>events</code> defaults to <code>both</code> in dev / <code>commands</code> in prod (§4.6); writes outside actions are <code>loose</code> everywhere, <code>strict</code> per slice (§4.4); React snapshot mode is the only inferred mode (§5.3); SaaS multi-tab leader is opt-in, single-tab default (§9.3); undo persistence is off by default (§4.10); remote has one mode, <code>command</code> (§9.1); MIT licence (§14).</p>
+<p>Still open:
+1. <strong>Name and scope on npm</strong> (working name <code>state</code>; needs a real name before the public repo).
+2. <strong>Statebus lineage:</strong> keep <code>ByID</code>, <code>substateInterest</code> (→ collection <code>interest</code> ref-counting, §4.5) and the phase ordering as named credits; the package itself is superseded. Needs Danny's agreement.
+3. <strong>Undo persistence for Hyper's canvas</strong> — on (proposed) — decided when canvas-engine migrates (§15.4).
+4. <strong>Docs/positioning language:</strong> the API and docs are English; the team's working documents may stay bilingual.
+5. <strong>Recording in production</strong> (§11.4): behind consent and sampling — the exact policy is Hyper's, not the toolkit's.</p>
+<p>Briefing outcomes (brief §7): Q1 compiler stance → §5.3 (all three modes, snapshot inferred); Q2 command granularity → §4.4/§4.6 (both logs, per-slice modes); Q3 keystroke policy → §4.9 (defaults as proposed, no exclusions named yet); Q4 TanStack DB → §8.1 (protocol + interop); Q5 SaaS leader → §9.3 (opt-in); Q6 undo scope → §4.10 (per-slice, persist off); Q7/Q8 targets and versions → §6/§7, all environments in v1 with stability tags (§14); Q9 devtools hosts → §10 (all three); Q10 bars → §13; Q11 statebus → open item 2; Q12 positioning → §1 (universal, MIT); Q13 migration → §15 (incremental, spike first).</p>
+<hr />
+<h2>Appendix A — Spike API reference (v0, subject to change after go/no-go)</h2>
+<pre><code class="language-ts">// ---- core ----
+createStore(opts?: { scope?: Scope; name?: string }): Store
+interface Store {
+  use(...defs: (SliceDef | ComplexDef)[]): Store
+  actions&lt;D extends SliceDef | ComplexDef&gt;(def: D): Actions&lt;D&gt;       // bound instance
+  get&lt;D&gt;(def: D): Node&lt;State&lt;D&gt;&gt;                                        // root node of a mounted slice
+  tx&lt;T&gt;(name: string, fn: () =&gt; T, meta?): T                            // explicit transaction
+  subscribe(target: Node | Selector, cb: () =&gt; void, opts?): Unsubscribe
+  getSnapshot&lt;T&gt;(node: Node&lt;T&gt;): Snapshot&lt;T&gt;                           // cached reference until next commit touching node
+  on(event: string | PatchListener | TxListener, handler): Unsubscribe
+  tick(): void                                                          // drain bus listener queue
+  dispose(): void
+  readonly commands: readonly Command[]                                 // when events retains commands
+}
+
+defineSlice&lt;F, C, A&gt;(name: string, def: {
+  fields?: F                         // Standard Schema per field
+  collections?: C                    // collection(...) per key
+  initial: Initial&lt;F, C&gt;
+  actions?: (s: Draft&lt;F, C&gt;) =&gt; A
+  derived?: (s: Reader&lt;F, C&gt;) =&gt; Record&lt;string, Derived&gt;
+  writes?: 'loose' | 'warn' | 'strict'                 // default 'loose'
+  events?: 'commands' | 'patches' | 'both' | 'none'
+  history?: false | { scope?: 'slice' | 'complex' | 'global' | string; mergeInterval?: number; limit?: number; persist?: boolean }
+  persist?: PersistPolicy
+  sync?: never                        // slices don't sync; collections do (source)
+}): SliceDef
+
+collection&lt;T&gt;(schema: StandardSchema&lt;T&gt;, opts: {
+  key: keyof T | ((t: T) =&gt; string)
+  source?: Source&lt;T&gt;
+  mutators?: Record&lt;string, { args?: StandardSchema; run: (c: CollectionDraft&lt;T&gt;, ...args) =&gt; void; optimistic?: boolean }&gt;
+  gcTime?: number; staleTime?: number
+}): CollectionDef&lt;T&gt;
+
+interface Node&lt;T&gt; { readonly $: Signal&lt;Snapshot&lt;T&gt;&gt;; readonly path: string /* JSON Pointer */ }
+interface CollectionNode&lt;T&gt; extends Node&lt;Collection&lt;T&gt;&gt; {
+  ids: Node&lt;string[]&gt;; get(id: string): Node&lt;T&gt; | undefined
+  insert(t: T): void; upsert(id: string, fn: (prev?: T) =&gt; T): void; remove(id: string): void
+  map&lt;U&gt;(fn: (t: T) =&gt; U): U[]; query?: never /* @state/db-ivm */
+  loadSubset(opts: { cursor?: string; offset?: number; limit: number; where?; orderBy? }): Promise&lt;{ hasMore: boolean }&gt;
+  refetch(): Promise&lt;void&gt;; invalidate(): void
+  readonly $synced: Signal&lt;boolean&gt;; readonly $pending: Signal&lt;number&gt;
+}
+
+interface Transaction { id: string; ts: number; cause?: Cause; command?: Command; patches: Patch[]; inversePatches: Patch[]; meta: { transient?: boolean; origin?: string } }
+type Patch = { op: 'add' | 'replace' | 'remove' | 'move'; path: string /* JSON Pointer */; value?: unknown; from?: string }
+type Command = { name: string; args: unknown[]; actorId?: string; ts: number; txId: string }
+
+// identity rules
+snapshot(x)  // plain object graph; snapshot(a) === snapshot(a) until a commit touches a; Object.is-comparable
+raw(x)       // underlying target; raw(proxy) === raw(proxy)
+ref(x)       // opaque; never proxied, never patched (stored by reference, excluded from persist/remote)
+// Map/Set → state.map()/state.set() reactive wrappers; Date/URL/class instances → ref by default
+// arrays: `length` is its own signal; index writes patch `/path/&lt;index&gt;`; splice generates minimal move/remove ops
+// destructuring a Node/snapshot copies plain values — no reactivity; lint rule `state/no-destructure-node`
+
+// ---- react ----
+&lt;StateProvider store | create initial?&gt;            // one of store | create
+useSlice&lt;T&gt;(node: Node&lt;T&gt; | SliceDef): Snapshot&lt;T&gt;  // snapshot mode
+useSlice&lt;T, U&gt;(node, selector: (s: Snapshot&lt;T&gt;) =&gt; U, equals?): U
+useActions&lt;D&gt;(def: D): Actions&lt;D&gt;
+useComplex&lt;D extends ComplexDef&gt;(def: D): ComplexHandle&lt;D&gt;
+useLocal&lt;T&gt;(def: LocalDef&lt;T&gt;, key?: string): { value: T; set(v: T | ((p: T) =&gt; T)): void; node: Node&lt;T&gt; }
+useItems&lt;T&gt;(coll: CollectionNode&lt;T&gt;): readonly string[]; useItem&lt;T&gt;(coll, id): Snapshot&lt;T&gt; | undefined
+&lt;For each filter? sort?&gt;{(item: Node&lt;T&gt;) =&gt; ReactNode}&lt;/For&gt;
+useTracked(): void                                   // 'use state:tracked' only
+</code></pre>
+<h2>Appendix B — Remote wire protocol v1 (<code>remote</code>, mode <code>command</code>)</h2>
+<p>Messages are JSON objects <code>{ t: type, ...payload }</code> on a transport <code>{ post, onMessage, close }</code>. All numbers are monotonic per leader session (<code>session</code> changes when the leader restarts).</p>
+<table>
+<thead>
+<tr>
+<th>From → To</th>
+<th>Message</th>
+<th>Payload</th>
+<th>Semantics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>replica → leader</td>
+<td><code>hello</code></td>
+<td><code>{ replicaId, slices: string[], lastSeq?: number, lastSession?: string }</code></td>
+<td>On connect/reconnect. <code>lastSeq</code> from <code>vscode.setState</code>/memory.</td>
+</tr>
+<tr>
+<td>leader → replica</td>
+<td><code>welcome</code></td>
+<td><code>{ session, seq }</code> then either <code>resync</code> or <code>snapshot</code></td>
+<td><code>resync</code> if <code>lastSession === session</code> and <code>lastSeq</code> is within the buffer; otherwise <code>snapshot</code>.</td>
+</tr>
+<tr>
+<td>leader → replica</td>
+<td><code>snapshot</code></td>
+<td><code>{ seq, slices: { [name]: raw } }</code></td>
+<td>Full raw values (no proxies, <code>ref</code>s omitted). Replica replaces truth, <strong>keeps its optimistic overlay</strong> and re-applies it.</td>
+</tr>
+<tr>
+<td>leader → replica</td>
+<td><code>resync</code></td>
+<td><code>{ from, to, txs: TxMsg[] }</code></td>
+<td>Buffered transactions in order.</td>
+</tr>
+<tr>
+<td>replica → leader</td>
+<td><code>cmd</code></td>
+<td><code>{ cid, txId, name, args, actorId, ts }</code></td>
+<td>A command executed optimistically on the replica under <code>txId</code>.</td>
+</tr>
+<tr>
+<td>leader → replicas</td>
+<td><code>tx</code> (TxMsg)</td>
+<td><code>{ seq, session, txId, origin: replicaId \| 'leader', patches, cause?, transient? }</code></td>
+<td>Broadcast to all replicas <strong>including the sender</strong>; the sender matches <code>txId</code> and drops its overlay entry; others apply as <code>origin: 'remote'</code>.</td>
+</tr>
+<tr>
+<td>leader → replica</td>
+<td><code>reject</code></td>
+<td><code>{ txId, reason, patches? }</code></td>
+<td>Command rejected (strict mode, validation, conflict); replica rolls back the overlay (<code>inversePatches</code>) and emits <code>remote.rejected</code>.</td>
+</tr>
+<tr>
+<td>either</td>
+<td><code>ping</code>/<code>pong</code></td>
+<td><code>{ ts }</code></td>
+<td>Liveness; also used to measure lag shown in devtools.</td>
+</tr>
+</tbody>
+</table>
+<p>Rules: a replica never applies its own optimistic patches to truth — truth changes only via <code>tx</code>/<code>snapshot</code>; <code>seq</code> gaps trigger <code>hello</code> with <code>lastSeq</code> (never silent skipping); leader buffer per session is bounded (500 tx / 256 KiB, configurable) and <code>transient</code> transactions are coalesced per frame before broadcast and never buffered for resync; payloads over the transport budget are chunked (<code>{ t: 'chunk', id, i, n, data }</code>) and reassembled before dispatch; message schema version is negotiated in <code>hello/welcome</code> (<code>v: 1</code>).</p>
+<p>Why this closes the <code>mergeInitState</code> race: the webview's local selection is an optimistic overlay keyed by <code>txId</code>; a <code>snapshot</code> (the old <code>state:init</code>) replaces truth but the overlay is re-applied on top, so the selection survives until the leader either echoes the <code>tx</code> (overlay dropped, truth now contains it) or <code>reject</code>s it.</p>
+<h2>Appendix C — Hyper spike integration map</h2>
+<table>
+<thead>
+<tr>
+<th>Today</th>
+<th>Spike replacement</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>client/lib/platform/shared-editor-state.ts</code> (Zustand replica, <code>applyPatch/init</code>, <code>mergeInitState</code>)</td>
+<td><code>defineSlice('editor', …)</code> + <code>remote.follow(store, editor, { transport: vscodeWebview() })</code> in webviews</td>
+<td><code>mergeInitState</code> deleted; behaviour covered by Appendix B overlay rule; keep <code>useSharedEditorState()</code> as an alias hook for one release</td>
+</tr>
+<tr>
+<td><code>vscode-extension/hypercanvas-preview/src/StateHub.ts</code> (<code>register/applyUpdate/broadcast</code>)</td>
+<td><code>remote.lead(hostStore, editor, { transport: vscodeHost(panels) })</code></td>
+<td><code>vscodeHost</code> wraps <code>webview.postMessage</code> + <code>onDidReceiveMessage</code> per registered panel; <code>register(panelId, webview)</code> becomes transport attach</td>
+</tr>
+<tr>
+<td><code>PlatformMessage</code> <code>state:init</code> / <code>state:update</code> variants</td>
+<td>Appendix B messages under <code>type: 'state:*'</code> namespace on the same bus</td>
+<td>Other <code>PlatformMessage</code> variants untouched in the spike</td>
+</tr>
+<tr>
+<td><code>client/components/github/hooks/useGitHubRepositories.ts</code> (7× <code>useState</code>, manual paging, <code>authFetch</code>)</td>
+<td><code>collection(GitHubRepository, { key: 'id', source: rest({ url: '/api/github/repositories', params: { org, search, sort }, page: 'offset', perPage: 20, fetch: authFetch }) })</code> + <code>useItems</code>/<code>loadSubset</code></td>
+<td>Same hook signature exported as an adapter for the existing consumer component</td>
+</tr>
+<tr>
+<td><code>client/stores/editorStore.ts</code> <code>loadPersistedState/savePersistedState</code></td>
+<td>untouched in the spike (weeks 3–6: <code>persist</code>)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Webview <code>vscode.getState/setState</code></td>
+<td><code>remote</code> stores <code>{ session, lastSeq }</code> + the UI slice snapshot</td>
+<td>Through <code>persist/vscode</code> later; direct calls in the spike</td>
+</tr>
+<tr>
+<td>Feature flag</td>
+<td><code>HYPER_STATE_SPIKE=1</code> env at build, both paths compiled; rollback = flag off</td>
+<td>Existing tests must pass in both modes</td>
+</tr>
+</tbody>
+</table>
+<p>Measurements the spike must report (§13 spike bars): bundle delta of the webview, transactions/s and lag in the VS Code leader/replica path (devtools <code>ping</code>), <code>postMessage</code> payload sizes, React microbench vs the current Zustand stores, heap diff on selection changes.</p>
+<h2>Appendix D — Review record</h2>
+<p>v0.1 → v0.2 changes (from an independent consistency review against the brief): snapshot mode is the only inferred React mode; one scheduling pipeline (sync effects and notification, microtask bus); actions bound via <code>useActions</code>/<code>store.actions</code> — no definition-level calls; core split into <code>state</code> + <code>state/collections</code> with query/joins moved to <code>@state/db-ivm</code>; budgets restated with an uncompiled minimal-app bar and spike-only bars; patch generation gated by consumers, <code>events</code> controls retention; <code>useLocal</code> lowering disabled with <code>record</code>; layering rewritten as a DAG; vendoring decided; spike scope aligned between §15 and §18; monotonic read-path union under React Compiler; signals-in-JSX marked experimental; VS Code destroyed-webview resync flow; TanStack DB shim semantics and version pin; async actions end at first <code>await</code>; ALS moved to <code>state/ssr</code>; RR7 <code>defer</code> removed; per-boundary hydration; no directive insertion by the compiler; SharedWorker wording; defaults for strictness, remote mode, conflict policy, <code>useLocal</code> ids, source lifecycle, message budgets, bare-write commands, Astro registry; wrong briefing-question reference fixed; §4.8 cross-reference fixed; Appendices A–C added.</p></div>
+<footer>Generated from markdown — edit the .md, rerun build.py.</footer></div></body></html>

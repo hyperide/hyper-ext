@@ -1,0 +1,3 @@
+PASS: verifier rejected missing-publication
+PASS: verifier rejected missing-revision
+PASS: verifier rejected reject-all

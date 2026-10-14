@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Concept explainers</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="state.css">
+</head>
+<body>
+<nav class="top"><div class="wrap">
+  <a class="brand" href="index.html">state-lib</a>
+  <a href="index.html">Home</a>
+  <a class="on" href="concepts.html">Concepts</a>
+  <a href="../docs/state-landscape.html">Landscape</a>
+  <a href="requirements.html">Requirements</a>
+  <a href="decisions.html">Decisions</a>
+  <a href="spec.html">Master spec</a>
+  <a href="brief.html">Research brief</a>
+</div></nav>
+<div class="wrap">
+<header class="page">
+  <p class="kicker">state-lib · concepts</p>
+  <h1>Concept explainers</h1>
+  <p class="lead">The ideas the spec and the landscape lean on, each with what it is, why it matters for the toolkit, and a picture. First batch — every explainer here started as a question Mextner asked. Illustrations follow one visual language and will go through the comprehension-testing protocol (R34).</p>
+</header>
+
+<!-- ============================================================ -->
+<section class="concept" id="push-pull">
+<h2>Push-pull reactivity (the "converged algorithm")</h2>
+<p class="ru">push-pull с тремя состояниями — алгоритм, на котором сошлись все</p>
+<p>When a signal is written, dependents are <em>not</em> recomputed — they are only <b>marked</b> (the cheap <i>push</i> phase): direct dependents become <span style="color:var(--red)"><b>dirty</b></span>, everything further becomes <span style="color:var(--amber)"><b>check</b></span> ("maybe dirty"). Actual recomputation happens lazily on <b>read</b> (the <i>pull</i> phase): a node asks its sources "did you really change?", and if an intermediate computed recomputes to the same value, everything below it stays clean and untouched.</p>
+<p>This one design gives glitch-freedom (the diamond problem is gone — you can never observe half-updated state), no redundant recomputation, and cheap dynamic dependencies. Reactively invented the three-state form; alien-signals, Preact Signals, Svelte 5, Solid 2, Vue 3.6 and the TC39 proposal are the same algorithm with different constants (linked lists vs arrays, flags vs version counters).</p>
+<figure class="fig">
+<svg viewBox="0 0 640 240" width="640" role="img" aria-label="Push-pull: write marks the graph, read pulls recomputation lazily">
+  <defs><marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>
+  <!-- phase 1 -->
+  <text x="20" y="26" font-size="11" fill="var(--accent-ink)">1 · WRITE → push marks (no compute)</text>
+  <circle cx="60" cy="120" r="20" fill="var(--red-soft)" stroke="var(--red)" stroke-width="2"/>
+  <text x="60" y="124" font-size="11" text-anchor="middle" fill="var(--red)">a=2</text>
+  <circle cx="150" cy="70" r="20" fill="var(--red-soft)" stroke="var(--red)"/>
+  <text x="150" y="74" font-size="10" text-anchor="middle" fill="var(--red)">dirty</text>
+  <circle cx="150" cy="170" r="20" fill="var(--red-soft)" stroke="var(--red)"/>
+  <text x="150" y="174" font-size="10" text-anchor="middle" fill="var(--red)">dirty</text>
+  <circle cx="245" cy="120" r="20" fill="var(--amber-soft)" stroke="var(--amber)"/>
+  <text x="245" y="124" font-size="10" text-anchor="middle" fill="var(--amber)">check</text>
+  <line x1="80" y1="110" x2="128" y2="80" stroke="var(--muted)" marker-end="url(#arr)"/>
+  <line x1="80" y1="130" x2="128" y2="160" stroke="var(--muted)" marker-end="url(#arr)"/>
+  <line x1="170" y1="80" x2="223" y2="110" stroke="var(--muted)" marker-end="url(#arr)"/>
+  <line x1="170" y1="160" x2="223" y2="130" stroke="var(--muted)" marker-end="url(#arr)"/>
+  <!-- divider -->
+  <line x1="320" y1="20" x2="320" y2="220" stroke="var(--line)" stroke-dasharray="4 4"/>
+  <!-- phase 2 -->
+  <text x="340" y="26" font-size="11" fill="var(--accent-ink)">2 · READ → pull recomputes only what changed</text>
+  <circle cx="380" cy="120" r="20" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+  <text x="380" y="124" font-size="11" text-anchor="middle" fill="var(--accent-ink)">a=2</text>
+  <circle cx="470" cy="70" r="20" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <text x="470" y="66" font-size="10" text-anchor="middle" fill="var(--accent-ink)">a×2</text>
+  <text x="470" y="80" font-size="9" text-anchor="middle" fill="var(--accent-ink)">4 ✓new</text>
+  <circle cx="470" cy="170" r="20" fill="var(--panel)" stroke="var(--grey)"/>
+  <text x="470" y="166" font-size="10" text-anchor="middle" fill="var(--muted)">a>0</text>
+  <text x="470" y="180" font-size="9" text-anchor="middle" fill="var(--muted)">true =same</text>
+  <circle cx="575" cy="170" r="22" fill="var(--panel)" stroke="var(--grey)" stroke-dasharray="3 3"/>
+  <text x="575" y="167" font-size="9" text-anchor="middle" fill="var(--muted)">not re-run</text>
+  <text x="575" y="179" font-size="9" text-anchor="middle" fill="var(--muted)">(clean)</text>
+  <line x1="400" y1="110" x2="448" y2="80" stroke="var(--accent)" marker-end="url(#arr)"/>
+  <line x1="400" y1="130" x2="448" y2="160" stroke="var(--muted)" marker-end="url(#arr)"/>
+  <line x1="492" y1="170" x2="549" y2="170" stroke="var(--line)" marker-end="url(#arr)"/>
+</svg>
+<figcaption>Left: writing <code>a</code> only paints the graph. Right: reading recomputes <code>a×2</code>; <code>a&gt;0</code> recomputes to the same value, so its dependents never run.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> this is §4.1 of the spec — vendored (alien-signals form) behind a 5-function interface. R41 adds: publish it as an isolated, seriously-tested standalone package, benchmark the internal variants (lists vs arrays, flags vs counters) against each other, and make the variant switchable behind the same interface.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="two-phase">
+<h2>Two-phase batch</h2>
+<p class="ru">почему 100 записей подряд — это один пересчёт, и ни одного глитча</p>
+<p>Phase one: every write in a batch only marks the graph (see above) — nothing computes, no effect runs. Phase two: when the batch ends, one lazy pull recomputes what is actually needed and each effect runs <b>at most once</b>, never on intermediate state. Svelte 5 and Solid 2 end the batch on a microtask (so even synchronous reads see the old value until <code>flush()</code>); Preact/Vue flush synchronously at batch end.</p>
+<p>We take two-phase, but with a <b>synchronous</b> second phase at the end of the outermost transaction (§4.1): controlled React inputs need the write visible within the same event (caret position, IME composition), and <code>useSyncExternalStore</code> demands a consistent snapshot. Same guarantees, without the "why is my value stale until flush()" surprise.</p>
+<figure class="fig">
+<svg viewBox="0 0 640 140" width="640" role="img" aria-label="Two-phase batch timeline">
+  <text x="20" y="24" font-size="11" fill="var(--muted)">tx( … )</text>
+  <rect x="20" y="40" width="300" height="34" rx="6" fill="var(--amber-soft)" stroke="var(--amber)"/>
+  <text x="170" y="61" font-size="11" text-anchor="middle" fill="var(--amber)">writes: a=1  b=2  c=3   → only marks</text>
+  <rect x="340" y="40" width="180" height="34" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <text x="430" y="61" font-size="11" text-anchor="middle" fill="var(--accent-ink)">commit: pull once</text>
+  <rect x="540" y="40" width="80" height="34" rx="6" fill="var(--blue-soft)" stroke="var(--blue)"/>
+  <text x="580" y="61" font-size="11" text-anchor="middle" fill="var(--blue)">notify ×1</text>
+  <line x1="20" y1="100" x2="620" y2="100" stroke="var(--line)"/>
+  <text x="20" y="122" font-size="10" fill="var(--muted)">effects run once per batch · subscribers see only the final state · zero glitches</text>
+</svg>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> §4.1's single pipeline — mark → sync effects → sync notify → bus listeners in a microtask — is exactly this, tuned for React's input semantics.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="cow">
+<h2>Copy-on-write (COW) &amp; structural sharing</h2>
+<p class="ru">COW = копируем только то, что трогаем; всё остальное — общее между версиями</p>
+<p><b>COW</b>: to "modify" an immutable tree you copy only the containers you touch plus the path up to the root; every untouched subtree is <b>shared by reference</b> between the old and new version — that sharing is <i>structural sharing</i>. A change to one field of one item costs a handful of small object copies, old snapshots stay valid, and "did this subtree change?" is a reference equality check. Immer, Mutative, our transaction engine (§4.4), and — at page granularity — LMDB and CouchDB all work this way.</p>
+<figure class="fig">
+<svg viewBox="0 0 640 210" width="640" role="img" aria-label="Copy-on-write: new root shares untouched subtrees with the old version">
+  <defs><marker id="arr2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="24" font-size="11" fill="var(--muted)">v1 (old snapshot — still valid)</text>
+  <text x="430" y="24" font-size="11" fill="var(--accent-ink)">v2 = set state.b.y = 9</text>
+  <!-- v1 tree -->
+  <rect x="120" y="40" width="70" height="26" rx="5" fill="var(--panel)" stroke="var(--grey)"/><text x="155" y="57" font-size="10" text-anchor="middle" fill="var(--muted)">root</text>
+  <rect x="40" y="100" width="70" height="26" rx="5" fill="var(--panel)" stroke="var(--grey)"/><text x="75" y="117" font-size="10" text-anchor="middle" fill="var(--muted)">a {…}</text>
+  <rect x="200" y="100" width="70" height="26" rx="5" fill="var(--panel)" stroke="var(--grey)"/><text x="235" y="117" font-size="10" text-anchor="middle" fill="var(--muted)">b {y:1}</text>
+  <rect x="40" y="160" width="70" height="26" rx="5" fill="var(--panel)" stroke="var(--grey)"/><text x="75" y="177" font-size="10" text-anchor="middle" fill="var(--muted)">a.list[1k]</text>
+  <line x1="140" y1="66" x2="90" y2="100" stroke="var(--muted)" marker-end="url(#arr2)"/>
+  <line x1="170" y1="66" x2="220" y2="100" stroke="var(--muted)" marker-end="url(#arr2)"/>
+  <line x1="75" y1="126" x2="75" y2="160" stroke="var(--muted)" marker-end="url(#arr2)"/>
+  <!-- v2 -->
+  <rect x="450" y="40" width="70" height="26" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><text x="485" y="57" font-size="10" text-anchor="middle" fill="var(--accent-ink)">root′ copy</text>
+  <rect x="530" y="100" width="76" height="26" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><text x="568" y="117" font-size="10" text-anchor="middle" fill="var(--accent-ink)">b′ {y:9} copy</text>
+  <line x1="500" y1="66" x2="550" y2="100" stroke="var(--accent)" marker-end="url(#arr2)"/>
+  <!-- shared pointers back to v1 subtrees -->
+  <line x1="462" y1="66" x2="115" y2="105" stroke="var(--blue)" stroke-dasharray="5 4" marker-end="url(#arr2)"/>
+  <text x="300" y="78" font-size="10" fill="var(--blue)">shared — same object as v1's “a”</text>
+</svg>
+<figcaption>v2 copies two small objects (root, b); the entire <code>a</code> subtree — including a 1000-item list — is the same object in both versions.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> R2 + R9 by construction: mutable-looking writes in a transaction produce a structurally shared snapshot plus RFC 6902 patches. Cost model: O(size of each touched container) — which is why big hot arrays are normalised into keyed collections (<code>ids</code> + <code>byId</code>), making the touched container a single item.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="hamt">
+<h2>HAMT — and why databases use B-trees anyway</h2>
+<p class="ru">HAMT = hash array mapped trie; и это не противник structural sharing, а его другой носитель</p>
+<p>A <b>HAMT</b> (hash array mapped trie) is the persistent hash map behind Immutable.js, Clojure and the C++ <code>immer</code> library: the key's hash is consumed 5 bits at a time, each level is a node of up to 32 slots (compressed via a bitmap), so any update copies ~log₃₂ n small nodes and shares the rest — structural sharing with O(log₃₂ n) updates <i>independent of container size</i>, versus COW's "copy the whole touched container".</p>
+<p>Databases still choose <b>B-trees</b> because their unit of cost is the 4–16 KB disk page, not the pointer hop: a B-tree with fanout in the hundreds reaches billions of keys in 3–4 page reads, keeps keys ordered (range scans), and maximises useful bytes per page. HAMT's many small scattered nodes are cache- and disk-hostile. The twist: LMDB and CouchDB are <i>copy-on-write B+trees</i> — databases already do structural sharing, at page granularity. In memory, in JS, the "page" is a plain object, so COW-of-plain-objects wins for typical UI containers; HAMT only pays off for very large, hot, unordered maps.</p>
+<div class="why-us"><b>Why it matters for us:</b> the core stays COW-of-plain-objects (§4.4). Per R52, Immutable.js is not discarded: it is faster than Immer <i>while you stay inside its structures and never call <code>toJS()</code></i> — the conversion tax at every React/JSON boundary is what killed it in practice. A HAMT-backed <code>collection</code> storage variant behind the same interface is a legitimate experiment for 100k+-entry maps; the compiler could even pick storage per collection from observed sizes — measured, not assumed.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="resumability">
+<h2>Hydration vs resumability (Qwik)</h2>
+<p class="ru">гидрация выполняет всё приложение заново; resumability продолжает с места, где сервер остановился</p>
+<p><b>Hydration</b> (React, Vue, Svelte, Solid SSR): the server renders HTML, then the client downloads the components and <i>re-executes them all</i> to rebuild state, closures and event handlers, then attaches listeners. You pay for the app twice.</p>
+<p><b>Resumability</b> (Qwik): the server serialises <i>into the HTML</i> the signal graph, the subscriptions, and pointers to every handler ("this button's click lives in chunk X, function Y, with this captured state"). The client executes <b>nothing</b> upfront — the first interaction lazily loads just the handler it needs and continues. The price: everything crossing a lazy-load boundary must be serialisable, which is what Qwik's <code>$</code> optimizer enforces.</p>
+<figure class="fig">
+<svg viewBox="0 0 640 170" width="640" role="img" aria-label="Hydration re-executes the app; resumability resumes from serialized state">
+  <text x="20" y="24" font-size="11" fill="var(--muted)">hydration</text>
+  <rect x="20" y="34" width="110" height="28" rx="6" fill="var(--blue-soft)" stroke="var(--blue)"/><text x="75" y="52" font-size="10" text-anchor="middle" fill="var(--blue)">server: render</text>
+  <rect x="150" y="34" width="150" height="28" rx="6" fill="var(--red-soft)" stroke="var(--red)"/><text x="225" y="52" font-size="10" text-anchor="middle" fill="var(--red)">client: re-run ALL components</text>
+  <rect x="320" y="34" width="90" height="28" rx="6" fill="var(--panel)" stroke="var(--grey)"/><text x="365" y="52" font-size="10" text-anchor="middle" fill="var(--muted)">attach listeners</text>
+  <rect x="430" y="34" width="80" height="28" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="470" y="52" font-size="10" text-anchor="middle" fill="var(--accent-ink)">interactive</text>
+  <text x="20" y="104" font-size="11" fill="var(--muted)">resumability</text>
+  <rect x="20" y="114" width="190" height="28" rx="6" fill="var(--blue-soft)" stroke="var(--blue)"/><text x="115" y="132" font-size="10" text-anchor="middle" fill="var(--blue)">server: render + serialize graph→HTML</text>
+  <rect x="230" y="114" width="90" height="28" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="275" y="132" font-size="10" text-anchor="middle" fill="var(--accent-ink)">interactive</text>
+  <rect x="340" y="114" width="180" height="28" rx="6" fill="var(--panel)" stroke="var(--grey)" stroke-dasharray="4 3"/><text x="430" y="132" font-size="10" text-anchor="middle" fill="var(--muted)">on 1st click: load just that handler</text>
+</svg>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> everyone except Qwik serialises only <i>values</i> and rebuilds the graph client-side — that is our v1 SSR design (§7). Qwik is the proof that serialising the live graph is possible; if the R31/R42 compiler ever targets it, this is the mechanism to study.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="runes">
+<h2>Svelte 5 runes</h2>
+<p class="ru">руны — это макросы компилятора: $-функции, которые превращаются в сигналы</p>
+<p>Runes are <b>compiler macros</b> that look like functions: <code>$state()</code>, <code>$derived()</code>, <code>$effect()</code>, <code>$props()</code>. They are not imported and don't exist at runtime — the Svelte compiler sees them and rewrites your plain-looking code into signal operations:</p>
+<pre><code>let count = $state(0);            // becomes a signal source
+let double = $derived(count * 2); // becomes a lazy computed
+$effect(() =&gt; console.log(double)); // becomes an effect
+
+count += 1;                        // compiles to a signal write
+</code></pre>
+<p><code>$state</code> on an object/array installs a deep proxy (one lazy signal per property); plain variable reads/writes compile to <code>.get()</code>/<code>.set()</code>. That's why the code looks like ordinary JavaScript with no <code>.value</code> — the compiler put the reactivity there. The limits come from the same trick: it only works inside files the compiler processes, and a bare exported <code>let</code> loses reactivity at the module boundary.</p>
+<div class="why-us"><b>Why it matters for us:</b> runes are the strongest existing proof of our "disappearing framework" thesis (F2, R23, R42): familiar-looking code, compiler injects the reactive machinery at the boundaries. Our compiler aims at the same ergonomics for store code — across frameworks, not inside one.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="signals-streams">
+<h2>Signals vs streams — and operator fusion</h2>
+<p class="ru">сигналы = состояние (pull), стримы = события во времени (push); fusion — склейка цепочек операторов</p>
+<p>A <b>signal</b> holds current state: the graph knows its dependencies, guarantees a consistent view, recomputes lazily. An <b>observable stream</b> pushes discrete events through operator chains: dependencies are wired by hand (<code>combineLatest</code>), there is no glitch-freedom (a diamond over <code>combineLatest</code> emits intermediate pairs), but time operators (debounce, retry, buffering) are unmatched. The standards reflect the split: TC39 Signals for state, WICG Observable for events. Rule of thumb: <i>state lives in signals; event streams feed transactions</i>.</p>
+<p><b>Operator fusion</b> — most.js's famous optimisation: <code>.map(f).map(g)</code> collapses into <code>.map(x =&gt; g(f(x)))</code> at composition time — one pass, no intermediate allocations. RxJS never fused automatically; most.js proved the win. For us this is a compiler pass, not a runtime trick: chains of <code>derive</code> and <code>derive.collection(filter → map → sort)</code> pipelines fuse statically into single passes (decision D-rxjs).</p>
+<div class="why-us"><b>Why it matters for us:</b> the <code>rx</code> source adapts <code>Observable&lt;ChangeBatch&gt;</code> into collection transactions (§8.4); RxJS also earns a row in the reactivity comparison (R27) so the push-vs-pull trade-off is shown, not asserted.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="shapes">
+<h2>ElectricSQL shapes — realtime over plain HTTP</h2>
+<p class="ru">шейп = подписка на срез таблицы как resumable HTTP-лог с оффсетом</p>
+<p>A <b>shape</b> is a subscription to a slice of a Postgres table (<code>table + where + columns</code>) delivered as an <b>append-only log over plain HTTP GET</b>: the client asks <code>/v1/shape?offset=…</code>, gets changes since that offset, and long-polls (or SSE) for more. Because it's just cacheable GETs, there is no stateful socket tier — a CDN can fan one shape out to thousands of clients; after offline, a client resumes from its stored offset — nothing is missed, nothing is duplicated. Writes stay in your own API; Electric only solves the read path.</p>
+<p><b>Pains it removes:</b> hand-written cache invalidation ("when X changes, refetch Y"), websocket infrastructure and reconnect logic, thundering-herd refetches, lost-update windows after reconnect. <b>Why it fits agent workloads</b> (their own positioning): dozens of agents polling the same state become one CDN-cached log; each agent process can die and resume from its offset with a consistent view.</p>
+<div class="why-us"><b>Why it matters for us:</b> beyond the <code>electric</code> source adapter — the pattern (resumable offset log per subscription slice) is worth copying for Hyper itself and for the code factory (rig+lmao/axe): task state, worktree status, and review queues consumed by many agents are exactly "shapes"; the orchestrator becomes a log server, and agents become resumable subscribers (R50). Same idea already powers our remote protocol's <code>resync(fromSeq)</code>.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="livestore-git">
+<h2>LiveStore's git-like sync (pull → rebase → push)</h2>
+<p class="ru">клиентские события ребейзятся поверх серверного лога — как ветка поверх main</p>
+<p>LiveStore keeps state as an <b>event log</b> (past-tense, versioned events; state = fold of the log). Sync works exactly like a git branch: the backend holds the authoritative, totally-ordered log (<i>main</i>); your device accumulates local events (<i>your branch</i>) — offline included. On (re)connect: <b>pull</b> new upstream events, <b>rebase</b> your pending local events on top of them (re-apply after, materialised state recomputed through pure fold functions), <b>push</b>; if the server accepted someone else's events first, you pull-rebase again. Undo is a <i>compensating event</i> (like <code>git revert</code>), which stays correct under concurrent edits — you never rewrite shared history.</p>
+<figure class="fig">
+<svg viewBox="0 0 640 150" width="640" role="img" aria-label="Local events rebase on top of the upstream event log">
+  <text x="20" y="24" font-size="11" fill="var(--muted)">upstream log</text>
+  <g>
+    <circle cx="60" cy="60" r="10" fill="var(--blue-soft)" stroke="var(--blue)"/><circle cx="100" cy="60" r="10" fill="var(--blue-soft)" stroke="var(--blue)"/><circle cx="140" cy="60" r="10" fill="var(--blue-soft)" stroke="var(--blue)"/>
+    <circle cx="180" cy="60" r="10" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="2"/><text x="180" y="43" font-size="9" text-anchor="middle" fill="var(--blue)">new (pulled)</text>
+  </g>
+  <line x1="70" y1="60" x2="170" y2="60" stroke="var(--blue)"/>
+  <text x="20" y="120" font-size="11" fill="var(--muted)">local, offline</text>
+  <circle cx="140" cy="120" r="10" fill="var(--amber-soft)" stroke="var(--amber)"/><circle cx="180" cy="120" r="10" fill="var(--amber-soft)" stroke="var(--amber)"/>
+  <path d="M190 115 C 260 90, 260 90, 230 68" stroke="var(--amber)" fill="none" stroke-dasharray="4 3"/>
+  <text x="268" y="96" font-size="10" fill="var(--amber)">rebase on top</text>
+  <circle cx="240" cy="60" r="10" fill="var(--amber-soft)" stroke="var(--amber)"/><circle cx="280" cy="60" r="10" fill="var(--amber-soft)" stroke="var(--amber)"/>
+  <line x1="190" y1="60" x2="270" y2="60" stroke="var(--amber)"/>
+  <text x="320" y="64" font-size="10" fill="var(--accent-ink)">→ push ✓</text>
+</svg>
+<figcaption>Offline edits (amber) are re-applied after the newly pulled upstream events, then pushed — the answer to "work offline, sync when internet returns" (R47).</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> we already took the hygiene rules (§4.6: versioned past-tense events, clientOnly vs synced, compensating undo §4.10). The pull-rebase-push loop is the reference design for R47 offline accumulation — and note it is the same shape as Zero's mutator rebase and our optimistic overlay (§4.11): three systems, one idea — <i>local intent replayed on top of authoritative truth</i>.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="redux-form">
+<h2>redux-form post-mortem (draft, R48)</h2>
+<p class="ru">почему было медленно — по причинам, и что из этого мы уже сняли</p>
+<p>Why it was slow and painful, cause by cause: (1) every keystroke dispatched an action into the <b>single root store</b>, and every connected component's <code>mapStateToProps</code> re-ran — cost proportional to app size, not to the one input; (2) the form state lived as one nested object, so each keystroke <b>rebuilt the whole form subtree</b> (no per-field granularity); (3) validation ran synchronously on the whole form per keystroke; (4) action log noise (<code>CHANGE</code> × every character) drowned devtools; (5) serialisation pressure — the whole form state was JSON-ready at all times, even transient focus/touched flags.</p>
+<p>Point-by-point in our design: per-field signals mean a keystroke notifies exactly one input's subscriber (§4.9); <code>transient</code> transactions are coalesced per frame and excluded from the command log (no devtools noise, no log growth); validation is per-field and compile-time-generated (R49/typia); persistence excludes transients by default. The principle stays ("all state global"); the mechanism that made it expensive is gone. Full write-up with measurements: R48, pending.</p>
+</section>
+
+<footer>state-lib · concepts v1 — next: comprehension-test these via the R34 subagent protocol, then add interactive/animated versions and REPL examples (R38).</footer>
+</div>
+</body>
+</html>

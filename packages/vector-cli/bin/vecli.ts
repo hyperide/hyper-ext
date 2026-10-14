@@ -7,12 +7,21 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { PathOpsBackend } from 'vector-wasm';
-import { createPathOpsBackend } from '../src/backend';
-import { runBatch } from '../src/batch';
 import { getHelp } from '../src/help';
-import { svgToPng } from '../src/png';
 
 const args = process.argv.slice(2);
+
+// Docs graphics and help do not load the PathOps, font or rasterization engines.
+if (args[0] === 'diagram') {
+  try {
+    const { runDiagramCli } = await import('../src/diagram-cli');
+    await runDiagramCli(args.slice(1));
+  } catch (error) {
+    process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  }
+} else {
+
 
 // `vecli mcp` — serve the vector-engine MCP tools over stdio. Dynamic import keeps
 // the MCP SDK off the batch hot path (same pattern as the TUI branch below).
@@ -76,6 +85,8 @@ const isTTY = process.stdin.isTTY && process.stdout.isTTY;
 const hasBatchArgs = expression || execFile;
 
 async function main(): Promise<void> {
+  const { createPathOpsBackend } = await import('../src/backend');
+  const { runBatch } = await import('../src/batch');
   // Load the real CanvasKit+Clipper PathOps backend once. initCanvasKit() is async;
   // createContext stays synchronous, so this is the single async boundary. If WASM
   // fails to load we abort with a clear error instead of silently degrading to the
@@ -115,6 +126,7 @@ async function main(): Promise<void> {
       const output = runBatch({ expression: code, canvasWidth, canvasHeight, pathOps });
 
       if (format === 'png' && output) {
+        const { svgToPng } = await import('../src/png');
         const pngBuf = svgToPng(output);
         if (outputFile) {
           writeFileSync(outputFile, pngBuf);
@@ -139,4 +151,8 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+main().catch(error => {
+  process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
+});
+}

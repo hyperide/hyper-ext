@@ -1,0 +1,22 @@
+import { createRequire } from 'node:module'
+import { dirname, resolve, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+const require = createRequire(import.meta.url)
+const { chromium } = require('playwright')
+const here = dirname(fileURLToPath(import.meta.url))
+const b = await chromium.launch()
+const p = await b.newPage({ viewport: { width: 1280, height: 1100 } })
+p.on('pageerror', (e: Error) => console.error('PAGEERROR', e.message))
+await p.goto(`file://${resolve(here, '../dist/index.html')}#/playground`)
+await p.waitForTimeout(500)
+const reject = await p.$('button:has-text("server rejects")')
+if (!reject) throw new Error('reject button not found')
+await reject.click()
+await p.waitForTimeout(250)
+console.log('mid-flight text:', await p.$eval('.pg-optim-row code', (e: Element) => e.textContent))
+await p.waitForTimeout(1200)
+console.log('after rejection :', await p.$eval('.pg-optim-row code', (e: Element) => e.textContent))
+const rows = await p.$$eval('.txrow .txname', (ns: Element[]) => ns.map((n) => n.textContent))
+console.log('log rows        :', rows.slice(0, 3))
+await p.screenshot({ path: join(here, '.figures/page-optimistic.png'), fullPage: false })
+await b.close()

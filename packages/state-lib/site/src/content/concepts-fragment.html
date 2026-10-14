@@ -1,0 +1,486 @@
+<!-- ============================================================ -->
+<section class="concept" id="push-pull">
+<h2>Push-pull reactivity (the "converged algorithm")</h2>
+<p>When a signal is written, dependents are <em>not</em> recomputed — they are only <b>marked</b> (the cheap <i>push</i> phase): direct dependents become <span style="color:var(--red)"><b>dirty</b></span>, everything further becomes <span style="color:var(--amber)"><b>check</b></span> ("maybe dirty"). Actual recomputation happens lazily on <b>read</b> (the <i>pull</i> phase): a node asks its sources "did you really change?", and if an intermediate computed recomputes to the same value, everything below it stays clean and untouched.</p>
+<p>This one design gives glitch-freedom (the diamond problem is gone — you can never observe half-updated state), no redundant recomputation, and cheap dynamic dependencies. Reactively invented the three-state form; alien-signals, Preact Signals, Svelte 5, Solid 2, Vue 3.6 and the TC39 proposal are the same algorithm with different constants (linked lists vs arrays, flags vs version counters).</p>
+<figure class="fig">
+<svg viewBox="0 0 660 272" width="660" role="img" aria-label="The same five-node graph at two moments. Writing a marks its direct dependents dirty and everything below them check, computing nothing. Reading pulls: double recomputes to a new value so label re-runs, while isPos recomputes to the same value so banner is skipped entirely.">
+  <defs><marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="22" font-size="10" fill="var(--accent-ink)">1 · WRITE a=2 → push marks</text>
+  <line x1="80" y1="99" x2="126" y2="75" stroke="var(--muted)" marker-end="url(#arr)"/><line x1="80" y1="121" x2="126" y2="145" stroke="var(--muted)" marker-end="url(#arr)"/><line x1="173" y1="62" x2="223" y2="62" stroke="var(--muted)" marker-end="url(#arr)"/><line x1="173" y1="158" x2="223" y2="158" stroke="var(--muted)" marker-end="url(#arr)"/><circle cx="60" cy="110" r="22" fill="var(--red-soft)" stroke="var(--red)" stroke-width="2"/><text x="60" y="113" font-size="9" text-anchor="middle" fill="var(--red)">a = 2</text><circle cx="150" cy="62" r="22" fill="var(--red-soft)" stroke="var(--red)" stroke-width="1"/><text x="150" y="60" font-size="9" text-anchor="middle" fill="var(--red)">double</text><text x="150" y="71" font-size="8.5" text-anchor="middle" fill="var(--red)">dirty</text><circle cx="150" cy="158" r="22" fill="var(--red-soft)" stroke="var(--red)" stroke-width="1"/><text x="150" y="156" font-size="9" text-anchor="middle" fill="var(--red)">isPos</text><text x="150" y="167" font-size="8.5" text-anchor="middle" fill="var(--red)">dirty</text><circle cx="250" cy="62" r="22" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/><text x="250" y="60" font-size="9" text-anchor="middle" fill="var(--amber)">label</text><text x="250" y="71" font-size="8.5" text-anchor="middle" fill="var(--amber)">check</text><circle cx="250" cy="158" r="22" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/><text x="250" y="156" font-size="9" text-anchor="middle" fill="var(--amber)">banner</text><text x="250" y="167" font-size="8.5" text-anchor="middle" fill="var(--amber)">check</text>
+  <text x="20" y="200" font-size="9" fill="var(--muted)">nothing computed yet — 4 flags set</text>
+  <line x1="322" y1="34" x2="322" y2="206" stroke="var(--line)" stroke-dasharray="4 4"/>
+  <text x="365" y="22" font-size="10" fill="var(--accent-ink)">2 · READ → pull recomputes</text><line x1="425" y1="99" x2="471" y2="75" stroke="var(--muted)" marker-end="url(#arr)"/><line x1="425" y1="121" x2="471" y2="145" stroke="var(--muted)" marker-end="url(#arr)"/><line x1="518" y1="62" x2="568" y2="62" stroke="var(--muted)" marker-end="url(#arr)"/><line x1="518" y1="158" x2="568" y2="158" stroke="var(--muted)" marker-end="url(#arr)"/><circle cx="405" cy="110" r="22" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><text x="405" y="113" font-size="9" text-anchor="middle" fill="var(--accent-ink)">a = 2</text><circle cx="495" cy="62" r="22" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/><text x="495" y="60" font-size="9" text-anchor="middle" fill="var(--accent-ink)">double</text><text x="495" y="71" font-size="8.5" text-anchor="middle" fill="var(--accent-ink)">→ 4 NEW</text><circle cx="495" cy="158" r="22" fill="var(--panel)" stroke="var(--grey)" stroke-width="1"/><text x="495" y="156" font-size="9" text-anchor="middle" fill="var(--muted)">isPos</text><text x="495" y="167" font-size="8.5" text-anchor="middle" fill="var(--muted)">→ true</text><circle cx="595" cy="62" r="22" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/><text x="595" y="60" font-size="9" text-anchor="middle" fill="var(--accent-ink)">label</text><text x="595" y="71" font-size="8.5" text-anchor="middle" fill="var(--accent-ink)">re-runs</text><circle cx="595" cy="158" r="22" fill="var(--panel)" stroke="var(--grey)" stroke-width="1"/><text x="595" y="156" font-size="9" text-anchor="middle" fill="var(--muted)">banner</text><text x="595" y="167" font-size="8.5" text-anchor="middle" fill="var(--muted)">skipped</text>
+  <text x="365" y="200" font-size="9" fill="var(--muted)">1 of 2 branches actually ran</text>
+  <line x1="20" y1="218" x2="640" y2="218" stroke="var(--line)"/>
+  <g font-size="9">
+    <circle cx="30" cy="238" r="7" fill="var(--red-soft)" stroke="var(--red)"/><text x="42" y="241" fill="var(--red)">dirty</text>
+    <circle cx="100" cy="238" r="7" fill="var(--amber-soft)" stroke="var(--amber)"/><text x="112" y="241" fill="var(--amber)">check</text>
+    <circle cx="176" cy="238" r="7" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="188" y="241" fill="var(--accent-ink)">ran, changed</text>
+    <circle cx="290" cy="238" r="7" fill="var(--panel)" stroke="var(--grey)"/><text x="302" y="241" fill="var(--muted)">clean</text>
+    <line x1="360" y1="238" x2="384" y2="238" stroke="var(--muted)" marker-end="url(#arr)"/><text x="392" y="241" fill="var(--muted)">feeds into</text>
+    <text x="30" y="262" fill="var(--muted)">double = a×2 · isPos = a&gt;0 · label and banner each consume one of them</text>
+  </g>
+</svg>
+<figcaption><b>Read the two panels as one graph at two moments.</b> Writing <code>a</code> does no work: its direct dependents are flagged <span style="color:var(--red)">dirty</span> (“your input definitely changed”) and everything below them <span style="color:var(--amber)">check</span> (“an input <i>may</i> have changed — ask me later”). Nothing recomputes until something reads. Then the pull walks up: <code>double</code> recomputes 2×2 = 4, a genuinely new value, so <code>label</code> must re-run. <code>isPos</code> recomputes 2&gt;0 = true — <b>the same value it already had</b> — so <code>banner</code> is never run at all. That last step is the whole trick: work stops at the node where the value stopped changing, not at the node where the write happened.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> this is §4.1 of the spec — vendored (alien-signals form) behind a 5-function interface. R41 adds: publish it as an isolated, seriously-tested standalone package, benchmark the internal variants (lists vs arrays, flags vs counters) against each other, and make the variant switchable behind the same interface.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="two-phase">
+<h2>Two-phase batch</h2>
+<p><b>Push–pull plus a notification boundary, not an alternative graph algorithm.</b> A single-write diamond must be glitch-free. Two separate setters, however, create two real source states: quantity 1 → 2 at price 100 gives 200 before price changes to 80 and gives 160. A synchronous subscriber can observe 200 even without a browser paint. A batch groups the writes as one intent and defers subscriber checks until they finish. <a href="/learning">Detailed explanation and paired executable examples →</a></p>
+<p>Phase one applies writes and marks dependents. Phase two releases queued observers, which pull required values and compare results. An explicit read inside the body can still see current partial edits; unobserved values stay lazy. This is not rollback, async isolation, or two-phase commit. A microtask flush policy does not imply old-value reads. <a href="https://preactjs.com/guide/v10/signals/#batchfn">Preact batch</a> and <a href="https://mobx.js.org/actions.html">MobX actions</a> are prior art; framework scheduling details are not interchangeable.</p>
+<p>We take two-phase, but with a <b>synchronous</b> second phase at the end of the outermost transaction (§4.1): controlled React inputs need the write visible within the same event (caret position, IME composition), and <code>useSyncExternalStore</code> demands a consistent snapshot. Same guarantees, without the "why is my value stale until flush()" surprise.</p>
+<figure class="fig">
+<svg viewBox="0 0 660 208" width="660" role="img" aria-label="Two-phase batch. Without a transaction each of three writes runs a full pull-and-notify cycle, so a subscriber can observe a state where a and b are new but c is still old. Inside a transaction the same three writes only mark, then one commit pulls once and notifies once.">
+  <defs><marker id="tpa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="20" font-size="10" fill="var(--ink)">WITHOUT a batch — 3 full cycles</text>
+  <rect x="24" y="32" width="40" height="24" rx="5" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/><text x="44" y="47" font-size="9" text-anchor="middle" fill="var(--amber)">a=1</text><line x1="64" y1="44" x2="76" y2="44" stroke="var(--muted)" marker-end="url(#tpa)"/><rect x="80" y="32" width="44" height="24" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/><text x="102" y="47" font-size="9" text-anchor="middle" fill="var(--accent-ink)">pull</text><line x1="124" y1="44" x2="136" y2="44" stroke="var(--muted)" marker-end="url(#tpa)"/><rect x="140" y="32" width="52" height="24" rx="5" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><text x="166" y="47" font-size="9" text-anchor="middle" fill="var(--blue)">notify</text><rect x="204" y="32" width="40" height="24" rx="5" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/><text x="224" y="47" font-size="9" text-anchor="middle" fill="var(--amber)">b=2</text><line x1="244" y1="44" x2="256" y2="44" stroke="var(--muted)" marker-end="url(#tpa)"/><rect x="260" y="32" width="44" height="24" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/><text x="282" y="47" font-size="9" text-anchor="middle" fill="var(--accent-ink)">pull</text><line x1="304" y1="44" x2="316" y2="44" stroke="var(--muted)" marker-end="url(#tpa)"/><rect x="320" y="32" width="52" height="24" rx="5" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><text x="346" y="47" font-size="9" text-anchor="middle" fill="var(--blue)">notify</text><rect x="384" y="32" width="40" height="24" rx="5" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/><text x="404" y="47" font-size="9" text-anchor="middle" fill="var(--amber)">c=3</text><line x1="424" y1="44" x2="436" y2="44" stroke="var(--muted)" marker-end="url(#tpa)"/><rect x="440" y="32" width="44" height="24" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/><text x="462" y="47" font-size="9" text-anchor="middle" fill="var(--accent-ink)">pull</text><line x1="484" y1="44" x2="496" y2="44" stroke="var(--muted)" marker-end="url(#tpa)"/><rect x="500" y="32" width="52" height="24" rx="5" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><text x="526" y="47" font-size="9" text-anchor="middle" fill="var(--blue)">notify</text>
+  <rect x="204" y="64" width="164" height="18" rx="4" fill="var(--red-soft)" stroke="var(--red)" stroke-dasharray="3 2"/>
+  <text x="286" y="77" font-size="8.5" text-anchor="middle" fill="var(--red)">a=1  b=2  c=0  ← visible here</text>
+  <text x="20" y="100" font-size="9" fill="var(--red)">notify ×3 · effects ×3 · that middle state never existed</text>
+  <line x1="20" y1="114" x2="640" y2="114" stroke="var(--line)"/>
+  <text x="20" y="136" font-size="10" fill="var(--ink)">INSIDE tx( … ) — 2 phases</text>
+  <rect x="24" y="148" width="232" height="28" rx="5" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/><text x="140" y="165" font-size="9.5" text-anchor="middle" fill="var(--amber)">a=1  b=2  c=3 — mark only</text><line x1="256" y1="162" x2="270" y2="162" stroke="var(--muted)" marker-end="url(#tpa)"/><rect x="274" y="148" width="150" height="28" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/><text x="349" y="165" font-size="9.5" text-anchor="middle" fill="var(--accent-ink)">commit: pull once</text><line x1="424" y1="162" x2="438" y2="162" stroke="var(--muted)" marker-end="url(#tpa)"/><rect x="442" y="148" width="96" height="28" rx="5" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><text x="490" y="165" font-size="9.5" text-anchor="middle" fill="var(--blue)">notify ×1</text>
+  <text x="20" y="196" font-size="9" fill="var(--muted)">notify ×1 · effects ×1 · no half-written state is observable</text>
+</svg>
+<figcaption><b>The top row is the bug the bottom row prevents.</b> With no transaction, every single write runs the whole machine: recompute, then notify. Three writes therefore produce three notifications, run every effect three times, and — the part that actually bites — leave a window where a subscriber reads <code>a=1, b=2, c=0</code>, a combination that never logically existed and that no test would think to check. A transaction splits the work in two: <b>phase 1</b> applies all the writes and only marks what became stale, computing nothing; <b>phase 2</b> commits — one pull recomputes everything stale exactly once, then one notification goes out. Same three writes, one consistent observation.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> §4.1's single pipeline — mark → sync effects → sync notify → bus listeners in a microtask — is exactly this, tuned for React's input semantics.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="cow">
+<h2>Copy-on-write (COW) &amp; structural sharing</h2>
+<p><b>COW</b>: to "modify" an immutable tree you copy only the containers you touch plus the path up to the root; every untouched subtree is <b>shared by reference</b> between the old and new version — that sharing is <i>structural sharing</i>. A change to one field of one item costs a handful of small object copies, old snapshots stay valid, and "did this subtree change?" is a reference equality check. Immer, Mutative, our transaction engine (§4.4), and — at page granularity — LMDB and CouchDB all work this way.</p>
+<figure class="fig">
+<svg viewBox="0 0 660 216" width="660" role="img" aria-label="Copy-on-write. Setting state.b.y to 9 allocates only a new root and a new b. The subtree under a, including a thousand-item list, is the identical object in both versions, so the old snapshot stays valid and the update costs two allocations rather than a thousand and three.">
+  <defs><marker id="cwa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker>
+  <marker id="cwb" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--blue)"/></marker></defs>
+  <text x="20" y="20" font-size="10" fill="var(--muted)">v1 — still valid</text>
+  <rect x="104" y="34" width="72" height="24" rx="5" fill="var(--panel)" stroke="var(--grey)"/><text x="140" y="50" font-size="9" text-anchor="middle" fill="var(--muted)">root</text>
+  <rect x="30" y="94" width="72" height="24" rx="5" fill="var(--panel)" stroke="var(--grey)"/><text x="66" y="110" font-size="9" text-anchor="middle" fill="var(--muted)">a { … }</text>
+  <rect x="182" y="94" width="72" height="24" rx="5" fill="var(--panel)" stroke="var(--grey)"/><text x="218" y="110" font-size="9" text-anchor="middle" fill="var(--muted)">b {y:1}</text>
+  <rect x="30" y="150" width="72" height="24" rx="5" fill="var(--panel)" stroke="var(--grey)"/><text x="66" y="166" font-size="9" text-anchor="middle" fill="var(--muted)">list·1000</text>
+  <line x1="124" y1="58" x2="80" y2="94" stroke="var(--muted)" marker-end="url(#cwa)"/>
+  <line x1="156" y1="58" x2="200" y2="94" stroke="var(--muted)" marker-end="url(#cwa)"/>
+  <line x1="66" y1="118" x2="66" y2="150" stroke="var(--muted)" marker-end="url(#cwa)"/>
+  <line x1="300" y1="28" x2="300" y2="182" stroke="var(--line)" stroke-dasharray="4 4"/>
+  <text x="330" y="20" font-size="10" fill="var(--accent-ink)">v2 = set b.y = 9</text>
+  <rect x="430" y="34" width="80" height="24" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><text x="470" y="50" font-size="9" text-anchor="middle" fill="var(--accent-ink)">root′ NEW</text>
+  <rect x="500" y="94" width="88" height="24" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><text x="544" y="110" font-size="9" text-anchor="middle" fill="var(--accent-ink)">b′ {y:9} NEW</text>
+  <line x1="486" y1="58" x2="528" y2="94" stroke="var(--accent)" marker-end="url(#cwa)"/>
+  <path d="M436 50 L316 50 L316 136 L66 136 L66 124" fill="none" stroke="var(--blue)" stroke-dasharray="5 4" marker-end="url(#cwb)"/>
+  <text x="118" y="152" font-size="9" fill="var(--blue)">root′.a IS v1.root.a — same object</text>
+  <line x1="20" y1="192" x2="640" y2="192" stroke="var(--line)"/>
+  <text x="20" y="208" font-size="9" fill="var(--ink)">allocated: 2 · reused: a and its 1000-item list · a deep copy would allocate 1003</text>
+</svg>
+<figcaption><b>Follow the dashed blue arrow — that is the entire idea.</b> Changing one leaf, <code>b.y</code>, allocates new objects only along the path from the root down to what changed: a new <code>root′</code> and a new <code>b′</code>. Two objects. The <code>a</code> branch is not copied, not scanned, not visited — <code>root′.a</code> and <code>v1.root.a</code> are literally the same object in memory, so the thousand-item list under it costs nothing. Two consequences fall out. The old snapshot <code>v1</code> stays completely valid, which is what makes undo, time travel and concurrent readers cheap. And “did anything change?” becomes a pointer comparison at each level (<code>v1.root.a === v2.root.a</code> → the whole subtree is untouched) instead of a deep walk. That is the payment for those two allocations: mutating in place would allocate nothing, but you would lose both.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> R2 + R9 by construction: mutable-looking writes in a transaction produce a structurally shared snapshot plus RFC 6902 patches. Cost model: O(size of each touched container) — which is why big hot arrays are normalised into keyed collections (<code>ids</code> + <code>byId</code>), making the touched container a single item. It runs today &mdash; <a href="#/repl/read-write">read a mutable-looking write back as a structurally shared snapshot</a>, or <a href="#/repl/undo">watch an old snapshot stay valid across undo</a>.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="hamt">
+<h2>HAMT — and why databases use B-trees anyway</h2>
+<p>A <b>HAMT</b> (hash array mapped trie) is the persistent hash map behind Immutable.js, Clojure and the C++ <code>immer</code> library: the key's hash is consumed 5 bits at a time, each level is a node of up to 32 slots (compressed via a bitmap), so any update copies ~log₃₂ n small nodes and shares the rest — structural sharing with O(log₃₂ n) updates <i>independent of container size</i>, versus COW's "copy the whole touched container".</p>
+<p>Databases still choose <b>B-trees</b> because their unit of cost is the 4–16 KB disk page, not the pointer hop: a B-tree with fanout in the hundreds reaches billions of keys in 3–4 page reads, keeps keys ordered (range scans), and maximises useful bytes per page. HAMT's many small scattered nodes are cache- and disk-hostile. The twist: LMDB and CouchDB are <i>copy-on-write B+trees</i> — databases already do structural sharing, at page granularity. In memory, in JS, the "page" is a plain object, so COW-of-plain-objects wins for typical UI containers; HAMT only pays off for very large, hot, unordered maps.</p>
+<figure class="fig">
+<svg viewBox="0 0 660 250" width="660" role="img" aria-label="Three ways to share structure. Copy-on-write of plain objects copies the whole touched container, which is cheap when containers are small. A HAMT copies about log base 32 of n small nodes regardless of container size, so it wins on very large maps. A B-tree copies a page and the path to the root, which is what a disk wants because its unit of cost is the page, not the pointer hop.">
+  <defs><marker id="hma" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="18" font-size="10" fill="var(--muted)">Update one key. What gets copied?</text>
+
+  <text x="20" y="42" font-size="10" fill="var(--ink)">COW of plain objects — what we do</text>
+  <g>
+    <rect x="24" y="52" width="150" height="26" rx="4" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+    <text x="99" y="69" font-size="9" text-anchor="middle" fill="var(--accent-ink)">the whole container</text>
+    <text x="186" y="69" font-size="9" fill="var(--muted)">O(size of that container)</text>
+  </g>
+  <text x="24" y="94" font-size="8.5" fill="var(--muted)">cheap while containers stay small · one plain object, no wrapper, no toJS() tax</text>
+
+  <text x="20" y="122" font-size="10" fill="var(--ink)">HAMT — a trie of 32-slot nodes, indexed 5 bits of the hash at a time</text>
+  <g>
+    <rect x="24" y="132" width="30" height="22" rx="4" fill="var(--amber-soft)" stroke="var(--amber)"/>
+    <rect x="62" y="132" width="30" height="22" rx="4" fill="var(--amber-soft)" stroke="var(--amber)"/>
+    <rect x="100" y="132" width="30" height="22" rx="4" fill="var(--amber-soft)" stroke="var(--amber)"/>
+    <rect x="138" y="132" width="30" height="22" rx="4" fill="var(--panel)" stroke="var(--grey)" stroke-dasharray="3 2"/>
+    <text x="153" y="147" font-size="8" text-anchor="middle" fill="var(--muted)">↕ depth</text>
+    <text x="186" y="147" font-size="9" fill="var(--muted)">O(log₃₂ n) small nodes — same cost at any size</text>
+  </g>
+  <text x="24" y="172" font-size="8.5" fill="var(--muted)">wins on very large hot maps · scattered small nodes are cache-hostile · pays a conversion tax at every JSON/React boundary</text>
+
+  <text x="20" y="200" font-size="10" fill="var(--ink)">B-tree — LMDB, CouchDB (also copy-on-write)</text>
+  <g>
+    <rect x="24" y="210" width="70" height="22" rx="4" fill="var(--blue-soft)" stroke="var(--blue)"/>
+    <text x="59" y="225" font-size="8.5" text-anchor="middle" fill="var(--blue)">page</text>
+    <line x1="98" y1="221" x2="112" y2="221" stroke="var(--muted)" marker-end="url(#hma)"/>
+    <rect x="116" y="210" width="70" height="22" rx="4" fill="var(--blue-soft)" stroke="var(--blue)"/>
+    <text x="151" y="225" font-size="8.5" text-anchor="middle" fill="var(--blue)">…to root</text>
+    <text x="200" y="225" font-size="9" fill="var(--muted)">O(depth) pages · fanout in the hundreds → depth 3–4 over billions</text>
+  </g>
+  <text x="24" y="246" font-size="8.5" fill="var(--muted)">chosen for the disk page, not the pointer hop · ordered keys give range scans</text>
+</svg>
+<figcaption><b>These are not three answers to one question — they are one answer at three units of cost.</b> All three are copy-on-write with structural sharing; they differ only in what a "unit" is. For plain objects it is the container, so copying is cheap exactly while containers are small, which is the normal shape of UI state. For a HAMT it is a 32-slot node, so an update costs about log₃₂ n nodes <i>whatever the size of the map</i> — the reason it wins on very large hot maps, and the reason its many small scattered nodes are unfriendly to a cache. For a B-tree it is a 4–16 kB disk page, and a fanout in the hundreds reaches billions of keys in three or four reads. The twist worth keeping: LMDB and CouchDB are copy-on-write B+trees, so databases have been doing structural sharing all along — at page granularity. In a browser the page is a plain object, which is why the core takes the first row and treats the second as an opt-in storage variant rather than a default.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> the core stays COW-of-plain-objects (§4.4). Per R52, Immutable.js is not discarded: it is faster than Immer <i>while you stay inside its structures and never call <code>toJS()</code></i> — the conversion tax at every React/JSON boundary is what killed it in practice. A HAMT-backed <code>collection</code> storage variant behind the same interface is a legitimate experiment for 100k+-entry maps; the compiler could even pick storage per collection from observed sizes — measured, not assumed.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="resumability">
+<h2>Hydration vs resumability (Qwik)</h2>
+<p><b>Hydration</b> (React, Vue, Svelte, Solid SSR): the server renders HTML, then the client downloads the components and <i>re-executes them all</i> to rebuild state, closures and event handlers, then attaches listeners. You pay for the app twice.</p>
+<p><b>Resumability</b> (Qwik): the server serialises <i>into the HTML</i> the signal graph, the subscriptions, and pointers to every handler ("this button's click lives in chunk X, function Y, with this captured state"). The client executes <b>nothing</b> upfront — the first interaction lazily loads just the handler it needs and continues. The price: everything crossing a lazy-load boundary must be serialisable, which is what Qwik's <code>$</code> optimizer enforces.</p>
+<figure class="fig">
+<svg viewBox="0 0 660 222" width="660" role="img" aria-label="Hydration versus resumability. Under hydration the browser must download the whole bundle and re-run every component before a click does anything, so the page looks finished long before it works. Under resumability the reactive graph is serialised into the HTML, the page is interactive on arrival, and a handler's code is fetched only when that handler is first used.">
+  <defs><marker id="rsa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="22" font-size="10" fill="var(--ink)">HYDRATION</text>
+  <rect x="24" y="34" width="86" height="30" rx="5" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><text x="67" y="52" font-size="9" text-anchor="middle" fill="var(--blue)">HTML</text><line x1="110" y1="49" x2="122" y2="49" stroke="var(--muted)" marker-end="url(#rsa)"/><rect x="126" y="34" width="120" height="30" rx="5" fill="var(--red-soft)" stroke="var(--red)" stroke-width="1"/><text x="186" y="46" font-size="8.5" text-anchor="middle" fill="var(--red)">download the</text><text x="186" y="58" font-size="8.5" text-anchor="middle" fill="var(--red)">whole bundle</text><line x1="246" y1="49" x2="258" y2="49" stroke="var(--muted)" marker-end="url(#rsa)"/><rect x="262" y="34" width="126" height="30" rx="5" fill="var(--red-soft)" stroke="var(--red)" stroke-width="1"/><text x="325" y="46" font-size="8.5" text-anchor="middle" fill="var(--red)">re-run EVERY</text><text x="325" y="58" font-size="8.5" text-anchor="middle" fill="var(--red)">component</text><line x1="388" y1="49" x2="400" y2="49" stroke="var(--muted)" marker-end="url(#rsa)"/><rect x="404" y="34" width="104" height="30" rx="5" fill="var(--panel)" stroke="var(--grey)" stroke-width="1"/><text x="456" y="46" font-size="8.5" text-anchor="middle" fill="var(--muted)">attach</text><text x="456" y="58" font-size="8.5" text-anchor="middle" fill="var(--muted)">listeners</text><line x1="508" y1="49" x2="520" y2="49" stroke="var(--muted)" marker-end="url(#rsa)"/><rect x="524" y="34" width="96" height="30" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/><text x="572" y="52" font-size="8.5" text-anchor="middle" fill="var(--accent-ink)">click works</text>
+  <line x1="24" y1="72" x2="24" y2="86" stroke="var(--red)"/>
+  <line x1="508" y1="72" x2="508" y2="86" stroke="var(--red)"/>
+  <line x1="24" y1="79" x2="508" y2="79" stroke="var(--red)" stroke-dasharray="3 2"/>
+  <rect x="158" y="69" width="222" height="20" rx="3" fill="var(--panel)"/>
+  <text x="269" y="83" font-size="8.5" text-anchor="middle" fill="var(--red)">page looks finished, clicks do nothing</text>
+  <text x="20" y="114" font-size="9" fill="var(--red)">time-to-interactive scales with app size</text>
+  <line x1="20" y1="128" x2="640" y2="128" stroke="var(--line)"/>
+  <text x="20" y="146" font-size="10" fill="var(--ink)">RESUMABILITY</text>
+  <rect x="24" y="150" width="180" height="30" rx="5" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><text x="114" y="162" font-size="8.5" text-anchor="middle" fill="var(--blue)">HTML + serialised</text><text x="114" y="174" font-size="8.5" text-anchor="middle" fill="var(--blue)">reactive graph</text><line x1="204" y1="165" x2="216" y2="165" stroke="var(--muted)" marker-end="url(#rsa)"/><rect x="220" y="150" width="96" height="30" rx="5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><text x="268" y="168" font-size="8.5" text-anchor="middle" fill="var(--accent-ink)">click works</text><line x1="316" y1="165" x2="328" y2="165" stroke="var(--muted)" marker-end="url(#rsa)"/><rect x="332" y="150" width="180" height="30" rx="5" fill="var(--panel)" stroke="var(--grey)" stroke-width="1"/><text x="422" y="162" font-size="8.5" text-anchor="middle" fill="var(--muted)">1st click on a button:</text><text x="422" y="174" font-size="8.5" text-anchor="middle" fill="var(--muted)">fetch only its chunk</text>
+  <text x="20" y="200" font-size="9" fill="var(--accent-ink)">zero components re-run · unclicked handlers never download</text>
+  <text x="20" y="214" font-size="8.5" fill="var(--muted)">cost: everything crossing the boundary must serialise — state easily, closures not</text>
+</svg>
+<figcaption><b>Both rows start from identical server-rendered HTML; the difference is what the browser must finish before a click works.</b> Hydration re-executes the entire component tree in the browser — not to produce different markup, but to rebuild the in-memory state and the closures the event listeners need. Until that finishes, the page is a photograph of an application: it looks complete, and nothing responds. Resumability removes the rebuild instead of speeding it up: the server serialises the reactive graph and the address of each handler <i>into the HTML</i>, so the browser resumes from where the server stopped rather than re-deriving it. The first click on a given button fetches that one handler's chunk; a handler nobody presses is never downloaded. The price is severe and is why almost nobody ships this: everything crossing the boundary must be serialisable. State is easy — it is JSON-shaped already. Closures are not, and splitting every handler into its own chunk with its captured environment is what a compiler like Qwik's exists to do.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> everyone except Qwik serialises only <i>values</i> and rebuilds the graph client-side — that is our v1 SSR design (§7). Qwik is the proof that serialising the live graph is possible; if the R31/R42 compiler ever targets it, this is the mechanism to study.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="runes">
+<h2>Svelte 5 runes</h2>
+<p>Runes are <b>compiler macros</b> that look like functions: <code>$state()</code>, <code>$derived()</code>, <code>$effect()</code>, <code>$props()</code>. They are not imported and don't exist at runtime — the Svelte compiler sees them and rewrites your plain-looking code into signal operations:</p>
+<pre><code>let count = $state(0);            // becomes a signal source
+let double = $derived(count * 2); // becomes a lazy computed
+$effect(() =&gt; console.log(double)); // becomes an effect
+
+count += 1;                        // compiles to a signal write
+</code></pre>
+<p><code>$state</code> on an object/array installs a deep proxy (one lazy signal per property); plain variable reads/writes compile to <code>.get()</code>/<code>.set()</code>. That's why the code looks like ordinary JavaScript with no <code>.value</code> — the compiler put the reactivity there. The limits come from the same trick: it only works inside files the compiler processes, and a bare exported <code>let</code> loses reactivity at the module boundary.</p>
+<figure class="fig">
+<svg viewBox="0 0 660 214" width="660" role="img" aria-label="Svelte runes are compiler macros. The authored source declares a value with dollar-state and a derived value with dollar-derived and then reassigns with plus-equals; the compiled output is a signal source, a lazy computed and a set call. Nothing named rune exists at runtime, which is why the code reads as ordinary JavaScript and why the reactivity stops at the boundary of files the compiler processes.">
+  <defs><marker id="rna" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--accent)"/></marker></defs>
+  <text x="20" y="18" font-size="10" fill="var(--ink)">what you write</text>
+  <rect x="20" y="28" width="264" height="106" rx="6" fill="var(--panel)" stroke="var(--line)"/>
+  <text x="34" y="48" font-size="9.5" fill="var(--muted)">let count = $state(0)</text>
+  <text x="34" y="66" font-size="9.5" fill="var(--muted)">let double = $derived(count * 2)</text>
+  <text x="34" y="84" font-size="9.5" fill="var(--muted)">$effect(() =&gt; log(double))</text>
+  <text x="34" y="110" font-size="9.5" fill="var(--muted)">count += 1</text>
+  <text x="34" y="126" font-size="8.5" fill="var(--muted)">— looks like plain JavaScript</text>
+
+  <line x1="292" y1="80" x2="330" y2="80" stroke="var(--accent)" stroke-width="2" marker-end="url(#rna)"/>
+  <text x="311" y="70" font-size="8.5" text-anchor="middle" fill="var(--accent-ink)">compiler</text>
+
+  <text x="340" y="18" font-size="10" fill="var(--accent-ink)">what runs — Svelte internals you never import</text>
+  <rect x="340" y="28" width="300" height="106" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <text x="354" y="48" font-size="9.5" fill="var(--accent-ink)">const count = source(0)</text>
+  <text x="354" y="66" font-size="9.5" fill="var(--accent-ink)">const double = derived(() =&gt; get(count) * 2)</text>
+  <text x="354" y="84" font-size="9.5" fill="var(--accent-ink)">effect(() =&gt; log(get(double)))</text>
+  <text x="354" y="110" font-size="9.5" fill="var(--accent-ink)">set(count, get(count) + 1)</text>
+  <text x="354" y="126" font-size="8.5" fill="var(--accent-ink)">— signal calls the author never typed</text>
+
+  <line x1="20" y1="150" x2="640" y2="150" stroke="var(--line)"/>
+  <text x="20" y="168" font-size="9" fill="var(--muted)">No rune exists at runtime — they are not imported and cannot be. The compiler is the whole mechanism.</text>
+  <text x="20" y="184" font-size="9" fill="var(--red)">Therefore: it only works in files the compiler processes …</text>
+  <text x="20" y="200" font-size="9" fill="var(--red)">… and a bare <tspan fill="var(--ink)">export let</tspan> loses its reactivity crossing the module boundary — the same trick is the same limit.</text>
+</svg>
+<figcaption><b>A rune looks like a function call and is really a marker for the compiler.</b> <code>$state</code>, <code>$derived</code>, <code>$effect</code> and <code>$props</code> are never imported, exist in no runtime package, and cannot be passed around as values — Svelte's compiler sees them in the source and rewrites the surrounding code into signal operations. That is why the authored side reads as ordinary JavaScript: a plain reassignment becomes a signal write because the compiler put the write there, not because the value is a wrapper object with a <code>.value</code>. On an object or array, <code>$state</code> additionally installs a deep proxy with one lazy signal per property. The limits fall out of the same trick rather than being separate flaws: reactivity exists only inside files the compiler processes, and a bare <code>export let</code> is a plain binding again the moment it crosses the module boundary. This is the precedent our own compiler follows — and the reason our uncompiled build must behave identically, so that crossing that boundary degrades performance rather than correctness.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> runes are the strongest existing proof of our "disappearing framework" thesis (F2, R23, R42): familiar-looking code, compiler injects the reactive machinery at the boundaries. Our compiler aims at the same ergonomics for store code — across frameworks, not inside one.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="signals-streams">
+<h2>Signals vs streams — and operator fusion</h2>
+<p>A <b>signal</b> holds current state: the graph knows its dependencies, guarantees a consistent view, recomputes lazily. An <b>observable stream</b> pushes discrete events through operator chains: dependencies are wired by hand (<code>combineLatest</code>), there is no glitch-freedom (a diamond over <code>combineLatest</code> emits intermediate pairs), but time operators (debounce, retry, buffering) are unmatched. The standards reflect the split: TC39 Signals for state, WICG Observable for events. Rule of thumb: <i>state lives in signals; event streams feed transactions</i>.</p>
+<p><b>Operator fusion</b> — most.js's famous optimisation: <code>.map(f).map(g)</code> collapses into <code>.map(x =&gt; g(f(x)))</code> at composition time — one pass, no intermediate allocations. RxJS never fused automatically; most.js proved the win. For us this is a compiler pass, not a runtime trick: chains of <code>derive</code> and <code>derive.collection(filter → map → sort)</code> pipelines fuse statically into single passes (decision D-rxjs).</p>
+<figure class="fig">
+<svg viewBox="0 0 660 268" width="660" role="img" aria-label="Signals versus streams on a diamond. With streams, combineLatest emits an intermediate pair because b and c arrive separately, so a downstream consumer briefly sees a mismatched combination. With signals, writing a marks the graph and one pull recomputes it, so the consumer only ever observes the consistent result. Below, operator fusion collapses two consecutive maps into one pass.">
+  <defs><marker id="ssa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="18" font-size="10" fill="var(--muted)">The same diamond: a feeds b and c, and d needs both.</text>
+
+  <text x="20" y="40" font-size="10" fill="var(--red)">STREAMS — push, wired by hand</text>
+  <circle cx="60" cy="86" r="17" fill="var(--panel)" stroke="var(--grey)"/><text x="60" y="90" font-size="9" text-anchor="middle" fill="var(--muted)">a</text>
+  <circle cx="140" cy="62" r="17" fill="var(--panel)" stroke="var(--grey)"/><text x="140" y="66" font-size="9" text-anchor="middle" fill="var(--muted)">b</text>
+  <circle cx="140" cy="110" r="17" fill="var(--panel)" stroke="var(--grey)"/><text x="140" y="114" font-size="9" text-anchor="middle" fill="var(--muted)">c</text>
+  <circle cx="228" cy="86" r="19" fill="var(--red-soft)" stroke="var(--red)"/><text x="228" y="83" font-size="8.5" text-anchor="middle" fill="var(--red)">d fires</text><text x="228" y="94" font-size="8.5" text-anchor="middle" fill="var(--red)">twice</text>
+  <line x1="76" y1="79" x2="121" y2="69" stroke="var(--muted)" marker-end="url(#ssa)"/>
+  <line x1="76" y1="93" x2="121" y2="104" stroke="var(--muted)" marker-end="url(#ssa)"/>
+  <line x1="157" y1="68" x2="208" y2="79" stroke="var(--muted)" marker-end="url(#ssa)"/>
+  <line x1="157" y1="104" x2="208" y2="93" stroke="var(--muted)" marker-end="url(#ssa)"/>
+  <text x="262" y="70" font-size="8.5" fill="var(--red)">1st emission: (b′, c) — b is new, c is still old.</text>
+  <text x="262" y="83" font-size="8.5" fill="var(--red)">That pair was never simultaneously true.</text>
+  <text x="262" y="96" font-size="8.5" fill="var(--muted)">2nd emission: (b′, c′) — correct, but too late.</text>
+
+  <line x1="20" y1="132" x2="640" y2="132" stroke="var(--line)"/>
+
+  <text x="20" y="152" font-size="10" fill="var(--accent-ink)">SIGNALS — pull, graph knows the shape</text>
+  <circle cx="60" cy="198" r="17" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><text x="60" y="202" font-size="9" text-anchor="middle" fill="var(--accent-ink)">a</text>
+  <circle cx="140" cy="174" r="17" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="140" y="178" font-size="9" text-anchor="middle" fill="var(--accent-ink)">b</text>
+  <circle cx="140" cy="222" r="17" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="140" y="226" font-size="9" text-anchor="middle" fill="var(--accent-ink)">c</text>
+  <circle cx="228" cy="198" r="19" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="228" y="195" font-size="8.5" text-anchor="middle" fill="var(--accent-ink)">d runs</text><text x="228" y="206" font-size="8.5" text-anchor="middle" fill="var(--accent-ink)">once</text>
+  <line x1="76" y1="191" x2="121" y2="181" stroke="var(--accent)" marker-end="url(#ssa)"/>
+  <line x1="76" y1="205" x2="121" y2="216" stroke="var(--accent)" marker-end="url(#ssa)"/>
+  <line x1="157" y1="180" x2="208" y2="191" stroke="var(--accent)" marker-end="url(#ssa)"/>
+  <line x1="157" y1="216" x2="208" y2="205" stroke="var(--accent)" marker-end="url(#ssa)"/>
+  <text x="262" y="194" font-size="8.5" fill="var(--accent-ink)">the write marks; one pull recomputes b, c, then d.</text>
+  <text x="262" y="206" font-size="8.5" fill="var(--muted)">No intermediate pair exists to be observed.</text>
+
+  <line x1="20" y1="240" x2="640" y2="240" stroke="var(--line)"/>
+  <text x="20" y="258" font-size="9" fill="var(--muted)">Fusion: <tspan fill="var(--ink)">.map(f).map(g)</tspan> → <tspan fill="var(--ink)">.map(g∘f)</tspan> — one pass, no intermediate array.</text>
+</svg>
+<figcaption><b>A signal holds current state; a stream pushes events through time.</b> The diamond is where the difference stops being philosophical. With streams you wire the join yourself, so when <code>a</code> changes, <code>b</code> and <code>c</code> arrive as two separate pushes and <code>combineLatest</code> dutifully emits the mismatched pair in between — a combination that was never simultaneously true. With signals the graph already knows <code>d</code> depends on both, so a write only marks and a single pull recomputes in dependency order; the inconsistent state has no moment in which to exist. That is glitch-freedom, and it is a property of knowing the graph, not of being faster. The trade runs the other way for time: retry, debounce, backpressure and buffering are what streams are for and what signals have no vocabulary for — hence the split we take, <b>state in signals, event streams feeding transactions</b>, which is also where the two standards landed (TC39 Signals, WICG Observable). Operator fusion is the one idea we take from the stream world wholesale: most.js proved that consecutive <code>map</code>s collapse into a single pass at composition time, and because our derived chains are declared rather than assembled at runtime, we can do it in the compiler instead.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> the <code>rx</code> source adapts <code>Observable&lt;ChangeBatch&gt;</code> into collection transactions (§8.4); RxJS also earns a row in the reactivity comparison (R27) so the push-vs-pull trade-off is shown, not asserted.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="shapes">
+<h2>ElectricSQL shapes — realtime over plain HTTP</h2>
+<p>A <b>shape</b> describes selected Postgres data maintained on the client through a snapshot and a change log. This helps small shared boards as well as larger catalogues. Log offsets identify changes, not row IDs. Electric supports long polling <em>and SSE</em>; the sync protocol, not the transport alone, specifies local updates/deletes and resynchronisation. <a href="/learning">Use cases, protocol steps and playable examples →</a> · <a href="https://electric.ax/docs/sync/api/http">Official protocol</a>.</p>
+<p><b>Pains it removes:</b> hand-written cache invalidation ("when X changes, refetch Y"), websocket infrastructure and reconnect logic, thundering-herd refetches, lost-update windows after reconnect. <b>Why it fits agent workloads</b> (their own positioning): dozens of agents polling the same state become one CDN-cached log; each agent process can die and resume from its offset with a consistent view.</p>
+<figure class="fig">
+<svg viewBox="0 0 660 226" width="660" role="img" aria-label="An Electric shape is a slice of a table delivered as an append-only log over ordinary HTTP GET requests carrying an offset. Because the requests are plain cacheable GETs a CDN can fan one shape out to many clients, and a client that was offline attempts resume with its matching shape handle and offset, with refetch when its old history is unavailable. Writes do not go through it.">
+  <defs><marker id="sha" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="18" font-size="10" fill="var(--muted)">A shape = table + where + columns, as an append-only log.</text>
+
+  <rect x="20" y="34" width="96" height="34" rx="6" fill="var(--panel)" stroke="var(--grey)"/>
+  <text x="68" y="50" font-size="9" text-anchor="middle" fill="var(--muted)">Postgres</text>
+  <text x="68" y="62" font-size="8.5" text-anchor="middle" fill="var(--muted)">your table</text>
+  <line x1="120" y1="51" x2="136" y2="51" stroke="var(--muted)" marker-end="url(#sha)"/>
+  <rect x="140" y="34" width="112" height="34" rx="6" fill="var(--blue-soft)" stroke="var(--blue)"/>
+  <text x="196" y="50" font-size="9" text-anchor="middle" fill="var(--blue)">shape log</text>
+  <text x="196" y="62" font-size="8.5" text-anchor="middle" fill="var(--blue)">offsets 0,1,2,3…</text>
+
+  <line x1="256" y1="51" x2="272" y2="51" stroke="var(--muted)" marker-end="url(#sha)"/>
+  <rect x="276" y="34" width="120" height="34" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <text x="336" y="50" font-size="9" text-anchor="middle" fill="var(--accent-ink)">CDN</text>
+  <text x="336" y="62" font-size="8.5" text-anchor="middle" fill="var(--accent-ink)">caches plain GETs</text>
+
+  <line x1="400" y1="44" x2="424" y2="30" stroke="var(--muted)" marker-end="url(#sha)"/>
+  <line x1="400" y1="51" x2="424" y2="51" stroke="var(--muted)" marker-end="url(#sha)"/>
+  <line x1="400" y1="58" x2="424" y2="72" stroke="var(--muted)" marker-end="url(#sha)"/>
+  <text x="432" y="26" font-size="8.5" fill="var(--muted)">client A · at offset 3</text>
+  <text x="432" y="54" font-size="8.5" fill="var(--muted)">client B · at offset 3</text>
+  <text x="432" y="80" font-size="8.5" fill="var(--muted)">…thousands, one cached response</text>
+
+  <line x1="20" y1="98" x2="640" y2="98" stroke="var(--line)"/>
+  <text x="20" y="118" font-size="10" fill="var(--ink)">Coming back after being offline</text>
+  <text x="24" y="140" font-size="9" fill="var(--muted)">GET /v1/shape?offset=<tspan fill="var(--ink)">3</tspan></text>
+  <line x1="200" y1="136" x2="222" y2="136" stroke="var(--muted)" marker-end="url(#sha)"/>
+  <text x="232" y="140" font-size="9" fill="var(--accent-ink)">everything after 3, in order — nothing missed, nothing duplicated</text>
+  <text x="24" y="158" font-size="8.5" fill="var(--muted)">The offset is the client's whole resume state. No socket to reconnect, no replay window to size, no thundering herd.</text>
+
+  <line x1="20" y1="176" x2="640" y2="176" stroke="var(--line)"/>
+  <text x="20" y="196" font-size="9" fill="var(--red)">Reads only. Writes go to your own API — Electric does not solve the write path.</text>
+  <text x="20" y="212" font-size="8.5" fill="var(--muted)">Which is exactly the seam our optimistic overlay and offline outbox are shaped to fill.</text>
+</svg>
+<figcaption><b>Snapshot, then changes to a selected local replica.</b> Equivalent authorised shape/chunk requests may reuse cache entries, and compatible long polls may be collapsed. Resume needs the shape handle and offset together with the matching local data, and retained history. An expired handle requires refetch. Replayed keyed updates can be idempotent, but arbitrary side effects are not automatically exactly-once. Application writes stay in your API. Private shapes require correct authorisation and cache boundaries.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> beyond the <code>electric</code> source adapter — the pattern (resumable offset log per subscription slice) is worth copying for Hyper itself and for the code factory (rig+lmao/axe): task state, worktree status, and review queues consumed by many agents are exactly "shapes"; the orchestrator becomes a log server, and agents become resumable subscribers (R50). Same idea already powers our remote protocol's <code>resync(fromSeq)</code>.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="livestore-git">
+<h2>LiveStore's git-like sync (pull → rebase → push)</h2>
+<p>LiveStore keeps state as an <b>event log</b> (past-tense, versioned events; state = fold of the log). Sync works exactly like a git branch: the backend holds the authoritative, totally-ordered log (<i>main</i>); your device accumulates local events (<i>your branch</i>) — offline included. On (re)connect: <b>pull</b> new upstream events, <b>rebase</b> your pending local events on top of them (re-apply after, materialised state recomputed through pure fold functions), <b>push</b>; if the server accepted someone else's events first, you pull-rebase again. Undo is a <i>compensating event</i> (like <code>git revert</code>), which stays correct under concurrent edits — you never rewrite shared history.</p>
+<figure class="fig">
+<svg viewBox="0 0 660 232" width="660" role="img" aria-label="Git-like sync. Offline, the server and the client each append events after the last point they agreed on. On reconnect the client pulls the two server events and replays its own two on top of them, producing one ordered log of six that it pushes back, so neither side loses work.">
+  <defs><marker id="lsa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="20" font-size="10" fill="var(--ink)">1 · OFFLINE — both append, neither can see the other</text>
+  <circle cx="470" cy="17" r="6" fill="var(--panel)" stroke="var(--grey)"/><text x="482" y="20" font-size="8.5" fill="var(--muted)">= one immutable event</text>
+  <text x="24" y="53" font-size="9" fill="var(--muted)">server</text>
+  <line x1="80" y1="49" x2="212" y2="49" stroke="var(--line)"/>
+  <circle cx="80" cy="49" r="9" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><circle cx="114" cy="49" r="9" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><circle cx="160" cy="49" r="9" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="2"/><circle cx="194" cy="49" r="9" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="2"/>
+  <text x="230" y="52" font-size="8.5" fill="var(--blue)">← added while you were away</text>
+  <text x="24" y="99" font-size="9" fill="var(--muted)">you</text>
+  <line x1="80" y1="95" x2="212" y2="95" stroke="var(--line)"/>
+  <circle cx="80" cy="95" r="9" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><circle cx="114" cy="95" r="9" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><circle cx="160" cy="95" r="9" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/><circle cx="194" cy="95" r="9" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/>
+  <text x="230" y="98" font-size="8.5" fill="var(--amber)">← your two offline edits</text>
+  <rect x="66" y="30" width="62" height="84" rx="6" fill="none" stroke="var(--grey)" stroke-dasharray="3 3"/>
+  <text x="97" y="128" font-size="8.5" text-anchor="middle" fill="var(--muted)">last agreed</text>
+  <line x1="20" y1="142" x2="640" y2="142" stroke="var(--line)"/>
+  <text x="20" y="164" font-size="10" fill="var(--ink)">2 · RECONNECT — replay yours on top of theirs, then push</text>
+  <line x1="80" y1="192" x2="280" y2="192" stroke="var(--line)"/>
+  <circle cx="80" cy="192" r="9" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><circle cx="114" cy="192" r="9" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/><circle cx="160" cy="192" r="9" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="2"/><circle cx="194" cy="192" r="9" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="2"/><circle cx="240" cy="192" r="9" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/><circle cx="274" cy="192" r="9" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/>
+  <line x1="292" y1="192" x2="312" y2="192" stroke="var(--muted)" marker-end="url(#lsa)"/>
+  <text x="322" y="195" font-size="9" fill="var(--accent-ink)">push — every client ends with these six, in this order</text>
+  <text x="20" y="222" font-size="8.5" fill="var(--muted)">your edits re-apply against state that already includes theirs — nothing is overwritten silently</text>
+</svg>
+<figcaption><b>State here is an ordered log of events, not a bag of values — which turns “two copies diverged” into the problem git already solved.</b> Offline, both sides append after the last event they agreed on, so neither log is wrong; they are just different. On reconnect the client does not merge and it does not pick a winner. It pulls the events the server accepted, then <b>replays its own two on top of them</b> — meaning each of your edits is re-applied against a state that already contains theirs, rather than against the stale state you had when you made it. The result is one linear log of six that every client converges on. The failure mode is honest and narrow: if one of your events genuinely cannot apply against the newer state, that single event is rejected and surfaced to you — not the whole batch, and never by quietly discarding one side's work.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> we already took the hygiene rules (§4.6: versioned past-tense events, clientOnly vs synced, compensating undo §4.10). The pull-rebase-push loop is the reference design for R47 offline accumulation — and note it is the same shape as Zero's mutator rebase and our optimistic overlay (§4.11): three systems, one idea — <i>local intent replayed on top of authoritative truth</i>.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="redux-form">
+<h2>redux-form post-mortem (draft, R48)</h2>
+<p>Why it was slow and painful, cause by cause: (1) every keystroke dispatched an action into the <b>single root store</b>, and every connected component's <code>mapStateToProps</code> re-ran — cost proportional to app size, not to the one input; (2) the form state lived as one nested object, so each keystroke <b>rebuilt the whole form subtree</b> (no per-field granularity); (3) validation ran synchronously on the whole form per keystroke; (4) action log noise (<code>CHANGE</code> × every character) drowned devtools; (5) serialisation pressure — the whole form state was JSON-ready at all times, even transient focus/touched flags.</p>
+<p>Point-by-point in our design: per-field signals mean a keystroke notifies exactly one input's subscriber (§4.9); <code>transient</code> transactions are coalesced per frame and excluded from the command log (no devtools noise, no log growth); validation is per-field and compile-time-generated (R49/typia); persistence excludes transients by default. The principle stays ("all state global"); the mechanism that made it expensive is gone. Full write-up with measurements: R48, pending.</p>
+<figure class="fig">
+<svg viewBox="0 0 660 240" width="660" role="img" aria-label="One keystroke under redux-form versus under this design. Under redux-form the keystroke dispatches an action into the root store, every connected component re-runs its mapStateToProps, the whole form subtree is rebuilt, validation runs over the entire form and the action log gains an entry per character. Here the same keystroke writes one per-field signal, re-renders one input, coalesces into one patch per frame and does not enter the command log at all.">
+  <text x="20" y="18" font-size="10" fill="var(--red)">redux-form — one keystroke</text>
+  <g font-size="9">
+    <rect x="24" y="30" width="120" height="24" rx="4" fill="var(--red-soft)" stroke="var(--red)"/><text x="84" y="46" text-anchor="middle" fill="var(--red)">dispatch CHANGE</text>
+    <rect x="24" y="60" width="264" height="22" rx="4" fill="var(--red-soft)" stroke="var(--red)"/><text x="156" y="75" text-anchor="middle" fill="var(--red)">every connected mapStateToProps re-runs</text>
+    <rect x="24" y="88" width="264" height="22" rx="4" fill="var(--red-soft)" stroke="var(--red)"/><text x="156" y="103" text-anchor="middle" fill="var(--red)">whole form subtree rebuilt</text>
+    <rect x="24" y="116" width="264" height="22" rx="4" fill="var(--red-soft)" stroke="var(--red)"/><text x="156" y="131" text-anchor="middle" fill="var(--red)">validation runs over the entire form</text>
+    <rect x="24" y="144" width="264" height="22" rx="4" fill="var(--red-soft)" stroke="var(--red)"/><text x="156" y="159" text-anchor="middle" fill="var(--red)">one log entry per character</text>
+  </g>
+  <text x="24" y="186" font-size="9" fill="var(--red)">Cost scales with the app, not the input.</text>
+
+  <line x1="308" y1="24" x2="308" y2="196" stroke="var(--line)" stroke-dasharray="4 4"/>
+
+  <text x="330" y="18" font-size="10" fill="var(--accent-ink)">here — the same keystroke</text>
+  <g font-size="9">
+    <rect x="334" y="30" width="120" height="24" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="394" y="46" text-anchor="middle" fill="var(--accent-ink)">write one signal</text>
+    <rect x="334" y="60" width="300" height="22" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="484" y="75" text-anchor="middle" fill="var(--accent-ink)">one subscriber notified — that input only</text>
+    <rect x="334" y="88" width="300" height="22" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="484" y="103" text-anchor="middle" fill="var(--accent-ink)">per-field node — no subtree to rebuild</text>
+    <rect x="334" y="116" width="300" height="22" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="484" y="131" text-anchor="middle" fill="var(--accent-ink)">validation per field, compiled from the type</text>
+    <rect x="334" y="144" width="300" height="22" rx="4" fill="var(--panel)" stroke="var(--grey)"/><text x="484" y="159" text-anchor="middle" fill="var(--muted)">transient · one patch per frame · not logged</text>
+  </g>
+  <text x="334" y="186" font-size="9" fill="var(--accent-ink)">Cost is local. Visibility is still global.</text>
+
+  <line x1="20" y1="204" x2="640" y2="204" stroke="var(--line)"/>
+  <text x="20" y="224" font-size="9" fill="var(--muted)">The idea was never wrong — keystrokes <tspan fill="var(--ink)">should</tspan> be inspectable state. The mechanism was.</text>
+  <text x="20" y="236" font-size="8.5" fill="var(--muted)">Every row on the right is a mechanism change, not a discipline the developer has to remember.</text>
+</svg>
+<figcaption><b>redux-form is the standing argument against putting every keystroke in global state, so it is worth being precise about what actually went wrong.</b> Five causes, and none of them is "global state is a bad idea". A keystroke dispatched into the root store, so every connected component re-ran its <code>mapStateToProps</code> — cost proportional to the size of the application rather than to the one input that changed. The form lived as a single nested object, so each character rebuilt the whole subtree. Validation ran over the entire form, synchronously, per character. The action log gained an entry per keystroke and drowned devtools. And the whole thing was kept JSON-ready at all times, including transient focus and touched flags. Each is a mechanism defect, and each has a mechanism answer here: per-field signals mean one subscriber is notified; per-field nodes mean there is no subtree to rebuild; validation is per field and compiled from the type; and transient nodes coalesce to one patch per frame and never enter the command log. The conclusion we draw is the opposite of the usual one — keystrokes <i>should</i> be inspectable state, which is what makes "reproduce the user's exact session" include what they typed. It just has to be free, and free is a property of the mechanism, not of developer discipline.</figcaption>
+</figure>
+<div class="why-us"><b>Why it matters for us:</b> the mechanism is assembled, not invented here &mdash; Zustand's &ldquo;transient updates&rdquo; supplied the name, Yjs's transaction origins/<code>captureTimeout</code>, Loro's <code>mergeInterval</code> and LiveStore's <code>clientOnly</code> events supplied the coalescing semantics, and wiring it all to one per-node flag is ours. Nor is it a slide: it runs today &mdash; <a href="#/repl/transient">type into the search box in the REPL</a> and read the transaction log: one coalesced entry, not one per keystroke.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="structured-concurrency">
+<h2>Structured concurrency, borrowed for the client</h2>
+<p>A <b>transaction</b> is instantaneous: it begins, applies, emits its patches and commits inside one turn. There is nothing in it to cancel, and keeping it that way is what makes undo, replication and the patch log simple. A <b>task</b> is the asynchronous thing that commits zero, one or many transactions over its lifetime &mdash; and it is the thing that has a status, a duration, children and a cancel button. Almost every state library models the first and leaves the second to you.</p>
+<p>Structured concurrency is the idea that a task belongs to a <b>scope</b>, and that when the scope ends every task inside it ends too &mdash; so no unit of work can outlive the thing that asked for it. Kotlin and Trio use it to stop orphaned coroutines on a server. On a client the scope that matters is almost always the <b>route</b>: nearly every genuine cancellation is &ldquo;the user navigated away&rdquo;.</p>
+<figure class="fig">
+<svg viewBox="0 0 660 262" width="660" role="img" aria-label="Two timelines of three network requests. In the top one the user leaves the route while all three are in flight; each finishes later and writes its result into the store and the screen that has already been unmounted. In the bottom one, leaving ends the route scope: all three abort at that instant, the abort reaches fetch, and the three finalisers run in reverse order, banner first and facets last.">
+  <defs><marker id="cna" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--muted)"/></marker></defs>
+
+  <text x="16" y="18" font-size="10" fill="var(--ink)">WITHOUT scopes &mdash; the request outlives the screen</text>
+  <text x="16" y="34" font-size="8.5" fill="var(--muted)">network requests, over time &rarr;</text>
+  <line x1="262" y1="38" x2="262" y2="104" stroke="var(--amber)" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="266" y="34" font-size="9" fill="var(--amber)">user leaves /products</text>
+
+  <text x="16" y="58" font-size="9" fill="var(--muted)">GET facets</text>
+  <rect x="90" y="48" width="200" height="12" rx="3" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/>
+  <rect x="290" y="48" width="11" height="12" rx="2" fill="var(--amber)" opacity="0.55"/>
+  <text x="16" y="76" font-size="9" fill="var(--muted)">GET rows</text>
+  <rect x="90" y="66" width="240" height="12" rx="3" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/>
+  <rect x="330" y="66" width="11" height="12" rx="2" fill="var(--amber)" opacity="0.55"/>
+  <text x="16" y="94" font-size="9" fill="var(--muted)">GET banner</text>
+  <rect x="90" y="84" width="280" height="12" rx="3" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/>
+  <rect x="370" y="84" width="11" height="12" rx="2" fill="var(--amber)" opacity="0.55"/>
+
+  <line x1="303" y1="54" x2="428" y2="62" stroke="var(--amber)" marker-end="url(#cna)"/>
+  <line x1="343" y1="72" x2="428" y2="70" stroke="var(--amber)" marker-end="url(#cna)"/>
+  <line x1="383" y1="90" x2="428" y2="78" stroke="var(--amber)" marker-end="url(#cna)"/>
+  <text x="316" y="42" font-size="8.5" fill="var(--amber)">responses arrive &rarr; 3 stale writes</text>
+  <rect x="432" y="48" width="214" height="48" rx="6" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/>
+  <text x="539" y="68" font-size="9.5" text-anchor="middle" fill="var(--amber)">the store, and the /products UI</text>
+  <text x="539" y="84" font-size="9" text-anchor="middle" fill="var(--muted)">&mdash; unmounted two seconds ago</text>
+  <text x="16" y="122" font-size="9" fill="var(--muted)">3 requests still on the wire &middot; 3 results written into a screen nobody is looking at</text>
+
+  <text x="16" y="152" font-size="10" fill="var(--ink)">WITH a route scope &mdash; leaving ends the scope</text>
+  <line x1="262" y1="164" x2="262" y2="230" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="196" y="160" font-size="9" fill="var(--accent-ink)">route.end()</text>
+
+  <text x="16" y="184" font-size="9" fill="var(--muted)">GET facets</text>
+  <rect x="90" y="174" width="172" height="12" rx="3" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
+  <text x="16" y="202" font-size="9" fill="var(--muted)">GET rows</text>
+  <rect x="90" y="192" width="172" height="12" rx="3" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
+  <text x="16" y="220" font-size="9" fill="var(--muted)">GET banner</text>
+  <rect x="90" y="210" width="172" height="12" rx="3" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
+
+  <line x1="268" y1="198" x2="284" y2="198" stroke="var(--muted)" marker-end="url(#cna)"/>
+  <rect x="288" y="180" width="86" height="36" rx="5" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/>
+  <text x="331" y="196" font-size="9.5" text-anchor="middle" fill="var(--blue)">abort</text>
+  <text x="331" y="209" font-size="8.5" text-anchor="middle" fill="var(--muted)">signal &rarr; fetch</text>
+  <line x1="378" y1="198" x2="394" y2="198" stroke="var(--muted)" marker-end="url(#cna)"/>
+
+  <text x="398" y="168" font-size="8.5" fill="var(--muted)">then the finalisers, last-in-first-out:</text>
+  <rect x="398" y="174" width="248" height="14" rx="3" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/>
+  <text x="404" y="184" font-size="8.5" fill="var(--blue)">1st &mdash; cleanup banner (registered last)</text>
+  <rect x="398" y="192" width="248" height="14" rx="3" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/>
+  <text x="404" y="202" font-size="8.5" fill="var(--blue)">2nd &mdash; cleanup rows</text>
+  <rect x="398" y="210" width="248" height="14" rx="3" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/>
+  <text x="404" y="220" font-size="8.5" fill="var(--blue)">3rd &mdash; cleanup facets (registered first)</text>
+  <text x="16" y="248" font-size="9" fill="var(--muted)">0 requests on the wire &middot; 0 writes &middot; each task ends cancelled, with a reason</text>
+</svg>
+<figcaption><b>The top row is the bug the bottom row prevents</b>, and it is worth naming precisely: not &ldquo;a wasted request&rdquo; but a <em>write into a screen that no longer exists</em>. The results arrive after the user has moved on and land in the store anyway &mdash; a spinner that never clears, a list that flashes back to the previous route&rsquo;s data, an error toast for a page nobody is on. Discarding the result on arrival does not fix it either, because the request was still made, still cost the user their battery and their data plan, and still occupied a connection the new screen needed. A scope fixes it at the source: the abort reaches <code>fetch</code>, the socket closes, and the finalisers run <b>last-in-first-out</b>, which is the order cleanup has to happen in and the order <code>addEventListener</code> gets wrong.</figcaption>
+</figure>
+<p>Two choices in the design are deliberately the opposite of what a server-side library would pick. <b>Siblings fail independently by default</b> &mdash; Kotlin&rsquo;s <code>SupervisorJob</code> as the default rather than the opt-in, because one widget&rsquo;s failed request must not take down the other five on the page, and Android spent years learning to always opt in. And <b>cancellation is a status, not an undo</b>: undo reverses the completed effects of a finished command and has a redo; cancel stops in-progress work and has none &mdash; you re-issue the command. Merging them would produce a history cursor that can point at a running task.</p>
+<p><b>Which router?</b> Any of them, and that is a design constraint rather than a convenience. A scope is a plain object with a lifetime; a router adapter opens one when a route is entered and calls <code>scope.end()</code> when it is left, which is a dozen lines against React Router, TanStack Router, Vue Router or something hand-rolled. The store cannot depend on a router &mdash; a framework-agnostic store that required one would not be framework-agnostic &mdash; so the dependency runs the other way and the adapter is the only piece that knows which router is in the building.</p>
+<p><b>And what is <code>ctx</code>?</b> The one object a task body is handed, and deliberately the whole capability surface, so that reading its type is enough to discover what the toolkit can do &mdash; for a person and for an agent. It carries <code>signal</code> (an ordinary <code>AbortSignal</code>, hand it to <code>fetch</code>), <code>reason()</code> for <em>why</em> a cancel happened rather than merely that it did, <code>progress()</code>, <code>spawn()</code> for a child task, <code>all()</code> and <code>race()</code> for groups, <code>shield()</code> for a region cancellation may not interrupt, and <code>onCancel()</code> for finalisers that run last-in-first-out.</p>
+<div class="why-us"><b>Why it matters for us:</b> this is redux-saga&rsquo;s best idea &mdash; task trees you can cancel as a unit &mdash; without a generator runtime, a middleware, or a second control-flow language to learn. Because the shape is declared rather than woven, the compiler can delete it: in a project where no effect spawns a child, the parent-pointer bookkeeping and the signal linking are dead code and are dropped, so task trees cost nothing where they are not used (&sect;4.15, R71&ndash;R74). It runs today &mdash; <a href="#/repl/cancellation">end a scope in the REPL</a> and read the output.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="concept" id="regions">
+<p><b>Prior art and implementation boundary:</b> the ingredients include <a href="https://react.dev/learn/preserving-and-resetting-state">React component lifetime</a>, <a href="https://mobx-state-tree.js.org/concepts/volatiles">MST volatile state</a> and <a href="https://github.com/rt2zz/redux-persist#blacklist--whitelist">selective persistence</a>. Our four labels compose defaults; they are not an invention of state lifetime. The policy diagram is the design target; the prototype implements region-aware persistence filtering, not every pictured guarantee. <a href="/learning">Detailed distinctions and inline declarations →</a>.</p>
+<h2>Regions: what a piece of state <em>is</em></h2>
+<p>Ask what a value in the store <b>is</b> and you get an answer that decides half a dozen policies at once. An order is business truth: the server knows it, it persists, it syncs, it belongs in undo. A scroll position is not: delete it and the application is still correct, the user has only lost their place. A half-typed comment is neither — no server has accepted it, but the user would be furious if it vanished. Those three answers imply completely different settings for persistence, sync, the command log, undo, eviction and crash-safety, and in most codebases each of those settings is decided separately, per slice, by whoever was there.</p>
+<p>A <b>region</b> is a name for one of those clusters. There are four — <b>domain</b>, <b>session</b>, <b>view</b>, <b>draft</b> — and each is a test you can apply rather than a category you have to intuit.</p>
+<figure class="fig">
+<svg viewBox="0 0 660 236" width="660" role="img" aria-label="Four regions with the policies each one implies. Domain persists, syncs, is logged, is undoable and evicts only to a tombstone. Session persists to its own store and is never undoable. View persists nothing, is freely evictable, and its undo entries are grouped. Draft is persisted crash-safe, never evicted, protected against loss, and does not sync until it is committed.">
+  <text x="16" y="16" font-size="10" fill="var(--ink)">one question &mdash; what IS this value? &mdash; answers six policies at once</text>
+  <text x="16" y="32" font-size="8.5" fill="var(--muted)">each card, top to bottom: the test it has to pass &middot; the policies that follow &middot; examples</text>
+
+  <rect x="16" y="42" width="152" height="166" rx="7" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
+  <text x="28" y="62" font-size="11" fill="var(--accent-ink)">domain</text>
+  <text x="28" y="78" font-size="8.5" fill="var(--muted)">the server knows it,</text>
+  <text x="28" y="90" font-size="8.5" fill="var(--muted)">or would want to</text>
+  <text x="28" y="112" font-size="9" fill="var(--accent-ink)">persist &middot; sync &middot; log</text>
+  <text x="28" y="126" font-size="9" fill="var(--accent-ink)">undo</text>
+  <text x="28" y="140" font-size="9" fill="var(--muted)">evicts to a tombstone</text>
+  <text x="28" y="164" font-size="8.5" fill="var(--muted)">orders, documents,</text>
+  <text x="28" y="176" font-size="8.5" fill="var(--muted)">automation rules</text>
+
+  <rect x="176" y="42" width="152" height="166" rx="7" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="1"/>
+  <text x="188" y="62" font-size="11" fill="var(--blue)">session</text>
+  <text x="188" y="78" font-size="8.5" fill="var(--muted)">survives navigation,</text>
+  <text x="188" y="90" font-size="8.5" fill="var(--muted)">dies at logout</text>
+  <text x="188" y="112" font-size="9" fill="var(--blue)">its own store</text>
+  <text x="188" y="126" font-size="9" fill="var(--amber)">never in undo</text>
+  <text x="188" y="140" font-size="9" fill="var(--amber)">never in a bug report</text>
+  <text x="188" y="164" font-size="8.5" fill="var(--muted)">identity, permissions,</text>
+  <text x="188" y="176" font-size="8.5" fill="var(--muted)">flags, connection</text>
+
+  <rect x="336" y="42" width="152" height="166" rx="7" fill="var(--panel)" stroke="var(--grey)" stroke-width="1"/>
+  <text x="348" y="62" font-size="11" fill="var(--ink)">view</text>
+  <text x="348" y="78" font-size="8.5" fill="var(--muted)">delete it and the app</text>
+  <text x="348" y="90" font-size="8.5" fill="var(--muted)">is still correct</text>
+  <text x="348" y="112" font-size="9" fill="var(--muted)">persists nothing</text>
+  <text x="348" y="126" font-size="9" fill="var(--muted)">undo, coalesced</text>
+  <text x="348" y="140" font-size="9" fill="var(--muted)">evict freely</text>
+  <text x="348" y="164" font-size="8.5" fill="var(--muted)">open, selected,</text>
+  <text x="348" y="176" font-size="8.5" fill="var(--muted)">scrolled, hovered</text>
+
+  <rect x="496" y="42" width="150" height="166" rx="7" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1"/>
+  <text x="508" y="62" font-size="11" fill="var(--amber)">draft</text>
+  <text x="508" y="78" font-size="8.5" fill="var(--muted)">the user would be angry;</text>
+  <text x="508" y="90" font-size="8.5" fill="var(--muted)">no server has taken it</text>
+  <text x="508" y="112" font-size="9" fill="var(--amber)">persist, crash-safe</text>
+  <text x="508" y="126" font-size="9" fill="var(--amber)">never evicted</text>
+  <text x="508" y="140" font-size="9" fill="var(--amber)">loss-protected</text>
+  <text x="508" y="164" font-size="8.5" fill="var(--muted)">the half-typed comment,</text>
+  <text x="508" y="176" font-size="8.5" fill="var(--muted)">the optimistic overlay,</text>
+  <text x="508" y="188" font-size="8.5" fill="var(--muted)">the queued outbox</text>
+
+  <text x="16" y="230" font-size="9" fill="var(--muted)">exactly one region per value &middot; declare one word &rarr; six defaults follow &middot; declare nothing &rarr; nothing changes</text>
+</svg>
+<figcaption><b>The brief was that this must be a benefit, never a tax</b>, and the whole design follows from taking that literally. These six policies do not vary independently in real projects &mdash; they cluster, and the clusters are the regions &mdash; so declaring one <em>replaces</em> several option lines instead of adding one. A project that declares nothing gets exactly today&rsquo;s behaviour, and can label one slice the day the split first buys something. Two regions from the original list were rejected by that same test: <em>automations</em> have domain&rsquo;s policy profile exactly, so a region for them would add a word without adding a rule, and <em>cache</em> is fully described by a collection being source-backed plus its retention policy. A region has to change a default that nothing else expresses.</figcaption>
+</figure>
+<p>Two details do the load-bearing work. A region is <b>a property of a node, not a place in the tree</b>: a slice can hold domain entities and the view state that describes them, and forcing a project to split its data by policy would be the tax the brief forbids. And a region supplies defaults <b>only for mechanisms the project already configured, and never introduces an I/O target</b> &mdash; labelling a slice <code>domain</code> does not start syncing it, because there is nothing to sync to; it decides what happens <em>if</em> a source is configured. Without that rule, adding a label could silently start writing to the network, and nobody would dare add one.</p>
+<div class="why-us"><b>Why it matters for us:</b> the honest reason regions exist is that the alternative is six independent switches per slice and no vocabulary for talking about them, so every project invents its own conventions and gets them subtly wrong &mdash; session data in the undo stack, drafts evicted under memory pressure, view state in a bug report. Naming the four clusters gives the toolkit something to default from, agents something to recommend, and a reviewer something to check (&sect;4.16, R76, R77). The policy table runs today &mdash; <a href="#/repl/regions">read it out of the prototype</a>.</div>
+</section>

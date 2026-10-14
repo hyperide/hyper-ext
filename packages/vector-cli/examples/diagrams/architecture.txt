@@ -1,0 +1,14 @@
+┌──────────────────────────────── build time ────────────────────────────────┐
+│  state-cli:  init · migrate · build · doctor · bench          agent MCP     │
+│                    └──────── shared analyzer (TS program + AST + LSP) ──────┤
+│  compiler plugin (vite/rollup/esbuild/babel/swc): specialises runtime       │
+└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────── run time ──────────────────────────────────┐
+│  adapters/react · vue · solid · svelte · angular · lit · (qwik constraints) │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  toolkit: history · optimistic · persist · url · remote · worker · devtools │
+│           collections/* (REST, GraphQL, RPC, WS/SSE, RxJS, Electric, …)     │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  core: signals graph · store (proxy) · transactions/patches · collections   │
+│        scopes · schema · event bus                                          │
+└─────────────────────────────────────────────────────────────────────────────┘

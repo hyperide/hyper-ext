@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "scope": "native/src/kernel.rs executable source contracts",
+  "sourceSha256": "08527d8bf34c3419fb6adb4ac7553a49aff9d015cc78053478b5ac62b6071af6",
+  "executableSha256": "ba1e9c2f2993712a92af022299c256861a004da20a9bacfe534ad05324692d5e",
+  "verifier": "Verus\n  Version: 0.2026.09.06.8dea4a2\n  Profile: release\n  Platform: macos_aarch64\n  Toolchain: 1.98.0-aarch64-apple-darwin (overridden by environment variable RUSTUP_TOOLCHAIN)",
+  "solver": "Z3 version 4.16.0 - 64 bit",
+  "verifiedItems": 9,
+  "verifierErrors": 0,
+  "conformance": "PASS: 16082 native command results, including 16,000 seeded transactions and edge cases",
+  "negativeProofControls": "PASS: verifier rejected missing-publication\nPASS: verifier rejected missing-revision\nPASS: verifier rejected reject-all",
+  "trusted": ["Verus", "SMT solver", "vstd specifications", "Rust compiler and standard library"],
+  "notProved": [
+    "driver parser and I/O",
+    "compiler correctness",
+    "TS lowering and canonicalisation",
+    "Wasm/FFI",
+    "concurrency or crash durability",
+    "reactivity and framework adapters"
+  ],
+  "platform": "macOS arm64",
+  "evidenceDate": "2026-09-13",
+  "inputSha256": {
+    "src/kernel.rs": "08527d8bf34c3419fb6adb4ac7553a49aff9d015cc78053478b5ac62b6071af6",
+    "src/main.rs": "e1d0e40064094496ff98bb44cb959ebc25cdba9d57361e423af0587fc8b0211f",
+    "tests/conformance.py": "616b9a3eaf6a1c1ac076476d308c19d42f60c4bed15ae33b5a812c9c0d524733",
+    "tests/test_conformance.py": "64d1dd6f5ce26bacfa10e7e3ac5edcd6ed941aef23d37339086230b13d91e637",
+    "tests/test_proof_controls.py": "2ef73cd5925ee5e1cda82b5f694a8fecc2c2d98f57758cde28b436de55595d71",
+    "tools/proof_controls.py": "e6b930fe7cade63aa9af4c81177873a09d93226cb7dfec7611dc112ab2eb4ba4",
+    "tools/verify.sh": "46a3f0e8391cbfac87105f48e8ad5f61a79a50c98cee86a0b62f746a17d17de4"
+  }
+}
