@@ -4,6 +4,30 @@ All notable changes to HyperCanvas Preview are documented here.
 
 ## [Unreleased]
 
+## [0.1.75] — 2026-10-15
+
+### Bug fixes
+
+- **Clicking a component in Hyper Explorer opens a side-by-side split on the first click** — before, the first click in a fresh window opened the component as a plain tab in the same group as Hyper Canvas, and only the second click split the view. The source file now opens first and the preview panel is revealed beside it (HYP-1372, #762)
+- **Components that get `children` through `extends *HTMLAttributes` no longer render empty in the preview** — buttons, links and most shadcn/ui-style primitives whose Props interface only inherits `children` (e.g. `extends ButtonHTMLAttributes<…>`) now get placeholder text instead of rendering as blank controls (HYP-1367, #760)
+- **Create Sample keeps children when the component also has props** — the generated `SampleDefault` scaffold used to drop all children as soon as any prop was detected, producing self-closing, visually empty controls (e.g. `<Button variant size />`). It now emits both props and children (HYP-1399, #768)
+- **Previews of projects that run a strict `tsc` build no longer kill the dev server** — the App Shell fallback bootstrap that HyperIDE injects into the entry file passed a `Node` to `createRoot()`, which caused a TS2345 error and a generic "Failed to start". The injected snippet now passes strict type-checking (HYP-1366, #759)
+- **Previews of apps whose `index.html` entry is not named `main.*` no longer hang on "Loading app…"**, and monorepo roots that are also apps keep their own components and pages in Hyper Explorer — before, the Explorer showed "No pages" and an empty Components section for such repos (HYP-1345, HYP-1347, #753)
+- **Starting the dev server no longer hangs on a project's Playwright browser download** — Playwright browser installs no longer run inside the mandatory dependency-install step and have a timeout. The toolchain progress button now skips the step and lets the start continue; before, it aborted the whole install (HYP-1340, #752)
+- **Inspector Layout panel no longer shows "Auto" for a width/height that has a working resize handle** — on shadcn/Radix `asChild` elements whose className is built at runtime (`cn(buttonVariants(...), className)`), the Layout panel now reads width/height from the live element, so it agrees with the resize handle (HYP-1420, #773)
+- **Color edits into a CSS file now apply even when the CSS rule can't be found** — if the CSS Modules or plain CSS rule for the element can't be located, the edit now falls back to an inline style on the element, so the color still changes. Before, the color pick did nothing and showed no message (HYP-706, #742)
+- **Fill color picks now keep a same-file `const` className in sync** — `const STYLES = 'bg-…'; className={cn(STYLES)}` now gets the new class instead of a stale class plus an inline override, and className-sync failures that were silently ignored are now reported (HYP-1292, #741)
+- **The extension's pre-write forwarding check now uses the per-channel forward-detector** — it now checks className and style forwarding separately, follows the render body, and recognizes styled-components. Before, the coarser check could miss real forwarding and pick the wrong write channel (HYP-1235, #736)
+
+### Features
+
+- **The Inspector warns before you edit a component that doesn't forward `className`/`style`** — when the selected element's component definitely doesn't forward styling, a persistent, dismissible warning appears before you make a style edit. VS Code mode now also fills in the component prop-surface data (HYP-1294, #738)
+- **Forwarding detection now follows `styled(Component)` one level deep** — styled-components wrappers around a custom component now get a high-confidence forwarding verdict when the wrapped component forwards. Before, they were always "unknown" (HYP-1234, #743)
+
+### Security
+
+- **Updated the extension's vulnerable transitive dependencies** — `undici` 7.29.1 (GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3), `browserslist` 4.28.7 and `fast-uri` 3.1.6, plus `js-yaml` 4.3.2, `brace-expansion` 5.0.11, `braces` replaced by the depth-limited `@zklogic/braces` 3.0.7 fork, and `@modelcontextprotocol/sdk` pinned to 1.31.0. These clear the high-severity advisories that `bun audit` reports (HYP-1585, #816; HYP-1452, #781; HYP-1507, #810)
+
 ## [0.1.74] — 2026-08-19
 
 ### Bug fixes
