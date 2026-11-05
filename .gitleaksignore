@@ -58,3 +58,13 @@ server/services/__tests__/ai-agent-remote-git.test.ts:generic-api-key:289
 docs/specs/2026-06-11-style-write-verified-pipeline.md:generic-api-key:144
 3bff90dd9d496b28c82bf0bbc0d738d2f86498f5:client/components/RightSidebar/RightSidebar.tsx:generic-api-key:729
 3bff90dd9d496b28c82bf0bbc0d738d2f86498f5:components/RightSidebar/RightSidebar.tsx:generic-api-key:729
+
+# 36d1ecf3 (reachable only from origin/wip/stash/45-hooks-canvas-fix-ralphex-plan-docs-agents-external-repo,
+# an auto "untracked files" stash commit that swept in a Chrome profile, scripts/.playwright-profile/):
+# vetted by eye, browser-internal Chrome profile fields only, no external-service credential:
+# `metadata_secret` (Preferences HMAC seed), extension `key` (base64 DER public key, MIGfMA...),
+# `policy_recovery_token` + `_encrypted_hash` (Chrome policy-recovery state). Unmerged to main, so
+# only the full-history scan that `ci/local-checks.sh` currently runs (SECRET_SCAN_SCOPE=dir is not
+# implemented by secret-scan.sh and falls through to full history) sees them.
+36d1ecf31adee61a647ac99069a26c8d9af3a51b:scripts/.playwright-profile/Default/Preferences:generic-api-key:1
+36d1ecf31adee61a647ac99069a26c8d9af3a51b:scripts/.playwright-profile/Default/Secure Preferences:generic-api-key:1

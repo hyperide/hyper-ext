@@ -1,6 +1,6 @@
 import * as http from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { HyperMcpServer } from '../mcp/HyperMcpServer';
+import { HyperMcpServer, MAX_MCP_BODY_BYTES } from '../mcp/HyperMcpServer';
 import { type HyperMcpServices, resolveFilePath } from '../mcp/types';
 
 function createMockServices(): HyperMcpServices {
@@ -71,6 +71,49 @@ describe('HyperMcpServer', () => {
       headers: { Authorization: `Bearer ${server.token}` },
     });
     expect(response.status).toBe(405);
+  });
+
+  it('rejects a request body above the size cap with 413 instead of buffering it (GHSA-46jr-4wx8-v453)', async () => {
+    const response = await fetch(`http://127.0.0.1:${server.port}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: `Bearer ${server.token}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { pad: 'x'.repeat(MAX_MCP_BODY_BYTES) },
+      }),
+    });
+    expect(response.status).toBe(413);
+  });
+
+  it('refuses a far-oversized declared body and a chunked stream of one with 413, not a reset', async () => {
+    const auth = { Authorization: `Bearer ${server.token}`, 'Content-Type': 'application/json' };
+    const declared = await fetch(`http://127.0.0.1:${server.port}/mcp`, {
+      method: 'POST',
+      headers: auth,
+      body: 'x'.repeat(MAX_MCP_BODY_BYTES * 4),
+    });
+    expect(declared.status).toBe(413);
+
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = http.request(
+        { host: '127.0.0.1', port: server.port, path: '/mcp', method: 'POST', headers: auth },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        },
+      );
+      req.on('error', reject);
+      const block = Buffer.alloc(1024 * 1024, 120);
+      for (let i = 0; i < 8; i++) req.write(block);
+      req.end();
+    });
+    expect(status).toBe(413);
   });
 
   it('should handle MCP initialize request', async () => {

@@ -4,6 +4,10 @@ All notable changes to HyperCanvas Preview are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **Extension dependencies updated to clear the high-severity `npm audit` findings** — `@modelcontextprotocol/sdk` 1.31.0 → 1.32.1 (GHSA-22jm-h49p-29qw, GHSA-6prh-2h8m-c8cw, GHSA-46jr-4wx8-v453), plus `markdown-it`, `hono`, `qs`, `body-parser`, `fast-uri`, `ip-address` and related transitive packages via `npm audit fix` (lockfile). `npm audit --audit-level=high` is clean again. The extension's MCP endpoint also caps request bodies at 4 MiB (413) and sets the SDK's `maxToolInputElements`, because the SDK's own limits do not apply to bodies the extension parses itself (HYP-1456)
+
 ## [0.1.75] — 2026-10-15
 
 ### Bug fixes

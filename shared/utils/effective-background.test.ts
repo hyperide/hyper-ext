@@ -31,7 +31,15 @@ describe('collectBackgroundLayers', () => {
 
   test('returns empty when no defaultView is reachable', () => {
     const orphan = { parentElement: null, ownerDocument: { defaultView: null } } as unknown as Element;
-    expect(collectBackgroundLayers(orphan)).toEqual([]);
+    // The helper falls back to the global window; happy-dom 21 rejects non-Element inputs there,
+    // so hide the global to exercise the "no view anywhere" branch.
+    const savedWindow = globalThis.window;
+    Object.defineProperty(globalThis, 'window', { value: undefined, configurable: true, writable: true });
+    try {
+      expect(collectBackgroundLayers(orphan)).toEqual([]);
+    } finally {
+      Object.defineProperty(globalThis, 'window', { value: savedWindow, configurable: true, writable: true });
+    }
   });
 });
 

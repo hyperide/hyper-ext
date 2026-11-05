@@ -18,6 +18,11 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Largest accepted /mcp request body. Tool arguments are small JSON; 4 MiB is far above real use. */
+export const MAX_MCP_BODY_BYTES = 4 * 1024 * 1024;
+/** SDK limit on array elements + object members in one tools/call arguments payload (off by default). */
+const MAX_MCP_TOOL_INPUT_ELEMENTS = 50_000;
+
 /** Race a promise against a timeout without leaking the timer once either settles. */
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -210,10 +215,10 @@ export class HyperMcpServer {
   }
 
   private _createMcpServer(): McpServer {
-    const server = new McpServer({
-      name: 'HyperCanvas',
-      version: '0.1.0',
-    });
+    const server = new McpServer(
+      { name: 'HyperCanvas', version: '0.1.0' },
+      { maxToolInputElements: MAX_MCP_TOOL_INPUT_ELEMENTS },
+    );
 
     registerAstTools(server, this._services.astService, this._services.stateHub);
     registerComponentTools(server, this._services.componentService, this._services.astService, this._services.stateHub);
@@ -279,6 +284,13 @@ export class HyperMcpServer {
         return;
       }
 
+      // Declared oversize is refused before any server/transport is built or any byte is read.
+      if (Number(req.headers['content-length']) > MAX_MCP_BODY_BYTES) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Request body too large' }));
+        return;
+      }
+
       // Stateless: new McpServer + transport per request
       const mcpServer = this._createMcpServer();
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
@@ -289,9 +301,26 @@ export class HyperMcpServer {
 
       await mcpServer.connect(transport);
 
+      // The SDK's own body-size guard never runs because the body is parsed here and passed as
+      // `parsedBody`, so this handler enforces the cap itself (GHSA-46jr-4wx8-v453).
       const chunks: Buffer[] = [];
-      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      let received = 0;
+      let rejected = false;
+      req.on('data', (chunk: Buffer) => {
+        if (rejected) return;
+        received += chunk.length;
+        if (received > MAX_MCP_BODY_BYTES) {
+          rejected = true;
+          chunks.length = 0;
+          // Keep draining (no `Connection: close`): closing mid-upload resets the socket and the client may lose the 413.
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Request body too large' }));
+          return;
+        }
+        chunks.push(chunk);
+      });
       req.on('end', async () => {
+        if (rejected) return;
         try {
           const body = JSON.parse(Buffer.concat(chunks).toString());
           await transport.handleRequest(req, res, body);

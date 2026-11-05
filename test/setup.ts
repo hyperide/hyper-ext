@@ -10,7 +10,8 @@ import { GlobalWindow } from 'happy-dom';
 
 // GlobalWindow re-uses native JS constructors (SyntaxError, Error, etc.) so happy-dom's
 // internal selector parser can call `new this.window.SyntaxError(...)` without failing.
-const win = new GlobalWindow({ url: 'http://localhost' });
+// happy-dom 21 no longer loads iframe pages by default; the preview-bridge tests need iframe contentWindow.
+const win = new GlobalWindow({ url: 'http://localhost', settings: { enableIframePageLoading: true } });
 
 Object.assign(globalThis, {
   window: win,
