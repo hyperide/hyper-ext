@@ -12,10 +12,12 @@
  */
 import { create, insertMultiple, search as oramaSearch } from '@orama/orama';
 import { PRIMARY, DOCS } from './routes';
+import { RESEARCH_CONCEPTS } from '../data/research';
 import { GLOSSARY } from '../data/glossary';
 import { CATS } from '../data/compare';
 import { ROWS } from '../data/landscape';
 import { EXAMPLES } from '../data/examples';
+import { LAB_EXAMPLES } from '../data/example-lab/catalogue';
 import { EFFECTS } from '../data/effects';
 import { LANDSCAPE_NAME } from '../pages/Library';
 import { REQ, SEC } from './linkify';
@@ -103,6 +105,7 @@ function buildDocs(): SearchDoc[] {
   };
 
   for (const [route, label] of [...PRIMARY, ...DOCS]) add(label, label, 'page', route);
+  for (const concept of RESEARCH_CONCEPTS) add(concept.title, concept.summary, 'concept', '/concepts', concept.id);
 
   for (const [term, t] of Object.entries(GLOSSARY)) {
     add(term, t.def, 'concept', '/concepts', `g-${term.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
@@ -121,6 +124,7 @@ function buildDocs(): SearchDoc[] {
     add(name, `${what} ${take} ${note}`, 'landscape', libId ? `/lib/${libId}` : '/landscape');
   }
 
+  for (const example of LAB_EXAMPLES) add(example.title, example.summary, 'example', `/repl/${example.id}`);
   for (const e of EXAMPLES) {
     add(e.title, `${e.short ?? ''} ${e.about ?? ''}`, 'example', `/repl/${e.id}`);
   }

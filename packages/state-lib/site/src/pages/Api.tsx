@@ -58,7 +58,7 @@ const anchor = (name: string) => `api-${name.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 const PLANNED = [
   [
     'defineStore / slice / defineComplex',
-    'Composition and schema-typed regions; prototype createStore is not their production implementation.',
+    'Composition and schema-typed regions; not part of the prototype createStore.',
     's4-2',
   ],
   [
@@ -78,7 +78,7 @@ const PLANNED = [
   ],
   [
     'useSlice / useTracked / useActions / For',
-    'Proposed React-facing adapter APIs, not React exports. The prototype REPL bindings do not prove production compiler integration.',
+    'Proposed React-facing adapter APIs; the prototype REPL bindings are separate.',
     's6-1',
   ],
   [
@@ -152,10 +152,7 @@ export default function Api() {
                     <a href={href('/api', anchor(name))}>{name}</a>
                   </h3>
                   <span className="api-badge">prototype · {entry.kind}</span>
-                  <p>
-                    {prose ||
-                      'This member has no dedicated prose comment yet. Its exact contract is the generated signature below; consult its containing type and linked spec before use.'}
-                  </p>
+                  {prose && <p>{prose}</p>}
                   <Code lang="typescript-signature">{entry.sig}</Code>
                   {example && (
                     <details>

@@ -7,7 +7,7 @@ const shapes = (Object.keys(SHAPE_SCENARIOS) as ShapeScenario[]).map(
     task: 'sync',
     title: SHAPE_SCENARIOS[scenario].title,
     short: scenario,
-    about: `${SHAPE_SCENARIOS[scenario].why} Deterministic teaching model, not a running Electric server or a benchmark. Use Step for one protocol action, then edit either table with the controls.`,
+    about: `${SHAPE_SCENARIOS[scenario].why} Simulation, no network. Use Step for one protocol action, then edit either table with the controls.`,
     setup: `const lab = createShapeLab('${scenario}')`,
     code:
       scenario === 'large'
@@ -93,7 +93,7 @@ log('must be 10, never a mixed 7 or 8', sum())`,
     title: 'Two independent writes expose an intermediate total',
     short: 'without batch',
     about:
-      'This is a synchronous subscriber, not a claim about a browser paint. Two writes cause two completed notification cycles. Step shows the real intermediate total of 200.',
+      'The subscriber is synchronous. Two writes cause two completed notification cycles. Step shows the real intermediate total of 200.',
     setup: `const qty = signal(1)
 const price = signal(100)
 const total = derive(() => qty.get() * price.get())

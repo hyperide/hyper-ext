@@ -1,0 +1,653 @@
+/* Example workbench (ExampleLab.tsx) and the Bench overview cards.
+   Layout contract: at >= 1024px the source and the live board share the first row so
+   code and its effect are visible together; below that every panel is one card in DOM
+   order. Every grid/flex child sets min-width:0 and wide content (pre, tables) scrolls
+   inside its own box, so nothing widens the page at 375px. */
+
+.xl {
+  min-width: 0;
+  margin-top: 18px;
+}
+.xl *,
+.xl-cards * {
+  min-width: 0;
+}
+.xl-head h2 {
+  font-size: 22px;
+  margin: 0 0 6px;
+}
+.xl-head p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  max-width: var(--measure, 74ch);
+}
+.xl-status {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--muted);
+}
+
+/* ---------- grid and panels ---------- */
+
+.xl-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .xl-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'source board'
+      'output run';
+  }
+  .xl-panel.xl-source {
+    grid-area: source;
+  }
+  .xl-panel.xl-board {
+    grid-area: board;
+  }
+  .xl-panel.xl-output {
+    grid-area: output;
+  }
+  .xl-panel.xl-run {
+    grid-area: run;
+  }
+}
+.xl-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  padding: 16px;
+}
+.xl-panel > h3 {
+  font-size: 17px;
+  margin: 0 0 12px;
+}
+.xl-panel > * + * {
+  margin-top: 12px;
+}
+.xl-panel > h3 + * {
+  margin-top: 0;
+}
+.xl-panel label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.xl-panel select,
+.xl-panel input[type='number'],
+.xl-panel input:not([type]),
+.xl-panel input[type='text'] {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font:
+    400 14px 'IBM Plex Sans',
+    sans-serif;
+  padding: 6px 10px;
+  width: 100%;
+}
+.xl-panel .tab,
+.xl button.tab {
+  min-height: 40px;
+  padding: 8px 14px;
+  line-height: 1.2;
+}
+.xl-panel .tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.xl-panel a {
+  overflow-wrap: anywhere;
+}
+.xl-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+.xl-error {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--red);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.xl-empty {
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  color: var(--muted);
+  background: var(--panel);
+}
+.xl-empty p {
+  margin: 0 0 10px;
+}
+
+/* ---------- source ---------- */
+
+.xl-files {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.xl-file {
+  flex: none;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font: 500 13px/1.2 var(--mono, monospace);
+  padding: 8px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.xl-file.on {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.xl-file-mark {
+  font-family: 'IBM Plex Sans', sans-serif;
+  opacity: 0.8;
+}
+.xl-editor {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.xl-editor .cm-editor {
+  max-width: 100%;
+  font-size: 14px;
+}
+.xl-editor .cm-scroller {
+  max-height: 420px;
+  overflow: auto;
+}
+.xl-code {
+  margin: 0;
+  max-width: 100%;
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--code);
+  padding: 12px;
+  font: 400 13px/1.5 var(--mono, monospace);
+  tab-size: 2;
+  white-space: pre;
+}
+.xl-code code {
+  font: inherit;
+  background: none;
+  padding: 0;
+}
+.xl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.xl-origin {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- compiled output ---------- */
+
+.xl-sizes {
+  display: grid;
+  gap: 10px;
+}
+.xl-sizes table,
+.xl-results {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.xl-sizes caption {
+  text-align: left;
+  color: var(--muted);
+  padding-bottom: 6px;
+}
+.xl-sizes th,
+.xl-sizes td,
+.xl-results th,
+.xl-results td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+.xl-imports {
+  display: block;
+  color: var(--muted);
+  font: 400 12px var(--mono, monospace);
+  white-space: normal;
+}
+.xl-sizes .benchbars,
+.xl-timing,
+.xl-mini {
+  margin-top: 0;
+  padding: 10px 12px;
+}
+.xl .bb,
+.xl-cards .bb {
+  grid-template-columns: minmax(84px, 150px) minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.xl .bb-name,
+.xl-cards .bb-name {
+  overflow-wrap: anywhere;
+}
+.xl .bb-bar span,
+.xl-cards .bb-bar span {
+  min-width: 2px;
+}
+.xl-viewer {
+  display: grid;
+  gap: 8px;
+}
+.xl-view-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+.xl-view-controls label {
+  flex: 1 1 220px;
+}
+.xl-segment {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.xl-segment button {
+  min-height: 40px;
+  border: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font:
+    500 13px 'IBM Plex Sans',
+    sans-serif;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.xl-segment button + button {
+  border-left: 1px solid var(--line);
+}
+.xl-segment button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.xl-mechanisms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.xl-mechanisms a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--accent-ink);
+  font-size: 13px;
+  padding: 4px 12px;
+  text-decoration: none;
+}
+.xl-mechanisms a:hover,
+.xl-mechanisms a:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---------- live board ---------- */
+
+.xl-board-title {
+  margin: 0;
+}
+.xl-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.xl-column {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 10px;
+}
+.xl-column h4 {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.xl-column h4 span {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.xl-column ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.xl-column li button {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    400 13px/1.3 'IBM Plex Sans',
+    sans-serif;
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.xl-column li.done button {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.xl-column li button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.xl-more {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.xl-board-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.xl-board-controls .xl-actions {
+  grid-column: 1 / -1;
+}
+.xl-history {
+  margin: 0;
+  padding-left: 22px;
+  color: var(--muted);
+  font: 400 12px/1.6 var(--mono, monospace);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- measure ---------- */
+
+.xl-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.xl-panel label.xl-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  color: var(--ink);
+}
+.xl-panel label.xl-check input {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  flex: none;
+}
+.xl-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.xl-progress progress {
+  width: 120px;
+  accent-color: var(--accent);
+}
+.xl-result {
+  display: grid;
+  gap: 12px;
+}
+.xl-bar {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  min-height: 40px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+.xl-bar[aria-pressed='true'] {
+  border-color: var(--line);
+  background: var(--paper);
+}
+.xl-verdict {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 14px;
+}
+.xl-verdict.xl-warn {
+  border-left-color: var(--amber);
+  background: var(--amber-soft, var(--paper));
+  color: var(--amber);
+}
+/* The tied-best cell is marked by fill, inset border and weight, never colour alone. */
+td.xl-best,
+.xl-results td.xl-best {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.bb.xl-best .bb-bar span {
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ink);
+}
+.bb.xl-best .bb-name,
+.bb.xl-best .bb-ms {
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+.bb.xl-best .bb-name::after {
+  content: ' (best)';
+  font-weight: 500;
+}
+.xl-details {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 8px 12px;
+}
+.xl-details summary {
+  min-height: 32px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.xl-details dl {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+.xl-details dt {
+  margin-top: 8px;
+  color: var(--muted);
+}
+.xl-details dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+.xl-spread {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.xl-spread-row {
+  display: grid;
+  grid-template-columns: minmax(84px, 150px) minmax(0, 1fr);
+  gap: 4px 10px;
+  align-items: center;
+  font-size: 13px;
+}
+.xl-spread-row.on {
+  font-weight: 600;
+}
+.xl-axis {
+  position: relative;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--line2);
+}
+.xl-dot {
+  position: absolute;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.xl-samples {
+  grid-column: 2;
+  color: var(--muted);
+  font: 400 12px var(--mono, monospace);
+  overflow-wrap: anywhere;
+}
+.xl-share {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.xl-share p {
+  margin: 0;
+}
+
+/* ---------- Bench overview ---------- */
+
+.xl-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.xl-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  padding: 16px;
+}
+.xl-card h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.xl-card p {
+  margin: 0;
+}
+.xl-ops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.xl-ops li {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 3px 10px;
+}
+.xl-mini {
+  margin-top: 0;
+}
+.xl-open {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+
+/* ---------- phones ---------- */
+
+@media (max-width: 700px) {
+  .xl-panel {
+    padding: 12px;
+  }
+  .xl-panel .tab,
+  .xl button.tab,
+  .xl-file,
+  .xl-segment button,
+  .xl-column li button,
+  .xl-bar,
+  .xl-panel select,
+  .xl-panel input[type='number'],
+  .xl-panel input:not([type]) {
+    min-height: 44px;
+  }
+  .xl-mechanisms a {
+    min-height: 44px;
+  }
+  .xl-details summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .xl .bb,
+  .xl-cards .bb {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .xl .bb-name,
+  .xl-cards .bb-name {
+    grid-column: 1 / -1;
+  }
+  .xl-spread-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .xl-samples {
+    grid-column: 1;
+  }
+}

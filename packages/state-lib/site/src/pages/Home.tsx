@@ -14,7 +14,7 @@ export default function Home() {
         <div className="landing-intro">
           <span className="landing-status">
             <span />
-            Working prototype · public design in progress
+            Prototype · not published to npm
           </span>
           <p className="kicker">STATE MANAGEMENT · UX BY DEFAULT</p>
           <h1>
@@ -41,7 +41,7 @@ export default function Home() {
             <a href="https://github.com/hyperide/hyper-saas/tree/main/packages/state-lib">
               Explore the source <SiteIcon name="updates" />
             </a>
-            <span>Source available · Elastic-2.0 · not yet a stable v1 package</span>
+            <span>Source available · Elastic-2.0</span>
           </p>
         </div>
         <LandingDemo />
@@ -92,12 +92,12 @@ export default function Home() {
           </div>
           <div className="global-benefits">
             <article>
-              <span className="readiness">WORKING BUILDING BLOCKS · CAPTURE PIPELINE PLANNED</span>
-              <h3>Turn a production failure into a reproducible scenario.</h3>
+              <span className="readiness">SNAPSHOTS AND NAMED CHANGES</span>
+              <h3>Start a bug report from the state that led to it.</h3>
               <p>
-                A snapshot plus named changes can preserve the state that led to a broken screen. Capture also needs the
-                application version and relevant inputs: responses, time, randomness and event order. A store alone
-                cannot reproduce every network, browser or timing bug.
+                A snapshot plus named changes preserves the state that led to a broken screen. Reproducing the bug also
+                needs the application version and the relevant inputs: responses, time, randomness and event order. A
+                store alone cannot reproduce every network, browser or timing bug.
               </p>
               {familiar('/devtools', 'Capture and replay boundaries')}{' '}
               {familiar('/repl/undo', 'Inspect actual changes')}
@@ -127,7 +127,7 @@ export default function Home() {
               {familiar('/concepts#signals-streams', 'Stores, signals and streams')}
             </article>
             <article>
-              <span className="readiness">INSPECTION WORKS · FULL DEVTOOLS PLANNED</span>
+              <span className="readiness">STATE TREE AND HISTORY</span>
               <h3>See the state you normally lose between components.</h3>
               <p>
                 Form drafts, modal state and request phases can share an inspectable timeline. The same boundaries can
@@ -148,17 +148,16 @@ export default function Home() {
 
       <section className="landing-section wrap" aria-labelledby="safe-async">
         <div className="section-heading">
-          <p className="kicker">UX BY DEFAULT, NOT A REMINDER IN A CHECKLIST</p>
-          <h2 id="safe-async">Loading and error are states of the feature — not optional decorations.</h2>
+          <p className="kicker">LOADING AND ERROR AS STATES</p>
+          <h2 id="safe-async">Loading and error are states of the feature, not decorations.</h2>
           <p>
-            The design goal is an exhaustive rendering boundary: idle, loading, success, empty, error and cancellation
-            have explicit behavior. An incomplete binding should be rejected or receive a defined fallback, not silently
-            ship a blank screen.
+            A task owns its phases and its cancellation, and a result from a cancelled or superseded run cannot publish.
+            The screen renders each phase from the same model as the data.
           </p>
         </div>
         <div className="model-comparison">
           <div>
-            <h3>What works today</h3>
+            <h3>What you can run</h3>
             <p>
               The prototype and typed pilot provide task ownership, cancellation and protection against obsolete
               results. The workbench lets you inspect live state while exercising real actions. You can build explicit
@@ -168,11 +167,10 @@ export default function Home() {
             {familiar('/repl/task-screen', 'Explore a complete screen')}
           </div>
           <div>
-            <h3>What is not yet a universal guarantee</h3>
+            <h3>Status</h3>
             <p>
-              Simply installing today’s package does not force every component to handle every state. A mandatory
-              exhaustive async binding and full capture/replay remain implementation work. A valid type cannot, by
-              itself, ensure an error message is useful or a retry policy is correct.
+              Exhaustive async binding (rejecting a component that skips a state) and capture/replay are not implemented
+              yet. A valid type cannot, by itself, ensure an error message is useful or a retry policy is correct.
             </p>
             <a href="https://tanstack.com/query/latest/docs/framework/react/guides/queries">
               TanStack Query also models pending, error and success ↗
@@ -187,9 +185,8 @@ export default function Home() {
           <p className="kicker">THE REDUX-FORM LESSON</p>
           <h2 id="forms-without-broadcasts">A shared form must not become a global broadcast.</h2>
           <p>
-            Keeping every draft in the model only helps if a keystroke does not copy the whole document, revalidate
-            every field or rerender the entire form. Those are mechanisms to measure, not problems solved by renaming a
-            store.
+            Keeping every draft in the model only pays off if a keystroke does not copy the whole document, revalidate
+            every field or rerender the entire form. The typing-path benchmarks below measure those costs.
           </p>
         </div>
         <div className="global-benefits on-light">
@@ -221,9 +218,8 @@ export default function Home() {
           <article>
             <h3>Measure the typing path.</h3>
             <p>
-              The common typed core, normalized data and structural sharing are still being integrated. Some measured
-              app paths remain slower and have more glue than their baseline. No claim that all Redux-form-era costs are
-              already eliminated.
+              The benchmark page lists each workload with its environment, including the cases where the baseline is
+              faster than state.
             </p>
             {familiar('/bench', 'Review the measurements')}
           </article>
@@ -232,19 +228,15 @@ export default function Home() {
           <a href="https://redux.js.org/faq/performance">
             Redux also recommends normalization, granular subscriptions and shallow copies
           </a>
-          . <a href="https://redux.js.org/faq/organizing-state">Its form-state guidance</a> is the tradeoff this
-          architecture must answer with evidence, not a claim that Redux inherently rerenders everything.
+          . <a href="https://redux.js.org/faq/organizing-state">Its form-state guidance</a> describes the same tradeoff.
         </p>
       </section>
 
       <section className="landing-section wrap model-evidence" aria-labelledby="measured-value">
         <div className="section-heading">
-          <p className="kicker">MEASUREMENT BEFORE SUPERLATIVES</p>
+          <p className="kicker">BENCHMARKS</p>
           <h2 id="measured-value">Show the mechanism. Show its cost.</h2>
-          <p>
-            A narrow improvement is not an application-wide speedup. The public harness records both wins and overhead,
-            with the workload and environment next to the result.
-          </p>
+          <p>The harness records the workload and environment next to every result, including overhead.</p>
         </div>
         {recompute && incremental && (
           <div className="evidence-pair">
@@ -259,37 +251,33 @@ export default function Home() {
           </div>
         )}
         <p>
-          Historical isolated workload: 10,000 rows and 200 single-item updates. Source run{' '}
-          <code>{measurements.provenance.commit}</code>, {measurements.provenance.ranAt.slice(0, 10)},{' '}
-          {measurements.provenance.cpu}, headless Chromium. Different runs and devices are not comparable. This does not
-          measure a whole React screen, every selector, or the native kernel.
+          Recorded run: 10,000 rows, 200 single-item updates. Source run <code>{measurements.provenance.commit}</code>,{' '}
+          {measurements.provenance.ranAt.slice(0, 10)}, {measurements.provenance.cpu}, headless Chromium. Different runs
+          and devices are not comparable. Measures the collection update only, not a whole React screen.
         </p>
         <p>
           {familiar('/bench', 'Rerun the harness and inspect the method')}{' '}
           {familiar('/query-research', 'Check where incremental queries actually help')}
         </p>
         <p className="contract-evidence">
-          <strong>Checked behavior, not just timing:</strong> the global-model fixture changes one form field and
-          observes one notification for its reader and zero for the unrelated preview reader. Separate story stores
-          remain isolated, incomplete input stays intact, and a same-version deterministic action fixture rebuilds the
-          same state. These are bounded prototype checks, not measurements of every React render or arbitrary production
-          replay.
+          <strong>Try the behavior:</strong> change one form field in the {familiar('/repl/task-screen', 'task screen')}{' '}
+          and watch which readers are notified: one notification for its reader, none for the unrelated preview reader.
+          Two larger app examples run the same way: {familiar('/repl/board-commands', 'board commands')}{' '}
+          {familiar('/repl/issue-triage', 'issue triage')}
         </p>
         <div className="model-comparison">
           <div>
             <h3>Correctness is observable too.</h3>
             <p>
               The workbench shows whether two views agree after one change, whether Undo restores values and whether old
-              async work can publish. These are executable contracts. A passing fixture is not a percentage of
-              production bugs prevented.
+              async work can publish.
             </p>
           </div>
           <div>
-            <h3>Native is a foundation, not a browser claim.</h3>
+            <h3>Native kernel source</h3>
             <p>
-              The Rust/Verus kernel has a narrow atomic-write contract. Today’s browser demonstrations run TypeScript.
-              End-to-end Wasm/GPU integration, universal performance wins and proof of the whole application are not
-              shipped claims.
+              The Rust/Verus kernel has a narrow atomic-write contract. Browser demonstrations on this site run
+              TypeScript.
             </p>
             <a href="https://github.com/hyperide/hyper-saas/tree/main/packages/state-lib/native">
               Read the native source and proof boundary ↗
@@ -300,7 +288,7 @@ export default function Home() {
 
       <section className="landing-section wrap" aria-labelledby="not-one-tool-for-everything">
         <div className="section-heading">
-          <p className="kicker">A SYNTHESIS, NOT A CLAIM TO HAVE INVENTED EVERYTHING</p>
+          <p className="kicker">WHERE STATE FITS NEXT TO EXISTING TOOLS</p>
           <h2 id="not-one-tool-for-everything">Keep the right boundary around each problem.</h2>
         </div>
         <div className="model-boundaries">
@@ -308,7 +296,7 @@ export default function Home() {
             <h3>Immutable editing is not the whole store.</h3>
             <p>
               Immer is a useful model for immutable changes; state connects updates to subscriptions, commands and
-              history. These are additional responsibilities, not proof that an update helper is deficient.
+              history.
             </p>
             <a href="https://immerjs.github.io/immer/">Immer’s model ↗</a>
             {familiar('/landscape#h-immutability-patches', 'Immutability landscape')}
@@ -326,8 +314,7 @@ export default function Home() {
             <h3>A named action is not a statechart.</h3>
             <p>
               XState models actors and orchestration, and XState Store supports event-driven state with extensions.
-              state’s FSM layer is a proposed integration with its transaction model, not a reason to hide useful
-              existing tools.
+              state’s FSM layer is a proposed integration with its transaction model.
             </p>
             <a href="https://stately.ai/docs/xstate-store">XState Store ↗</a>
             {familiar('/landscape#h-stores', 'Compare event and store models')}
@@ -358,10 +345,6 @@ export default function Home() {
             Read the screen-building path →
           </a>
         </div>
-        <p className="lnote">
-          Working prototype and implementation research. No npm installation or production-readiness promise is implied
-          by the playground.
-        </p>
       </section>
     </div>
   );

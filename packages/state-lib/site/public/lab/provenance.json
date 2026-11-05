@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "compiler": "statec/0.1.0-oxc",
+  "harness": {
+    "src/lib/example-lab/execution.worker.js": "e180938ad6ed0ce757d027c19f53a4aa9a1f54611386753070554dabd25a8a00",
+    "src/lib/example-lab/compiler.worker.ts": "c29513e01e5dafe85228fcdd2566c176fdec1f17560ccdac4134fbfbabafa95c",
+    "src/lib/example-lab/core.ts": "15cc7c0e800187d5ff80988ee05bb9cd2394ef2b8389e539e9576221bea7d2e8"
+  },
+  "rustSources": {
+    "compiler/Cargo.toml": "35ad3c725ea43b4159f1ef2af0e61814c1c20ed4360d194d45afe4b115a19b63",
+    "compiler/Cargo.lock": "7fdd399f44c6f95a78f7539cc0de49435f9499c6b8a340966c9b8e142f812185",
+    "compiler/src/lib.rs": "1695d1078bb075db5400176ffea6784dd3be2718b644cbdb19588824c691f616",
+    "compiler/src/projection.rs": "7b99cddb14cb71284d72de0e63fe613848b8afc75be9a946893dca6e1f0ae171",
+    "compiler/src/command.rs": "d5e8bfc92e0f325811ec10f2e326c3a168fdd99aa01fedf57b6fbcfe6f97fe1a"
+  },
+  "assets": {
+    "statec.js": {
+      "sha256": "f7141eb82cb3798d50d84a65113018cb2906c1bbfc5152d515a7428f0157b15e",
+      "bytes": 6731
+    },
+    "statec_bg.wasm": {
+      "sha256": "7a683f655e231377c79a8eb7187a306cfcc17e9b656260fce49cc1cdfee48c97",
+      "bytes": 818132
+    },
+    "esbuild.wasm": {
+      "sha256": "92c182cd141115f33ad08ad1d29b38f00f6292d38c3fe7ef85c11775407b54fb",
+      "bytes": 12332677
+    },
+    "board-commands.json": {
+      "sha256": "fef15bc6ac98cdf80c0b848127ecb5b636cdc7335d36a2112e6c4c4f45f8c945",
+      "bytes": 60393
+    },
+    "issue-triage.json": {
+      "sha256": "450cdbfe3268d8020f80771c747225e5704190ab9595a29308f2e871a59db5f0",
+      "bytes": 60138
+    }
+  }
+}

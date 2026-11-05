@@ -1,0 +1,461 @@
+[
+  {
+    "variant": "specialized-test-baseline",
+    "emitted": {
+      "baseline": {
+        "raw": 96877,
+        "gzip": 37132,
+        "brotli": 32188
+      },
+      "selected": {
+        "raw": 96877,
+        "gzip": 37132,
+        "brotli": 32188
+      },
+      "sourceMap": true,
+      "runtimeDispatcher": false
+    },
+    "sourceHash": "aa8b5c21260e7e2efe328c91e8d26870be9e1b933ca72d38da0ff8d0ba716a30",
+    "files": {
+      "app.js": {
+        "raw": 96877,
+        "gzip": 37132,
+        "sha256": "b83af585eb0d2b7d2f131333938281a53da47be21e2835c96ad8c91a199ffc17",
+        "brotli": 32188
+      },
+      "app.js.map": {
+        "raw": 300683,
+        "gzip": 89508,
+        "sha256": "65db477d83b485ea51fa3b9365b501b517c7b937d607b3980dda4de7a0689eea",
+        "brotli": 77608
+      },
+      "index.html": {
+        "raw": 626,
+        "gzip": 373,
+        "sha256": "2755c0885ae354cbc3b8efd1d20057baa429bdcb2fb4fea81fac61c122a66fb6",
+        "brotli": 242
+      },
+      "placeholder.svg": {
+        "raw": 311,
+        "gzip": 223,
+        "sha256": "f914d2680cf7b2abd7dce22654cbb71718e20e00b02c0d67ae0bd1f612861f05",
+        "brotli": 196
+      },
+      "refinements.css": {
+        "raw": 1583,
+        "gzip": 770,
+        "sha256": "183be3794944334ebb2db5c63ea2206bebe6ef769630ef7adde30469f9c47431",
+        "brotli": 615
+      },
+      "style.css": {
+        "raw": 19119,
+        "gzip": 5643,
+        "sha256": "3cb55aa188e46b8c20db10a9e19f302cffa57bf55312c9ef1913adfbff638c5f",
+        "brotli": 4930
+      }
+    },
+    "contributions": {
+      "src/document-action.mjs": {
+        "bytesInOutput": 477
+      },
+      "src/board-row-view.mjs": {
+        "bytesInOutput": 1235
+      },
+      "src/packages/state-lib/dom/immutable-row-delta.mjs": {
+        "bytesInOutput": 492
+      },
+      "src/packages/core/workspace-loader.mjs": {
+        "bytesInOutput": 435
+      },
+      "src/packages/core/model.mjs": {
+        "bytesInOutput": 1917
+      },
+      "src/packages/core/document-store-baseline.mjs": {
+        "bytesInOutput": 772
+      },
+      "src/packages/core/json-draft.mjs": {
+        "bytesInOutput": 128
+      },
+      "src/packages/core/document-publication.mjs": {
+        "bytesInOutput": 21
+      },
+      "src/packages/core/document-store.mjs": {
+        "bytesInOutput": 322
+      },
+      "src/packages/core/assignees.mjs": {
+        "bytesInOutput": 564
+      },
+      "src/photo-review.mjs": {
+        "bytesInOutput": 4443
+      },
+      "src/packages/font/glyphs.mjs": {
+        "bytesInOutput": 12125
+      },
+      "src/packages/font/font.mjs": {
+        "bytesInOutput": 7675
+      },
+      "src/packages/core/art.mjs": {
+        "bytesInOutput": 5046
+      },
+      "src/packages/core/workspace.mjs": {
+        "bytesInOutput": 753
+      },
+      "src/packages/core/references.mjs": {
+        "bytesInOutput": 1599
+      },
+      "src/packages/core/sync.mjs": {
+        "bytesInOutput": 1860
+      },
+      "src/packages/state-lib/scoped/scope-core.mjs": {
+        "bytesInOutput": 3381
+      },
+      "src/packages/state-lib/scoped/scope-baseline.mjs": {
+        "bytesInOutput": 100
+      },
+      "src/packages/state-lib/scoped/debounced-latest.mjs": {
+        "bytesInOutput": 1260
+      },
+      "src/state-config.mjs": {
+        "bytesInOutput": 78
+      },
+      "src/board-state.mjs": {
+        "bytesInOutput": 4103
+      },
+      "src/board-commands.mjs": {
+        "bytesInOutput": 3188
+      },
+      "src/app.mjs": {
+        "bytesInOutput": 44310
+      },
+      "src/boot.mjs": {
+        "bytesInOutput": 557
+      }
+    },
+    "prelink": {
+      "builds": 1,
+      "files": 30,
+      "elapsedMs": 62.17082599999998,
+      "linkBuilds": 1,
+      "reusedByLinks": false,
+      "pathResolutions": 31
+    },
+    "runtimeFilesExcludingSourceMap": {
+      "raw": 118516,
+      "gzip": 44141,
+      "brotli": 38171
+    }
+  },
+  {
+    "variant": "specialized-test-state-lib",
+    "emitted": {
+      "baseline": {
+        "raw": 112148,
+        "gzip": 42166,
+        "brotli": 36470
+      },
+      "selected": {
+        "raw": 112148,
+        "gzip": 42166,
+        "brotli": 36470
+      },
+      "sourceMap": true,
+      "runtimeDispatcher": false
+    },
+    "sourceHash": "bf038ca0a4a9ab2975d9f5b19b2e62236c7b80dd6968a173ef717ba2f51aed5d",
+    "files": {
+      "app.js": {
+        "raw": 112148,
+        "gzip": 42166,
+        "sha256": "f19621d5a0de615d580a0c6d7366ae9517f4580a6f8de1d27ea720e0c2361990",
+        "brotli": 36470
+      },
+      "app.js.map": {
+        "raw": 345559,
+        "gzip": 101312,
+        "sha256": "ce8f54ac70b49bb90eb92989d505001fbd74bf6974306c2d0cedc53b6619469a",
+        "brotli": 87561
+      },
+      "index.html": {
+        "raw": 626,
+        "gzip": 373,
+        "sha256": "2755c0885ae354cbc3b8efd1d20057baa429bdcb2fb4fea81fac61c122a66fb6",
+        "brotli": 242
+      },
+      "placeholder.svg": {
+        "raw": 311,
+        "gzip": 223,
+        "sha256": "f914d2680cf7b2abd7dce22654cbb71718e20e00b02c0d67ae0bd1f612861f05",
+        "brotli": 196
+      },
+      "refinements.css": {
+        "raw": 1583,
+        "gzip": 770,
+        "sha256": "183be3794944334ebb2db5c63ea2206bebe6ef769630ef7adde30469f9c47431",
+        "brotli": 615
+      },
+      "style.css": {
+        "raw": 19119,
+        "gzip": 5643,
+        "sha256": "3cb55aa188e46b8c20db10a9e19f302cffa57bf55312c9ef1913adfbff638c5f",
+        "brotli": 4930
+      }
+    },
+    "contributions": {
+      "src/document-action.mjs": {
+        "bytesInOutput": 477
+      },
+      "src/board-row-view.mjs": {
+        "bytesInOutput": 1235
+      },
+      "src/packages/state-lib/dom/immutable-row-delta.mjs": {
+        "bytesInOutput": 492
+      },
+      "src/packages/state-lib/dist/core.js": {
+        "bytesInOutput": 6870
+      },
+      "src/packages/state-lib/dist/latest-task.js": {
+        "bytesInOutput": 1010
+      },
+      "src/packages/state-lib/dist/index.js": {
+        "bytesInOutput": 26
+      },
+      "src/packages/core/workspace-loader.mjs": {
+        "bytesInOutput": 964
+      },
+      "src/packages/core/model.mjs": {
+        "bytesInOutput": 1917
+      },
+      "src/packages/core/document-store-baseline.mjs": {
+        "bytesInOutput": 21
+      },
+      "src/packages/core/json-draft.mjs": {
+        "bytesInOutput": 5319
+      },
+      "src/packages/core/document-publication.mjs": {
+        "bytesInOutput": 1671
+      },
+      "src/packages/core/document-store.mjs": {
+        "bytesInOutput": 932
+      },
+      "src/packages/core/assignees.mjs": {
+        "bytesInOutput": 564
+      },
+      "src/photo-review.mjs": {
+        "bytesInOutput": 4448
+      },
+      "src/packages/font/glyphs.mjs": {
+        "bytesInOutput": 12125
+      },
+      "src/packages/font/font.mjs": {
+        "bytesInOutput": 7680
+      },
+      "src/packages/core/art.mjs": {
+        "bytesInOutput": 5046
+      },
+      "src/packages/core/workspace.mjs": {
+        "bytesInOutput": 753
+      },
+      "src/packages/core/references.mjs": {
+        "bytesInOutput": 1599
+      },
+      "src/packages/core/sync.mjs": {
+        "bytesInOutput": 1860
+      },
+      "src/packages/state-lib/scoped/scope-core.mjs": {
+        "bytesInOutput": 3179
+      },
+      "src/packages/state-lib/scoped/scope.mjs": {
+        "bytesInOutput": 289
+      },
+      "src/packages/state-lib/scoped/debounced-latest.mjs": {
+        "bytesInOutput": 1182
+      },
+      "src/state-config.mjs": {
+        "bytesInOutput": 79
+      },
+      "src/board-state.mjs": {
+        "bytesInOutput": 4122
+      },
+      "src/board-commands.mjs": {
+        "bytesInOutput": 3358
+      },
+      "src/app.mjs": {
+        "bytesInOutput": 44337
+      },
+      "src/boot.mjs": {
+        "bytesInOutput": 557
+      }
+    },
+    "prelink": {
+      "builds": 1,
+      "files": 30,
+      "elapsedMs": 75.56026800000001,
+      "linkBuilds": 1,
+      "reusedByLinks": false,
+      "pathResolutions": 31
+    },
+    "runtimeFilesExcludingSourceMap": {
+      "raw": 133787,
+      "gzip": 49175,
+      "brotli": 42453
+    }
+  },
+  {
+    "variant": "state-bundle-only",
+    "emitted": {
+      "baseline": {
+        "raw": 118626,
+        "gzip": 44221,
+        "brotli": 38165
+      },
+      "selected": {
+        "raw": 118626,
+        "gzip": 44221,
+        "brotli": 38165
+      },
+      "sourceMap": true,
+      "runtimeDispatcher": false
+    },
+    "sourceHash": "6778c47957310010a5f371567699a7a0c4e419543b3ab9ae904197b12d2f4d59",
+    "files": {
+      "app.js": {
+        "raw": 118626,
+        "gzip": 44221,
+        "sha256": "d99695e3fa3fa8c759d96dd2ff4bb28cc0998625aa0b4d873c920740539d57ee",
+        "brotli": 38165
+      },
+      "app.js.map": {
+        "raw": 355822,
+        "gzip": 104200,
+        "sha256": "f780c88800739a8265ade7d0404d251a98c2dddfab82bd04bc196ba4c3e34224",
+        "brotli": 90069
+      },
+      "index.html": {
+        "raw": 626,
+        "gzip": 373,
+        "sha256": "2755c0885ae354cbc3b8efd1d20057baa429bdcb2fb4fea81fac61c122a66fb6",
+        "brotli": 242
+      },
+      "placeholder.svg": {
+        "raw": 311,
+        "gzip": 223,
+        "sha256": "f914d2680cf7b2abd7dce22654cbb71718e20e00b02c0d67ae0bd1f612861f05",
+        "brotli": 196
+      },
+      "refinements.css": {
+        "raw": 1583,
+        "gzip": 770,
+        "sha256": "183be3794944334ebb2db5c63ea2206bebe6ef769630ef7adde30469f9c47431",
+        "brotli": 615
+      },
+      "style.css": {
+        "raw": 19119,
+        "gzip": 5643,
+        "sha256": "3cb55aa188e46b8c20db10a9e19f302cffa57bf55312c9ef1913adfbff638c5f",
+        "brotli": 4930
+      }
+    },
+    "contributions": {
+      "src/document-action.mjs": {
+        "bytesInOutput": 477
+      },
+      "src/board-row-view.mjs": {
+        "bytesInOutput": 1235
+      },
+      "src/packages/state-lib/dom/immutable-row-delta.mjs": {
+        "bytesInOutput": 492
+      },
+      "src/packages/state-lib/dist/core.js": {
+        "bytesInOutput": 6870
+      },
+      "src/packages/state-lib/dist/latest-task.js": {
+        "bytesInOutput": 1010
+      },
+      "src/packages/state-lib/dist/index.js": {
+        "bytesInOutput": 26
+      },
+      "src/packages/core/workspace-loader.mjs": {
+        "bytesInOutput": 1323
+      },
+      "src/packages/core/model.mjs": {
+        "bytesInOutput": 1917
+      },
+      "src/packages/core/document-store-baseline.mjs": {
+        "bytesInOutput": 772
+      },
+      "src/packages/core/json-draft.mjs": {
+        "bytesInOutput": 8576
+      },
+      "src/packages/core/document-publication.mjs": {
+        "bytesInOutput": 1671
+      },
+      "src/packages/core/document-store.mjs": {
+        "bytesInOutput": 1135
+      },
+      "src/packages/core/assignees.mjs": {
+        "bytesInOutput": 564
+      },
+      "src/photo-review.mjs": {
+        "bytesInOutput": 4448
+      },
+      "src/packages/font/glyphs.mjs": {
+        "bytesInOutput": 12138
+      },
+      "src/packages/font/font.mjs": {
+        "bytesInOutput": 7680
+      },
+      "src/packages/core/art.mjs": {
+        "bytesInOutput": 5046
+      },
+      "src/packages/core/workspace.mjs": {
+        "bytesInOutput": 753
+      },
+      "src/packages/core/references.mjs": {
+        "bytesInOutput": 1599
+      },
+      "src/packages/core/sync.mjs": {
+        "bytesInOutput": 1860
+      },
+      "src/packages/state-lib/scoped/scope-core.mjs": {
+        "bytesInOutput": 3381
+      },
+      "src/packages/state-lib/scoped/scope.mjs": {
+        "bytesInOutput": 289
+      },
+      "src/packages/state-lib/scoped/scope-baseline.mjs": {
+        "bytesInOutput": 100
+      },
+      "src/packages/state-lib/scoped/debounced-latest.mjs": {
+        "bytesInOutput": 1470
+      },
+      "src/state-config.mjs": {
+        "bytesInOutput": 79
+      },
+      "src/board-state.mjs": {
+        "bytesInOutput": 4791
+      },
+      "src/board-commands.mjs": {
+        "bytesInOutput": 3439
+      },
+      "src/app.mjs": {
+        "bytesInOutput": 44892
+      },
+      "src/boot.mjs": {
+        "bytesInOutput": 557
+      }
+    },
+    "prelink": {
+      "builds": 0,
+      "files": 0,
+      "elapsedMs": 0,
+      "linkBuilds": 1,
+      "reusedByLinks": false,
+      "pathResolutions": 31
+    },
+    "runtimeFilesExcludingSourceMap": {
+      "raw": 140265,
+      "gzip": 51230,
+      "brotli": 44148
+    }
+  }
+]

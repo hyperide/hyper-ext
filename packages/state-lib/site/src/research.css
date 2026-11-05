@@ -1,0 +1,225 @@
+/* Measured comparisons: no editorial styling or decorative diagram assets. */
+.research-proof {
+  clear: both;
+}
+.journal-next {
+  clear: both;
+  background: var(--accent-soft);
+  padding: 22px 26px;
+  border-radius: 16px;
+  margin-top: 32px;
+}
+.journal-next h2 {
+  margin-top: 4px;
+}
+.journal-related {
+  margin: 32px 0;
+}
+.journal-related h2 {
+  flex-basis: 100%;
+  margin: 0;
+}
+.research-proof {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 26px;
+  margin: 28px 0;
+  background: var(--panel);
+}
+.research-proof h2 {
+  margin-top: 4px;
+  font-size: 25px;
+}
+.research-proof p {
+  font-size: 15px;
+}
+.research-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0;
+}
+.research-stats > div {
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  min-width: 0;
+}
+.research-stats > div > span {
+  color: var(--muted);
+  font-size: 13px;
+  display: block;
+}
+.research-stats strong {
+  display: block;
+  font-size: clamp(23px, 2.8vw, 34px);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.research-stats strong span,
+.research-stats small {
+  font-size: 0.65em;
+  font-weight: 500;
+}
+.research-stats p {
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+.research-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 20px;
+  margin: 18px 0;
+  border-left: 4px solid var(--amber);
+  background: var(--amber-soft);
+  border-radius: 4px 12px 12px 4px;
+}
+.research-verdict span {
+  font-size: 14px;
+}
+.research-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 22px 0 14px;
+}
+.research-controls label {
+  font-weight: 600;
+}
+.research-controls select {
+  min-height: 44px;
+  font: inherit;
+  font-size: 16px;
+  padding: 8px 30px 8px 12px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.research-table {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overscroll-behavior-x: contain;
+}
+.research-table table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.research-table caption {
+  text-align: left;
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.research-table th,
+.research-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--line2);
+  text-align: right;
+}
+.research-table th:first-child {
+  text-align: left;
+}
+.research-table thead th {
+  background: var(--code);
+  font-size: 13px;
+}
+.research-table tbody th {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.research-pass {
+  color: var(--accent-ink);
+}
+.research-reject {
+  color: var(--red);
+  font-weight: 600;
+}
+.research-method,
+.research-source {
+  margin: 18px 0;
+}
+.research-method summary,
+.research-source summary {
+  min-height: 44px;
+  padding: 10px 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+.research-source pre {
+  overflow: auto;
+  max-width: 100%;
+  font-size: 14px;
+  background: var(--code);
+  padding: 16px;
+  border-radius: 10px;
+}
+.research-proof-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 18px;
+  padding-top: 18px;
+  font-size: 14px;
+  border-top: 1px solid var(--line);
+}
+.research-proof-footer a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.research-proof-footer > span {
+  width: 100%;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.research-concept {
+  padding: 28px 0;
+  border-top: 1px solid var(--line);
+}
+.research-concept h3 {
+  margin: 16px 0 6px;
+}
+.research-related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.research-related a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.research-eyebrow,
+.research-meta {
+  color: var(--muted);
+  font-size: 14px;
+}
+.research-table td[data-best] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 700;
+  box-shadow: inset 0 -2px var(--accent);
+}
+.research-best-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+}
+@media (max-width: 700px) {
+  .research-proof {
+    padding: 16px;
+  }
+  .research-stats {
+    grid-template-columns: 1fr;
+  }
+}

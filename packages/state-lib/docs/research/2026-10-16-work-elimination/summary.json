@@ -1,0 +1,36 @@
+{
+  "scope": "Actual compiled Boards completion path, not full-app all-operations certification",
+  "tests": {
+    "compiler": 65,
+    "captureRowCowCommands": 53,
+    "boardsUnit": 392,
+    "fixedBuildContracts": 4,
+    "compiledAppBrowserScenarios": 28
+  },
+  "benchmarkCasesPerEngine": 8,
+  "pagesPerCase": 7,
+  "timedClicksPerCase": 42,
+  "engines": {
+    "chromium": {
+      "version": "153.0.8010.12",
+      "date": "2026-10-16T19:47:47.565Z",
+      "startLoad": [11.76, 13.2, 14.49],
+      "endLoad": [14.35, 13.66, 14.4],
+      "logicalCPUs": 16
+    },
+    "webkit": {
+      "version": "26.6",
+      "date": "2026-10-16T19:54:16.227Z",
+      "startLoad": [14.35, 13.66, 14.4],
+      "endLoad": [25.81, 22.4, 18.31],
+      "logicalCPUs": 16
+    }
+  },
+  "sourceFiles": "source-identities.json",
+  "entryBytes": "entry-bytes.json",
+  "rawRuns": {
+    "archive": "measured-runs.zip",
+    "sha256": "75317f25b18a8cb3468f5c1813cd9bd6d02f8e6692b189b807a804ed179c2b53",
+    "members": ["chromium.json", "webkit.json"]
+  }
+}

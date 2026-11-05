@@ -37,7 +37,7 @@ export const SCREEN_EXAMPLES: Example[] = [
     tech: 'state',
     title: 'A React screen, one store, ordinary values',
     about:
-      'One store owns the checklist. Named actions change data; React components subscribe to values. No individual signals are created by the application. Compare the same screen with Zustand: both can make this screen coherent; state adds a broader transaction/history design, not a unique checkbox capability.',
+      'One store owns the checklist. Named actions change data; React components subscribe to values. No individual signals are created by the application. Compare the same screen with Zustand: both make this screen coherent. state adds the transaction and history design.',
     setup: `const store = createStore(${initial})
 const toggle = store.action('Toggle task', (state, id) => { state.tasks[id].done = !state.tasks[id].done })
 const setFilter = store.action('Change filter', (state, value) => { state.filter = value })
@@ -60,7 +60,7 @@ const completeBoth = store.action('Complete both tasks', state => {
     tech: 'zustand',
     title: 'The same React screen with Zustand',
     about:
-      'Zustand provides the shared store and React subscriptions. These explicit immutable updates implement the same checklist behavior. A single set updates both tasks. This example subscribes to the complete snapshot; selectors can narrow it. History and task ownership are separate choices, not things Zustand makes impossible.',
+      'Zustand provides the shared store and React subscriptions. These explicit immutable updates implement the same checklist behavior. A single set updates both tasks. This example subscribes to the complete snapshot; selectors can narrow it. History and task ownership are separate choices.',
     setup: `const store = zustand.createStore(() => (${initial}))
 const toggle = id => store.setState(state => ({
   tasks: { ...state.tasks, [id]: { ...state.tasks[id], done: !state.tasks[id].done } }

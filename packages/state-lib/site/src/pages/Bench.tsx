@@ -1,5 +1,6 @@
 import { T } from '../lib/T';
-import { href } from '../lib/router';
+import { ResearchEvidence } from '../lib/ResearchEvidence';
+import { ExampleOverview } from '../lib/ExampleLab';
 import { useState } from 'react';
 import { create } from 'zustand';
 import { produce } from 'immer';
@@ -445,19 +446,13 @@ export default function Bench() {
         </T>
         <h1>Benchmarks</h1>
         <p className="lead">
-          Two kinds of numbers, kept separate on purpose: <b>live</b> — run in your browser right now, on your hardware
-          (median of 7 runs after warmup); and <b>verified static</b> — published results with sources. Coming:
-          data-type × volume × operation grid and real-world scenarios per R28, wired into the playground examples.
+          Published experiments preserve the complete comparison, including rejected candidates. The live prototype
+          suites below run separately in your browser. They are different evidence, not interchangeable product
+          rankings.
         </p>
-        <p className="lead">
-          <b>The one worth running first</b> is R66 at the top: a filter-sort-group view over 10 000 rows, brought up to
-          date after one row changes. Recomputing it — what a memoized selector chain does once the array identity has
-          changed — took <b>110 ms</b> on the machine that recorded this, against <b>1.8 ms</b> maintained from patches
-          by a real primitive that also pays for the whole transaction pipeline. One checkbox, seven dropped frames.
-          This is the same selector-pyramid-vs-query argument as{' '}
-          <a href={`${href('/concepts')}#queries`}>the concept</a> — this page is the measured number, that page is why
-          it happens. What the number does and does not license is written up in{' '}
-          <code>docs/research/2026-09-04-r66-ivm-vs-selectors-first-run.md</code>, at greater length than the number.
+        <p>
+          Compare equal work and inspect the data. Highlighted cells have the lowest recorded median in their row; that
+          does not erase regressions elsewhere.
         </p>
         <p>
           <button className="tab runall" onClick={runAll} disabled={running !== null}>
@@ -465,6 +460,23 @@ export default function Bench() {
           </button>
         </p>
       </header>
+      <section id="example-benchmarks" aria-labelledby="example-benchmarks-title">
+        <h2 id="example-benchmarks-title">Measure real examples</h2>
+        <p className="lead">
+          Open a real project, change its code and see what the compiled version saves in size and time on your own
+          device.
+        </p>
+        <ExampleOverview />
+      </section>
+      <section id="published-research" aria-labelledby="published-research-title">
+        <h2 id="published-research-title">Published research: inspect the whole result</h2>
+        <ResearchEvidence experiment="cow" />
+      </section>
+      <h2 id="live-prototype-suites">Live prototype suites</h2>
+      <p className="lead">
+        Run these on your own device. They are demonstrations of individual mechanisms, not a substitute for the
+        source-pinned compiler and controller experiments above.
+      </p>
       {SUITES.map((s) => {
         const rs = results[s.id];
         const max = rs ? Math.max(...rs.map((r) => r.ms)) : 0;

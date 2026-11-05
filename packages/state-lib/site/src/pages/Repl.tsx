@@ -19,6 +19,8 @@ import { createStepSession, safe, freezeAll, type StepSession, type Frame, type 
 import { replApi } from '../lib/repl-api';
 import { DEFAULT_UI, ScopeWorkbench } from '../lib/ScopeWorkbench';
 import { GUIDES } from '../lib/learning';
+import { LAB_EXAMPLES } from '../data/example-lab/catalogue';
+import { ExampleLab } from '../lib/ExampleLab';
 export type { Frame } from '../lib/step-session';
 const emptySubscribe = () => () => {};
 const zero = () => 0;
@@ -624,9 +626,54 @@ function Pane({ ex, primary }: { ex: Example; primary: boolean }) {
   );
 }
 
+function ReplHeader() {
+  return (
+    <header className="page">
+      <p className="kicker">STATE · INTERACTIVE EXAMPLES</p>
+      <h1>UI, state and code.</h1>
+      <p className="lead">
+        Explore manually or run a demo. The interface, live values and editable code stay together.
+      </p>
+    </header>
+  );
+}
+
+const STARTER_TEMPLATES: [string, string][] = [
+  ['task-screen', 'React task screen'],
+  ['undo', 'Undo & redo'],
+  ['derived', 'Filtered collection'],
+  ['lifecycle', 'Owned async work'],
+];
+
+function QuickTemplates() {
+  const links = [...STARTER_TEMPLATES, ...LAB_EXAMPLES.map((e): [string, string] => [e.id, e.title])];
+  return (
+    <nav className="quick-templates" aria-label="Starter templates">
+      {links.map(([id, label]) => (
+        <a key={id} href={href(`/repl/${id}`)}>
+          {label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
 export default function Repl() {
   const route = useRoute();
   const wanted = route.split('/')[2] || (typeof location !== 'undefined' ? location.hash.replace(/^#/, '') : '');
+  if (LAB_EXAMPLES.some((e) => e.id === wanted)) {
+    return (
+      <div className="wrap repl-page">
+        <ReplHeader />
+        <QuickTemplates />
+        <ExampleLab key={wanted} id={wanted} />
+      </div>
+    );
+  }
+  return <LegacyRepl wanted={wanted} />;
+}
+
+function LegacyRepl({ wanted }: { wanted: string }) {
   const initial = exampleById(wanted) ?? EXAMPLES[0];
   const [ex, setEx] = useState<Example>(initial);
   /** The right-hand column: the same task in another toolkit, chosen from a
@@ -649,26 +696,8 @@ export default function Repl() {
 
   return (
     <div className="wrap repl-page">
-      <header className="page">
-        <p className="kicker">STATE · INTERACTIVE EXAMPLES</p>
-        <h1>UI, state and code.</h1>
-        <p className="lead">
-          Explore manually or run a demo. The interface, live values and editable code stay together.
-        </p>
-      </header>
-
-      <nav className="quick-templates" aria-label="Starter templates">
-        {[
-          ['task-screen', 'React task screen'],
-          ['undo', 'Undo & redo'],
-          ['derived', 'Filtered collection'],
-          ['lifecycle', 'Owned async work'],
-        ].map(([id, label]) => (
-          <a key={id} href={href(`/repl/${id}`)}>
-            {label}
-          </a>
-        ))}
-      </nav>
+      <ReplHeader />
+      <QuickTemplates />
       <details className="repl-choose">
         <summary>Choose or compare examples</summary>
         <div className="repl-pick">

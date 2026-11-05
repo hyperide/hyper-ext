@@ -1,0 +1,856 @@
+{
+  "findings": [
+    {
+      "quote": "A SYNTHESIS, NOT A CLAIM TO HAVE INVENTED EVERYTHING",
+      "routes": ["/index"],
+      "classification": "defensive-disclaimer (heading)",
+      "action": "rewrite",
+      "replacement": "Where state fits next to existing tools",
+      "reason": "The heading defends against an accusation nobody has made. The section below it is useful comparison content (Immer, TanStack Query, XState, Undo vs sync)."
+    },
+    {
+      "quote": "Native is a foundation, not a browser claim.",
+      "routes": ["/index"],
+      "classification": "dead-claim / defensive",
+      "action": "delete from the homepage; move the one factual sentence to a status or research page",
+      "replacement": "",
+      "reason": "The whole block only says what is not shipped: \"End-to-end Wasm/GPU integration, universal performance wins and proof of the whole application are not shipped claims.\" The only reader-relevant fact is \"Today’s browser demonstrations run TypeScript\". Put that in a single status line."
+    },
+    {
+      "quote": "What is not yet a universal guarantee",
+      "routes": ["/index"],
+      "classification": "bookkeeping about unfinished work",
+      "action": "move-to-settings (a single Status block)",
+      "replacement": "Status",
+      "reason": "This block and the next paragraph (\"Simply installing today's package does not force every component to handle every state...\") is a list of what is missing. It also implies an installable package, while the page says elsewhere there is none. Keep one sentence: exhaustive async binding and capture/replay are not implemented yet."
+    },
+    {
+      "quote": "The common typed core, normalized data and structural sharing are still being integrated. Some measured app paths remain slower and have more glue than their baseline. No claim that all Redux-form-era costs are already eliminated.",
+      "routes": ["/index"],
+      "classification": "bookkeeping + defensive disclaimer",
+      "action": "delete from the homepage. Move the \"some paths are slower\" fact to /bench as a visible losing row.",
+      "replacement": "",
+      "reason": "The genuine information is that some paths are slower than the baseline. That belongs in benchmark rows with numbers, not in a hedge paragraph on the homepage."
+    },
+    {
+      "quote": "Checked behavior, not just timing: the global-model fixture changes one form field and observes one notification for its reader and zero for the unrelated preview reader.",
+      "routes": ["/index"],
+      "classification": "self-congratulation about tests",
+      "action": "replace-with-executable",
+      "replacement": "Link to the workbench where the reader changes one form field and sees one notification for the reader and zero for the unrelated preview reader.",
+      "reason": "The paragraph reports that the tests pass, followed by the disclaimer \"These are bounded prototype checks, not measurements of every React render or arbitrary production replay.\" Show the result live instead of asserting it."
+    },
+    {
+      "quote": "These are executable contracts. A passing fixture is not a percentage of production bugs prevented.",
+      "routes": ["/index"],
+      "classification": "defensive disclaimer",
+      "action": "delete the second sentence; keep the first as a description of what the workbench shows",
+      "replacement": "The workbench shows whether two views agree after one change, whether Undo restores values and whether old async work can publish.",
+      "reason": "Nobody claimed a bug percentage. The sentence answers an objection that was never raised."
+    },
+    {
+      "quote": "Those are mechanisms to measure, not problems solved by renaming a store.",
+      "routes": ["/index"],
+      "classification": "defensive/meta",
+      "action": "rewrite",
+      "replacement": "Keeping every draft in the model only pays off if a keystroke does not copy the whole document, revalidate every field or rerender the entire form.",
+      "reason": "This is a genuine design constraint. The rhetorical tail is filler."
+    },
+    {
+      "quote": "Its form-state guidance is the tradeoff this architecture must answer with evidence, not a claim that Redux inherently rerenders everything.",
+      "routes": ["/index"],
+      "classification": "defensive disclaimer",
+      "action": "delete second clause",
+      "replacement": "Redux also recommends normalization, granular subscriptions and shallow copies.",
+      "reason": "It pre-empts a strawman. The fair comparison to Redux is already made in the previous clause."
+    },
+    {
+      "quote": "These are additional responsibilities, not proof that an update helper is deficient.",
+      "routes": ["/index"],
+      "classification": "defensive disclaimer",
+      "action": "delete",
+      "replacement": "",
+      "reason": "The preceding sentence already says Immer is a useful model and that state adds subscriptions, commands and history."
+    },
+    {
+      "quote": "not a reason to hide useful existing tools.",
+      "routes": ["/index"],
+      "classification": "defensive disclaimer",
+      "action": "rewrite",
+      "replacement": "state’s FSM layer is a proposed integration with its transaction model.",
+      "reason": "Nobody suggested hiding XState. Keep the genuine status (proposed)."
+    },
+    {
+      "quote": "MEASUREMENT BEFORE SUPERLATIVES",
+      "routes": ["/index"],
+      "classification": "meta (eyebrow)",
+      "action": "delete or rename to \"Benchmarks\"",
+      "replacement": "Benchmarks",
+      "reason": "It comments on the site's own writing style instead of describing content."
+    },
+    {
+      "quote": "A narrow improvement is not an application-wide speedup. The public harness records both wins and overhead, with the workload and environment next to the result.",
+      "routes": ["/index"],
+      "classification": "defensive/meta",
+      "action": "rewrite",
+      "replacement": "The harness records workload and environment next to every result, including overhead.",
+      "reason": "Keep the measurement-conditions fact and drop the self-justification."
+    },
+    {
+      "quote": "Historical isolated workload: 10,000 rows and 200 single-item updates.",
+      "routes": ["/index"],
+      "classification": "genuine measurement condition",
+      "action": "keep; move the trailing \"This does not measure a whole React screen, every selector, or the native kernel.\" into the /bench methodology block",
+      "replacement": "10,000 rows, 200 single-item updates. Apple M4 Pro, headless Chromium, 2026-09-04.",
+      "reason": "Workload, device and date are required conditions. The list of what was not measured belongs in the methodology on /bench, not next to the headline number."
+    },
+    {
+      "quote": "Working prototype and implementation research. No npm installation or production-readiness promise is implied by the playground.",
+      "routes": ["/index"],
+      "classification": "defensive disclaimer",
+      "action": "rewrite as a plain status line",
+      "replacement": "Prototype. Not published to npm.",
+      "reason": "The status (prototype, no npm package) is a genuine constraint and must stay visible, but as one line, not as a hedge about what is \"implied\"."
+    },
+    {
+      "quote": "WORKING BUILDING BLOCKS · CAPTURE PIPELINE PLANNED",
+      "routes": ["/index"],
+      "classification": "status bookkeeping in eyebrows",
+      "action": "convert to a small status badge or drop the planned half; link the working half to a runnable demo",
+      "replacement": "",
+      "reason": "Same pattern on \"INSPECTION WORKS · FULL DEVTOOLS PLANNED\". A planned half in the eyebrow undercuts each feature card. A status legend can carry it once."
+    },
+    {
+      "quote": "The generator is a compiler preview; immutable-update generation is a separate next step.",
+      "routes": ["/bench"],
+      "classification": "compiler-preview chatter + unfinished work",
+      "action": "delete",
+      "replacement": "",
+      "reason": "The paragraph's useful claim is \"5,000 value comparisons plus getter-order checks passed\". Keep that as the correctness line of the result card and drop the roadmap."
+    },
+    {
+      "quote": "Whole-document COW: not qualified13 of 21 timing cells pass · 21 correctness checks pass",
+      "routes": ["/bench"],
+      "classification": "internal jargon (\"qualified\", \"cells pass\")",
+      "action": "rewrite",
+      "replacement": "Whole-document COW: faster in 13 of 21 timing cases · 21 correctness checks pass",
+      "reason": "\"Not qualified\" and \"pass\" refer to an internal gate the reader has never seen. State the plain result."
+    },
+    {
+      "quote": "Both remain visible. Correctness passing does not erase a slower dense update or move.",
+      "routes": ["/bench"],
+      "classification": "defensive/meta",
+      "action": "delete",
+      "replacement": "The original mutable document and the full-copy Runtime have different safety contracts.",
+      "reason": "The table already shows the slower dense update and move. The safety-contract difference is genuine and stays."
+    },
+    {
+      "quote": "Strict sample gate",
+      "routes": ["/bench"],
+      "classification": "internal jargon (column header) with \"Pass\" / \"Not admitted\" cells",
+      "action": "rewrite",
+      "replacement": "Faster in every sample?",
+      "reason": "Column values \"Pass\" and \"Not admitted\" are review-process vocabulary. The method paragraph already defines the rule (maximum candidate sample does not exceed minimum original sample)."
+    },
+    {
+      "quote": "Best median",
+      "routes": ["/bench"],
+      "classification": "repeated label",
+      "action": "delete the text label in cells; keep the highlight and the table caption (\"Highlight: best recorded median in this row\")",
+      "replacement": "",
+      "reason": "The label repeats in nearly every row and duplicates the highlight."
+    },
+    {
+      "quote": "That is a conservative finite-sample decision, not a theorem about every future execution.",
+      "routes": ["/bench"],
+      "classification": "defensive disclaimer",
+      "action": "delete this sentence; keep the gate definition and the P95 note",
+      "replacement": "",
+      "reason": "The gate definition and \"With 17 observations, nearest-rank P95 is their maximum\" are the methodology. The philosophical caveat adds nothing."
+    },
+    {
+      "quote": "No UI frame, network, initial import or peak/native-memory advantage is claimed by this table.",
+      "routes": ["/bench"],
+      "classification": "genuine scope, wrong voice",
+      "action": "move-to-methodology and reword",
+      "replacement": "Not measured: UI frames, network, initial import, peak/native memory.",
+      "reason": "Measurement scope must stay. Only the \"claimed\" phrasing goes."
+    },
+    {
+      "quote": "They are demonstrations of individual mechanisms, not a substitute for the source-pinned compiler and controller experiments above.",
+      "routes": ["/bench"],
+      "classification": "defensive disclaimer",
+      "action": "delete",
+      "replacement": "Run these on your own device.",
+      "reason": "Nobody would treat the run buttons as replacing the recorded experiments."
+    },
+    {
+      "quote": "R66 — selector pyramid vs incremental maintenance",
+      "routes": ["/bench"],
+      "classification": "internal ID as heading",
+      "action": "rewrite",
+      "replacement": "Selector pyramid vs incremental maintenance",
+      "reason": "\"R66\" is a requirement number from the internal list. The same applies to \"The claim R66 exists to test\"."
+    },
+    {
+      "quote": "Reported whether it wins or loses.",
+      "routes": ["/bench"],
+      "classification": "self-congratulation (honesty label)",
+      "action": "delete",
+      "replacement": "Three collection sizes, 200 single-item updates per timed sample.",
+      "reason": "Honesty is demonstrated by showing losses, not by announcing it."
+    },
+    {
+      "quote": "Both are shown rather than picking the flattering one.",
+      "routes": ["/bench"],
+      "classification": "self-congratulation",
+      "action": "delete",
+      "replacement": "",
+      "reason": "The row already shows 7× measured versus ≈13× cited. The sentence only comments on the presentation."
+    },
+    {
+      "quote": "it stays amber until the spike ships a number",
+      "routes": ["/bench"],
+      "classification": "bookkeeping about unfinished work",
+      "action": "delete this clause; keep \"The amber bar is state’s CI-enforced budget, not a measurement\"",
+      "replacement": "",
+      "reason": "\"Budget, not a measurement\" is a genuine constraint. The spike schedule is internal."
+    },
+    {
+      "quote": "This is a row we do not win outright, and it is here for that reason.",
+      "routes": ["/compare", "/lib/jotai", "/lib/legend", "/lib/rtk", "/lib/valtio"],
+      "classification": "meta / self-congratulation about honesty",
+      "action": "rewrite",
+      "replacement": "MobX, Zustand and @xstate/store have genuinely agnostic cores and score the same as us. Where we differ is the server half: no singletons is a constraint on the whole design, not a helper anyone can add later.",
+      "reason": "The sentence \"a comparison page whose first column wins every single row reads as marketing, and one honest near-tie is what buys the other twenty-nine their credibility\" describes the page's rhetoric, not the product. Keep the two factual sentences."
+    },
+    {
+      "quote": "The honest limit first: this only works on an application that already ships this toolkit, and it is planned rather than built.",
+      "routes": [
+        "/compare",
+        "/lib/jotai",
+        "/lib/legend",
+        "/lib/mobx",
+        "/lib/rtk",
+        "/lib/valtio",
+        "/lib/xstate",
+        "/lib/zustand"
+      ],
+      "classification": "genuine constraint wrapped in meta",
+      "action": "rewrite; keep the constraint",
+      "replacement": "Works only on an application that already ships this toolkit. Planned, not built.",
+      "reason": "\"The honest limit first\" and the tail (\"the row is here because a reader recognises the problem, not because it wins\") are meta. The constraint itself must stay."
+    },
+    {
+      "quote": "Budgets are commitments, not marketing: the CI gate fails the build when a module exceeds its byte budget.",
+      "routes": ["/compare", "/lib/jotai", "/lib/legend", "/lib/mobx", "/lib/rtk", "/lib/valtio"],
+      "classification": "defensive/meta duplicate",
+      "action": "rewrite as a one-line note under the bundle row; the sentence that follows it (an \"honest caveat\" that our figures are targets until the spike is done) is the same point again",
+      "replacement": "Our figures are CI-enforced size budgets, not measurements. Other figures are measured.",
+      "reason": "The same point is made three times on the compare page (cell text, budget paragraph, caveat). One line is enough. Keep the budget-versus-measurement distinction."
+    },
+    {
+      "quote": "They are commitments a CI gate enforces by failing the build when a module crosses its byte budget, not sizes anyone has weighed, because there is nothing to weigh yet.",
+      "routes": ["/compare"],
+      "classification": "defensive duplicate",
+      "action": "delete",
+      "replacement": "",
+      "reason": "Repeats the budget note. Keep \"at most 4 kB for the core, and at most 3 kB more if a project uses collections\"."
+    },
+    {
+      "quote": "Note the ordering on this page: the idempotency row sells the consequence, and this row is the capability that creates the reconnect it protects.",
+      "routes": [
+        "/compare",
+        "/lib/jotai",
+        "/lib/legend",
+        "/lib/mobx",
+        "/lib/rtk",
+        "/lib/valtio",
+        "/lib/xstate",
+        "/lib/zustand"
+      ],
+      "classification": "meta about page structure",
+      "action": "delete",
+      "replacement": "",
+      "reason": "It comments on row ordering. On a per-library page the ordering reference makes no sense."
+    },
+    {
+      "quote": "The separation of code-reuse unit from undo scope is a distinction the design got wrong once and corrected — worth stating, because collapsing them looks tidy and breaks in both directions.",
+      "routes": [
+        "/compare",
+        "/lib/jotai",
+        "/lib/legend",
+        "/lib/mobx",
+        "/lib/rtk",
+        "/lib/valtio",
+        "/lib/xstate",
+        "/lib/zustand"
+      ],
+      "classification": "changelog / meta",
+      "action": "rewrite",
+      "replacement": "A complex is a unit of code reuse, not an undo scope. Collapsing the two breaks in both directions.",
+      "reason": "\"Got wrong once and corrected\" is design history. The rule itself is useful."
+    },
+    {
+      "quote": "in the prototype it is hand-rolled inside the scope, which is the one sentence here a reader could go and check.",
+      "routes": ["/compare"],
+      "classification": "meta / status",
+      "action": "rewrite",
+      "replacement": "In the prototype the status machine is hand-rolled inside the scope.",
+      "reason": "Genuine status stays. The commentary about the reader checking does not."
+    },
+    {
+      "quote": "This is the only row where all seven score zero and the reader still recognises the problem instantly — because the duplicate schema is sitting in their editor right now.",
+      "routes": [
+        "/compare",
+        "/lib/jotai",
+        "/lib/legend",
+        "/lib/mobx",
+        "/lib/rtk",
+        "/lib/valtio",
+        "/lib/xstate",
+        "/lib/zustand"
+      ],
+      "classification": "rhetorical meta",
+      "action": "delete",
+      "replacement": "",
+      "reason": "Narrates the comparison instead of informing. The previous two sentences carry the argument."
+    },
+    {
+      "quote": "Rolling the cancelled task’s optimistic writes back is specified and not yet in the prototype; the scopes, the cascade and the typed reasons are.",
+      "routes": ["/compare"],
+      "classification": "status bookkeeping",
+      "action": "move-to-settings (status column of the row)",
+      "replacement": "",
+      "reason": "The same pattern appears in the undo, logging, optimistic and persistence rows (\"origin scoping still designed\", \"rebase still designed\", \"URL module still designed\"). Give each row a single status column or badge instead of prose tails."
+    },
+    {
+      "quote": "spec v0.6",
+      "routes": ["/compare"],
+      "classification": "internal versioning as per-row label",
+      "action": "rewrite",
+      "replacement": "Use only the status vocabulary prototyped / designed / planned, with one legend.",
+      "reason": "\"spec v0.6\" repeats on about 15 rows and means nothing to a reader. The lib pages already use \"designed\"."
+    },
+    {
+      "quote": "Nothing else here has a name for either half.",
+      "routes": [
+        "/compare",
+        "/lib/jotai",
+        "/lib/legend",
+        "/lib/mobx",
+        "/lib/rtk",
+        "/lib/valtio",
+        "/lib/xstate",
+        "/lib/zustand"
+      ],
+      "classification": "marketing filler (also \"No state library treats migration as a product.\")",
+      "action": "delete",
+      "replacement": "",
+      "reason": "Unverifiable superlatives that add no information beyond the table."
+    },
+    {
+      "quote": "This member has no dedicated prose comment yet. Its exact contract is the generated signature below; consult its containing type and linked spec before use.",
+      "routes": ["/api"],
+      "classification": "bookkeeping about unfinished docs",
+      "action": "delete; render nothing above the signature until a description exists",
+      "replacement": "",
+      "reason": "An empty-state notice that repeats per undocumented member. Silence is cleaner. Optionally list undocumented members once in a coverage note."
+    },
+    {
+      "quote": "The declarative query layer (R32) is designed and not built — the Datalog form is printed rather than run, and clearly labelled.",
+      "routes": ["/api", "/repl/queries"],
+      "classification": "status bookkeeping + self-labelling",
+      "action": "rewrite",
+      "replacement": "The declarative query layer is designed, not built; the Datalog form below is printed, not run. What runs is the incremental primitive underneath it.",
+      "reason": "Keep the status. Drop \"clearly labelled\" and the internal ID \"R32\"."
+    },
+    {
+      "quote": "state adds a broader transaction/history design, not a unique checkbox capability.",
+      "routes": ["/api", "/playground", "/repl/task-screen", "/repl"],
+      "classification": "defensive disclaimer",
+      "action": "rewrite",
+      "replacement": "Compare the same screen with Zustand: both make this screen coherent. state adds the transaction and history design.",
+      "reason": "The disclaimer clause invites the objection it answers. It appears on the opening screen example of every REPL route."
+    },
+    {
+      "quote": "the four labels are our composition, not a claimed invention of state lifetime.",
+      "routes": ["/api", "/repl/regions", "/concepts", "/learning"],
+      "classification": "defensive disclaimer",
+      "action": "delete from the API and REPL text; keep the prior-art links once on the concepts page",
+      "replacement": "",
+      "reason": "Same disclaimer is repeated on four pages plus \"There is no defensible single inventor of “classifying state by ownership and lifetime”.\" One prior-art note with links is enough. The genuine constraint (\"tags alone do not enable storage or sync\") stays."
+    },
+    {
+      "quote": "The type below is a local explanatory interface used only in this guide. It is not a claim about a published package's exports.",
+      "routes": ["/adapters"],
+      "classification": "defensive disclaimer",
+      "action": "delete second sentence",
+      "replacement": "The type below is a local explanatory interface used only in this guide.",
+      "reason": "The status of adapters is already stated at the top of the page."
+    },
+    {
+      "quote": "The earlier adapter paragraph said the opposite and has been corrected.",
+      "routes": ["/adapters"],
+      "classification": "changelog chatter",
+      "action": "delete",
+      "replacement": "",
+      "reason": "The current policy statement stands alone. Same for \"despite earlier overloaded wording\" in the Lit paragraph."
+    },
+    {
+      "quote": "This is unrelated to state-lib's low-level primitive despite earlier overloaded wording.",
+      "routes": ["/adapters"],
+      "classification": "changelog chatter",
+      "action": "rewrite",
+      "replacement": "This is unrelated to state-lib's low-level primitive.",
+      "reason": "Readers never saw the earlier wording."
+    },
+    {
+      "quote": "they do not pretend to have bootstrapped a framework application.",
+      "routes": ["/adapters"],
+      "classification": "defensive disclaimer",
+      "action": "rewrite",
+      "replacement": "The rest of the guide's exact-source buttons preserve imports and interfaces; they do not bootstrap a framework application.",
+      "reason": "\"Pretend\" carries defensive tone. The technical constraint stays."
+    },
+    {
+      "quote": "The shared proposed conformance suite is itself planned, not an already published dependency.",
+      "routes": ["/adapters"],
+      "classification": "bookkeeping about unfinished work",
+      "action": "delete; the top of the page already says all adapters are planned",
+      "replacement": "",
+      "reason": "The test checklist above it is useful and should stay."
+    },
+    {
+      "quote": "Research concepts · Compiler preview",
+      "routes": ["/concepts"],
+      "classification": "internal status labels on cards",
+      "action": "replace with topic labels; move status to one \"Status\" line per card",
+      "replacement": "",
+      "reason": "\"Compiler preview\", \"Tested research contract\" and \"Next research direction\" tag cards with internal maturity vocabulary. The same tag text appears again in the glossary rows."
+    },
+    {
+      "quote": "The recorded correction passed the expanded contract; that does not qualify every COW performance case.",
+      "routes": ["/concepts"],
+      "classification": "self-congratulation about tests + defensive",
+      "action": "delete; link to /bench for performance cases",
+      "replacement": "",
+      "reason": "Reports a test outcome and then disclaims it."
+    },
+    {
+      "quote": "The implemented preview generates projections and chooses declared modules. It does not yet inspect every application command and automatically choose COW or a dense updater.",
+      "routes": ["/concepts"],
+      "classification": "compiler-preview chatter / unfinished work",
+      "action": "move-to-settings (status)",
+      "replacement": "Status: generates projections and chooses declared modules.",
+      "reason": "Keep the actual current capability; drop the list of what it does not do yet."
+    },
+    {
+      "quote": "This diagram is a proposed selection model, not a switch already optimizing every app command.",
+      "routes": ["/concepts"],
+      "classification": "defensive disclaimer",
+      "action": "rewrite",
+      "replacement": "This diagram shows a proposed selection model.",
+      "reason": "\"Proposed\" already says it. The sentence before it (\"are the next research work\") is roadmap bookkeeping."
+    },
+    {
+      "quote": "Why it matters for us: this is §4.1 of the spec — vendored (alien-signals form) behind a 5-function interface. R41 adds: publish it as an isolated, seriously-tested standalone package",
+      "routes": ["/concepts"],
+      "classification": "internal jargon / spec archival leakage",
+      "action": "rewrite or delete across the page",
+      "replacement": "",
+      "reason": "Every concept section ends with \"Why it matters for us\" and requirement IDs (R2, R9, R41, R48, R52, R76, R77, §4.x). Public readers cannot follow \"us\" or the IDs. Rewrite as \"Why it matters\" and describe the effect on the user, or remove."
+    },
+    {
+      "quote": "Full write-up with measurements: R48, pending.",
+      "routes": ["/concepts"],
+      "classification": "bookkeeping about unfinished work",
+      "action": "delete",
+      "replacement": "",
+      "reason": "A pointer to a document that does not exist yet."
+    },
+    {
+      "quote": "Nor is it a slide: it runs today",
+      "routes": ["/concepts"],
+      "classification": "meta / self-congratulation",
+      "action": "rewrite (also \"It runs today — end a scope in the REPL and read the output\", \"The policy table runs today — read it out of the prototype\")",
+      "replacement": "Type into the search box in the REPL and read the transaction log: one coalesced entry, not one per keystroke.",
+      "reason": "The concrete instruction is good executable content. The \"it runs today\" boasts add nothing."
+    },
+    {
+      "quote": "These explanations distinguish the working site prototype from planned production contracts. The API index is generated from the prototype. The master spec describes the intended toolkit; a code sketch there is not automatically an installed export.",
+      "routes": ["/concepts/practical"],
+      "classification": "defensive intro",
+      "action": "rewrite to one line",
+      "replacement": "Each explanation is labelled as working prototype or planned API.",
+      "reason": "Three sentences of caveats before any content. The labels themselves already exist inline (\"Proposed API; not a prototype export.\")."
+    },
+    {
+      "quote": "That runnable snippet illustrates a boundary, not a transaction implementation.",
+      "routes": ["/concepts/practical"],
+      "classification": "defensive disclaimer",
+      "action": "delete",
+      "replacement": "",
+      "reason": "The next sentence points to the actual tx() API and REPL."
+    },
+    {
+      "quote": "Every term below becomes a hover tooltip wherever it appears across the docs.",
+      "routes": ["/concepts"],
+      "classification": "meta about the docs system",
+      "action": "delete",
+      "replacement": "Glossary",
+      "reason": "Describes the site's mechanism, not the content."
+    },
+    {
+      "quote": "The state implementation on this site is a runnable prototype, not the published production library.",
+      "routes": ["/learning"],
+      "classification": "genuine status, repeated",
+      "action": "keep once on this page; delete \"Research checked against the primary sources below on 8 September 2026.\" or move it to a footer date",
+      "replacement": "",
+      "reason": "The prototype status is a real constraint. Do not repeat it on every section."
+    },
+    {
+      "quote": "There is now a separate synchronous TypeScript reference kernel, in addition to this",
+      "routes": ["/learning"],
+      "classification": "self-congratulation about tests + status report",
+      "action": "delete the whole section \"Runtime implementation and verification status\" (about 12 lines: \"The normal verification command includes strict callback type contracts, adversarial regressions and seeded differential event streams...\", \"This is tested reference code, not a formally proved production StateIR runtime.\", \"Test coverage does not imply compiler correctness, framework correctness or a universal speed advantage...\")",
+      "replacement": "",
+      "reason": "Internal engineering status report inside a learning guide. Detail about the kernel (staged transactions, nested savepoints) belongs in the spec or a repo README."
+    },
+    {
+      "quote": "This site no longer equates Svelte/Solid/Preact/Vue flush timing or read isolation",
+      "routes": ["/learning"],
+      "classification": "changelog chatter",
+      "action": "rewrite",
+      "replacement": "Svelte, Solid, Preact and Vue differ in flush timing and read isolation; these are version-specific contracts, not interchangeable labels.",
+      "reason": "\"No longer\" refers to an earlier version of the site. The technical caveat is genuine."
+    },
+    {
+      "quote": "The REPL now lists these as separate task groups, rather than burying all three under “Policy”.",
+      "routes": ["/learning"],
+      "classification": "changelog chatter",
+      "action": "delete",
+      "replacement": "",
+      "reason": "Describes a past change to the site."
+    },
+    {
+      "quote": "The served build now prerenders every manifest route into real HTML.",
+      "routes": ["/learning"],
+      "classification": "changelog / site-internals chatter",
+      "action": "rewrite",
+      "replacement": "Every page is served as real HTML and as Markdown, with an index and an optional full-text corpus (llms.txt).",
+      "reason": "\"Now\" is history. Also cut \"This follows the llms.txt proposal and documentation-platform contextual menus, not a mandatory browser standard\" and \"this static build does not claim negotiation on arbitrary HTML routes\". Keep \"It does not send your current code or data to an AI service.\""
+    },
+    {
+      "quote": "The JSX editor now uses the same static API hints as the program editor, with labels for React/native HTML/REPL helpers. This is not a full TypeScript language server, and top-level tracing cannot reveal a value scoped only inside a component event callback.",
+      "routes": ["/learning"],
+      "classification": "changelog + genuine limitation",
+      "action": "rewrite",
+      "replacement": "The JSX editor shows the same static API hints as the program editor. Top-level tracing cannot show a value scoped only inside a component event callback.",
+      "reason": "Keep the debugging limit (real constraint). Drop \"now\" and the negation about language servers."
+    },
+    {
+      "quote": "Danny's proposed local query engine addresses the query/materialisation layer; no claim about its unprovided implementation is needed to explain this separation.",
+      "routes": ["/learning"],
+      "classification": "internal name + defensive meta",
+      "action": "delete",
+      "replacement": "",
+      "reason": "Private person's name and a disclaimer about something the page does not claim."
+    },
+    {
+      "quote": "The fixture has forty synthetic server rows, not a claimed large-scale benchmark.",
+      "routes": ["/learning"],
+      "classification": "genuine condition, defensive voice",
+      "action": "rewrite",
+      "replacement": "The fixture has forty synthetic server rows.",
+      "reason": "The row count is the condition. \"Not a claimed benchmark\" adds nothing."
+    },
+    {
+      "quote": "What `state init` will write, built live from the choices above — the CLI has not shipped, so this has not actually run anywhere; the keys are exactly the schema in the master spec (§17.1), nothing invented.",
+      "routes": ["/init"],
+      "classification": "meta / defensive",
+      "action": "rewrite",
+      "replacement": "Preview of the state.config.yaml that `state init` will write, built from the choices above. The CLI is not released yet.",
+      "reason": "\"Nothing invented\" and the spec-section reference are defensive. Keep that the CLI has not shipped."
+    },
+    {
+      "quote": "6 of 17 choices above are real today — try them in the REPL. The rest are the roadmap: specified in the master spec, not built.",
+      "routes": ["/init"],
+      "classification": "bookkeeping about unfinished work",
+      "action": "replace-with-executable: mark unavailable choices as disabled with a \"planned\" badge; link the six working choices to REPL examples",
+      "replacement": "",
+      "reason": "Progress counter instead of a UI state. Disabled controls communicate the same thing where the choice is made."
+    },
+    {
+      "quote": "R19 is explicit that state is framework-agnostic, so this comes before any framework-specific question: which framework you're on.",
+      "routes": ["/init"],
+      "classification": "internal requirement ID",
+      "action": "rewrite",
+      "replacement": "The core is framework-agnostic, so the first question is which framework you use.",
+      "reason": "\"R19\" is meaningless to a reader. The \"v1 GA\" and `preview` wording in the same paragraph is roadmap talk; keep it only as status if needed."
+    },
+    {
+      "quote": "not a production npm installation recipe.",
+      "routes": ["/init"],
+      "classification": "defensive disclaimer",
+      "action": "delete this clause",
+      "replacement": "The workbench supplies React and createStore for this prototype.",
+      "reason": "Covered by the single Status line proposed for the homepage."
+    },
+    {
+      "quote": "The remaining command panels describe the intended toolchain. Their terminal transcripts are illustrative—not successful operations performed on your project.",
+      "routes": ["/cli"],
+      "classification": "defensive disclaimer (but the transcript labelling is a genuine constraint)",
+      "action": "rewrite as a small label on each transcript",
+      "replacement": "Illustrative output.",
+      "reason": "Transcripts that look real must be labelled. One short label on each block is enough."
+    },
+    {
+      "quote": "This is a narrow implemented preview, not completion of every command design below.",
+      "routes": ["/cli"],
+      "classification": "compiler-preview chatter",
+      "action": "delete; keep the sentence before it listing what works (projections, declared module alternatives, explain, doctor, build)",
+      "replacement": "",
+      "reason": "The status of the rest is covered by the illustrative-output label."
+    },
+    {
+      "quote": "The current projection preview does not implement all codemods, LSP or MCP surfaces shown above.",
+      "routes": ["/cli"],
+      "classification": "bookkeeping about unfinished work",
+      "action": "rewrite as per-panel status badges (scaffold, codemods, invariants, advice, budgets, search)",
+      "replacement": "",
+      "reason": "Says the opposite of a feature panel. A status per panel is more useful."
+    },
+    {
+      "quote": "all 14rewritten for you · 8flagged, rewritten by hand · 3depends on the body · 1stays an effect · 2",
+      "routes": ["/effects"],
+      "classification": "dead claim (codemods are not released)",
+      "action": "rewrite",
+      "replacement": "State the count as \"8 of 14 will be mechanically rewritable\" or mark the codemod as planned, consistent with /cli.",
+      "reason": "\"Rewritten for you\" reads as shipped behaviour, but state migrate is not implemented. The genuine catalogue value of the 14 reasons stays."
+    },
+    {
+      "quote": "SyntaxError: Unexpected end of JSON input",
+      "routes": ["/repl/snippet"],
+      "classification": "broken page",
+      "action": "replace-with-executable",
+      "replacement": "",
+      "reason": "This route renders a raw error as its only content. Either fix the snippet loader with an example or remove the route from the manifest."
+    },
+    {
+      "quote": "Nothing runs until you start it",
+      "routes": ["/playground", "/repl (all example routes)"],
+      "classification": "empty-state chatter, repeated 3+ times per page",
+      "action": "replace-with-executable",
+      "replacement": "",
+      "reason": "The page states \"Nothing runs until you start it\", \"Start the example above. Your interactive demo will appear here.\", \"Initialize the example to see its actual values. Nothing has run yet.\", \"Choose manual setup or a scripted demo. Nothing executes on arrival.\" That is four empty-state messages for one idle state. Auto-initialize the scripted demo on load (edited code still needs the security note) or show one placeholder."
+    },
+    {
+      "quote": "Optional developer tools. The live example above is the place to explore the feature; these are recorded execution details.",
+      "routes": ["/repl (all example routes)"],
+      "classification": "meta",
+      "action": "delete",
+      "replacement": "Debug execution",
+      "reason": "The disclosure title already says what it is."
+    },
+    {
+      "quote": "The ~1800-line prototype and comparison libraries execute locally in this tab. Edited code has this site's privileges; review it before running. Protocol simulations are not live servers.",
+      "routes": ["/repl (all example routes)"],
+      "classification": "mixed: genuine security note + filler",
+      "action": "rewrite",
+      "replacement": "Edited code runs with this site's privileges; review it before running.",
+      "reason": "The security warning is genuine and duplicated elsewhere on the page. Keep it once. The line count is trivia."
+    },
+    {
+      "quote": "Why this matters. Both branches are invalidated before the reader runs. A correct pull sees left and right at the same source version.",
+      "routes": ["/repl/diamond", "/repl/adapter-react", "/repl/sync-*", "/repl/writes-*", "/repl/*"],
+      "classification": "duplicate paragraph",
+      "action": "delete the repeated intro or the \"Why this matters\" copy",
+      "replacement": "",
+      "reason": "On many examples the intro paragraph and the \"Why this matters\" block have identical text (diamond, adapter-react, sync-catalog, sync-kanban, sync-large, sync-quotes, sync-reset, sync-resume, writes-unbatched, electric-http, react-basics, valtio/zustand basics)."
+    },
+    {
+      "quote": "Deterministic teaching model, not a running Electric server or a benchmark. Use Step for one protocol action, then edit either table with the controls.",
+      "routes": [
+        "/repl/sync-catalog",
+        "/repl/sync-kanban",
+        "/repl/sync-large",
+        "/repl/sync-quotes",
+        "/repl/sync-reset",
+        "/repl/sync-resume"
+      ],
+      "classification": "genuine constraint, repeated twice per page",
+      "action": "move-to-settings: one \"Simulation\" badge and one line",
+      "replacement": "Simulation, no network. Use Step for one protocol action, then edit either table.",
+      "reason": "Keep the fact that these are not a live Electric server. Say it once per page. The \"not a benchmark\" clause is unnecessary."
+    },
+    {
+      "quote": "This is the prototype watch unsubscribe function, not a claim that every dispose signature shares this API.",
+      "routes": ["/repl/lifecycle"],
+      "classification": "defensive disclaimer",
+      "action": "rewrite",
+      "replacement": "This uses the unsubscribe function returned by watch.",
+      "reason": "Duplicates the intro sentence directly above."
+    },
+    {
+      "quote": "No planned useSlice package is implied.",
+      "routes": ["/repl/adapter-react"],
+      "classification": "defensive disclaimer",
+      "action": "delete",
+      "replacement": "",
+      "reason": "The first sentence already labels native React versus prototype APIs."
+    },
+    {
+      "quote": "History and task ownership are separate choices, not things Zustand makes impossible.",
+      "routes": ["/repl/zustand-task-screen"],
+      "classification": "fairness hedge (mild)",
+      "action": "keep or shorten",
+      "replacement": "Zustand provides the shared store and React subscriptions; history and task ownership are separate choices.",
+      "reason": "This one is legitimate comparison fairness; trim only the negation."
+    },
+    {
+      "quote": "Editing and additional-language adapters belong to the existing REPL integration and are not implemented on this page yet.",
+      "routes": ["/queries"],
+      "classification": "bookkeeping about unfinished work",
+      "action": "replace-with-executable (link each task to \"Try in REPL\") or delete",
+      "replacement": "",
+      "reason": "Tells the reader what the page cannot do. Either add Try links or say nothing. Keep the correctness-corpus scope: \"This is a correctness corpus, not a library-speed leaderboard\" (genuine)."
+    },
+    {
+      "quote": "in the earlier spec was an unimplemented package placeholder, not an existing npm package. It was too easy to read it as a dependency one could install.",
+      "routes": ["/query-research"],
+      "classification": "changelog / correction chatter",
+      "action": "delete; state the current facts",
+      "replacement": "The real upstream engine is @tanstack/db-ivm, in the TanStack DB repository. Our still-unimplemented boundary is called state/query-tanstack (planned).",
+      "reason": "Public readers never saw the earlier spec."
+    },
+    {
+      "quote": "Corrections to the earlier corpus interpretation",
+      "routes": ["/query-research"],
+      "classification": "changelog section",
+      "action": "delete section; fold each correction (OR branch, keyed-lookup priority, recursive order) into the fixture card it concerns",
+      "replacement": "",
+      "reason": "Same for the sentence saying a previous claim about Datalog was too strong. The corrected claim (an unordered core relation does not itself give an ordered list) is worth keeping."
+    },
+    {
+      "quote": "This small baseline lets us test readability and semantic contracts without pretending the difficult engine work is finished.",
+      "routes": ["/query-research"],
+      "classification": "defensive disclaimer",
+      "action": "delete this sentence; keep \"Current implementation: performs a full recomputation... no incremental subscription, backend pushdown, custom query compiler, join implementation or persistent index\"",
+      "replacement": "",
+      "reason": "The concrete list of missing features is the genuine constraint."
+    },
+    {
+      "quote": "The UI says this rather than substituting a JavaScript implementation and calling it a successful database query.",
+      "routes": ["/query-research"],
+      "classification": "self-congratulation about honesty",
+      "action": "delete",
+      "replacement": "",
+      "reason": "Keep the fact that Datalog, Prisma and Drizzle are reference spellings only."
+    },
+    {
+      "quote": "2026-09-08 correction notice. This is the full original study, retained with its method and all 22 records.",
+      "routes": ["/selectors-vs-datalog"],
+      "classification": "changelog / meta",
+      "action": "delete the notice; drop the repeated full study or collapse it under a details element",
+      "replacement": "",
+      "reason": "Also \"The complete source document is rendered here, not hidden behind a repository path. Read its correction notice before relying on earlier conclusions.\" and \"Corrected 2026-09-08: the original draft lost the gap exception.\" in a card. The page contains the same 22-chain analysis twice (cards, then full study)."
+    },
+    {
+      "quote": "GitHub code search and the contents API were both available and neither rate-limited during this pass.",
+      "routes": ["/selectors-vs-datalog"],
+      "classification": "process bookkeeping",
+      "action": "delete; keep the pinned-SHA statement",
+      "replacement": "Every file was read at a pinned commit SHA.",
+      "reason": "The rate-limit status of the research tooling is irrelevant to readers. The heading \"Provenance and honesty about coverage\" should be \"Corpus and method\"."
+    },
+    {
+      "quote": "The leading maintenance annotation before “This” is omitted from this excerpt (HYP-1457); it is not byte-for-byte verbatim.",
+      "routes": ["/selectors-vs-datalog", "/dive-stores"],
+      "classification": "internal ticket ID + process chatter",
+      "action": "rewrite to \"(abridged)\"",
+      "replacement": "Excerpt abridged; see the pinned source for the full comment.",
+      "reason": "Also in /dive-stores (\"this excerpt omits the leading maintenance annotation and is not byte-for-byte verbatim\", and the Jotai note about the trailing annotation \"asking Daishi to revisit it\"). One word \"abridged\" carries the same meaning."
+    },
+    {
+      "quote": "Mextner’s past pain, formally retired",
+      "routes": ["/landscape", "/validation"],
+      "classification": "internal names on a public page",
+      "action": "rewrite",
+      "replacement": "The conversion tax at every boundary; the reason our core uses COW of plain objects",
+      "reason": "Also \"Mextner’s own bad experience\", \"needs Danny’s sign-off\", \"Danny’s architecture PoC\", \"Danny’s “events for everything”\" (lib/xstate), and \"Briefing on §5 tensions and §7 questions (Mextner + Danny)\" on /brief. Private people and process do not belong in a public library site. R55 already says the site speaks as an OSS project."
+    },
+    {
+      "quote": "What Hyper runs today (8 stores)",
+      "routes": ["/landscape", "/validation", "/lib/zustand"],
+      "classification": "adopter-internals leak",
+      "action": "delete",
+      "replacement": "",
+      "reason": "Contradicts requirement R55 and decision #21 (no adopter internals). Same for \"what Hyper uses today; selectors + useShallow are the pain we remove\" and, on /concepts, \"for Hyper itself and for the code factory (rig+lmao/axe)\"."
+    },
+    {
+      "quote": "Status: draft v0.6 for review (Mextner, Danny). v0.2: 43 review findings folded in (Appendix D).",
+      "routes": ["/spec"],
+      "classification": "changelog archival",
+      "action": "move to a repository CHANGELOG or an /internal section; leave a short public header",
+      "replacement": "",
+      "reason": "The header, \"v0.1 → v0.2 changes (from an independent consistency review...)\", \"Audit date: 2026-09-23. The earlier site did not contain a complete algorithm inventory\", \"Sections 10.1–10.5 ... are not yet written; 10.6 is numbered ahead\" and \"R103 correction (2026-09-23): the two premature marketing articles ... are withdrawn\" are process history."
+    },
+    {
+      "quote": "Status: research phase complete → this brief → briefing session → master spec + full competitor matrix + build-setup fit check.",
+      "routes": ["/brief"],
+      "classification": "internal process bookkeeping",
+      "action": "move /brief, /requirements and /decisions out of the public navigation (or clearly mark them as design archive)",
+      "replacement": "",
+      "reason": "These pages are briefing-session material: open questions for named people, to-do lists (\"Two-week spike per §6\"), and decision #38 that mentions withdrawing blog articles. Keep only the decision log entries that explain design choices."
+    },
+    {
+      "quote": "Moved (09-03, R55): the concrete audit of the first adopter's codebase",
+      "routes": ["/brief"],
+      "classification": "changelog + adopter reference",
+      "action": "delete",
+      "replacement": "",
+      "reason": "Points to an adopter-side doc and describes moving text. Keep only the generalisable findings that follow."
+    }
+  ],
+  "coverage": {
+    "read_fully": [
+      "/index",
+      "/bench",
+      "/compare (+ /lib/* shared rows)",
+      "/api",
+      "/adapters",
+      "/concepts",
+      "/concepts/practical",
+      "/learning",
+      "/init",
+      "/cli",
+      "/effects",
+      "/queries",
+      "/query-research",
+      "/repl/* shared chrome and per-example text",
+      "/playground",
+      "/404"
+    ],
+    "sampled_or_pattern_matched": [
+      "/spec (about 250 KB: sampled headers, status notes, roadmap and correction paragraphs, not every section)",
+      "/selectors-vs-datalog (cards plus duplicated full study)",
+      "/landscape and /validation (tables: only internal names and adopter leaks flagged)",
+      "/dive-data and /dive-stores (only abridgement notes flagged)",
+      "/brief",
+      "/requirements",
+      "/decisions"
+    ],
+    "not_flagged_on_purpose": "Genuine API constraints and risky semantics were left alone: no rollback in tx(), throwing action leaves partial writes, snapshot() clones and is not a stable getSnapshot, Proxy tax, budgets vs measurements, machine and date on benchmarks, edited-code privileges, Electric authorization/CORS notes, transcript labelling on /cli.",
+    "note": "The lib pages (/lib/*) are the compare rows repeated per library; findings on the shared paragraphs list them in routes but are counted once. One /compare quote was cut short and its tail is described in the reason, because the full sentence contains a word blocked by the output filter."
+  },
+  "top_priorities": [
+    "1. Homepage (/index): remove the defensive apparatus (heading \"A SYNTHESIS, NOT A CLAIM...\", \"What is not yet a universal guarantee\", \"Native is a foundation, not a browser claim\", the three \"not a claim that...\" tails). Replace test-pass boasts with links to the live workbench. Keep one Status line: prototype, not on npm.",
+    "2. Benchmark page: rename internal gate language (\"qualified\", \"Strict sample gate\", \"Not admitted\", \"Best median\" cell text, R66 in headings). Move the \"what is not measured\" list into the methodology block. Drop the \"compiler preview\" and \"honest\" remarks. Keep every loss visible.",
+    "3. REPL chrome (35+ routes): collapse four empty-state messages into one or auto-initialise the scripted demo. Show the intro once, not twice (\"Why this matters\" duplicates). Fix /repl/snippet, which shows a raw SyntaxError. Say once per sync lab that it is a simulation.",
+    "4. Compare and /lib/*: delete meta paragraphs (\"we do not win outright... honest near-tie\", \"Note the ordering on this page\", \"honest limit first\", budget caveat repeated three times). Replace \"spec v0.6\" tags and status prose tails with a single status column. Remove adopter leaks (\"What Hyper runs today\") and internal names (Mextner, Danny).",
+    "5. Concepts and /learning: strip \"Why it matters for us\" plus R-number and § references, changelog voice (\"now\", \"no longer\", \"earlier wording\", \"corrected\"), card tags like \"Compiler preview\", and the whole \"Runtime implementation and verification status\" section on /learning.",
+    "6. Archival (/spec, /brief, /requirements, /decisions, /query-research corrections, /selectors-vs-datalog correction notice): move process history and changelogs out of the public nav or into a repository CHANGELOG. The public spec keeps the design, not the review trail.",
+    "7. Dead claims to fix rather than hedge: /effects \"rewritten for you\" (codemods unreleased), /init \"6 of 17 choices are real\" (use disabled controls), /api \"no dedicated prose comment yet\" (render nothing)."
+  ]
+}

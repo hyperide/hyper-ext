@@ -2,6 +2,7 @@ import { SiteIcon } from './lib/SiteIcon';
 import { useEffect, useRef, useState } from 'react';
 import { DiagramViewer } from './lib/DiagramViewer';
 import Home from './pages/Home';
+import './research.css';
 import Snippet from './pages/Snippet';
 import Api from './pages/Api';
 import { SnippetActions } from './lib/SnippetActions';
@@ -25,6 +26,13 @@ import OperatorCorpus from './pages/OperatorCorpus';
 import requirements from './content/requirements.md?raw';
 import decisions from './content/decisions.md?raw';
 import spec from './content/spec.md?raw';
+import portfolio from '../../docs/spec/algorithm-portfolio.md?raw';
+import { composeSpec } from './lib/spec-compose.mjs';
+import liveExampleLab from '../../docs/spec/live-example-lab.md?raw';
+const specWithPortfolio = composeSpec(spec.replace('](spec/live-example-lab.md)', '](/spec#browser-compiler)'), [
+  [5, liveExampleLab],
+  [14, portfolio],
+]);
 import learning from './content/learning.md?raw';
 import brief from './content/brief.md?raw';
 import diveData from './content/dive-data.md?raw';
@@ -164,7 +172,7 @@ export default function App() {
   ) : route.startsWith('/decisions') ? (
     <Doc title="Decision log" md={decisions} wide />
   ) : route.startsWith('/spec') ? (
-    <Doc title="Master spec" md={spec} wide />
+    <Doc title="Master spec" md={specWithPortfolio} wide />
   ) : route.startsWith('/brief') ? (
     <Doc title="Research brief" md={brief} wide />
   ) : route === '/' ? (

@@ -1,6 +1,6 @@
 # Reactivity, synchronisation and readable documentation
 
-This guide separates an algorithm, its scheduling policy, and the product guarantees built on top. The state implementation on this site is a runnable **prototype**, not the published production library. Protocol laboratories are **deterministic teaching models**. The separately labelled HTTP reader makes real requests only after you configure an authorised endpoint. Research checked against the primary sources below on **8 September 2026**.
+This guide separates an algorithm, its scheduling policy, and the product guarantees built on top. The state implementation on this site is a runnable **prototype**, not the published production library. Protocol laboratories are simulations. The separately labelled HTTP reader makes real requests only after you configure an authorised endpoint.
 
 ## Lazy derivation does not mean a sleeping UI
 
@@ -24,11 +24,11 @@ A diamond has `a → left → sum` and `a → right → sum`. After **one** writ
 
 Now consider an invoice with two independent source signals, quantity 1 and unit price 100. The application intends to change them to quantity 2 and unit price 80. An immediate subscriber can see:
 
-| Boundary | Quantity | Price | Total |
-|---|---:|---:|---:|
-| Initially | 1 | 100 | 100 |
-| After the first completed write | 2 | 100 | 200 |
-| After the second completed write | 2 | 80 | 160 |
+| Boundary                         | Quantity | Price | Total |
+| -------------------------------- | -------: | ----: | ----: |
+| Initially                        |        1 |   100 |   100 |
+| After the first completed write  |        2 |   100 |   200 |
+| After the second completed write |        2 |    80 |   160 |
 
 The intermediate 200 is **not a broken derivation**: it is correct for the source state that actually existed between those two writes. The reactive graph cannot infer that two ordinary calls belong to one business operation. There need not be another thread, a timer, an `await`, or a browser paint: a synchronous subscriber can run inside the first setter.
 
@@ -51,7 +51,7 @@ This distinction prevents several false guarantees:
 
 A microtask-coalesced default is a useful ergonomic policy, but it still cannot discover a transaction crossing a timer/network response, or prevent an explicit read between setters. An explicit transaction communicates intent and works independently of a renderer's batching. For data that must always travel together, a single aggregate write may also be simpler than independently writable fields.
 
-Lineage: [Preact batch](https://preactjs.com/guide/v10/signals/#batchfn) documents deferred reactions and reads inside batches; [MobX actions](https://mobx.js.org/actions.html) document transaction boundaries for reactions. This site no longer equates Svelte/Solid/Preact/Vue flush timing or read isolation: those are version-specific contracts, not interchangeable labels.
+Lineage: [Preact batch](https://preactjs.com/guide/v10/signals/#batchfn) documents deferred reactions and reads inside batches; [MobX actions](https://mobx.js.org/actions.html) document transaction boundaries for reactions. Svelte, Solid, Preact and Vue differ in flush timing and read isolation; these are version-specific contracts, not interchangeable labels.
 
 ## Electric is a read synchronisation protocol, not “large downloads”
 
@@ -81,7 +81,7 @@ The real protocol uses a **shape handle plus an offset**, not the educational mo
 
 Large initial logs can span multiple responses. Progressively displaying arrived rows is a **presentation policy**, not evidence that the shape is complete. A subtotal computed over the first chunk is not the total for the whole shape. The model lets you choose staged publication or progressive display with an explicit incomplete marker.
 
-[Try: loading while the server changes](/repl/sync-large). Change a server row between snapshot chunks; finish the snapshot, then catch up the log. The fixture has forty synthetic server rows, not a claimed large-scale benchmark.
+[Try: loading while the server changes](/repl/sync-large). Change a server row between snapshot chunks; finish the snapshot, then catch up the log. The fixture has forty synthetic server rows.
 
 Chunking an entire selected shape and loading only requested subsets are different. Current Electric also documents changes-only logs and **subset snapshots**, with snapshot metadata used to reconcile overlap with the change stream. Subset snapshots are not implemented by this site's minimal HTTP reader or the simple model. Consult the official SDK and [HTTP API](https://electric.ax/docs/sync/api/http) for that protocol rather than extending the illustrative integer cursor into a production client.
 
@@ -93,18 +93,18 @@ Authorisation must happen at the backend/proxy before serving protected data, an
 
 ### Which scenario should I try?
 
-| Situation | What it teaches | Playground |
-|---|---|---|
-| Shared project board | Changes to a small collection matter; moving a row outside the shape removes it | [Board](/repl/sync-kanban) |
-| Catalogue category | Selected local data can be searched without another round trip once available | [Catalogue](/repl/sync-catalog) |
+| Situation                 | What it teaches                                                                   | Playground                         |
+| ------------------------- | --------------------------------------------------------------------------------- | ---------------------------------- |
+| Shared project board      | Changes to a small collection matter; moving a row outside the shape removes it   | [Board](/repl/sync-kanban)         |
+| Catalogue category        | Selected local data can be searched without another round trip once available     | [Catalogue](/repl/sync-catalog)    |
 | Public latest-price board | Shared state is plausible for cache reuse; ticks and benchmarks are not simulated | [Latest values](/repl/sync-quotes) |
-| Chunked initial load | Partial display versus complete-state publication; update during loading | [Chunks](/repl/sync-large) |
-| A disconnected client | Old-ID update/delete, retained checkpoint, repeat delivery | [Reconnect](/repl/sync-resume) |
-| Server history recreated | Invalid handle; discard and rebuild rather than silently skip | [Refetch](/repl/sync-reset) |
+| Chunked initial load      | Partial display versus complete-state publication; update during loading          | [Chunks](/repl/sync-large)         |
+| A disconnected client     | Old-ID update/delete, retained checkpoint, repeat delivery                        | [Reconnect](/repl/sync-resume)     |
+| Server history recreated  | Invalid handle; discard and rebuild rather than silently skip                     | [Refetch](/repl/sync-reset)        |
 
 All six have a server/client visualisation, editable server rows, chunk controls, connection state and event trace. They deliberately perform **no network I/O** and do not claim to execute Electric's implementation. [The real HTTP exercise](/repl/electric-http) instead lets you configure an authorised endpoint and inspect actual messages. It is read-only, does not bundle Postgres, and does not implement the production SDK's retry/persistence/subset/transaction-coordination coverage. After stopping its SSE display it starts a fresh snapshot instead of inventing a resumable event ID.
 
-Electric's read path does not implement application write validation or conflict policy. Those belong to your write API and, where needed, an optimistic overlay/outbox. In the intended architecture, state-lib manages local reactive state, lifecycle and user intent; an Electric adapter supplies confirmed remote data. Danny's proposed local query engine addresses the query/materialisation layer; no claim about its unprovided implementation is needed to explain this separation.
+Electric's read path does not implement application write validation or conflict policy. Those belong to your write API and, where needed, an optimistic overlay/outbox. In the intended architecture, state-lib manages local reactive state, lifecycle and user intent; an Electric adapter supplies confirmed remote data. A local query engine addresses the query and materialisation layer separately.
 
 ## Three artefacts means three views of one action
 
@@ -120,49 +120,32 @@ Our `domain`, `view`, `session`, `draft` names compose those policy decisions. T
 
 [Try: inline region declarations](/repl/regions). Write `ui: region.view({ panelOpen: false })` beside the data, rather than maintaining a second pointer map. Markers are unwrapped during initialisation: reading `store.state.ui.panelOpen` yields the ordinary value. Existing pointer-map options remain available for migration and override the same declared path. Path matching respects segment boundaries: `/ui` does not cover `/uint`.
 
-Regions, persistence and optimism are related but **not one feature**. Regions classify a lifetime/ownership scope. Persistence determines what survives and in which representation. Optimism separates tentative intent from confirmed data until success/failure. A view-only drag preview may be optimistic but not persisted; a durable preference may be persisted without being optimistic; an offline draft can need both local retention and later validation. The REPL now lists these as separate task groups, rather than burying all three under “Policy”.
+Regions, persistence and optimism are related but **not one feature**. Regions classify a lifetime/ownership scope. Persistence determines what survives and in which representation. Optimism separates tentative intent from confirmed data until success/failure. A view-only drag preview may be optimistic but not persisted; a durable preference may be persisted without being optimistic; an offline draft can need both local retention and later validation. The REPL lists them as separate task groups.
 
 ## Two boundaries apply to more than dates
 
 A domain value, its wire representation and its display/editor representation need not be the same type. Date is one worked example, not the definition of the feature.
 
-| Domain value | Storage/wire contract | Editor/display contract |
-|---|---|---|
-| Money amount | Explicit currency plus agreed precision, for example integer minor units | Locale-dependent decimal/group separators; temporarily incomplete input |
-| Date/time | Explicit instant or date-only contract, not an ambiguous formatted label | Locale and time-zone presentation |
-| Physical quantity | Canonical value plus defined unit semantics | User-selected units and precision |
-| Enum/reference | Stable code or identifier | Translated label or editable search text |
-| Structured document | Versioned data structure | Rich-text presentation and intermediate editor state |
+| Domain value        | Storage/wire contract                                                    | Editor/display contract                                                 |
+| ------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Money amount        | Explicit currency plus agreed precision, for example integer minor units | Locale-dependent decimal/group separators; temporarily incomplete input |
+| Date/time           | Explicit instant or date-only contract, not an ambiguous formatted label | Locale and time-zone presentation                                       |
+| Physical quantity   | Canonical value plus defined unit semantics                              | User-selected units and precision                                       |
+| Enum/reference      | Stable code or identifier                                                | Translated label or editable search text                                |
+| Structured document | Versioned data structure                                                 | Rich-text presentation and intermediate editor state                    |
 
 A codec handles the domain ↔ wire boundary. A presenter/parser handles the domain ↔ UI boundary, including incomplete or invalid editing text. Changing locale should not rewrite saved data. Saving a half-typed minus sign as a valid domain number would be a different bug. Do not silently replace a domain value when parsing fails.
 
-[Try: the Date example and locale changes](/repl/conversion). It demonstrates the split; it is not a claim that money, units or rich text are already implemented as built-in types. Background on the display side: [ECMAScript internationalisation API](https://tc39.es/ecma402/).
+[Try: the Date example and locale changes](/repl/conversion). It demonstrates the split; money, units and rich text are not built-in types. Background on the display side: [ECMAScript internationalisation API](https://tc39.es/ecma402/).
 
 ## Reading, copying and running this documentation
 
-The served build now prerenders every manifest route into real HTML. A client can read headings, tables, explanations and example source without running JavaScript. React adds interactions in the browser. Each page also has a generated `.md` representation, with a small `/llms.txt` index and an optional full-text `/llms-full.txt` corpus. The Copy page dropdown offers Markdown, a page link and both text entry points. It does not send your current code or data to an AI service.
+Every page is served as real HTML: a client can read headings, tables, explanations and example source without running JavaScript, and React adds interactions in the browser. Each page also has a generated `.md` representation, with a small `/llms.txt` index and an optional full-text `/llms-full.txt` corpus. The Copy page dropdown offers Markdown, a page link and both text entry points. It does not send your current code or data to an AI service.
 
 This follows the [llms.txt proposal](https://llmstxt.org/) and [documentation-platform contextual menus](https://www.mintlify.com/docs/ai/contextual-menu), not a mandatory browser standard. Standard alternate/describedby link relations advertise the Markdown and index. Explicit `.md` URLs work without content negotiation; this static build does **not** claim `Accept: text/markdown` negotiation on arbitrary HTML routes.
 
 Step really executes one next top-level statement and pauses. Run proceeds without inserting an artificial `await` between synchronous statements. Earlier frames are immutable records; scrubbing them is not reverse execution of network requests, timers or the live UI. Reset cancels owned resources and restores the example. Scaffolding is initialised as a unit before the first step; step inside that setup by moving the relevant statement into the main program.
 
-Every example has its custom product UI or a shared live-bindings workbench. The JSX editor now uses the same static API hints as the program editor, with labels for React/native HTML/REPL helpers. This is not a full TypeScript language server, and top-level tracing cannot reveal a value scoped only inside a component event callback.
+Every example has its custom product UI or a shared live-bindings workbench. The JSX editor shows the same static API hints as the program editor, with labels for React, native HTML and REPL helpers. It is not a full TypeScript language server, and top-level tracing cannot reveal a value scoped only inside a component event callback.
 
 Diagram expansion offers pan, wheel/pinch/button zoom, fit, rotation, a caption and gallery navigation. A narrow touch device requests fullscreen/landscape when permitted. A non-maximised desktop window can request a separate screen-sized popup; blocked popups fall back to the full-page viewer. Browsers control actual popup geometry and orientation/fullscreen permissions, so manual rotation and the in-page viewer remain available. References: [window.open](https://developer.mozilla.org/en-US/docs/Web/API/Window/open), [Fullscreen](https://developer.mozilla.org/en-US/docs/Web/API/Element/requestFullscreen), [orientation lock](https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock).
-
-
-## Runtime implementation and verification status
-
-There is now a separate synchronous TypeScript reference kernel, in addition to this
-site's larger API prototype. It implements staged transactions with nested savepoints,
-lazy derives and post-commit notifications. Equality validation reads the staged snapshot
-without poisoning committed caches; root disposal handles dynamically ordered graphs.
-The normal verification command includes strict callback type contracts, adversarial
-regressions and seeded differential event streams against from-scratch evaluation.
-
-This is tested reference code, **not a formally proved production StateIR runtime**.
-Signal objects are still caller-owned references; immutable structural snapshots,
-compiled event boundaries, collection IVM and the native Rust/Verus backend remain
-separate implementation steps. The API examples on this page still run against the
-explicitly labelled site prototype. Test coverage does not imply compiler correctness,
-framework correctness or a universal speed advantage over ordinary JavaScript.

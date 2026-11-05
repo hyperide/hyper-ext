@@ -12,4 +12,6 @@ pathIgnorePatterns = [
   "templates/**",
   ".claude/worktrees/**",
   ".ralphex/worktrees/**",
+  # Needs a Vercel build output; deploy.sh runs it after the build.
+  "packages/state-lib/site/tools/package-server.test.mts",
 ]

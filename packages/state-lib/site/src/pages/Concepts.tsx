@@ -9,6 +9,7 @@ import { linkify } from '../lib/linkify';
 import { highlightHtml } from '../lib/highlight';
 import { GLOSSARY } from '../data/glossary';
 import PushPullDemo from './PushPullDemo';
+import { ResearchConcepts } from '../lib/ResearchConcepts';
 export default function Concepts() {
   const headings = useHeadings('.concepts-body', []);
   return (
@@ -17,9 +18,8 @@ export default function Concepts() {
         <p className="kicker">state · concepts</p>
         <h1>Concept explainers</h1>
         <p className="lead">
-          The concepts the spec and the landscape build on — for each: what it is, why it matters for the toolkit, and a
-          picture. Illustrations share one visual language; interactive and animated versions are being added, starting
-          with push-pull below.
+          The concepts the spec and the landscape build on: what each one is, how state uses it, and a picture.
+          Push-pull below is interactive.
         </p>
       </header>
       <div className="tocwrap">
@@ -32,6 +32,7 @@ export default function Concepts() {
           <p>
             <a href={href('/adapters')}>Framework adapters: native imports versus state-owned APIs →</a>
           </p>
+          <ResearchConcepts />
           <section className="concept" id="push-pull-interactive">
             <h2>Push-pull, step by step</h2>
             <p className="lead">
@@ -85,7 +86,7 @@ const selectSorted = createSelector(selectVisible, selectSortKey,
 const selectGrouped = createSelector(selectSorted, selectUsers,
   (s, users) => groupBy(s, t => users[t.assignee]?.team))  // and re-groups
 
-// DESIGN SKETCH, not Datomic syntax or a shipped API. The query (Datalog-style, planned engine — R32/R66):
+// Design sketch (Datalog-style, planned engine; R32, R66). Not Datomic syntax:
 const grouped = query\`
   [:find ?team (todos ?t)
    :where [?t :status \${filter}]
@@ -117,8 +118,8 @@ const grouped = query\`
           </section>
 
           <section className="concept" id="glossary">
-            <h2>Glossary (R63)</h2>
-            <p className="lead">Every term below becomes a hover tooltip wherever it appears across the docs.</p>
+            <h2>Glossary</h2>
+            <p className="lead">Terms used across the docs, also shown as hover tooltips wherever they appear.</p>
             <dl className="gloss">
               {Object.entries(GLOSSARY).map(([term, g]) => (
                 <div key={term} id={`g-${term.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}>
@@ -140,7 +141,6 @@ const grouped = query\`
               ))}
             </dl>
           </section>
-          <footer>state · concepts v1</footer>
         </div>
         <Toc headings={headings} />
       </div>

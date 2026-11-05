@@ -60,7 +60,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     title: 'Framework',
     question: 'Framework',
     about:
-      "R19 is explicit that state is framework-agnostic, so this comes before any framework-specific question: which framework you're on. The core (signals + proxy store + patch-emitting transactions + keyed collections, spec §1) is itself framework-agnostic and runs in a browser tab, a Web Worker, a VS Code extension host, or Node/Bun with no adapter at all; React/Vue/Solid/Svelte are adapters built on top of it (§6). v1 GA targets those four behind one conformance suite — anything else ships `preview`.",
+      'The core is framework-agnostic, so the first question is which framework you use. The core (signals + proxy store + patch-emitting transactions + keyed collections, spec §1) is itself framework-agnostic and runs in a browser tab, a Web Worker, a VS Code extension host, or Node/Bun with no adapter at all; React/Vue/Solid/Svelte are adapters built on top of it (§6). v1 GA targets those four behind one conformance suite — anything else ships `preview`.',
     choices: [
       {
         id: 'react',
@@ -169,7 +169,7 @@ export const WIZARD_STEPS: WizardStep[] = [
         id: 'graphql',
         label: 'graphql',
         reality: 'designed',
-        note: 'Queries plus graphql-ws subscriptions (§8.4) — specified, not built. No example exists to show — one would be a fabrication.',
+        note: 'Queries plus graphql-ws subscriptions (§8.4) — specified, not built.',
         apply: (cfg) => {
           cfg.sources = [...(cfg.sources ?? []), 'graphql'];
         },
@@ -178,7 +178,7 @@ export const WIZARD_STEPS: WizardStep[] = [
         id: 'rpc',
         label: 'rpc',
         reality: 'designed',
-        note: 'A typed contract over a transport — tRPC/oRPC/custom (§8.4) — is specified and not built. No example exists to show — one would be a fabrication.',
+        note: 'A typed contract over a transport — tRPC/oRPC/custom (§8.4) — is specified and not built.',
         apply: (cfg) => {
           cfg.sources = [...(cfg.sources ?? []), 'rpc'];
         },
@@ -187,7 +187,7 @@ export const WIZARD_STEPS: WizardStep[] = [
         id: 'ws',
         label: 'ws / sse',
         reality: 'designed',
-        note: 'Raw WebSocket/SSE streams (§8.4) are specified and not built. No example exists to show — one would be a fabrication.',
+        note: 'Raw WebSocket/SSE streams (§8.4) are specified and not built.',
         apply: (cfg) => {
           cfg.sources = [...(cfg.sources ?? []), 'ws'];
         },

@@ -196,7 +196,7 @@ return <List />`,
     tech: 'state',
     title: 'A selector pyramid, and the query that replaces it',
     about:
-      'The gnarliest code in a Redux-era application is the derived-data layer: chains of hand-memoised selectors, each depending on the last, each needing its own tests and its own equality reasoning. Below, the same filter-sort-group written both ways against the same data, with counters showing how much each recomputes. The declarative query layer (R32) is designed and not built — the Datalog form is printed rather than run, and clearly labelled. What DOES run is the incremental primitive underneath it.',
+      'The gnarliest code in a Redux-era application is the derived-data layer: chains of hand-memoised selectors, each depending on the last, each needing its own tests and its own equality reasoning. Below, the same filter-sort-group written both ways against the same data, with counters showing how much each recomputes. The declarative query layer (spec R32) is designed, not built; the Datalog form below is printed, not run. What runs is the incremental primitive underneath it.',
     setup: `// A hundred rows, three slices worth of state, one question:
 // "open tasks, by assignee's team, newest first".
 const rows = {}
@@ -531,7 +531,7 @@ return <List />`,
     tech: 'state',
     title: 'Declare lifetime next to the data',
     about:
-      'region.view/session/draft/domain attach policy defaults next to the initial data. The markers are stripped from the stored values. Here persistence reads those defaults; tags alone do not enable storage or sync. See the Concepts and Learning prior-art links; the four labels are our composition, not a claimed invention of state lifetime.',
+      'region.view/session/draft/domain attach policy defaults next to the initial data. The markers are stripped from the stored values. Here persistence reads those defaults; tags alone do not enable storage or sync. Prior-art links for state lifetimes are on the Concepts page.',
     setup: `const disk = storageAdapter(memoryStorage())
 
 const store = createStore(
@@ -597,7 +597,7 @@ return <Search />`,
     short: 'adapter ownership',
     tech: 'state',
     about:
-      'useSyncExternalStore is native React. signal/createStore/store.usePath are the site prototype. Both buttons update the same named store action. No planned useSlice package is implied.',
+      'useSyncExternalStore is native React. signal/createStore/store.usePath are the site prototype. Both buttons update the same named store action.',
     setup: `const store = createStore({count:0})
 const count = signal(0)
 const increment = store.action('counter.increment', s => { s.count++ })
@@ -629,7 +629,7 @@ return <div><NativeCounter /><PrototypeCounter /></div>`,
     short: 'unsubscribe',
     title: 'Disconnect a subscription on purpose',
     about:
-      'Watch the source keep changing after its reader disconnects. This is the prototype watch unsubscribe function, not a claim that every dispose signature shares this API.',
+      'Watch the source keep changing after its reader disconnects. This uses the unsubscribe function returned by watch.',
     setup: `const source = signal(0)
 const observed = signal(0)
 const connected = signal(false)

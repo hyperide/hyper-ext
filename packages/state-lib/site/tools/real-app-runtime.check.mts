@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 const cwd = fileURLToPath(new URL('../', import.meta.url));
-const paths = ['latest-task.test.ts', 'app-contracts.test.ts', 'external-store.test.ts'].map((file) =>
+const paths = ['latest-task.test.ts', 'app-contracts.test.ts', 'external-store.test.ts', 'record.test.ts'].map((file) =>
   fileURLToPath(new URL(`../../runtime/src/${file}`, import.meta.url)),
 );
 const tests = spawnSync(process.execPath, ['--import', 'tsx', '--test', '--test-reporter=tap', ...paths], {
@@ -28,4 +28,13 @@ process.stdout.write(types.stdout ?? '');
 process.stderr.write(types.stderr ?? '');
 assert.ifError(types.error);
 assert.equal(types.status, 0, 'Async result type contracts failed');
+const recordTypes = spawnSync(
+  fileURLToPath(new URL('../node_modules/.bin/tsc', import.meta.url)),
+  ['--project', fileURLToPath(new URL('../../runtime/tsconfig.record.json', import.meta.url)), '--noEmit'],
+  { cwd, input: '', encoding: 'utf8', timeout: 30_000 },
+);
+process.stdout.write(recordTypes.stdout ?? '');
+process.stderr.write(recordTypes.stderr ?? '');
+assert.ifError(recordTypes.error);
+assert.equal(recordTypes.status, 0, 'Validated record adapter type contracts failed');
 console.info('PASS: app-derived atomic publication, latest/cancel/error ownership and strict sync-commit types');

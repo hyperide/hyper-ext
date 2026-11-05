@@ -11,6 +11,10 @@ export function ownJson<T>(value: T): T;
 export function beginJsonDraft<T>(base: T): JsonDraft<T>;
 export function beginCopiedJson<T>(base: T): JsonDraft<T>;
 export function isOwnedJsonSnapshot(value: unknown): boolean;
+/** Parses without a reviver; envelope[field] is certified and deep-frozen before this returns. An object or array
+ * field becomes adoptable by replaceImported; a scalar or null field is certified but never adoptable. */
+export function importJsonField<E extends object = Record<string, unknown>>(text: unknown, field: string): E;
+export function isImportedJsonRoot(value: unknown): boolean;
 export function copyJsonArrayForCommand<T>(value: readonly T[]): T[];
 export function copyJsonRoot<T>(base: T): T;
 export function setJsonScalar<T>(base: T, path: JsonPath, value: unknown): T;

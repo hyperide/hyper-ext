@@ -1,0 +1,45 @@
+{
+  "state-lib": {
+    "baseCommit": "71b23d0f49c41b6618f4bdc4a53380db3483b02f",
+    "branch": "feat/HYP-1737-entry-specialization",
+    "sources": {
+      "packages/state-lib/adapters/dom/immutable-row-delta.d.mts": "444339d528c49754677e64600f36d7986fd12a624b1738ab4a5cfe36b5c6a5b7",
+      "packages/state-lib/adapters/dom/immutable-row-delta.mjs": "f3e82777b9058d3fa4cfc77d9bc91f3d82013f4a2edd4540eece69059f7bf2e1",
+      "packages/state-lib/build-tools/bundle.mjs": "401a2d11f64c96182700c7d18acc6953f1ef4cfd89211045b3ec23f2d4b37dce",
+      "packages/state-lib/build-tools/config-inputs.mjs": "101b0ee8ece49d0b760522941bef906c76e6028e75185f039125fae8637d75fc",
+      "packages/state-lib/cli/state_cli/main.py": "e96c15a74b61e7b903dd1d2fa87591834c6d32cc72da2ceadd95a949f524ff25",
+      "packages/state-lib/experiments/2026-09-19-cow/json-draft.d.mts": "62edcbd662bc7e019582b92b795aa4cc88d488efe1c58d1395bef125a4ee26f7",
+      "packages/state-lib/experiments/2026-09-19-cow/json-draft.mjs": "15e43091c39a7990f2eef0db3afd952aa8e82bebbb0b9dece38a23c5ce3fd451",
+      "packages/state-lib/experiments/2026-09-23-command-builder/capture.test.mjs": "5dc5046e3a032525ed913d0adf2aa9c8929d1251808eec10c44af9f218527db2",
+      "packages/state-lib/tests/compiler/test_output_publication.py": "c09451365cab3f8d529c2a12aa23c95336c1376f21d59bb45a3480c965917437",
+      "packages/state-lib/tests/compiler/test_static_entry.py": "6a59fbf97a3955e3c93e7df5e18f7a8f466ec4291b64ff27882560a47a64ec7f",
+      "packages/state-lib/tests/immutable-row-delta.test.mjs": "fde3ddfc31cf2ba8e0a4d7f6809e9224f47394555c2b7060369583be158ddf0b"
+    }
+  },
+  "boards-app": {
+    "baseCommit": "90d06a8a38ab5bddb5922b43a56e8a4073090b2b",
+    "branch": "feat/HYP-1737-entry-specialization",
+    "sources": {
+      "apps/board/app.mjs": "0720b11a0423aae86280f203ed1e48b43a5eb054cd60b243a7addaae85033a27",
+      "apps/board/board-commands.mjs": "29bfca7d5ddab80dbc13f9053d56c96da28fa7ad4fc2e83c07eb6a373db37d46",
+      "apps/board/board-row-view.mjs": "895ee859591def9e1bde0075acbb31149d09e3a77019c93737312191e46da664",
+      "apps/board/board-state.mjs": "b5d521ca93beed08973518b71bc93a89d564610d94be13409526b004ad667904",
+      "package.json": "0a2cbf2434b5d97146d85852f8d4aa7bcf63655cc0c933f33225a3d55d738e4e",
+      "packages/core/document-store.mjs": "48f65a7912b16d66776ba497e40ab8897c8d51b245abe1e945fab9c4a34e6af6",
+      "packages/core/json-draft.mjs": "15e43091c39a7990f2eef0db3afd952aa8e82bebbb0b9dece38a23c5ce3fd451",
+      "packages/core/json-draft.provenance.json": "5b8163dcdc0b77f35db2364815e8f75ce7efa2f35bb54d4ed0126092c65eb09e",
+      "packages/core/sync.mjs": "b8ed35109838dc44a722954cdd51ea3bac9d5c24738156284ba8aed6f9ba2ade",
+      "packages/core/workspace-loader.mjs": "575bb98b088cb4f8a1e02654ad58c986a51d2633a25402356430be36a29c144a",
+      "packages/state-lib/dom/immutable-row-delta.mjs": "f3e82777b9058d3fa4cfc77d9bc91f3d82013f4a2edd4540eece69059f7bf2e1",
+      "packages/state-lib/dom/immutable-row-delta.provenance.json": "b600032d07cb0d9ede62e64b9c978ad933aa793c4f68e329c4c6a68e8ba92031",
+      "scripts/benchmark-compiled-board.mjs": "384f0bbdf3b5596b0c62d843f9fd6cc244b3a932c73c3c5e806ff2ce8b646b5b",
+      "scripts/build.mjs": "ffc3f5c599cefce091d0e871c94a3e960ac726439ac22d29e7ffe6bb3dba6550",
+      "scripts/compile-board.mjs": "91e5f98b30ffc68dae2de55ee6da83fedebe110789e744c130ac67b7b82f8e72",
+      "scripts/dev.mjs": "e0fc77bac36050dadb9d61ded8ebe6aedd21ff7604a2fc860644dcf955ffb674",
+      "tests/board-row-view.test.mjs": "050acd7e5706bca026a3c4b164d57003f15155fb66053eb53d43f2dd584a02ae",
+      "tests/state-migration-browser.mjs": "fa18dd9db2aa7922b2cbe76392481d58a46ee29ee19f6a0a94341181f804d1c2",
+      "tests/state-specialized-build.mjs": "852c736a5dedd61a236513f28444be47d846d92eb00001bdf9dd0cd8fbfd0cb0",
+      "tests/sync-capture.test.mjs": "bcd8d1c6c963ee5c0177797d1215b11a377fed1a4ac4c73ccfe4886858255086"
+    }
+  }
+}

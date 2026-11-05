@@ -130,6 +130,16 @@ Coverage includes in-flight disposal, self-disposal and unsubscribe, dynamic bra
 cached failures/cycles, failed preflight, committed cache/graph isolation and nested
 savepoints.
 
+## Validated record adapter (UB-22)
+
+`createRecord(runtime, initial, validate)` in `src/record.ts` is a separate adapter for small plain JSON-like records such as workspace preferences. It uses this actual Runtime, not a second transaction engine. `get()` returns a frozen snapshot; `set` and draft `update` validate isolated input and clone the validator output before publication, preventing caller or validator reference aliases. Only plain JSON-like data is accepted (objects, arrays, primitives): Map, Set, Date, ArrayBuffer and typed arrays are rejected with `STATE_RECORD_UNSUPPORTED` because freezing cannot protect them. A draft recipe mutates its draft in place; its return value is ignored, so Immer-style `d => ({ ...d })` replacement does not work; async recipes and validators are rejected (`STATE_RECORD_ASYNC`). Class instances are cloned to plain objects; functions and proxies are rejected. Every write publishes a fresh clone, so a write that changes nothing still notifies: dedupe in the subscriber if that matters. The adapter is source-only: it is not exported from the package entry or the pilot export, so adopters import `src/record.ts` directly.
+
+An outer Runtime transaction may group several updates into one notification wave or roll them back together. Same-record reentrant writes are rejected (`STATE_RECORD_REENTRANT`) rather than allowing a stale outer draft to erase an inner update. Promise-returning recipes reject (`STATE_RECORD_ASYNC`); this does not cancel arbitrary async effects scheduled by trusted code. `NotificationError` is still after commit.
+
+The validator owns the admissible schema. This is not a universal immutable Map/Set/class store, a parser sandbox, a deep structural diff/IVM implementation or an async storage transaction. Callers should restrict record sizes and use plain data. Native document ownership remains with the adopting application's domain model.
+
+Regression coverage: input/reference isolation (`set` and `update`), nested outer abort, invalid candidate rollback, single-wave batching, committed observer failures, reentrant writes, async-recipe rejection and unsupported value types. The adapter tests and the unchanged core suites pass under real Node+tsx (`node --import tsx --test ../runtime/src/record.test.ts` from `../site`). Build/test provenance is in the PR, not a formal correctness claim.
+
 ## Optional latest-result module — HYP-1464 candidate
 
 `src/latest-task.ts` composes the existing Runtime rather than importing the site's

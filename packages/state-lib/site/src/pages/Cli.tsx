@@ -103,10 +103,26 @@ export default function Cli() {
         <h1>The toolchain is half the product</h1>
         <T as="p" className="lead">
           {
-            'A store you adopt with codemods, configure with enforced invariants, and ship through a compiler — that is the difference between a library and infrastructure. Every command runs as an interactive TUI for humans and with --json for machines and agents; the MCP server (MCP — the emerging standard AI coding agents use to call tools) exposes the same operations to AI tooling (R25).'
+            'A store you adopt with codemods, configure with enforced invariants, and ship through a compiler — that is the difference between a library and infrastructure. The intended command family includes an interactive TUI and machine-readable output; the planned MCP server (MCP — the emerging standard AI coding agents use to call tools) exposes the same operations to AI tooling (R25).'
           }
         </T>
       </header>
+      <section className="research-proof" aria-labelledby="compiler-preview-status">
+        <p className="research-eyebrow">Source-backed compiler preview</p>
+        <h2 id="compiler-preview-status">From a field declaration to generated code</h2>
+        <p>
+          The repository-local Rust/Oxc compiler now generates known-field projections, qualifies declared module
+          alternatives and records why a candidate is retained or rejected. The Python CLI exposes build, doctor and
+          explain. This is a narrow implemented preview, not completion of every command design below.
+        </p>
+        <p>
+          <a href={href('/bench#published-research')}>Inspect the measured output →</a>
+        </p>
+      </section>
+      <p className="lnote">
+        The remaining command panels describe the intended toolchain. Their terminal transcripts are illustrative—not
+        successful operations performed on your project.
+      </p>
       <div className="cli-layout">
         <div className="cli-list">
           {CMDS.map((c, i) => (
@@ -145,7 +161,7 @@ export default function Cli() {
       </div>
       <T as="p" className="lead">
         {
-          'Under the hood, one shared analyzer (the TS compiler API wrapped as a service) powers the compiler, every codemod, the ESLint plugin, the LSP integration and the agent MCP — the TypeScript language-service model applied to state. The CLI shell itself is Python with a rig-style TUI; the analysis is TypeScript, spoken over JSON-RPC (decision #14).'
+          'The canonical split is a Python CLI and a Rust compiler (decision #23), with a TypeScript sidecar only where genuine type-checker or language-service information is needed. The current projection preview does not implement all codemods, LSP or MCP surfaces shown above.'
         }
       </T>
       <footer>

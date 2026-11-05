@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+assert(existsSync('src/lib/benchmark-best.ts'), 'Benchmark rows need explicit comparable-cell ranking');
+const { bestIndices } = await import('../src/lib/benchmark-best');
+assert.deepEqual(bestIndices([4, 2, 3]), [1]);
+assert.deepEqual(bestIndices([4, 2, 2]), [1, 2], 'Highlight every exact tie');
+assert.deepEqual(bestIndices([0, -0, 1]), [0, 1]);
+assert.deepEqual(bestIndices([null, Number.NaN, Infinity, 5]), [3], 'Missing observations are not zero');
+assert.deepEqual(bestIndices([null, NaN, Infinity]), []);
+assert.deepEqual(bestIndices([]), []);
+assert.deepEqual(bestIndices([1.0002, 1.0001]), [1], 'Rank the observation, not formatted text');
+assert.deepEqual(bestIndices([2, 7, 7], 'max'), [1, 2]);
+console.log('PASS: best measured cells, ties, missing data and metric direction');

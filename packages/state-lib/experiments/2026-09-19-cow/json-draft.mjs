@@ -63,6 +63,21 @@ export function ownJson(value) {
   }
   return certify(copy);
 }
+const imported = new WeakSet();
+/** Parse JSON text (no reviver) and certify envelope[field] before any caller can see it. Parse output holds only
+ * plain objects/arrays with own data properties: no accessors, proxies, class instances or shared references can
+ * come from text, so the certify walk replaces the defensive clone here.
+ * Only an object or array field root becomes adoptable; the envelope and its other fields stay plain caller data. */
+export function importJsonField(text, field) {
+  if (typeof text !== 'string') throw new TypeError('JSON import requires text');
+  const envelope = JSON.parse(text);
+  if (!object(envelope) || Array.isArray(envelope) || !Object.hasOwn(envelope, field)) throw new TypeError(message);
+  const value = certify(envelope[field]);
+  if (object(value) && tree.get(value) === true) imported.add(value);
+  return envelope;
+}
+/** True only for a tree root recorded by importJsonField; owned subtrees and other certified roots are not. */
+export const isImportedJsonRoot = (value) => imported.has(value);
 /** Full-copy oracle and conservative fallback for shared-reference input graphs. */
 export function beginCopiedJson(base) {
   const draft = structuredClone(base);
@@ -196,42 +211,29 @@ export function beginJsonDraft(base) {
     const visiting = new WeakSet(),
       finished = new WeakMap(),
       imported = new WeakMap();
-    function resolve(value) {
-      if (!object(value)) {
-        if (!scalar(value)) throw new TypeError(message);
-        return value;
-      }
-      const node = proxies.get(value);
-      if (node) {
-        if (finished.has(node)) return finished.get(node);
-        if (visiting.has(node)) throw new TypeError(message);
-        if (!node.copy) return node.base;
-        visiting.add(node);
-        const result = node.copy;
-        for (const key of node.changed) {
-          if (typeof key === 'symbol') {
-            Reflect.deleteProperty(result, key);
-            continue;
-          }
-          if (!Object.hasOwn(result, key)) continue;
-          Reflect.set(result, key, resolve(result[key]));
-        }
-        for (const key of Object.getOwnPropertySymbols(result)) Reflect.deleteProperty(result, key);
-        visiting.delete(node);
-        Object.freeze(result);
-        owned.add(result);
-        finished.set(node, result);
-        return result;
-      }
-      if (owned.has(value)) return value;
-      if (visiting.has(value)) throw new TypeError(message);
-      if (imported.has(value)) return imported.get(value);
-      if (
-        !Array.isArray(value) &&
-        Object.getPrototypeOf(value) !== Object.prototype &&
-        Object.getPrototypeOf(value) !== null
-      )
-        throw new TypeError(message);
+    function resolveChanged(result, key) {
+      if (typeof key === 'symbol') Reflect.deleteProperty(result, key);
+      else if (Object.hasOwn(result, key)) Reflect.set(result, key, resolve(result[key]));
+    }
+    function resolveNode(node) {
+      if (finished.has(node)) return finished.get(node);
+      if (visiting.has(node)) throw new TypeError(message);
+      if (!node.copy) return node.base;
+      visiting.add(node);
+      const result = node.copy;
+      for (const key of node.changed) resolveChanged(result, key);
+      for (const key of Object.getOwnPropertySymbols(result)) Reflect.deleteProperty(result, key);
+      visiting.delete(node);
+      Object.freeze(result);
+      owned.add(result);
+      finished.set(node, result);
+      return result;
+    }
+    const foreignObject = (value) =>
+      !Array.isArray(value) &&
+      Object.getPrototypeOf(value) !== Object.prototype &&
+      Object.getPrototypeOf(value) !== null;
+    function importPlain(value) {
       visiting.add(value);
       const result = Array.isArray(value) ? new Array(value.length) : {};
       for (const key of Object.keys(value))
@@ -246,6 +248,19 @@ export function beginJsonDraft(base) {
       owned.add(result);
       imported.set(value, result);
       return result;
+    }
+    function resolve(value) {
+      if (!object(value)) {
+        if (!scalar(value)) throw new TypeError(message);
+        return value;
+      }
+      const node = proxies.get(value);
+      if (node) return resolveNode(node);
+      if (owned.has(value)) return value;
+      if (visiting.has(value)) throw new TypeError(message);
+      if (imported.has(value)) return imported.get(value);
+      if (foreignObject(value)) throw new TypeError(message);
+      return importPlain(value);
     }
     try {
       copy(root);
@@ -573,9 +588,7 @@ export function setJsonGroups(base, path, items, field, value, stride = 1) {
   const next = fast && output !== groups ? liftCommand(parents, path, frozenOwned(output)) : unchangedRoot(root, fast);
   return finishDirect(next, fast);
 }
-export function moveJsonItem(base, fromPath, fromIndex, toPath, toIndex) {
-  commandPath(fromPath);
-  commandPath(toPath);
+function commonMovePrefix(fromPath, toPath) {
   let common = 0;
   while (
     common < fromPath.length &&
@@ -585,15 +598,9 @@ export function moveJsonItem(base, fromPath, fromIndex, toPath, toIndex) {
     common++;
   if (fromPath.length !== toPath.length && common === Math.min(fromPath.length, toPath.length))
     throw new TypeError('Move paths must not overlap');
-  const fast = treeOwned(base),
-    root = fast ? base : structuredClone(base);
-  const fromTrace = traceCommand(root, fromPath, true);
-  const toTrace = fromTrace.slice(0, common + 1);
-  for (let i = common; i < toPath.length; i++) toTrace.push(commandChild(toTrace[toTrace.length - 1], toPath[i]));
-  const from = fromTrace[fromTrace.length - 1],
-    to = toTrace[toTrace.length - 1];
-  if (!Array.isArray(from) || !Array.isArray(to)) throw new TypeError('Move paths must address arrays');
-  const same = from === to;
+  return common;
+}
+function assertMoveIndices(from, to, same, fromIndex, toIndex) {
   if (
     !Number.isSafeInteger(fromIndex) ||
     fromIndex < 0 ||
@@ -604,29 +611,50 @@ export function moveJsonItem(base, fromPath, fromIndex, toPath, toIndex) {
     toIndex > to.length - Number(same)
   )
     throw new RangeError('Move indices must be inside the source and post-removal destination');
-  if (same && fromIndex === toIndex) return finishDirect(unchangedRoot(root, fast), fast);
-  let source, target;
+}
+function moveBetweenArrays(from, to, same, fast, fromIndex, toIndex) {
   if (fast && !same && from.length === 1 && to.length === 0) {
-    source = [];
-    target = [from[0]];
+    const source = [],
+      target = [from[0]];
     denseArrays.add(source);
     denseArrays.add(target);
-  } else {
-    source = fast ? copyJsonArrayForCommand(from) : from;
-    target = same ? source : fast ? copyJsonArrayForCommand(to) : to;
-    const [item] = source.splice(fromIndex, 1);
-    target.splice(toIndex, 0, item);
+    return [source, target];
   }
-  if (!fast) return finishDirect(root, false);
-  frozenOwned(source);
-  if (same) return finishDirect(liftCommand(fromTrace, fromPath, source), true);
-  frozenOwned(target);
+  const source = fast ? copyJsonArrayForCommand(from) : from;
+  const target = same ? source : fast ? copyJsonArrayForCommand(to) : to;
+  const [item] = source.splice(fromIndex, 1);
+  target.splice(toIndex, 0, item);
+  return [source, target];
+}
+function liftMove(fromTrace, toTrace, fromPath, toPath, common, source, target) {
   const left = liftCommand(fromTrace, fromPath, source, common + 1);
   const right = liftCommand(toTrace, toPath, target, common + 1);
   const ancestor = commandCopy(fromTrace[common]);
   ancestor[fromPath[common]] = left;
   ancestor[toPath[common]] = right;
   return finishDirect(liftCommand(fromTrace, fromPath.slice(0, common), frozenOwned(ancestor)), true);
+}
+export function moveJsonItem(base, fromPath, fromIndex, toPath, toIndex) {
+  commandPath(fromPath);
+  commandPath(toPath);
+  const common = commonMovePrefix(fromPath, toPath);
+  const fast = treeOwned(base),
+    root = fast ? base : structuredClone(base);
+  const fromTrace = traceCommand(root, fromPath, true);
+  const toTrace = fromTrace.slice(0, common + 1);
+  for (let i = common; i < toPath.length; i++) toTrace.push(commandChild(toTrace[toTrace.length - 1], toPath[i]));
+  const from = fromTrace[fromTrace.length - 1],
+    to = toTrace[toTrace.length - 1];
+  if (!Array.isArray(from) || !Array.isArray(to)) throw new TypeError('Move paths must address arrays');
+  const same = from === to;
+  assertMoveIndices(from, to, same, fromIndex, toIndex);
+  if (same && fromIndex === toIndex) return finishDirect(unchangedRoot(root, fast), fast);
+  const [source, target] = moveBetweenArrays(from, to, same, fast, fromIndex, toIndex);
+  if (!fast) return finishDirect(root, false);
+  frozenOwned(source);
+  if (same) return finishDirect(liftCommand(fromTrace, fromPath, source), true);
+  frozenOwned(target);
+  return liftMove(fromTrace, toTrace, fromPath, toPath, common, source, target);
 }
 export function copyJsonRoot(base) {
   if (treeOwned(base)) return finishDirect(frozenOwned(commandCopy(base)), true);

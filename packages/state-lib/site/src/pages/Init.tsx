@@ -9,13 +9,14 @@ import {
   selectedChoice,
   visibleSteps,
   buildConfigYaml,
+  RATED_CHOICES,
   REAL_CHOICE_COUNT,
   RATED_CHOICE_COUNT,
   type WizardChoice,
   type WizardStep,
 } from '../data/init-wizard';
 
-/** R24/R26/R38 — a web version of `state init`: the same questions the CLI page's static
+/** A web version of `state init`: the same questions the CLI page's static
  *  transcript already promises, made interactive, with a live config preview and — for
  *  every choice the prototype actually does something for — the real example that proves it. */
 
@@ -103,7 +104,7 @@ function ChoiceDetail({ choice }: { choice: WizardChoice }) {
       {choice.sketch && (
         <>
           <p className="lnote">
-            <em>an API sketch, not runnable — nothing behind it exists yet</em>
+            <em>API sketch (planned)</em>
           </p>
           <Code lang="ts">{choice.sketch}</Code>
         </>
@@ -142,6 +143,7 @@ function StepDetail({
         {step.choices.map((c) => (
           <button key={c.id} className={`cli-item${c.id === current.id ? ' on' : ''}`} onClick={() => onPick(c.id)}>
             {c.label}
+            {c.reality === 'designed' && <span className="tag t-designed">planned</span>}
           </button>
         ))}
       </div>
@@ -156,7 +158,7 @@ function ConfigPreview({ selection }: { selection: Record<string, string> }) {
       <h2>state.config.yaml</h2>
       <T as="p" className="lead">
         {
-          'What `state init` will write, built live from the choices above — the CLI has not shipped, so this has not actually run anywhere; the keys are exactly the schema in the master spec (§17.1), nothing invented.'
+          'Preview of the state.config.yaml that `state init` will write, built from the choices above. Keys follow the schema in the master spec (§17.1); the CLI itself is not published yet.'
         }
       </T>
       <Code lang="yaml">{buildConfigYaml(selection)}</Code>
@@ -165,13 +167,19 @@ function ConfigPreview({ selection }: { selection: Record<string, string> }) {
 }
 
 function RealitySummary() {
+  const runnable = RATED_CHOICES.filter((c) => c.reality === 'prototyped' && c.example);
   return (
     <p className="hero-honest">
       <b>
-        {REAL_CHOICE_COUNT} of {RATED_CHOICE_COUNT} choices above are real today
+        {REAL_CHOICE_COUNT} of {RATED_CHOICE_COUNT} choices run in the prototype:
       </b>{' '}
-      — try them in the <a href={href('/repl')}>REPL</a>. The rest are the roadmap: specified in the master spec, not
-      built.
+      {runnable.map((c, i) => (
+        <span key={c.id}>
+          {i > 0 && ' · '}
+          <a href={href(`/repl/${c.example}`)}>{c.label}</a>
+        </span>
+      ))}
+      . The rest are marked planned.
     </p>
   );
 }
@@ -187,12 +195,12 @@ export default function Init() {
     <div className="wrap wide">
       <header className="page">
         <T as="p" className="kicker">
-          {'state init · web version · R19 R24 R26 R38'}
+          {'state init · web preview'}
         </T>
         <h1>Configure state</h1>
         <T as="p" className="lead">
           {
-            'A web version of the setup wizard `state init` will run, before the CLI exists. Click through the same questions the CLI page already promises, and see, for each answer, whether it is something the prototype does today or only something the spec describes.'
+            'Answer the questions `state init` asks. Each answer is marked as running in the prototype or as planned in the master spec; runnable answers link to a live example.'
           }
         </T>
       </header>
@@ -205,7 +213,7 @@ export default function Init() {
         </p>
         <p>
           The workbench supplies React and createStore for this prototype. The model and component source below belong
-          to the same runnable example, not a production npm installation recipe.
+          to the same runnable example.
         </p>
         <ExampleFor id="task-screen" />
         <p>

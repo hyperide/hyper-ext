@@ -48,6 +48,8 @@ const page = [
   'lesson-entry.mts',
   'navigation-escape.mts',
   'contextual-diagrams.mts',
+  'research-focus.mts',
+  'example-lab-workbench.mts',
 ];
 
 const run = (label: string, cmd: string, args: string[]) => {

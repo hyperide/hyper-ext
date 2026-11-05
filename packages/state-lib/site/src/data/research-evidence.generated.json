@@ -1,0 +1,627 @@
+{
+  "version": 1,
+  "measuredAt": "2026-09-20",
+  "environment": {
+    "machine": "Apple M4 Pro",
+    "runtime": "v26.7.0",
+    "scope": "Local synthetic document-controller experiment; not a browser latency result"
+  },
+  "provenance": {
+    "revision": "1a6d08481ce82f5fc57998b092b117b420eba06b",
+    "sources": [
+      {
+        "label": "Controller trials",
+        "sha256": "f61e0b3effd7d5385b63fbff1fce680faa7a0520fa1736d2fc7013fbc770d18c"
+      },
+      {
+        "label": "Native projection build",
+        "sha256": "01c4c7e2508d7b2eb77bbac7834c1ffd2758f4bdfbd620da19d15a9cfe7d211b"
+      },
+      {
+        "label": "Conformance and admission",
+        "sha256": "72ac9334b7260f494eabbeebe0d53c1b8ed90d680d2c0926e228b0a6331af731"
+      }
+    ]
+  },
+  "controller": {
+    "rows": [
+      {
+        "count": 30,
+        "operation": "root",
+        "backend": "baseline",
+        "medianMs": 0.012732287499999906,
+        "sampleCount": 17,
+        "minimumMs": 0.012328650000000075,
+        "maximumMs": 0.014141149999999936
+      },
+      {
+        "count": 30,
+        "operation": "root",
+        "backend": "state-lib",
+        "medianMs": 0.03844113749999991,
+        "sampleCount": 17,
+        "minimumMs": 0.03746457500000009,
+        "maximumMs": 0.04592968749999997
+      },
+      {
+        "count": 30,
+        "operation": "root",
+        "backend": "state-lib-cow",
+        "medianMs": 0.0017994749999999727,
+        "sampleCount": 17,
+        "minimumMs": 0.0009802125000000217,
+        "maximumMs": 0.004098437500000074
+      },
+      {
+        "count": 30,
+        "operation": "item",
+        "backend": "baseline",
+        "medianMs": 0.012822399999999946,
+        "sampleCount": 17,
+        "minimumMs": 0.012263537500000154,
+        "maximumMs": 0.013488549999999933
+      },
+      {
+        "count": 30,
+        "operation": "item",
+        "backend": "state-lib",
+        "medianMs": 0.039706250000000054,
+        "sampleCount": 17,
+        "minimumMs": 0.03765363750000006,
+        "maximumMs": 0.06255676250000022
+      },
+      {
+        "count": 30,
+        "operation": "item",
+        "backend": "state-lib-cow",
+        "medianMs": 0.008292699999999797,
+        "sampleCount": 17,
+        "minimumMs": 0.006343224999999819,
+        "maximumMs": 0.016773437499999842
+      },
+      {
+        "count": 30,
+        "operation": "sparse",
+        "backend": "baseline",
+        "medianMs": 0.012856250000000102,
+        "sampleCount": 17,
+        "minimumMs": 0.012357299999999682,
+        "maximumMs": 0.0136588500000002
+      },
+      {
+        "count": 30,
+        "operation": "sparse",
+        "backend": "state-lib",
+        "medianMs": 0.03949218749999943,
+        "sampleCount": 17,
+        "minimumMs": 0.03771249999999995,
+        "maximumMs": 0.05172656250000003
+      },
+      {
+        "count": 30,
+        "operation": "sparse",
+        "backend": "state-lib-cow",
+        "medianMs": 0.008894275000000108,
+        "sampleCount": 17,
+        "minimumMs": 0.008421349999999706,
+        "maximumMs": 0.040559375000000134
+      },
+      {
+        "count": 30,
+        "operation": "all",
+        "backend": "baseline",
+        "medianMs": 0.0131708500000002,
+        "sampleCount": 17,
+        "minimumMs": 0.012714550000001167,
+        "maximumMs": 0.014439600000000042
+      },
+      {
+        "count": 30,
+        "operation": "all",
+        "backend": "state-lib",
+        "medianMs": 0.03975414999999884,
+        "sampleCount": 17,
+        "minimumMs": 0.03809170000000108,
+        "maximumMs": 0.040462500000001
+      },
+      {
+        "count": 30,
+        "operation": "all",
+        "backend": "state-lib-cow",
+        "medianMs": 0.029462499999999635,
+        "sampleCount": 17,
+        "minimumMs": 0.02780415000000005,
+        "maximumMs": 0.17419999999999902
+      },
+      {
+        "count": 30,
+        "operation": "move",
+        "backend": "baseline",
+        "medianMs": 0.013082287499999267,
+        "sampleCount": 17,
+        "minimumMs": 0.01252500000000012,
+        "maximumMs": 0.04832812499999974
+      },
+      {
+        "count": 30,
+        "operation": "move",
+        "backend": "state-lib",
+        "medianMs": 0.03869375000000019,
+        "sampleCount": 17,
+        "minimumMs": 0.03727551249999976,
+        "maximumMs": 0.04229894999999999
+      },
+      {
+        "count": 30,
+        "operation": "move",
+        "backend": "state-lib-cow",
+        "medianMs": 0.033567187500000276,
+        "sampleCount": 17,
+        "minimumMs": 0.028563025000000408,
+        "maximumMs": 0.10027864999999991
+      },
+      {
+        "count": 30,
+        "operation": "noop",
+        "backend": "baseline",
+        "medianMs": 0.013028650000001108,
+        "sampleCount": 17,
+        "minimumMs": 0.0128354250000001,
+        "maximumMs": 0.013259375000001229
+      },
+      {
+        "count": 30,
+        "operation": "noop",
+        "backend": "state-lib",
+        "medianMs": 0.03925832500000013,
+        "sampleCount": 17,
+        "minimumMs": 0.03873698750000045,
+        "maximumMs": 0.0527213500000002
+      },
+      {
+        "count": 30,
+        "operation": "noop",
+        "backend": "state-lib-cow",
+        "medianMs": 0.0008744750000005297,
+        "sampleCount": 17,
+        "minimumMs": 0.0008588624999987359,
+        "maximumMs": 0.0010885500000000548
+      },
+      {
+        "count": 30,
+        "operation": "history",
+        "backend": "baseline",
+        "medianMs": 0.030158849999999404,
+        "sampleCount": 17,
+        "minimumMs": 0.02863384999999994,
+        "maximumMs": 0.030551562499999817
+      },
+      {
+        "count": 30,
+        "operation": "history",
+        "backend": "state-lib",
+        "medianMs": 0.0004229249999994522,
+        "sampleCount": 17,
+        "minimumMs": 0.0004145874999991861,
+        "maximumMs": 0.0029744874999991567
+      },
+      {
+        "count": 30,
+        "operation": "history",
+        "backend": "state-lib-cow",
+        "medianMs": 0.0004541624999987448,
+        "sampleCount": 17,
+        "minimumMs": 0.00041250000000019326,
+        "maximumMs": 0.0006859375000004775
+      },
+      {
+        "count": 300,
+        "operation": "root",
+        "backend": "baseline",
+        "medianMs": 0.11341249999999832,
+        "sampleCount": 17,
+        "minimumMs": 0.10838437499999998,
+        "maximumMs": 0.1222223999999997
+      },
+      {
+        "count": 300,
+        "operation": "root",
+        "backend": "state-lib",
+        "medianMs": 0.33967656250000006,
+        "sampleCount": 17,
+        "minimumMs": 0.3257567749999993,
+        "maximumMs": 0.34763906250000076
+      },
+      {
+        "count": 300,
+        "operation": "root",
+        "backend": "state-lib-cow",
+        "medianMs": 0.001092712499999493,
+        "sampleCount": 17,
+        "minimumMs": 0.0009671875000009323,
+        "maximumMs": 0.0014046875000019554
+      },
+      {
+        "count": 300,
+        "operation": "item",
+        "backend": "baseline",
+        "medianMs": 0.11415207499999838,
+        "sampleCount": 17,
+        "minimumMs": 0.10803853749999917,
+        "maximumMs": 0.12696615000000405
+      },
+      {
+        "count": 300,
+        "operation": "item",
+        "backend": "state-lib",
+        "medianMs": 0.3428578124999973,
+        "sampleCount": 17,
+        "minimumMs": 0.32535729999999885,
+        "maximumMs": 0.3579041750000016
+      },
+      {
+        "count": 300,
+        "operation": "item",
+        "backend": "state-lib-cow",
+        "medianMs": 0.010802599999999529,
+        "sampleCount": 17,
+        "minimumMs": 0.009243225000000166,
+        "maximumMs": 0.02563072500000203
+      },
+      {
+        "count": 300,
+        "operation": "sparse",
+        "backend": "baseline",
+        "medianMs": 0.11854167500000017,
+        "sampleCount": 17,
+        "minimumMs": 0.11258281249999982,
+        "maximumMs": 0.14340364999999905
+      },
+      {
+        "count": 300,
+        "operation": "sparse",
+        "backend": "state-lib",
+        "medianMs": 0.359732812499999,
+        "sampleCount": 17,
+        "minimumMs": 0.3404145874999983,
+        "maximumMs": 0.4195718750000026
+      },
+      {
+        "count": 300,
+        "operation": "sparse",
+        "backend": "state-lib-cow",
+        "medianMs": 0.04632343750000132,
+        "sampleCount": 17,
+        "minimumMs": 0.04123490000000061,
+        "maximumMs": 0.06531771250000133
+      },
+      {
+        "count": 300,
+        "operation": "all",
+        "backend": "baseline",
+        "medianMs": 0.11776250000000346,
+        "sampleCount": 17,
+        "minimumMs": 0.11192085000000133,
+        "maximumMs": 0.24516874999999344
+      },
+      {
+        "count": 300,
+        "operation": "all",
+        "backend": "state-lib",
+        "medianMs": 0.34974165000000995,
+        "sampleCount": 17,
+        "minimumMs": 0.3324312499999905,
+        "maximumMs": 0.5989771000000019
+      },
+      {
+        "count": 300,
+        "operation": "all",
+        "backend": "state-lib-cow",
+        "medianMs": 0.33184790000000247,
+        "sampleCount": 17,
+        "minimumMs": 0.23806454999999005,
+        "maximumMs": 0.4508833500000037
+      },
+      {
+        "count": 300,
+        "operation": "move",
+        "backend": "baseline",
+        "medianMs": 0.11467499999999972,
+        "sampleCount": 17,
+        "minimumMs": 0.1109625000000051,
+        "maximumMs": 0.11743697499999825
+      },
+      {
+        "count": 300,
+        "operation": "move",
+        "backend": "state-lib",
+        "medianMs": 0.35496771250000164,
+        "sampleCount": 17,
+        "minimumMs": 0.33573802500000055,
+        "maximumMs": 0.369126037500007
+      },
+      {
+        "count": 300,
+        "operation": "move",
+        "backend": "state-lib-cow",
+        "medianMs": 0.22600519999999732,
+        "sampleCount": 17,
+        "minimumMs": 0.1913015625000014,
+        "maximumMs": 0.24548750000000155
+      },
+      {
+        "count": 300,
+        "operation": "noop",
+        "backend": "baseline",
+        "medianMs": 0.11547656249999819,
+        "sampleCount": 17,
+        "minimumMs": 0.10935937500000818,
+        "maximumMs": 0.12965988750000862
+      },
+      {
+        "count": 300,
+        "operation": "noop",
+        "backend": "state-lib",
+        "medianMs": 0.3416864625000017,
+        "sampleCount": 17,
+        "minimumMs": 0.32987134999999623,
+        "maximumMs": 0.351352087500004
+      },
+      {
+        "count": 300,
+        "operation": "noop",
+        "backend": "state-lib-cow",
+        "medianMs": 0.0010192749999987428,
+        "sampleCount": 17,
+        "minimumMs": 0.0009036375000050611,
+        "maximumMs": 0.0014015624999956344
+      },
+      {
+        "count": 300,
+        "operation": "history",
+        "backend": "baseline",
+        "medianMs": 0.26810937499999454,
+        "sampleCount": 17,
+        "minimumMs": 0.2567916625000066,
+        "maximumMs": 0.2740588499999944
+      },
+      {
+        "count": 300,
+        "operation": "history",
+        "backend": "state-lib",
+        "medianMs": 0.00046353750000207585,
+        "sampleCount": 17,
+        "minimumMs": 0.0004031250000025466,
+        "maximumMs": 0.0006015625000031832
+      },
+      {
+        "count": 300,
+        "operation": "history",
+        "backend": "state-lib-cow",
+        "medianMs": 0.0004244749999998021,
+        "sampleCount": 17,
+        "minimumMs": 0.00041041250000262153,
+        "maximumMs": 0.0005578125000056389
+      },
+      {
+        "count": 1200,
+        "operation": "root",
+        "backend": "baseline",
+        "medianMs": 0.45249635000000127,
+        "sampleCount": 17,
+        "minimumMs": 0.4449677124999994,
+        "maximumMs": 0.4665583374999983
+      },
+      {
+        "count": 1200,
+        "operation": "root",
+        "backend": "state-lib",
+        "medianMs": 1.318879687499998,
+        "sampleCount": 17,
+        "minimumMs": 1.2943510375000074,
+        "maximumMs": 1.397581249999996
+      },
+      {
+        "count": 1200,
+        "operation": "root",
+        "backend": "state-lib-cow",
+        "medianMs": 0.00145988749998196,
+        "sampleCount": 17,
+        "minimumMs": 0.0011744750000048042,
+        "maximumMs": 0.011860937500000546
+      },
+      {
+        "count": 1200,
+        "operation": "item",
+        "backend": "baseline",
+        "medianMs": 0.45627291250000324,
+        "sampleCount": 17,
+        "minimumMs": 0.44945728749999037,
+        "maximumMs": 0.5017421875000082
+      },
+      {
+        "count": 1200,
+        "operation": "item",
+        "backend": "state-lib",
+        "medianMs": 1.341296350000016,
+        "sampleCount": 17,
+        "minimumMs": 1.3212453125000139,
+        "maximumMs": 1.3972375000000057
+      },
+      {
+        "count": 1200,
+        "operation": "item",
+        "backend": "state-lib-cow",
+        "medianMs": 0.01215156250000291,
+        "sampleCount": 17,
+        "minimumMs": 0.011190099999998893,
+        "maximumMs": 0.024735937500008732
+      },
+      {
+        "count": 1200,
+        "operation": "sparse",
+        "backend": "baseline",
+        "medianMs": 0.466143749999992,
+        "sampleCount": 17,
+        "minimumMs": 0.4462630125000032,
+        "maximumMs": 0.49440937499998655
+      },
+      {
+        "count": 1200,
+        "operation": "sparse",
+        "backend": "state-lib",
+        "medianMs": 1.387653649999993,
+        "sampleCount": 17,
+        "minimumMs": 1.350242712499994,
+        "maximumMs": 1.444891662500004
+      },
+      {
+        "count": 1200,
+        "operation": "sparse",
+        "backend": "state-lib-cow",
+        "medianMs": 0.20122187499998745,
+        "sampleCount": 17,
+        "minimumMs": 0.14223541250000835,
+        "maximumMs": 0.2830276124999955
+      },
+      {
+        "count": 1200,
+        "operation": "all",
+        "backend": "baseline",
+        "medianMs": 0.4793125000000146,
+        "sampleCount": 17,
+        "minimumMs": 0.4518562500000371,
+        "maximumMs": 0.5369041499999184
+      },
+      {
+        "count": 1200,
+        "operation": "all",
+        "backend": "state-lib",
+        "medianMs": 1.3798583500000858,
+        "sampleCount": 17,
+        "minimumMs": 1.3251145999999607,
+        "maximumMs": 1.448210399999971
+      },
+      {
+        "count": 1200,
+        "operation": "all",
+        "backend": "state-lib-cow",
+        "medianMs": 1.4289396000000125,
+        "sampleCount": 17,
+        "minimumMs": 1.0021353999999518,
+        "maximumMs": 1.7024583500000516
+      },
+      {
+        "count": 1200,
+        "operation": "move",
+        "backend": "baseline",
+        "medianMs": 0.4638395874999787,
+        "sampleCount": 17,
+        "minimumMs": 0.45372656249996907,
+        "maximumMs": 0.46973542499999893
+      },
+      {
+        "count": 1200,
+        "operation": "move",
+        "backend": "state-lib",
+        "medianMs": 1.3511619875000178,
+        "sampleCount": 17,
+        "minimumMs": 1.328848949999974,
+        "maximumMs": 1.38978228750002
+      },
+      {
+        "count": 1200,
+        "operation": "move",
+        "backend": "state-lib-cow",
+        "medianMs": 0.5123375000000123,
+        "sampleCount": 17,
+        "minimumMs": 0.48614218749999055,
+        "maximumMs": 0.5437203124999996
+      },
+      {
+        "count": 1200,
+        "operation": "noop",
+        "backend": "baseline",
+        "medianMs": 0.46534947499999363,
+        "sampleCount": 17,
+        "minimumMs": 0.453121874999988,
+        "maximumMs": 0.4929187499999898
+      },
+      {
+        "count": 1200,
+        "operation": "noop",
+        "backend": "state-lib",
+        "medianMs": 1.350791662499978,
+        "sampleCount": 17,
+        "minimumMs": 1.3292114625000067,
+        "maximumMs": 1.3771291624999775
+      },
+      {
+        "count": 1200,
+        "operation": "noop",
+        "backend": "state-lib-cow",
+        "medianMs": 0.0012260375000096245,
+        "sampleCount": 17,
+        "minimumMs": 0.0010073000000375032,
+        "maximumMs": 0.011600512499990145
+      },
+      {
+        "count": 1200,
+        "operation": "history",
+        "backend": "baseline",
+        "medianMs": 1.0557677124999827,
+        "sampleCount": 17,
+        "minimumMs": 1.039212499999985,
+        "maximumMs": 1.101559887500025
+      },
+      {
+        "count": 1200,
+        "operation": "history",
+        "backend": "state-lib",
+        "medianMs": 0.0006083374999889202,
+        "sampleCount": 17,
+        "minimumMs": 0.000523437499987267,
+        "maximumMs": 0.0008255124999777763
+      },
+      {
+        "count": 1200,
+        "operation": "history",
+        "backend": "state-lib-cow",
+        "medianMs": 0.0005479124999965279,
+        "sampleCount": 17,
+        "minimumMs": 0.0005135375000008934,
+        "maximumMs": 0.0008109375000003638
+      }
+    ],
+    "promotion": "rejected",
+    "conformancePassed": 21,
+    "method": "17 alternating batches after 3 warmups per condition. Means per operation, not individual interaction percentiles. Factory/import and DOM/network excluded; actual public document/history controller used. All outcomes compared after each trial. Baseline lacks immutability guarantees; state-lib full-copy is the stronger semantic comparator.",
+    "unit": "Milliseconds per operation, averaged within each batch",
+    "warmups": 3,
+    "trials": 17,
+    "exclusions": ["Initial document import", "DOM and rendering", "Network", "Native/peak memory"],
+    "baselineContracts": {
+      "baseline": "Original mutable document",
+      "state-lib": "Full-copy Runtime with immutable snapshots",
+      "state-lib-cow": "Corrected experimental copy-on-write adapter"
+    }
+  },
+  "projection": {
+    "bytes": {
+      "baseline": {
+        "raw": 171,
+        "gzip": 153
+      },
+      "generated": {
+        "raw": 64,
+        "gzip": 80
+      }
+    },
+    "authoredCandidateFiles": 0,
+    "comparisons": 5000,
+    "generatedSource": "export function project(input) { return { [\"id\"]: input[\"id\"], [\"done\"]: input[\"done\"] }; }\n",
+    "scope": "One known-field projection, not the package or an entire application",
+    "status": "Compiler preview"
+  },
+  "generatedFrom": "cf09e48d790a9dc1f9eeccc00fce16f82bae0100b7f6690585dc31b5120e40dc"
+}

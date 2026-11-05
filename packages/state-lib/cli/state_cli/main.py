@@ -1,10 +1,12 @@
 """Small Python surface; parsing and optimization decisions belong to Rust statec."""
 
-import argparse, gzip, hashlib, json, os, subprocess, sys, tempfile
+import argparse, gzip, hashlib, json, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[2]
 EXTENSIONS = {".js", ".mjs", ".jsx", ".ts", ".tsx", ".mts"}
+CONFIG_NAMES = ("tsconfig.json", "jsconfig.json")
+BUILD_CONSTANT_NAME = re.compile(r"__STATE_BUILD_[A-Z][A-Z0-9_]*__")
 
 
 def contained(root, relative, *, required=True):
@@ -21,6 +23,8 @@ def contained(root, relative, *, required=True):
 BUDGET_KEYS = {"maxRawBytes", "maxGzipBytes", "maxBrotliBytes"}
 LOCK_FILES = [
     "package.json",
+    "tsconfig.json",
+    "jsconfig.json",
     "bun.lock",
     "package-lock.json",
     "pnpm-lock.yaml",
@@ -35,6 +39,8 @@ TOOLCHAIN_FILES = [
     "compiler/src/command.rs",
     "cli/state_cli/main.py",
     "build-tools/bundle.mjs",
+    "build-tools/config-inputs.mjs",
+    "build-tools/bun.lock",
     "build-tools/package.json",
 ]
 
@@ -63,12 +69,33 @@ def read_source(path, root, source_root, digest):
 
 def scan_sources(root, source_root, digest):
     files = []
+    configs = []
     for path in sorted(source_root.rglob("*")):
         if path.is_file():
             entry = read_source(path, root, source_root, digest)
+            if path.name in CONFIG_NAMES:
+                configs.append(path.relative_to(root).as_posix())
             if entry is not None:
                 files.append(entry)
-    return files
+    return files, configs
+
+
+def compiler_inputs(root, files, configs):
+    payload = {
+        "root": str(root),
+        "files": [file["path"] for file in files],
+        "configs": configs,
+    }
+    child = subprocess.run(
+        ["node", str(PACKAGE / "build-tools/config-inputs.mjs")],
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if child.returncode:
+        raise ValueError("Compiler configuration: " + child.stderr.strip())
+    return json.loads(child.stdout)
 
 
 def digest_existing(digest, base, names):
@@ -138,7 +165,41 @@ def check_units(root, config, generated, inventory):
             raise ValueError("Variant IDs must be unique; baseline is reserved")
 
 
-def request_for(args):
+def validate_build_constants(config):
+    constants = config.get("buildConstants", {})
+    if not isinstance(constants, dict) or any(
+        not BUILD_CONSTANT_NAME.fullmatch(name) or type(value) not in (bool, str)
+        for name, value in constants.items()
+    ):
+        raise ValueError(
+            "buildConstants require reserved __STATE_BUILD_*__ names and boolean/string literals"
+        )
+
+
+def unit_entries(unit):
+    return [unit["facade"], unit["baseline"], *[v["entry"] for v in unit["variants"]]]
+
+
+def validate_browser_root(root, source_root, config):
+    browser_root = config.get("browserRoot")
+    if browser_root is None:
+        return
+    web_root = contained(root, browser_root, required=False)
+    if not web_root.is_dir() or not web_root.is_relative_to(source_root):
+        raise ValueError("browserRoot must be a directory inside sourceRoot")
+    if not contained(root, config["entry"]).is_relative_to(web_root):
+        raise ValueError("Entry must belong to browserRoot")
+    for unit in config["units"]:
+        if any(
+            not contained(root, name, required=False).is_relative_to(web_root)
+            for name in unit_entries(unit)
+        ):
+            raise ValueError(
+                "Every authored and generated strategy must belong to browserRoot"
+            )
+
+
+def load_config(args):
     config_file = Path(args.config).resolve()
     root = config_file.parent
     config = json.loads(config_file.read_text())
@@ -148,10 +209,19 @@ def request_for(args):
     source_root = contained(root, config["sourceRoot"], required=False)
     if not source_root.is_dir():
         raise ValueError("sourceRoot must be a directory")
+    validate_build_constants(config)
+    validate_browser_root(root, source_root, config)
+    return root, config, source_root
+
+
+def request_for(args):
+    root, config, source_root = load_config(args)
     digest = hashlib.sha256(
         json.dumps(config, sort_keys=True, separators=(",", ":")).encode()
     )
-    files = scan_sources(root, source_root, digest)
+    files, configs = scan_sources(root, source_root, digest)
+    inputs = compiler_inputs(root, files, configs)
+    digest.update(json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode())
     # Profile validity includes optional Wasm/data inputs, project locks and our toolchain sources.
     digest_existing(digest, root, LOCK_FILES)
     digest_existing(digest, PACKAGE, TOOLCHAIN_FILES)
@@ -167,6 +237,7 @@ def request_for(args):
             "config": config,
             "files": files,
             "sourceHash": digest.hexdigest(),
+            "compilerInputs": inputs,
             "profile": profile,
             "mode": args.mode,
         },
@@ -190,13 +261,27 @@ def native_plan(request):
         text=True,
         encoding="utf-8",
         capture_output=True,
+        check=False,
     )
     if child.returncode:
         raise RuntimeError(child.stderr.strip())
     return json.loads(child.stdout)
 
 
-def emit(root, config, plan, *, baseline=False):
+def build_defines(config):
+    return {
+        name: json.dumps(value)
+        for name, value in config.get("buildConstants", {}).items()
+    }
+
+
+def browser_root_path(root, config):
+    name = config.get("browserRoot")
+    return None if name is None else str(contained(root, name, required=False))
+
+
+def emit(root, config, plan, source_files, *, baseline=False, compare=False):
+    # source_files is the validated inventory from request_for, not a fresh walk.
     generated = {
         str(contained(root, module["path"], required=False)): module["content"]
         for module in plan.get("generatedModules", [])
@@ -222,10 +307,14 @@ def emit(root, config, plan, *, baseline=False):
     data = {
         "root": str(root),
         "entry": str(contained(root, config["entry"])),
+        "sourceFiles": [str((root / file["path"]).resolve()) for file in source_files],
         "aliases": aliases,
+        "compare": compare,
         "generated": generated,
         "outDir": str(contained(root, config["outDir"], required=False)),
         "target": config.get("emitTarget", "es2022"),
+        "defines": build_defines(config),
+        "browserRoot": browser_root_path(root, config),
     }
     child = subprocess.run(
         ["node", str(PACKAGE / "build-tools/bundle.mjs")],
@@ -233,6 +322,7 @@ def emit(root, config, plan, *, baseline=False):
         text=True,
         encoding="utf-8",
         capture_output=True,
+        check=False,
     )
     if child.returncode:
         raise RuntimeError(child.stderr.strip())
@@ -301,11 +391,14 @@ def bundle_size(bundle):
     }
 
 
-def emit_selected(root, config, plan):
+def emit_selected(root, config, plan, source_files):
     # Compare the actual whole emitted bundle, not merely a claimed per-module budget.
-    original = emit(root, config, plan, baseline=True)
     selected = [d for d in plan["decisions"] if d["selected"] != "baseline"]
-    result = emit(root, config, plan) if selected else original
+    if selected:
+        pair = emit(root, config, plan, source_files, compare=True)
+        original, result = pair["baseline"], pair["selected"]
+    else:
+        original = result = emit(root, config, plan, source_files, baseline=True)
     missing = [
         d
         for d in selected
@@ -357,20 +450,133 @@ def write_outputs(out, outputs):
         ) as temporary:
             os.fchmod(temporary.fileno(), 0o666 & ~umask)
             temporary.write(content)
+            temporary.flush()
+            os.fsync(temporary.fileno())
             temp = temporary.name
         os.replace(temp, out / name)
+
+
+class PublicationRecovery(OSError):
+    """The previous generation could not be restored and is kept for recovery."""
+
+
+def warn_cleanup(message, path, failure):
+    print(
+        json.dumps({"warning": message, "path": str(path), "error": str(failure)}),
+        file=sys.stderr,
+    )
+
+
+def acquire_publication_lock(out):
+    out.parent.mkdir(parents=True, exist_ok=True)
+    lock = out.parent / ("." + out.name + ".state-publish.lock")
+    try:
+        descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as failure:
+        raise OSError("Another publication owns " + str(lock)) from failure
+    os.close(descriptor)
+    return lock
+
+
+def release_publication_lock(lock):
+    # The committed directory and its leftover lock are separate outcomes. Do not
+    # hide a commit or mask an earlier failure.
+    try:
+        lock.unlink(missing_ok=True)
+    except OSError as failure:
+        warn_cleanup("Publication lock cleanup required", lock, failure)
+
+
+def discard_stage(stage):
+    # Publication has its own commit point. A leftover recovery directory must not
+    # turn a successfully installed generation into a failure.
+    if stage is None:
+        return
+    try:
+        shutil.rmtree(stage)
+    except OSError as failure:
+        warn_cleanup("Staging cleanup required", stage, failure)
+
+
+def check_replaceable(out, outputs):
+    if not out.exists():
+        return
+    if not out.is_dir() or any(
+        path.name not in outputs or not path.is_file() for path in out.iterdir()
+    ):
+        raise ValueError("Refusing to replace output containing unowned files")
+    marker = out / ".state-owned"
+    if any(out.iterdir()) and (
+        not marker.is_file() or marker.read_text() != "state-build-v1\n"
+    ):
+        raise ValueError("Refusing to replace an unrecognized generated output")
+
+
+def restore_previous(out, previous):
+    if not previous.exists():
+        return
+    try:
+        os.replace(previous, out)
+    except OSError as failure:
+        raise PublicationRecovery(
+            "Publication failed; previous output preserved at " + str(previous)
+        ) from failure
+
+
+def install_generation(out, ready, previous):
+    if out.exists():
+        os.replace(out, previous)
+    try:
+        os.replace(ready, out)
+    except OSError:
+        restore_previous(out, previous)
+        raise
+
+
+def publish_outputs(out, outputs):
+    """Publish one complete generation; retain the old directory on failed restore."""
+    lock = acquire_publication_lock(out)
+    stage = None
+    try:
+        check_replaceable(out, outputs)
+        stage = Path(tempfile.mkdtemp(prefix=".state-publish-", dir=out.parent))
+        ready = stage / "next"
+        ready.mkdir()
+        write_outputs(ready, outputs)
+        install_generation(out, ready, stage / "previous")
+    except PublicationRecovery:
+        stage = None
+        raise
+    finally:
+        discard_stage(stage)
+        release_publication_lock(lock)
+
+
+def annotate_plan(plan, config, request):
+    plan["buildConstants"] = config.get("buildConstants", {})
+    plan["browserRoot"] = config.get("browserRoot")
+    plan["compilerInputs"] = request["compilerInputs"]
+
+
+def ensure_inputs_unchanged(args, request):
+    _, _, current = request_for(args)
+    if current["sourceHash"] != request["sourceHash"]:
+        raise ValueError(
+            "Source or compiler configuration changed during build; retry with current inputs"
+        )
 
 
 def build(args):
     root, config, request = request_for(args)
     plan = native_plan(request)
     plan["phase"] = "analysis-only"
+    annotate_plan(plan, config, request)
     verify_facades(root, plan)
 
     if args.command in ["doctor", "explain"]:
         return plan
     out = checked_output_dir(root, config)
-    original, result = emit_selected(root, config, plan)
+    original, result = emit_selected(root, config, plan, request["files"])
     result, reference, measured = compare_sizes(plan, original, result)
     limits = enforce_budgets(config, measured)
     plan["budgetCheck"] = {
@@ -392,8 +598,10 @@ def build(args):
     plan["phase"] = "emitted-and-size-checked"
     plan["bundler"] = result["version"]
     plan["inputs"] = result["inputs"]
-    out.mkdir(parents=True, exist_ok=True)
-    write_outputs(
+    plan["contributions"] = result.get("contributions", {})
+    plan["prelink"] = result["prelink"]
+    ensure_inputs_unchanged(args, request)
+    publish_outputs(
         out,
         {
             ".state-owned": "state-build-v1\n",

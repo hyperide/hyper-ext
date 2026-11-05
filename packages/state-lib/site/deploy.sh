@@ -1,16 +1,8 @@
 #!/usr/bin/env bash
-# Publish the site — but only from a green tree.
-#
-#   ./deploy.sh            # gates, local Vercel build, then production
-#   ./deploy.sh --preview  # gates, local Vercel build, then a preview URL
-#   ./deploy.sh --skip-checks   # only immediately after a green check
-#
-# Install dependencies and Chromium before running this script:
-#   bun install --frozen-lockfile
-#   bunx playwright install chromium
+# Publish only a checked tree. --skip-checks is valid immediately after a green run.
+# Build locally so Chromium is available for the static prerender step.
 set -euo pipefail
 cd "$(dirname "$0")"
-
 target=--prod
 skip=0
 for arg in "$@"; do
@@ -20,25 +12,18 @@ for arg in "$@"; do
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
-
 if [ "$skip" -eq 0 ]; then
   echo "== gates"
-  if ! bun run check; then
-    echo "REFUSING TO DEPLOY: a gate is red." >&2
-    exit 1
-  fi
+  bun run check || { echo "REFUSING TO DEPLOY: a gate is red." >&2; exit 1; }
 else
   echo "== gates explicitly skipped"
 fi
-
-echo "== local Vercel build (includes static prerendering)"
-# Use the same local environment that ran the browser checks. A plain `vercel`
-# upload would rebuild remotely, where the required Chromium may not exist.
-# Vercel build reads this package's buildCommand and writes .vercel/output.
-# --scope fixes the project scope; credentials still need access to this team.
+echo "== local Vercel build"
 # shellcheck disable=SC2086
 vercel build $target --yes --scope inventorems-projects
-
+# Bun's cache symlinks must not escape the uploaded function artifact.
+bunx tsx tools/package-server.mts
+bunx tsx tools/package-server.test.mts
 echo "== publishing the prebuilt output"
 # shellcheck disable=SC2086
 vercel deploy --prebuilt $target --yes --scope inventorems-projects

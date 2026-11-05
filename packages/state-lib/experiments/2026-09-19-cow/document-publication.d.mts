@@ -14,7 +14,10 @@ export interface DocumentPublication<T> {
   /** Runtime validates ownership and rejects asynchronous returned values. */
   apply<A>(command: (base: T, args: A) => unknown, args: A): boolean;
   transact(build: (base: T, expose: (working: unknown) => void) => unknown): boolean;
+  /** Always publishes a private certified copy; the input is never frozen or retained. */
   replace(value: T | null): void;
+  /** Publishes an importJsonField root by identity (TypeError otherwise); its holders see the frozen snapshot. */
+  replaceImported(value: T): void;
   undo(): boolean;
   redo(): boolean;
   clear(): void;

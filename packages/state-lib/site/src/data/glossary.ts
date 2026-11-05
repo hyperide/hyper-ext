@@ -1,6 +1,13 @@
+import { RESEARCH_CONCEPTS } from './research';
 /** R63 glossary — feeds the R54 tooltip system. `link` points at a fuller explainer where one exists. */
 export type Term = { def: string; link?: string; compare?: string };
 export const GLOSSARY: Record<string, Term> = {
+  ...Object.fromEntries(
+    RESEARCH_CONCEPTS.map((concept) => [
+      concept.id.replaceAll('-', ' '),
+      { def: `${concept.summary} ${concept.status}.`, link: `/concepts#${concept.id}` },
+    ]),
+  ),
   DAG: {
     def: 'Directed acyclic dependency graph: arrows show imports and cycles are forbidden. Unlike strict layers, optional features may share dependencies.',
     link: '/concepts/practical#dag',
@@ -202,7 +209,7 @@ export const GLOSSARY: Record<string, Term> = {
     def: "React's opt-in auto-memoization compiler; it assumes components don't mutate objects during render, which is exactly what render-time read tracking (Valtio, MobX, Legend) does — and it breaks silently when that assumption is violated.",
   },
   region: {
-    def: 'A state-lib declaration of lifetime/policy defaults: domain, session, view or draft. Prior art includes React component-state lifetime, MST volatile state and persistence inclusion/exclusion; the four labels are our composition. The prototype implements region-aware persistence filtering, not all planned policy enforcement.',
+    def: 'A state-lib declaration of lifetime/policy defaults: domain, session, view or draft. Prior art includes React component-state lifetime, MST volatile state and persistence inclusion/exclusion; the prototype implements region-aware persistence filtering, not all planned policy enforcement.',
     link: '/learning#h-regions-known-ingredients-explicit-local-policy',
   },
   scope: {

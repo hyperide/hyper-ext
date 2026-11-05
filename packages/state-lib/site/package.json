@@ -3,13 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "tsx tools/gen-research-evidence.mts && vite",
+    "build": "tsx tools/gen-research-evidence.mts && vite build",
     "preview": "vite preview",
-    "check": "tsx tools/check-all.mts",
+    "check": "tsx tools/gen-research-evidence.mts && tsx tools/check-all.mts",
     "figures": "tsx tools/render-figures.mts",
     "deploy": "./deploy.sh",
-    "build:served": "SITE_SPLIT=1 vite build --outDir dist-served && tsx tools/prerender.mts"
+    "build:served": "tsx tools/gen-research-evidence.mts && SITE_SPLIT=1 vite build --outDir dist-served && tsx tools/prerender.mts"
   },
   "dependencies": {
     "@babel/parser": "7.29.8",
@@ -22,11 +22,13 @@
     "@lezer/highlight": "1.2.3",
     "@orama/orama": "^3.1.18",
     "@tanstack/db": "^0.8.7",
+    "esbuild-wasm": "0.25.12",
     "immer": "^11.1.18",
     "immutable": "^5.1.9",
     "lodash": "^4.18.1",
     "marked": "^15.0.0",
     "mutative": "^1.3.0",
+    "pg": "8.16.3",
     "ramda": "^0.32.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

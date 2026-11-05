@@ -1,0 +1,270 @@
+{
+  "scope": "Compiled Boards completion path on the review-corrected source; not full-app all-operations certification",
+  "baselineBoardsCommit": "90d06a8a38ab5bddb5922b43a56e8a4073090b2b",
+  "tests": {
+    "compiler": 86,
+    "captureRowCowCommands": 53,
+    "boardsUnit": 395,
+    "fixedBuildContracts": 4,
+    "compiledAppBrowserScenarios": "28 passed earlier; final JS/HTML/CSS byte-identical (browser-verified-artifacts)"
+  },
+  "artifactSha256": {
+    "baselineAppJs": "b83af585eb0d2b7d2f131333938281a53da47be21e2835c96ad8c91a199ffc17",
+    "stateLibAppJs": "f19621d5a0de615d580a0c6d7366ae9517f4580a6f8de1d27ea720e0c2361990",
+    "bundleOnlyAppJs": "d99695e3fa3fa8c759d96dd2ff4bb28cc0998625aa0b4d873c920740539d57ee"
+  },
+  "pagesPerCase": 7,
+  "timedClicksPerCase": 42,
+  "hostNote": "shared host, other projects running; load recorded per sample",
+  "engines": {
+    "chromium": {
+      "version": "153.0.8010.12",
+      "date": "2026-10-21T13:26:58.840Z",
+      "startLoad": [
+        5.06,
+        5.3,
+        4.58
+      ],
+      "endLoad": [
+        5.98,
+        6.92,
+        5.57
+      ],
+      "logicalCPUs": 16,
+      "summary": [
+        {
+          "count": 1,
+          "visibleRows": 1,
+          "backend": "baseline",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 1.5999999940395355,
+          "handlerP95Ms": 2.2999999821186066,
+          "nextFrameMedianMs": 11.099999994039536,
+          "nextFrameP95Ms": 12,
+          "rowsRecreatedPerDiagnostic": 1,
+          "heapMedianBytes": 2801688
+        },
+        {
+          "count": 1,
+          "visibleRows": 1,
+          "backend": "state-lib",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 0.5,
+          "handlerP95Ms": 0.7000000178813934,
+          "nextFrameMedianMs": 11,
+          "nextFrameP95Ms": 12,
+          "rowsRecreatedPerDiagnostic": 0,
+          "heapMedianBytes": 2839336
+        },
+        {
+          "count": 30,
+          "visibleRows": 30,
+          "backend": "baseline",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 3.699999988079071,
+          "handlerP95Ms": 5.700000017881393,
+          "nextFrameMedianMs": 14.200000017881393,
+          "nextFrameP95Ms": 23,
+          "rowsRecreatedPerDiagnostic": 30,
+          "heapMedianBytes": 2845564
+        },
+        {
+          "count": 30,
+          "visibleRows": 30,
+          "backend": "state-lib",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 0.5999999940395355,
+          "handlerP95Ms": 0.800000011920929,
+          "nextFrameMedianMs": 9.900000005960464,
+          "nextFrameP95Ms": 11.099999994039536,
+          "rowsRecreatedPerDiagnostic": 0,
+          "heapMedianBytes": 2878032
+        },
+        {
+          "count": 1200,
+          "visibleRows": 1200,
+          "backend": "baseline",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 63.19999998807907,
+          "handlerP95Ms": 82.5,
+          "nextFrameMedianMs": 311,
+          "nextFrameP95Ms": 409,
+          "rowsRecreatedPerDiagnostic": 1200,
+          "heapMedianBytes": 4342224
+        },
+        {
+          "count": 1200,
+          "visibleRows": 1200,
+          "backend": "state-lib",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 1,
+          "handlerP95Ms": 1.300000011920929,
+          "nextFrameMedianMs": 13.799999982118607,
+          "nextFrameP95Ms": 21.100000023841858,
+          "rowsRecreatedPerDiagnostic": 0,
+          "heapMedianBytes": 3245656
+        },
+        {
+          "count": 10000,
+          "visibleRows": 1200,
+          "backend": "baseline",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 90.40000000596046,
+          "handlerP95Ms": 119.30000001192093,
+          "nextFrameMedianMs": 312.2000000178814,
+          "nextFrameP95Ms": 371.59999999403954,
+          "rowsRecreatedPerDiagnostic": 1200,
+          "heapMedianBytes": 15584456
+        },
+        {
+          "count": 10000,
+          "visibleRows": 1200,
+          "backend": "state-lib",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 0.9000000059604645,
+          "handlerP95Ms": 1.2000000178813934,
+          "nextFrameMedianMs": 12.5,
+          "nextFrameP95Ms": 15.400000005960464,
+          "rowsRecreatedPerDiagnostic": 0,
+          "heapMedianBytes": 4731016
+        }
+      ]
+    },
+    "webkit": {
+      "version": "26.6",
+      "date": "2026-10-21T13:33:43.726Z",
+      "startLoad": [
+        5.68,
+        6.82,
+        5.56
+      ],
+      "endLoad": [
+        6.95,
+        7.24,
+        6.21
+      ],
+      "logicalCPUs": 16,
+      "summary": [
+        {
+          "count": 1,
+          "visibleRows": 1,
+          "backend": "baseline",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 2,
+          "handlerP95Ms": 3,
+          "nextFrameMedianMs": 25,
+          "nextFrameP95Ms": 26,
+          "rowsRecreatedPerDiagnostic": 1,
+          "heapMedianBytes": null
+        },
+        {
+          "count": 1,
+          "visibleRows": 1,
+          "backend": "state-lib",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 1,
+          "handlerP95Ms": 1,
+          "nextFrameMedianMs": 25,
+          "nextFrameP95Ms": 26,
+          "rowsRecreatedPerDiagnostic": 0,
+          "heapMedianBytes": null
+        },
+        {
+          "count": 30,
+          "visibleRows": 30,
+          "backend": "baseline",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 4,
+          "handlerP95Ms": 6,
+          "nextFrameMedianMs": 24,
+          "nextFrameP95Ms": 28,
+          "rowsRecreatedPerDiagnostic": 30,
+          "heapMedianBytes": null
+        },
+        {
+          "count": 30,
+          "visibleRows": 30,
+          "backend": "state-lib",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 1,
+          "handlerP95Ms": 1,
+          "nextFrameMedianMs": 23,
+          "nextFrameP95Ms": 25,
+          "rowsRecreatedPerDiagnostic": 0,
+          "heapMedianBytes": null
+        },
+        {
+          "count": 1200,
+          "visibleRows": 1200,
+          "backend": "baseline",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 93,
+          "handlerP95Ms": 116,
+          "nextFrameMedianMs": 546,
+          "nextFrameP95Ms": 616,
+          "rowsRecreatedPerDiagnostic": 1200,
+          "heapMedianBytes": null
+        },
+        {
+          "count": 1200,
+          "visibleRows": 1200,
+          "backend": "state-lib",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 1,
+          "handlerP95Ms": 2,
+          "nextFrameMedianMs": 7,
+          "nextFrameP95Ms": 13,
+          "rowsRecreatedPerDiagnostic": 0,
+          "heapMedianBytes": null
+        },
+        {
+          "count": 10000,
+          "visibleRows": 1200,
+          "backend": "baseline",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 167,
+          "handlerP95Ms": 198,
+          "nextFrameMedianMs": 611,
+          "nextFrameP95Ms": 697,
+          "rowsRecreatedPerDiagnostic": 1200,
+          "heapMedianBytes": null
+        },
+        {
+          "count": 10000,
+          "visibleRows": 1200,
+          "backend": "state-lib",
+          "pages": 7,
+          "events": 42,
+          "handlerMedianMs": 2,
+          "handlerP95Ms": 2,
+          "nextFrameMedianMs": 8,
+          "nextFrameP95Ms": 17,
+          "rowsRecreatedPerDiagnostic": 0,
+          "heapMedianBytes": null
+        }
+      ]
+    }
+  },
+  "rawRuns": [
+    "chromium.json",
+    "webkit.json"
+  ],
+  "entryBytes": "entry-bytes.json",
+  "sourceFiles": "source-identities.json",
+  "screenshots": "screenshots/"
+}

@@ -1,0 +1,458 @@
+[
+  {
+    "variant": "specialized-test-baseline",
+    "emitted": {
+      "baseline": {
+        "raw": 96859,
+        "gzip": 37132,
+        "brotli": 32080
+      },
+      "selected": {
+        "raw": 96859,
+        "gzip": 37132,
+        "brotli": 32080
+      },
+      "sourceMap": true,
+      "runtimeDispatcher": false
+    },
+    "sourceHash": "c4740c79055b7f11b1551bc5a7f0df9473b8384245f154932aed9dc523f3a782",
+    "contributions": {
+      "src/document-action.mjs": {
+        "bytesInOutput": 477
+      },
+      "src/board-row-view.mjs": {
+        "bytesInOutput": 1222
+      },
+      "src/packages/state-lib/dom/immutable-row-delta.mjs": {
+        "bytesInOutput": 492
+      },
+      "src/packages/core/workspace-loader.mjs": {
+        "bytesInOutput": 435
+      },
+      "src/packages/core/model.mjs": {
+        "bytesInOutput": 1917
+      },
+      "src/packages/core/document-store-baseline.mjs": {
+        "bytesInOutput": 772
+      },
+      "src/packages/core/json-draft.mjs": {
+        "bytesInOutput": 128
+      },
+      "src/packages/core/document-publication.mjs": {
+        "bytesInOutput": 21
+      },
+      "src/packages/core/document-store.mjs": {
+        "bytesInOutput": 322
+      },
+      "src/packages/core/assignees.mjs": {
+        "bytesInOutput": 564
+      },
+      "src/photo-review.mjs": {
+        "bytesInOutput": 4443
+      },
+      "src/packages/font/glyphs.mjs": {
+        "bytesInOutput": 12125
+      },
+      "src/packages/font/font.mjs": {
+        "bytesInOutput": 7675
+      },
+      "src/packages/core/art.mjs": {
+        "bytesInOutput": 5046
+      },
+      "src/packages/core/workspace.mjs": {
+        "bytesInOutput": 753
+      },
+      "src/packages/core/references.mjs": {
+        "bytesInOutput": 1599
+      },
+      "src/packages/core/sync.mjs": {
+        "bytesInOutput": 1860
+      },
+      "src/packages/state-lib/scoped/scope-core.mjs": {
+        "bytesInOutput": 3381
+      },
+      "src/packages/state-lib/scoped/scope-baseline.mjs": {
+        "bytesInOutput": 100
+      },
+      "src/packages/state-lib/scoped/debounced-latest.mjs": {
+        "bytesInOutput": 1260
+      },
+      "src/state-config.mjs": {
+        "bytesInOutput": 78
+      },
+      "src/board-state.mjs": {
+        "bytesInOutput": 4103
+      },
+      "src/board-commands.mjs": {
+        "bytesInOutput": 3188
+      },
+      "src/app.mjs": {
+        "bytesInOutput": 44305
+      },
+      "src/boot.mjs": {
+        "bytesInOutput": 557
+      }
+    },
+    "files": [
+      {
+        "file": ".state-owned",
+        "bytes": 15,
+        "sha256": "a2705d8194680bfeee72cb3ee35b3006f9ca6170afcff01426df4941d8794c23",
+        "kind": "static"
+      },
+      {
+        "file": "app.js",
+        "bytes": 96859,
+        "sha256": "72b1045cd75be0ad365ea9ad1c57cad694fcb91d7bf3d3fafa23313d1f5044e0",
+        "kind": "runtime"
+      },
+      {
+        "file": "app.js.map",
+        "bytes": 300556,
+        "sha256": "2d64d81d5e471d7e7fd01a783cf648a3ac4c0e50d6c3f07609cd9065fb7da593",
+        "kind": "source-map"
+      },
+      {
+        "file": "index.html",
+        "bytes": 626,
+        "sha256": "2755c0885ae354cbc3b8efd1d20057baa429bdcb2fb4fea81fac61c122a66fb6",
+        "kind": "static"
+      },
+      {
+        "file": "placeholder.svg",
+        "bytes": 311,
+        "sha256": "f914d2680cf7b2abd7dce22654cbb71718e20e00b02c0d67ae0bd1f612861f05",
+        "kind": "static"
+      },
+      {
+        "file": "refinements.css",
+        "bytes": 1583,
+        "sha256": "183be3794944334ebb2db5c63ea2206bebe6ef769630ef7adde30469f9c47431",
+        "kind": "static"
+      },
+      {
+        "file": "state.manifest.json",
+        "bytes": 7518,
+        "sha256": "1d7aff52449f789897cece28f1724a3c210c5fe11ad2a5b724cde952befb2175",
+        "kind": "metadata"
+      },
+      {
+        "file": "style.css",
+        "bytes": 19119,
+        "sha256": "3cb55aa188e46b8c20db10a9e19f302cffa57bf55312c9ef1913adfbff638c5f",
+        "kind": "static"
+      }
+    ]
+  },
+  {
+    "variant": "specialized-test-state-lib",
+    "emitted": {
+      "baseline": {
+        "raw": 112126,
+        "gzip": 42150,
+        "brotli": 36424
+      },
+      "selected": {
+        "raw": 112126,
+        "gzip": 42150,
+        "brotli": 36424
+      },
+      "sourceMap": true,
+      "runtimeDispatcher": false
+    },
+    "sourceHash": "e9c991e2309d19367ed3f19cd7afc4b31d54d4e8a26e8f71b266ee262146714d",
+    "contributions": {
+      "src/document-action.mjs": {
+        "bytesInOutput": 477
+      },
+      "src/board-row-view.mjs": {
+        "bytesInOutput": 1222
+      },
+      "src/packages/state-lib/dom/immutable-row-delta.mjs": {
+        "bytesInOutput": 492
+      },
+      "src/packages/state-lib/dist/core.js": {
+        "bytesInOutput": 6870
+      },
+      "src/packages/state-lib/dist/latest-task.js": {
+        "bytesInOutput": 1010
+      },
+      "src/packages/state-lib/dist/index.js": {
+        "bytesInOutput": 26
+      },
+      "src/packages/core/workspace-loader.mjs": {
+        "bytesInOutput": 964
+      },
+      "src/packages/core/model.mjs": {
+        "bytesInOutput": 1917
+      },
+      "src/packages/core/document-store-baseline.mjs": {
+        "bytesInOutput": 21
+      },
+      "src/packages/core/json-draft.mjs": {
+        "bytesInOutput": 5319
+      },
+      "src/packages/core/document-publication.mjs": {
+        "bytesInOutput": 1671
+      },
+      "src/packages/core/document-store.mjs": {
+        "bytesInOutput": 932
+      },
+      "src/packages/core/assignees.mjs": {
+        "bytesInOutput": 564
+      },
+      "src/photo-review.mjs": {
+        "bytesInOutput": 4448
+      },
+      "src/packages/font/glyphs.mjs": {
+        "bytesInOutput": 12125
+      },
+      "src/packages/font/font.mjs": {
+        "bytesInOutput": 7680
+      },
+      "src/packages/core/art.mjs": {
+        "bytesInOutput": 5046
+      },
+      "src/packages/core/workspace.mjs": {
+        "bytesInOutput": 753
+      },
+      "src/packages/core/references.mjs": {
+        "bytesInOutput": 1599
+      },
+      "src/packages/core/sync.mjs": {
+        "bytesInOutput": 1860
+      },
+      "src/packages/state-lib/scoped/scope-core.mjs": {
+        "bytesInOutput": 3179
+      },
+      "src/packages/state-lib/scoped/scope.mjs": {
+        "bytesInOutput": 289
+      },
+      "src/packages/state-lib/scoped/debounced-latest.mjs": {
+        "bytesInOutput": 1182
+      },
+      "src/state-config.mjs": {
+        "bytesInOutput": 79
+      },
+      "src/board-state.mjs": {
+        "bytesInOutput": 4122
+      },
+      "src/board-commands.mjs": {
+        "bytesInOutput": 3358
+      },
+      "src/app.mjs": {
+        "bytesInOutput": 44328
+      },
+      "src/boot.mjs": {
+        "bytesInOutput": 557
+      }
+    },
+    "files": [
+      {
+        "file": ".state-owned",
+        "bytes": 15,
+        "sha256": "a2705d8194680bfeee72cb3ee35b3006f9ca6170afcff01426df4941d8794c23",
+        "kind": "static"
+      },
+      {
+        "file": "app.js",
+        "bytes": 112126,
+        "sha256": "2d00fb8d3b1842f815f4669a216c3c8e25472ef1df7706853ec581247887318b",
+        "kind": "runtime"
+      },
+      {
+        "file": "app.js.map",
+        "bytes": 345477,
+        "sha256": "011fbd31cd24df2598beb2a4d4831bf287f0ca7b0a75c160f902f4f2062814d5",
+        "kind": "source-map"
+      },
+      {
+        "file": "index.html",
+        "bytes": 626,
+        "sha256": "2755c0885ae354cbc3b8efd1d20057baa429bdcb2fb4fea81fac61c122a66fb6",
+        "kind": "static"
+      },
+      {
+        "file": "placeholder.svg",
+        "bytes": 311,
+        "sha256": "f914d2680cf7b2abd7dce22654cbb71718e20e00b02c0d67ae0bd1f612861f05",
+        "kind": "static"
+      },
+      {
+        "file": "refinements.css",
+        "bytes": 1583,
+        "sha256": "183be3794944334ebb2db5c63ea2206bebe6ef769630ef7adde30469f9c47431",
+        "kind": "static"
+      },
+      {
+        "file": "state.manifest.json",
+        "bytes": 7760,
+        "sha256": "13a017b645f8264ac9e470ee688d1f708b7344f16c7c9a227b693a6b612cda94",
+        "kind": "metadata"
+      },
+      {
+        "file": "style.css",
+        "bytes": 19119,
+        "sha256": "3cb55aa188e46b8c20db10a9e19f302cffa57bf55312c9ef1913adfbff638c5f",
+        "kind": "static"
+      }
+    ]
+  },
+  {
+    "variant": "state-bundle-only",
+    "emitted": {
+      "baseline": {
+        "raw": 118604,
+        "gzip": 44214,
+        "brotli": 38116
+      },
+      "selected": {
+        "raw": 118604,
+        "gzip": 44214,
+        "brotli": 38116
+      },
+      "sourceMap": true,
+      "runtimeDispatcher": false
+    },
+    "sourceHash": "fc5f867c35c1ac0e2af5946262a5188bdabd3d497ab8af6bfeec07e8a98ed8a7",
+    "contributions": {
+      "src/document-action.mjs": {
+        "bytesInOutput": 477
+      },
+      "src/board-row-view.mjs": {
+        "bytesInOutput": 1222
+      },
+      "src/packages/state-lib/dom/immutable-row-delta.mjs": {
+        "bytesInOutput": 492
+      },
+      "src/packages/state-lib/dist/core.js": {
+        "bytesInOutput": 6870
+      },
+      "src/packages/state-lib/dist/latest-task.js": {
+        "bytesInOutput": 1010
+      },
+      "src/packages/state-lib/dist/index.js": {
+        "bytesInOutput": 26
+      },
+      "src/packages/core/workspace-loader.mjs": {
+        "bytesInOutput": 1323
+      },
+      "src/packages/core/model.mjs": {
+        "bytesInOutput": 1917
+      },
+      "src/packages/core/document-store-baseline.mjs": {
+        "bytesInOutput": 772
+      },
+      "src/packages/core/json-draft.mjs": {
+        "bytesInOutput": 8576
+      },
+      "src/packages/core/document-publication.mjs": {
+        "bytesInOutput": 1671
+      },
+      "src/packages/core/document-store.mjs": {
+        "bytesInOutput": 1135
+      },
+      "src/packages/core/assignees.mjs": {
+        "bytesInOutput": 564
+      },
+      "src/photo-review.mjs": {
+        "bytesInOutput": 4448
+      },
+      "src/packages/font/glyphs.mjs": {
+        "bytesInOutput": 12138
+      },
+      "src/packages/font/font.mjs": {
+        "bytesInOutput": 7680
+      },
+      "src/packages/core/art.mjs": {
+        "bytesInOutput": 5046
+      },
+      "src/packages/core/workspace.mjs": {
+        "bytesInOutput": 753
+      },
+      "src/packages/core/references.mjs": {
+        "bytesInOutput": 1599
+      },
+      "src/packages/core/sync.mjs": {
+        "bytesInOutput": 1860
+      },
+      "src/packages/state-lib/scoped/scope-core.mjs": {
+        "bytesInOutput": 3381
+      },
+      "src/packages/state-lib/scoped/scope.mjs": {
+        "bytesInOutput": 289
+      },
+      "src/packages/state-lib/scoped/scope-baseline.mjs": {
+        "bytesInOutput": 100
+      },
+      "src/packages/state-lib/scoped/debounced-latest.mjs": {
+        "bytesInOutput": 1470
+      },
+      "src/state-config.mjs": {
+        "bytesInOutput": 79
+      },
+      "src/board-state.mjs": {
+        "bytesInOutput": 4791
+      },
+      "src/board-commands.mjs": {
+        "bytesInOutput": 3439
+      },
+      "src/app.mjs": {
+        "bytesInOutput": 44883
+      },
+      "src/boot.mjs": {
+        "bytesInOutput": 557
+      }
+    },
+    "files": [
+      {
+        "file": ".state-owned",
+        "bytes": 15,
+        "sha256": "a2705d8194680bfeee72cb3ee35b3006f9ca6170afcff01426df4941d8794c23",
+        "kind": "static"
+      },
+      {
+        "file": "app.js",
+        "bytes": 118604,
+        "sha256": "e31d70707a8724a9d9e883fe51ef64c2338027bbb89e61643b6fd82221b83631",
+        "kind": "runtime"
+      },
+      {
+        "file": "app.js.map",
+        "bytes": 355520,
+        "sha256": "18cad50098555ab416f76840dbff7fe06c7acf7147c6cbfecc46f23d8ce5d03a",
+        "kind": "source-map"
+      },
+      {
+        "file": "index.html",
+        "bytes": 626,
+        "sha256": "2755c0885ae354cbc3b8efd1d20057baa429bdcb2fb4fea81fac61c122a66fb6",
+        "kind": "static"
+      },
+      {
+        "file": "placeholder.svg",
+        "bytes": 311,
+        "sha256": "f914d2680cf7b2abd7dce22654cbb71718e20e00b02c0d67ae0bd1f612861f05",
+        "kind": "static"
+      },
+      {
+        "file": "refinements.css",
+        "bytes": 1583,
+        "sha256": "183be3794944334ebb2db5c63ea2206bebe6ef769630ef7adde30469f9c47431",
+        "kind": "static"
+      },
+      {
+        "file": "state.manifest.json",
+        "bytes": 7780,
+        "sha256": "78c57e2921b1b39af2fa258302bb3fad764e99ea0cc1b054b534fc8b37bb029a",
+        "kind": "metadata"
+      },
+      {
+        "file": "style.css",
+        "bytes": 19119,
+        "sha256": "3cb55aa188e46b8c20db10a9e19f302cffa57bf55312c9ef1913adfbff638c5f",
+        "kind": "static"
+      }
+    ]
+  }
+]

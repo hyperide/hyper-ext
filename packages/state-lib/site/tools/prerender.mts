@@ -6,7 +6,10 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { ROUTES } from '../src/lib/routes';
+import { evidenceDownload } from '../src/data/research';
+import rawEvidence from '../../docs/research/datasets/2026-09-20-public-evidence.json';
 import { EXAMPLES } from '../src/data/examples';
+import { LAB_EXAMPLES } from '../src/data/example-lab/catalogue';
 import { LIBS } from '../src/data/compare';
 import { serveStatic } from './static-server.mts';
 const origin = (process.env.SITE_URL ?? 'https://state-lib.vercel.app').replace(/\/$/, '');
@@ -20,6 +23,7 @@ export const routes = [
     '/repl/snippet',
     '/concepts/practical',
     ...EXAMPLES.map((e) => `/repl/${e.id}`),
+    ...LAB_EXAMPLES.map((e) => `/repl/${e.id}`),
     ...LIBS.filter((l) => l.id !== 'state').map((l) => `/lib/${l.id}`),
   ]),
 ];
@@ -47,6 +51,7 @@ export async function prerender(directory = 'dist-served', selectedRoutes = rout
       if (errors.length) throw new Error(`${route}: ${errors.join('; ')}`);
       const markdown = await page.evaluate(() => window.__STATE_DOCS__!.markdown());
       const title =
+        LAB_EXAMPLES.find((e) => route === `/repl/${e.id}`)?.title ??
         EXAMPLES.find((e) => route === `/repl/${e.id}`)?.title ??
         (await page.locator('#page-content h1').first().innerText());
       await page.evaluate(() => {
@@ -87,6 +92,9 @@ export async function prerender(directory = 'dist-served', selectedRoutes = rout
       .filter((m) => m.route.startsWith('/repl/'))
       .map((m) => `- [${m.title}](${origin + m.markdown}): code, scaffolding and explanation`)
       .join('\n')}\n\n## Optional\n\n- [Complete corpus](${origin}/llms-full.txt): larger combined export\n`;
+    const evidencePath = resolve(out, evidenceDownload.slice(1));
+    await mkdir(dirname(evidencePath), { recursive: true });
+    await writeFile(evidencePath, JSON.stringify(rawEvidence, null, 2) + '\n');
     await writeFile(resolve(out, 'llms.txt'), index);
     await writeFile(resolve(out, 'llms-full.txt'), all.join('\n\n---\n\n'));
     await writeFile(
