@@ -10,5 +10,79 @@
     "unicorn/prefer-node-protocol": "error",
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "warn"
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "packages/state-lib/build-tools/bundle.mjs",
+        "packages/state-lib/build-tools/config-inputs.mjs",
+        "packages/state-lib/experiments/2026-09-18-compiler/browser-probe.mjs",
+        "packages/state-lib/experiments/2026-09-18-compiler/build-wasm.mjs",
+        "packages/state-lib/experiments/2026-09-18-compiler/measure-projection.mjs",
+        "packages/state-lib/experiments/2026-09-18-compiler/run-browser.mjs",
+        "packages/state-lib/experiments/2026-09-19-cow/verify-selection.mjs",
+        "packages/state-lib/experiments/2026-09-20-hybrid/dense-probe.mjs",
+        "packages/state-lib/experiments/2026-09-20-hybrid/measure-generated.mjs",
+        "packages/state-lib/experiments/2026-09-23-command-builder/browser-workload.mjs",
+        "packages/state-lib/experiments/2026-09-23-command-builder/measure-browser.mjs",
+        "packages/state-lib/experiments/2026-09-23-command-builder/measure-size.mjs",
+        "packages/state-lib/experiments/2026-09-23-command-builder/measure.mjs"
+      ],
+      "rules": {
+        "prefer-template": "off"
+      }
+    },
+    {
+      "files": [
+        "packages/state-lib/experiments/2026-09-19-cow/json-draft.mjs",
+        "packages/state-lib/experiments/2026-09-20-hybrid/dense-probe.mjs",
+        "packages/state-lib/experiments/2026-09-23-command-builder/capture.test.mjs",
+        "packages/state-lib/experiments/2026-09-23-command-builder/commands.test.mjs",
+        "packages/state-lib/experiments/2026-09-23-command-builder/dense-copy.test.mjs",
+        "packages/state-lib/tests/immutable-row-delta.test.mjs"
+      ],
+      "rules": {
+        "unicorn/no-new-array": "off"
+      }
+    },
+    {
+      "files": ["packages/state-lib/experiments/2026-09-18-compiler/browser-probe.mjs"],
+      "rules": {
+        "no-unused-vars": [
+          "warn",
+          {
+            "varsIgnorePattern": "^startup$"
+          }
+        ],
+        "no-unused-expressions": [
+          "warn",
+          {
+            "allowTernary": true
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/state-lib/experiments/2026-09-18-compiler/run-browser.mjs"],
+      "rules": {
+        "no-unused-vars": [
+          "warn",
+          {
+            "varsIgnorePattern": "^fileURLToPath$"
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/state-lib/experiments/2026-09-19-cow/verify-selection.mjs"],
+      "rules": {
+        "no-unused-vars": [
+          "warn",
+          {
+            "varsIgnorePattern": "^forced$"
+          }
+        ]
+      }
+    }
+  ]
 }

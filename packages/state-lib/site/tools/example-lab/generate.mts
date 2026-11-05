@@ -11,8 +11,8 @@ mkdirSync(out, { recursive: true });
 const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const common: Record<string, string> = {};
 for (const name of ['json-draft.mjs', 'document-publication.mjs'])
-  common['src/core/' + name] = readFileSync(resolve(source, 'experiments/2026-09-19-cow', name), 'utf8');
-for (const name of ['core.js']) common['src/state-lib/' + name] = readFileSync(resolve(runtime, name), 'utf8');
+  common[`src/core/${name}`] = readFileSync(resolve(source, 'experiments/2026-09-19-cow', name), 'utf8');
+for (const name of ['core.js']) common[`src/state-lib/${name}`] = readFileSync(resolve(runtime, name), 'utf8');
 const declarations: Record<string, Record<string, unknown>> = {
   point: { operation: 'toggle', path: ['columns', { arg: 'column' }, 'items', { arg: 'index' }, 'done'] },
   dense: { operation: 'groups', path: ['columns'], itemsField: 'items', field: 'text', value: { arg: 'text' } },
@@ -127,7 +127,7 @@ export function createModel(count = 30, historyLimit = 40) {
     minimumSamples: 3,
     units,
   };
-  files['state.config.json'] = JSON.stringify(config, null, 2) + '\n';
+  files['state.config.json'] = `${JSON.stringify(config, null, 2)}\n`;
   const project = {
     ...meta,
     files,
@@ -137,7 +137,7 @@ export function createModel(count = 30, historyLimit = 40) {
     defaultFile: 'src/entry.ts',
     sourceRevision: 'dbdfc07d0b25fa12f6f395305a25d88b6b838052',
   };
-  writeFileSync(resolve(out, meta.id + '.json'), JSON.stringify(project));
+  writeFileSync(resolve(out, `${meta.id}.json`), JSON.stringify(project));
 }
 for (const name of ['statec.js', 'statec_bg.wasm'])
   copyFileSync(resolve(source, 'compiler/pkg-web', name), resolve(out, name));
@@ -166,7 +166,7 @@ execFileSync(resolve('../../../node_modules/.bin/oxfmt'), [
   resolve(out, 'statec.js'),
   resolve(binding, 'statec.js'),
   resolve(binding, 'statec.d.ts'),
-  ...LAB_EXAMPLES.map((example) => resolve(out, example.id + '.json')),
+  ...LAB_EXAMPLES.map((example) => resolve(out, `${example.id}.json`)),
 ]);
 const compilerInputs = [
   'compiler/Cargo.toml',
@@ -187,11 +187,11 @@ const provenance = {
   ),
   rustSources: Object.fromEntries(compilerInputs.map((p) => [p, digest(readFileSync(resolve(source, p)))])),
   assets: Object.fromEntries(
-    ['statec.js', 'statec_bg.wasm', 'esbuild.wasm', ...LAB_EXAMPLES.map((p) => p.id + '.json')].map((name) => [
+    ['statec.js', 'statec_bg.wasm', 'esbuild.wasm', ...LAB_EXAMPLES.map((p) => `${p.id}.json`)].map((name) => [
       name,
       { sha256: digest(readFileSync(resolve(out, name))), bytes: readFileSync(resolve(out, name)).byteLength },
     ]),
   ),
 };
-writeFileSync(resolve(out, 'provenance.json'), JSON.stringify(provenance, null, 2) + '\n');
-console.log('Generated real compiler assets and ' + LAB_EXAMPLES.length + ' editable multi-file projects.');
+writeFileSync(resolve(out, 'provenance.json'), `${JSON.stringify(provenance, null, 2)}\n`);
+console.log(`Generated real compiler assets and ${LAB_EXAMPLES.length} editable multi-file projects.`);

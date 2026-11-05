@@ -1,13 +1,29 @@
 /** Materialize runtime dependencies inside the prebuilt function, not Bun cache mappings. */
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync, realpathSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { assertPackageName, assertOnlyPgMappings } from './package-server-contract.mjs';
 const root = resolve('.');
 const target = resolve('.vercel/output/functions/api/measurements.func');
 const configPath = join(target, '.vc-config.json');
-if (!existsSync(configPath)) throw new Error('Build the Vercel measurements function first');
-const config = JSON.parse(readFileSync(configPath, 'utf8'));
+let config;
+try {
+  config = JSON.parse(readFileSync(configPath, 'utf8'));
+} catch (error) {
+  if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+    throw new Error('Build the Vercel measurements function first', { cause: error });
+  throw error;
+}
 if (config.handler !== 'api/measurements.mjs' || !String(config.runtime).startsWith('nodejs'))
   throw new Error('Unexpected server artifact');
 assertOnlyPgMappings(config.filePathMap);
@@ -50,6 +66,18 @@ copyDependency('pg', root, target, new Map());
 // The known pg mappings are now satisfied by a self-contained JS driver tree.
 // Optional pg-native is not used by this service's pg.Pool configuration.
 delete config.filePathMap;
-writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
-writeFileSync(join(target, 'dependency-inventory.json'), `${JSON.stringify(copied, null, 2)}\n`);
+// Replace each metadata entry atomically so substituted links cannot redirect either write.
+const staging = mkdtempSync(join(target, '.metadata-'));
+try {
+  for (const [name, value] of [
+    ['.vc-config.json', config],
+    ['dependency-inventory.json', copied],
+  ] as const) {
+    const stagedFile = join(staging, name);
+    writeFileSync(stagedFile, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx' });
+    renameSync(stagedFile, join(target, name));
+  }
+} finally {
+  rmSync(staging, { recursive: true, force: true });
+}
 console.log(`Packaged ${copied.length} JavaScript dependency instances inside the measurements function.`);

@@ -11,6 +11,9 @@ const samples = [
   '<scr<script>ipt>alert(1)</scr</script>ipt>',
   '<img src=x onerror="alert(1)">',
   '&lt;script&gt; &amp; &#60;script&#62;',
+  `store["quoted"]; const text = 'single & double " quotes';`,
+  `name" onmouseover='alert(1)' data-forged="x`,
+  `"' &quot; &#39; &amp;quot; </span><iframe src="//example.invalid">`,
 ];
 const browser = await chromium.launch({ headless: true });
 try {

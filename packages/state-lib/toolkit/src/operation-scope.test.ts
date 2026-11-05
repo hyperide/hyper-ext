@@ -465,9 +465,11 @@ test('async feedback reads a lazy then getter once and preserves its receiver wh
   let calls = 0;
   let receiver: unknown;
   const thenable = {
+    // oxlint-disable-next-line unicorn/no-thenable -- Exercise lazy thenable assimilation and getter call count.
     get then() {
       reads++;
       return function (this: unknown, _resolve: (value: unknown) => void, reject: (error: unknown) => void) {
+        // oxlint-disable-next-line typescript/no-this-alias -- Record the actual call receiver for the identity assertion.
         receiver = this;
         calls++;
         reject(new Error('rejected lazy feedback'));

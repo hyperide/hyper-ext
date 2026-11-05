@@ -30,8 +30,9 @@ const built = await build({
   ],
 });
 const { submitMeasurement } = await import(
-  'data:text/javascript;base64,' +
-    Buffer.from(built.outputFiles[0].text + '\n//# sourceURL=measurement-client-under-test.mjs').toString('base64')
+  `data:text/javascript;base64,${Buffer.from(
+    `${built.outputFiles[0].text}\n//# sourceURL=measurement-client-under-test.mjs`,
+  ).toString('base64')}`
 );
 
 const result: BenchmarkResult = {

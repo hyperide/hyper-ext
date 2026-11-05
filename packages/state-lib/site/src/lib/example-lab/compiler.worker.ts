@@ -173,6 +173,8 @@ async function compile(project: ExampleProject, edits: Record<string, string>): 
 }
 self.addEventListener(
   'message',
+  // codeql[js/missing-origin-check] Dedicated worker, not Window: client.ts compileProject owns the only Worker reference.
+  // Requests arrive on its private implicit MessagePort; an origin string does not authenticate that channel.
   async (event: MessageEvent<{ id: number; project: ExampleProject; edits: Record<string, string> }>) => {
     const { id, project, edits } = event.data;
     try {

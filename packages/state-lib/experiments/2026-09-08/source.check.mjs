@@ -26,7 +26,7 @@ for (const c of cases) {
 }
 
 test('nested delimiters and escaped strings preserve exact slices', () => {
-  const code = `() => ({ value: ["),]", ${JSON.stringify('escaped " ),')}, \`],)\`] })`;
+  const code = '() => ({ value: ["),]", "escaped \\" ),", `],)`] })';
   const native = "() => ({ nested: [(1 + 2)], text: 'comma,)' })";
   for (const separator of [',', ',\n  ']) {
     const source = `  add (\n  ${['"edge"', "'title'", "'family'", code, native, "'note'"].join(separator)},\n);`;

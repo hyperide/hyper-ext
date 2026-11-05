@@ -111,3 +111,16 @@ export function pageMarkdown(root: Element, url: string): string {
 export function markdownPath(route: string): string {
   return route === '/' ? '/index.md' : `${route.replace(/\/+$/, '')}.md`;
 }
+
+/** Documentation paths are canonical root-relative segments, never URL authority or encoded separators. */
+export function markdownRequestUrl(route: string, origin: string): URL | null {
+  if (!/^\/(?:[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*\/?)?$/.test(route)) return null;
+  try {
+    const url = new URL(origin);
+    if (url.origin !== origin || (url.protocol !== 'https:' && url.protocol !== 'http:')) return null;
+    url.pathname = markdownPath(route);
+    return url;
+  } catch {
+    return null;
+  }
+}

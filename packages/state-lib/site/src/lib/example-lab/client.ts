@@ -12,11 +12,13 @@ import type {
   VariantId,
 } from './types';
 export async function loadProject(id: string, signal?: AbortSignal): Promise<ExampleProject> {
-  if (!LAB_EXAMPLES.some((example) => example.id === id)) throw new Error('Unknown example');
-  const response = await fetch(`/lab/${id}.json`, { signal });
+  const example = LAB_EXAMPLES.find((entry) => entry.id === id);
+  if (!example) throw new Error('Unknown example');
+  const exampleId = example.id;
+  const response = await fetch(`/lab/${exampleId}.json`, { signal });
   if (!response.ok) throw new Error('Could not load the example source');
   const project: ExampleProject = await response.json();
-  if (project.id !== id || !project.files) throw new Error('Invalid example source');
+  if (project.id !== exampleId || !project.files) throw new Error('Invalid example source');
   return project;
 }
 export function compileProject(

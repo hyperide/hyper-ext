@@ -2,6 +2,8 @@
 function executeWorker() {
   const scope = self;
 
+  // codeql[js/missing-origin-check] Dedicated worker owned only by execution-sandbox.ts's opaque-origin iframe.
+  // Its Window bootstrap checks parent + random token, then uses a private MessageChannel; connect-src is 'none'.
   scope.addEventListener('message', async (event) => {
     let active;
     try {

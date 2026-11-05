@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { chromium, firefox, webkit } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import type * as ExampleLabClient from '../src/lib/example-lab/client';
+import type * as ExecutionSandbox from '../src/lib/example-lab/execution-sandbox';
 const origin = process.env.LAB_BASE_URL ?? 'http://127.0.0.1:6919';
 mkdirSync('tools/artifacts/example-lab', { recursive: true });
 for (const [name, engine] of [
@@ -13,11 +15,11 @@ for (const [name, engine] of [
     const page = await browser.newPage();
     const requests: string[] = [];
     page.on('request', (r) => requests.push(r.url()));
-    await page.goto(origin + '/');
+    await page.goto(`${origin}/`);
     assert(!requests.some((url) => url.endsWith('.wasm')), 'Compiler assets must not load on the landing page');
     const results = await page.evaluate(async () => {
       const modulePath = '/src/lib/example-lab/client.ts';
-      const api: typeof import('../src/lib/example-lab/client') = await import(modulePath);
+      const api: typeof ExampleLabClient = await import(modulePath);
       const output = [];
       for (const id of ['board-commands', 'issue-triage']) {
         const project = await api.loadProject(id),
@@ -48,7 +50,7 @@ for (const [name, engine] of [
     }
     const checks = await page.evaluate(async () => {
       const modulePath = '/src/lib/example-lab/client.ts';
-      const api: typeof import('../src/lib/example-lab/client') = await import(modulePath);
+      const api: typeof ExampleLabClient = await import(modulePath);
       const project = await api.loadProject('board-commands');
       let invalid = false;
       try {
@@ -66,7 +68,7 @@ for (const [name, engine] of [
         cancelled = (error as Error).name === 'AbortError';
       }
       const sandboxPath = '/src/lib/example-lab/execution-sandbox.ts';
-      const sandbox: typeof import('../src/lib/example-lab/execution-sandbox') = await import(sandboxPath);
+      const sandbox: typeof ExecutionSandbox = await import(sandboxPath);
       const running = new AbortController();
       const run = sandbox.executeInSandbox(
         {

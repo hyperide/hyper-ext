@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 const object = (value, keys) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw TypeError('Expected an object');
   if (Object.keys(value).some((key) => !keys.includes(key))) throw TypeError('Unknown measurement field');
-  for (const key of keys) if (!Object.hasOwn(value, key)) throw TypeError('Missing measurement field: ' + key);
+  for (const key of keys) if (!Object.hasOwn(value, key)) throw TypeError(`Missing measurement field: ${key}`);
 };
 const integer = (n, min, max) => {
   if (!Number.isSafeInteger(n) || n < min || n > max) throw TypeError('Invalid integer condition');
@@ -12,7 +12,7 @@ const number = (n, min, max) => {
   if (typeof n !== 'number' || !Number.isFinite(n) || n < min || n > max) throw TypeError('Invalid timing');
 };
 const hash = (value, length) => {
-  if (typeof value !== 'string' || !new RegExp('^[a-f0-9]{' + length + '}$').test(value))
+  if (typeof value !== 'string' || !new RegExp(`^[a-f0-9]{${length}}$`).test(value))
     throw TypeError('Invalid source identity');
 };
 export function validateMeasurement(input) {

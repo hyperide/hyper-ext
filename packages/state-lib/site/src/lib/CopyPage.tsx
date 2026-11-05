@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { currentRoute, HISTORY_MODE, useRoute } from './router';
-import { pageMarkdown, markdownPath } from './page-markdown';
+import { pageMarkdown, markdownRequestUrl } from './page-markdown';
 
 declare global {
   interface Window {
@@ -9,6 +9,7 @@ declare global {
 }
 export function CopyPage() {
   const route = useRoute();
+  const markdownUrl = markdownRequestUrl(route, HISTORY_MODE ? location.origin : 'https://state-lib.vercel.app');
   const [status, setStatus] = useState('');
   const menu = useRef<HTMLDetailsElement>(null);
   const current = () =>
@@ -38,9 +39,9 @@ export function CopyPage() {
   const copy = async (kind: 'page' | 'url') => {
     try {
       let value = kind === 'url' ? location.href : current();
-      if (kind === 'page' && HISTORY_MODE) {
+      if (kind === 'page' && HISTORY_MODE && markdownUrl) {
         try {
-          const response = await fetch(markdownPath(route));
+          const response = await fetch(markdownUrl.href, { mode: 'same-origin' });
           if (response.ok && /text\/(plain|markdown)/.test(response.headers.get('content-type') ?? ''))
             value = await response.text();
         } catch {
@@ -77,10 +78,7 @@ export function CopyPage() {
         <details ref={menu}>
           <summary aria-label="More page actions">▾</summary>
           <div className="copy-menu">
-            <a
-              data-native
-              href={HISTORY_MODE ? markdownPath(route) : `https://state-lib.vercel.app${markdownPath(route)}`}
-            >
+            <a data-native href={markdownUrl ? (HISTORY_MODE ? markdownUrl.pathname : markdownUrl.href) : undefined}>
               View Markdown
             </a>
             <button type="button" onClick={() => void copy('url')}>

@@ -8,17 +8,17 @@ const browser = await chromium.launch();
 mkdirSync('tools/artifacts/research-focus', { recursive: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 920 } });
-  await page.goto(server.url + '/');
+  await page.goto(`${server.url}/`);
   assert.equal(await page.locator('a[href^="/blog"]').count(), 0, 'Withdraw premature marketing links');
   for (const slug of ['', '/generate-less-ship-less', '/a-faster-edit-is-not-a-faster-product']) {
-    const response = await page.request.get(server.url + '/blog' + slug);
+    const response = await page.request.get(`${server.url}/blog${slug}`);
     assert.equal(response.status(), 404, 'Withdraw listing and article HTML, not just navigation');
   }
   for (const file of ['sitemap.xml', 'llms.txt'])
-    assert(!readFileSync('dist-served/' + file, 'utf8').includes('/blog'));
+    assert(!readFileSync(`dist-served/${file}`, 'utf8').includes('/blog'));
   for (const slug of ['generate-less-ship-less', 'a-faster-edit-is-not-a-faster-product'])
-    assert(!existsSync('dist-served/blog/' + slug + '.md'));
-  await page.goto(server.url + '/bench');
+    assert(!existsSync(`dist-served/blog/${slug}.md`));
+  await page.goto(`${server.url}/bench`);
   for (const size of [30, 300, 1200]) {
     await page.locator('[data-research-proof="cow"] select').selectOption(String(size));
     const rows = page.locator('[data-research-proof="cow"] tbody tr');
@@ -50,16 +50,16 @@ try {
       return { best: getComputedStyle(best).backgroundColor, other: getComputedStyle(other).backgroundColor };
     });
   assert.notEqual(styles.best, styles.other, 'Best values must be visually highlighted, not merely tagged');
-  await page.goto(server.url + '/spec');
+  await page.goto(`${server.url}/spec`);
   assert.equal(await page.locator('#algorithm-portfolio').count(), 1, 'Exactly one live portfolio insertion');
-  await page.goto(server.url + '/concepts');
+  await page.goto(`${server.url}/concepts`);
   assert.equal(await page.locator('a[href^="/blog"]').count(), 0);
   assert.equal(
     await page.locator('[data-research-concept] .research-figure').count(),
     0,
     'Remove rejected decorative research diagrams',
   );
-  const evidence = await page.request.get(server.url + '/research/2026-09-20-evidence.json');
+  const evidence = await page.request.get(`${server.url}/research/2026-09-20-evidence.json`);
   assert.equal(evidence.status(), 200, 'Withdrawal must retain research observations');
   console.log('PASS: withdrawn posts, retained evidence, correct best-row cells and mobile bounds');
 } finally {

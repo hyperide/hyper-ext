@@ -61,7 +61,8 @@ const KEYWORD = new Set([
   'continue',
 ]);
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const span = (cls: string, text: string) => `<span class="hl-${cls}">${esc(text)}</span>`;
 
 /** Ordered longest-match-first; the first rule that matches at the cursor wins. */
@@ -187,7 +188,7 @@ export function highlightHtml(html: string): string {
       if (lang && NOT_CODE.has(lang)) return whole;
       const parts = /^(?:ts|tsx|js|jsx|javascript|typescript)$/.test(lang ?? '') ? literateParts(raw) : [];
       if (parts.some((part) => part.kind === 'prose')) {
-        const source = esc(raw).replace(/"/g, '&quot;');
+        const source = esc(raw);
         const body = parts
           .map((part) =>
             !part.text
