@@ -1,0 +1,4687 @@
+{
+  "measuredAt": "2026-09-23T14:54:53.556Z",
+  "node": "v26.7.0",
+  "controllerMethod": "Actual document controller and its one Runtime, history and publication are included. Commands measured are native-generated functions. 17 alternating batches after 3 warmups; batch means are not individual event percentiles. Both columns are explicit; the largest fixture has a 10000-item single column.",
+  "controllerExclusions": [
+    "Initial import, DOM, network and peak memory are not inside operation timings.",
+    "Empty point and move commands compare rejection of invalid access, not useful item work.",
+    "B0 is a weaker mutable baseline; B1 and COW preserve stronger snapshot semantics.",
+    "The compiler profile is local synthetic producer evidence, not a proof over all inputs or future scheduling."
+  ],
+  "nodeComparisons": 2520,
+  "nodeRows": [
+    {
+      "count": 0,
+      "operation": "root",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.00159545898437502,
+      "minMs": 0.001513102050781201,
+      "maxMs": 0.004587870117187504
+    },
+    {
+      "count": 0,
+      "operation": "root",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.006419413574218741,
+      "minMs": 0.005686441894531269,
+      "maxMs": 0.012071675292968737
+    },
+    {
+      "count": 0,
+      "operation": "root",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.0026444091796875013,
+      "minMs": 0.0009977822265624936,
+      "maxMs": 0.007223022460937506
+    },
+    {
+      "count": 0,
+      "operation": "root",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.0004621176757812484,
+      "minMs": 0.00038285351562500347,
+      "maxMs": 0.005640380859374988
+    },
+    {
+      "count": 0,
+      "operation": "item",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.007202758789062513,
+      "minMs": 0.006692687988281265,
+      "maxMs": 0.00862963867187505
+    },
+    {
+      "count": 0,
+      "operation": "item",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.00897326660156239,
+      "minMs": 0.00845312499999995,
+      "maxMs": 0.01108878613281239
+    },
+    {
+      "count": 0,
+      "operation": "item",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.010356872558593744,
+      "minMs": 0.009420206542968712,
+      "maxMs": 0.019220072265624943
+    },
+    {
+      "count": 0,
+      "operation": "item",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.005241943359375112,
+      "minMs": 0.00476987695312503,
+      "maxMs": 0.006252258300781244
+    },
+    {
+      "count": 0,
+      "operation": "sparse",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.0016494345703124136,
+      "minMs": 0.001577188964843712,
+      "maxMs": 0.0033983564453123893
+    },
+    {
+      "count": 0,
+      "operation": "sparse",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.007434305664062446,
+      "minMs": 0.005797729492187598,
+      "maxMs": 0.008991699218749982
+    },
+    {
+      "count": 0,
+      "operation": "sparse",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.004209167480468734,
+      "minMs": 0.002777526855468615,
+      "maxMs": 0.006140441894531223
+    },
+    {
+      "count": 0,
+      "operation": "sparse",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.0005209555664063004,
+      "minMs": 0.0004389038085936825,
+      "maxMs": 0.0026371665039064407
+    },
+    {
+      "count": 0,
+      "operation": "all",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.0016578979492187784,
+      "minMs": 0.0015729575195313483,
+      "maxMs": 0.0027803754882811393
+    },
+    {
+      "count": 0,
+      "operation": "all",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.007979512695312607,
+      "minMs": 0.005882365234374909,
+      "maxMs": 0.009090006347656221
+    },
+    {
+      "count": 0,
+      "operation": "all",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.004411417968749998,
+      "minMs": 0.0028459272460936713,
+      "maxMs": 0.00602667236328136
+    },
+    {
+      "count": 0,
+      "operation": "all",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.0004818320312498514,
+      "minMs": 0.00043918847656265747,
+      "maxMs": 0.002620137695312552
+    },
+    {
+      "count": 0,
+      "operation": "move",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.0050416870117189205,
+      "minMs": 0.004948242187500007,
+      "maxMs": 0.007440328125000173
+    },
+    {
+      "count": 0,
+      "operation": "move",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.007200948242187533,
+      "minMs": 0.006223470214843818,
+      "maxMs": 0.008913980957031331
+    },
+    {
+      "count": 0,
+      "operation": "move",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.007730957031249819,
+      "minMs": 0.006012573242187624,
+      "maxMs": 0.008867899414062519
+    },
+    {
+      "count": 0,
+      "operation": "move",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.00426568603515598,
+      "minMs": 0.004177917480468807,
+      "maxMs": 0.005055928710937518
+    },
+    {
+      "count": 0,
+      "operation": "noop",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.0015479736328121163,
+      "minMs": 0.0015055336914060469,
+      "maxMs": 0.002795328613280912
+    },
+    {
+      "count": 0,
+      "operation": "noop",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.007004129882812737,
+      "minMs": 0.005715861328124738,
+      "maxMs": 0.011163472656249951
+    },
+    {
+      "count": 0,
+      "operation": "noop",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.0009831743164059326,
+      "minMs": 0.000842346191406218,
+      "maxMs": 0.003173441406250088
+    },
+    {
+      "count": 0,
+      "operation": "noop",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.00040812158203129556,
+      "minMs": 0.00035791015625008527,
+      "maxMs": 0.003473612792968872
+    },
+    {
+      "count": 0,
+      "operation": "history",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.0035650224609371506,
+      "minMs": 0.003518859863281598,
+      "maxMs": 0.003662679199218921
+    },
+    {
+      "count": 0,
+      "operation": "history",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.0003682656250001415,
+      "minMs": 0.00034920263671844864,
+      "maxMs": 0.00044118261718750773
+    },
+    {
+      "count": 0,
+      "operation": "history",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.00036920166015619316,
+      "minMs": 0.00034796142578130684,
+      "maxMs": 0.000477539062500032
+    },
+    {
+      "count": 0,
+      "operation": "history",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.00037007666015620444,
+      "minMs": 0.00035107421875002487,
+      "maxMs": 0.0004453125000001279
+    },
+    {
+      "count": 1,
+      "operation": "root",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.0019671630859376954,
+      "minMs": 0.0018874716796872804,
+      "maxMs": 0.0030782670898439335
+    },
+    {
+      "count": 1,
+      "operation": "root",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.008386718749999744,
+      "minMs": 0.007386006835937486,
+      "maxMs": 0.017441060546874887
+    },
+    {
+      "count": 1,
+      "operation": "root",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.001379089355468821,
+      "minMs": 0.0009531455078124473,
+      "maxMs": 0.0051713867187501705
+    },
+    {
+      "count": 1,
+      "operation": "root",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.00045833349609347707,
+      "minMs": 0.0004116010742190035,
+      "maxMs": 0.0045134277343747975
+    },
+    {
+      "count": 1,
+      "operation": "item",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.0020547895507814218,
+      "minMs": 0.0019318237304686292,
+      "maxMs": 0.004002319335937532
+    },
+    {
+      "count": 1,
+      "operation": "item",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.00897271728515614,
+      "minMs": 0.007493021972655889,
+      "maxMs": 0.016870157714843792
+    },
+    {
+      "count": 1,
+      "operation": "item",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.00951637744140621,
+      "minMs": 0.005438802246093388,
+      "maxMs": 0.01476072167968745
+    },
+    {
+      "count": 1,
+      "operation": "item",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.0014248046874998366,
+      "minMs": 0.001142740722655855,
+      "maxMs": 0.005527913574218779
+    },
+    {
+      "count": 1,
+      "operation": "sparse",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.002064046386718754,
+      "minMs": 0.0019569501953125013,
+      "maxMs": 0.005138814453125029
+    },
+    {
+      "count": 1,
+      "operation": "sparse",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.010382751464843576,
+      "minMs": 0.007551493652343755,
+      "maxMs": 0.015505574218749985
+    },
+    {
+      "count": 1,
+      "operation": "sparse",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.00955859375000001,
+      "minMs": 0.006821187011718521,
+      "maxMs": 0.013396687988281197
+    },
+    {
+      "count": 1,
+      "operation": "sparse",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.0013289995117187203,
+      "minMs": 0.0012147626953127322,
+      "maxMs": 0.004201965332031321
+    },
+    {
+      "count": 1,
+      "operation": "all",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.0020780844726564496,
+      "minMs": 0.0020069985351565123,
+      "maxMs": 0.005299438476562557
+    },
+    {
+      "count": 1,
+      "operation": "all",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.009952961914062364,
+      "minMs": 0.007740885742188119,
+      "maxMs": 0.012836547851562408
+    },
+    {
+      "count": 1,
+      "operation": "all",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.009791076660156328,
+      "minMs": 0.0070369057617192254,
+      "maxMs": 0.013739420410155745
+    },
+    {
+      "count": 1,
+      "operation": "all",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.0013757324218746092,
+      "minMs": 0.00114270019531304,
+      "maxMs": 0.0049025468749999135
+    },
+    {
+      "count": 1,
+      "operation": "move",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.0021335654296876783,
+      "minMs": 0.002061055664062117,
+      "maxMs": 0.005595092773437393
+    },
+    {
+      "count": 1,
+      "operation": "move",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.009228515624999822,
+      "minMs": 0.007503295898437123,
+      "maxMs": 0.016018880371093225
+    },
+    {
+      "count": 1,
+      "operation": "move",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.012958658691405667,
+      "minMs": 0.010320719238280596,
+      "maxMs": 0.017315287597655882
+    },
+    {
+      "count": 1,
+      "operation": "move",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.0017379150390626208,
+      "minMs": 0.0015019936523437138,
+      "maxMs": 0.00640871142578181
+    },
+    {
+      "count": 1,
+      "operation": "noop",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.0020167441406249154,
+      "minMs": 0.0018784790039063637,
+      "maxMs": 0.0030631308593749296
+    },
+    {
+      "count": 1,
+      "operation": "noop",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.009221598144531384,
+      "minMs": 0.007288045410156485,
+      "maxMs": 0.011592854980468914
+    },
+    {
+      "count": 1,
+      "operation": "noop",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.0008992309570308166,
+      "minMs": 0.0008378706054683605,
+      "maxMs": 0.006248128417968957
+    },
+    {
+      "count": 1,
+      "operation": "noop",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.00042472314453068094,
+      "minMs": 0.00037648535156264984,
+      "maxMs": 0.0031378784179691976
+    },
+    {
+      "count": 1,
+      "operation": "history",
+      "backend": "baseline",
+      "iterations": 2048,
+      "medianMs": 0.004722249511718957,
+      "minMs": 0.004430216308593415,
+      "maxMs": 0.005098470214843331
+    },
+    {
+      "count": 1,
+      "operation": "history",
+      "backend": "state-lib",
+      "iterations": 2048,
+      "medianMs": 0.0003763222656250065,
+      "minMs": 0.0003562827148435588,
+      "maxMs": 0.0004404091796876841
+    },
+    {
+      "count": 1,
+      "operation": "history",
+      "backend": "state-lib-cow",
+      "iterations": 2048,
+      "medianMs": 0.000379476074218843,
+      "minMs": 0.00035105371093813176,
+      "maxMs": 0.00044669628906301995
+    },
+    {
+      "count": 1,
+      "operation": "history",
+      "backend": "generated",
+      "iterations": 2048,
+      "medianMs": 0.00039369726562465956,
+      "minMs": 0.0003469033203122862,
+      "maxMs": 0.00047129296874981463
+    },
+    {
+      "count": 30,
+      "operation": "root",
+      "backend": "baseline",
+      "iterations": 256,
+      "medianMs": 0.013004070312497618,
+      "minMs": 0.012659667968748067,
+      "maxMs": 0.013124511718750398
+    },
+    {
+      "count": 30,
+      "operation": "root",
+      "backend": "state-lib",
+      "iterations": 256,
+      "medianMs": 0.04973014453125302,
+      "minMs": 0.04715185546874778,
+      "maxMs": 0.1161918945312479
+    },
+    {
+      "count": 30,
+      "operation": "root",
+      "backend": "state-lib-cow",
+      "iterations": 256,
+      "medianMs": 0.0011725273437477313,
+      "minMs": 0.0010804023437458454,
+      "maxMs": 0.03384114453125164
+    },
+    {
+      "count": 30,
+      "operation": "root",
+      "backend": "generated",
+      "iterations": 256,
+      "medianMs": 0.0005284843750033019,
+      "minMs": 0.00045458984374846523,
+      "maxMs": 0.02557535937499722
+    },
+    {
+      "count": 30,
+      "operation": "item",
+      "backend": "baseline",
+      "iterations": 256,
+      "medianMs": 0.01294970703124676,
+      "minMs": 0.012584308593751814,
+      "maxMs": 0.013339843749996305
+    },
+    {
+      "count": 30,
+      "operation": "item",
+      "backend": "state-lib",
+      "iterations": 256,
+      "medianMs": 0.05010042578125251,
+      "minMs": 0.04852701562499817,
+      "maxMs": 0.11938053515625313
+    },
+    {
+      "count": 30,
+      "operation": "item",
+      "backend": "state-lib-cow",
+      "iterations": 256,
+      "medianMs": 0.00746305078125431,
+      "minMs": 0.006639320312501695,
+      "maxMs": 0.13964990234374852
+    },
+    {
+      "count": 30,
+      "operation": "item",
+      "backend": "generated",
+      "iterations": 256,
+      "medianMs": 0.0015818710937480773,
+      "minMs": 0.001412921875001416,
+      "maxMs": 0.0020486640624994834
+    },
+    {
+      "count": 30,
+      "operation": "sparse",
+      "backend": "baseline",
+      "iterations": 256,
+      "medianMs": 0.013181152343747726,
+      "minMs": 0.012665855468753762,
+      "maxMs": 0.031589515625000786
+    },
+    {
+      "count": 30,
+      "operation": "sparse",
+      "backend": "state-lib",
+      "iterations": 256,
+      "medianMs": 0.04947770312499955,
+      "minMs": 0.04782275390624591,
+      "maxMs": 0.1213802109375024
+    },
+    {
+      "count": 30,
+      "operation": "sparse",
+      "backend": "state-lib-cow",
+      "iterations": 256,
+      "medianMs": 0.009591960937498811,
+      "minMs": 0.00819564062500433,
+      "maxMs": 0.055029785156250455
+    },
+    {
+      "count": 30,
+      "operation": "sparse",
+      "backend": "generated",
+      "iterations": 256,
+      "medianMs": 0.001676921874995685,
+      "minMs": 0.0014303359374991942,
+      "maxMs": 0.0018097343749943207
+    },
+    {
+      "count": 30,
+      "operation": "all",
+      "backend": "baseline",
+      "iterations": 256,
+      "medianMs": 0.01335172656249739,
+      "minMs": 0.012803546874998517,
+      "maxMs": 0.04907763671874932
+    },
+    {
+      "count": 30,
+      "operation": "all",
+      "backend": "state-lib",
+      "iterations": 256,
+      "medianMs": 0.05086572265624767,
+      "minMs": 0.04808219531250302,
+      "maxMs": 0.11458691406249955
+    },
+    {
+      "count": 30,
+      "operation": "all",
+      "backend": "state-lib-cow",
+      "iterations": 256,
+      "medianMs": 0.04315039062500148,
+      "minMs": 0.02723307421874921,
+      "maxMs": 0.14037207031249466
+    },
+    {
+      "count": 30,
+      "operation": "all",
+      "backend": "generated",
+      "iterations": 256,
+      "medianMs": 0.005198566406249938,
+      "minMs": 0.004315101562497148,
+      "maxMs": 0.007040039062502501
+    },
+    {
+      "count": 30,
+      "operation": "move",
+      "backend": "baseline",
+      "iterations": 256,
+      "medianMs": 0.013186359375005452,
+      "minMs": 0.012770996093749432,
+      "maxMs": 0.028691406249997442
+    },
+    {
+      "count": 30,
+      "operation": "move",
+      "backend": "state-lib",
+      "iterations": 256,
+      "medianMs": 0.05015624999999346,
+      "minMs": 0.04790934374999978,
+      "maxMs": 0.07526448437500477
+    },
+    {
+      "count": 30,
+      "operation": "move",
+      "backend": "state-lib-cow",
+      "iterations": 256,
+      "medianMs": 0.039253089843754196,
+      "minMs": 0.0320857773437524,
+      "maxMs": 0.06807226562499835
+    },
+    {
+      "count": 30,
+      "operation": "move",
+      "backend": "generated",
+      "iterations": 256,
+      "medianMs": 0.0017916679687530745,
+      "minMs": 0.001434406250005793,
+      "maxMs": 0.03404996484375289
+    },
+    {
+      "count": 30,
+      "operation": "noop",
+      "backend": "baseline",
+      "iterations": 256,
+      "medianMs": 0.013000328125002625,
+      "minMs": 0.012620929687500393,
+      "maxMs": 0.027191570312496083
+    },
+    {
+      "count": 30,
+      "operation": "noop",
+      "backend": "state-lib",
+      "iterations": 256,
+      "medianMs": 0.0486240234374975,
+      "minMs": 0.04693245312499528,
+      "maxMs": 0.11439615624999533
+    },
+    {
+      "count": 30,
+      "operation": "noop",
+      "backend": "state-lib-cow",
+      "iterations": 256,
+      "medianMs": 0.0009430312500029459,
+      "minMs": 0.0008543281250013024,
+      "maxMs": 0.016509929687501312
+    },
+    {
+      "count": 30,
+      "operation": "noop",
+      "backend": "generated",
+      "iterations": 256,
+      "medianMs": 0.0004401015625035143,
+      "minMs": 0.0003875312499985739,
+      "maxMs": 0.0005029296874994316
+    },
+    {
+      "count": 30,
+      "operation": "history",
+      "backend": "baseline",
+      "iterations": 256,
+      "medianMs": 0.02993587109374829,
+      "minMs": 0.029300617187502098,
+      "maxMs": 0.03185742187499585
+    },
+    {
+      "count": 30,
+      "operation": "history",
+      "backend": "state-lib",
+      "iterations": 256,
+      "medianMs": 0.0004666328125040309,
+      "minMs": 0.0004591445312556175,
+      "maxMs": 0.0005369492187483615
+    },
+    {
+      "count": 30,
+      "operation": "history",
+      "backend": "state-lib-cow",
+      "iterations": 256,
+      "medianMs": 0.00046484374999522515,
+      "minMs": 0.00046028515625096134,
+      "maxMs": 0.0005249023437485789
+    },
+    {
+      "count": 30,
+      "operation": "history",
+      "backend": "generated",
+      "iterations": 256,
+      "medianMs": 0.0004637070312512037,
+      "minMs": 0.00045882421874665624,
+      "maxMs": 0.0006365585937544438
+    },
+    {
+      "count": 300,
+      "operation": "root",
+      "backend": "baseline",
+      "iterations": 64,
+      "medianMs": 0.11414778124998293,
+      "minMs": 0.1099576718750086,
+      "maxMs": 0.23921874999999204
+    },
+    {
+      "count": 300,
+      "operation": "root",
+      "backend": "state-lib",
+      "iterations": 64,
+      "medianMs": 0.5113300781249848,
+      "minMs": 0.44695378124998797,
+      "maxMs": 0.9673886718749998
+    },
+    {
+      "count": 300,
+      "operation": "root",
+      "backend": "state-lib-cow",
+      "iterations": 64,
+      "medianMs": 0.001507812499994543,
+      "minMs": 0.0011503906249856755,
+      "maxMs": 0.002214843749982265
+    },
+    {
+      "count": 300,
+      "operation": "root",
+      "backend": "generated",
+      "iterations": 64,
+      "medianMs": 0.000602218750003658,
+      "minMs": 0.0005442656249954325,
+      "maxMs": 0.0006653750000111813
+    },
+    {
+      "count": 300,
+      "operation": "item",
+      "backend": "baseline",
+      "iterations": 64,
+      "medianMs": 0.1129713437500186,
+      "minMs": 0.10858593750000978,
+      "maxMs": 0.22333139062499185
+    },
+    {
+      "count": 300,
+      "operation": "item",
+      "backend": "state-lib",
+      "iterations": 64,
+      "medianMs": 0.5842747343749863,
+      "minMs": 0.48416928124999004,
+      "maxMs": 0.6387734374999923
+    },
+    {
+      "count": 300,
+      "operation": "item",
+      "backend": "state-lib-cow",
+      "iterations": 64,
+      "medianMs": 0.013677078124999298,
+      "minMs": 0.012528000000003203,
+      "maxMs": 0.13749804687498113
+    },
+    {
+      "count": 300,
+      "operation": "item",
+      "backend": "generated",
+      "iterations": 64,
+      "medianMs": 0.0024739531249906577,
+      "minMs": 0.00225846875000002,
+      "maxMs": 0.003251296874992704
+    },
+    {
+      "count": 300,
+      "operation": "sparse",
+      "backend": "baseline",
+      "iterations": 64,
+      "medianMs": 0.11262565625003162,
+      "minMs": 0.11026367187497499,
+      "maxMs": 0.22580339062500343
+    },
+    {
+      "count": 300,
+      "operation": "sparse",
+      "backend": "state-lib",
+      "iterations": 64,
+      "medianMs": 0.6211881406250086,
+      "minMs": 0.4936816406250273,
+      "maxMs": 2.349999999999966
+    },
+    {
+      "count": 300,
+      "operation": "sparse",
+      "backend": "state-lib-cow",
+      "iterations": 64,
+      "medianMs": 0.04616601562497635,
+      "minMs": 0.04279817187500612,
+      "maxMs": 0.1731614531249761
+    },
+    {
+      "count": 300,
+      "operation": "sparse",
+      "backend": "generated",
+      "iterations": 64,
+      "medianMs": 0.009065093749995867,
+      "minMs": 0.008218749999969077,
+      "maxMs": 0.010657562500000495
+    },
+    {
+      "count": 300,
+      "operation": "all",
+      "backend": "baseline",
+      "iterations": 64,
+      "medianMs": 0.11497004687498702,
+      "minMs": 0.11145573437499934,
+      "maxMs": 0.21871874999999363
+    },
+    {
+      "count": 300,
+      "operation": "all",
+      "backend": "state-lib",
+      "iterations": 64,
+      "medianMs": 0.6078509218750128,
+      "minMs": 0.4790540312499729,
+      "maxMs": 0.643634765624995
+    },
+    {
+      "count": 300,
+      "operation": "all",
+      "backend": "state-lib-cow",
+      "iterations": 64,
+      "medianMs": 0.39207031250003865,
+      "minMs": 0.2810039062500209,
+      "maxMs": 4.922848312500037
+    },
+    {
+      "count": 300,
+      "operation": "all",
+      "backend": "generated",
+      "iterations": 64,
+      "medianMs": 0.06735090624999884,
+      "minMs": 0.06111457812500021,
+      "maxMs": 0.16472982812501868
+    },
+    {
+      "count": 300,
+      "operation": "move",
+      "backend": "baseline",
+      "iterations": 64,
+      "medianMs": 0.11405729687504618,
+      "minMs": 0.11039323437501025,
+      "maxMs": 0.18886653125002795
+    },
+    {
+      "count": 300,
+      "operation": "move",
+      "backend": "state-lib",
+      "iterations": 64,
+      "medianMs": 0.5605742187499914,
+      "minMs": 0.4850377656250089,
+      "maxMs": 0.5848027343749891
+    },
+    {
+      "count": 300,
+      "operation": "move",
+      "backend": "state-lib-cow",
+      "iterations": 64,
+      "medianMs": 0.3396015625000359,
+      "minMs": 0.24224478125000815,
+      "maxMs": 1.4562096406249907
+    },
+    {
+      "count": 300,
+      "operation": "move",
+      "backend": "generated",
+      "iterations": 64,
+      "medianMs": 0.0029628906250422915,
+      "minMs": 0.002668609375007236,
+      "maxMs": 0.10084506250001368
+    },
+    {
+      "count": 300,
+      "operation": "noop",
+      "backend": "baseline",
+      "iterations": 64,
+      "medianMs": 0.11290170312503278,
+      "minMs": 0.11009765625004775,
+      "maxMs": 0.2469850312500057
+    },
+    {
+      "count": 300,
+      "operation": "noop",
+      "backend": "state-lib",
+      "iterations": 64,
+      "medianMs": 0.4915097656249827,
+      "minMs": 0.4848984375000214,
+      "maxMs": 0.626225265624953
+    },
+    {
+      "count": 300,
+      "operation": "noop",
+      "backend": "state-lib-cow",
+      "iterations": 64,
+      "medianMs": 0.0011302187500064065,
+      "minMs": 0.0010123750000161635,
+      "maxMs": 0.0012929687500218279
+    },
+    {
+      "count": 300,
+      "operation": "noop",
+      "backend": "generated",
+      "iterations": 64,
+      "medianMs": 0.0005911406250334039,
+      "minMs": 0.0005677031250002074,
+      "maxMs": 0.0006660156249722604
+    },
+    {
+      "count": 300,
+      "operation": "history",
+      "backend": "baseline",
+      "iterations": 64,
+      "medianMs": 0.2660729218750362,
+      "minMs": 0.25621939062494903,
+      "maxMs": 0.3133222656250041
+    },
+    {
+      "count": 300,
+      "operation": "history",
+      "backend": "state-lib",
+      "iterations": 64,
+      "medianMs": 0.00037564062500905493,
+      "minMs": 0.0003613281249954525,
+      "maxMs": 0.0005957031249863576
+    },
+    {
+      "count": 300,
+      "operation": "history",
+      "backend": "state-lib-cow",
+      "iterations": 64,
+      "medianMs": 0.0003736874999731299,
+      "minMs": 0.0003652343750104592,
+      "maxMs": 0.0009140624999872671
+    },
+    {
+      "count": 300,
+      "operation": "history",
+      "backend": "generated",
+      "iterations": 64,
+      "medianMs": 0.00036914062502546585,
+      "minMs": 0.000363937500026168,
+      "maxMs": 0.0005227812500265827
+    },
+    {
+      "count": 1200,
+      "operation": "root",
+      "backend": "baseline",
+      "iterations": 24,
+      "medianMs": 0.4451475416666047,
+      "minMs": 0.43197395833340124,
+      "maxMs": 0.9137934166666734
+    },
+    {
+      "count": 1200,
+      "operation": "root",
+      "backend": "state-lib",
+      "iterations": 24,
+      "medianMs": 2.2949878750000607,
+      "minMs": 1.9534583333334012,
+      "maxMs": 2.5301232499999364
+    },
+    {
+      "count": 1200,
+      "operation": "root",
+      "backend": "state-lib-cow",
+      "iterations": 24,
+      "medianMs": 0.0016284583333193343,
+      "minMs": 0.0012413333333824994,
+      "maxMs": 0.0019218749998799467
+    },
+    {
+      "count": 1200,
+      "operation": "root",
+      "backend": "generated",
+      "iterations": 24,
+      "medianMs": 0.0007638749999993403,
+      "minMs": 0.0006770833332060041,
+      "maxMs": 0.0008871666667194708
+    },
+    {
+      "count": 1200,
+      "operation": "item",
+      "backend": "baseline",
+      "iterations": 24,
+      "medianMs": 0.44327083333337214,
+      "minMs": 0.4289635416666897,
+      "maxMs": 0.969394083333403
+    },
+    {
+      "count": 1200,
+      "operation": "item",
+      "backend": "state-lib",
+      "iterations": 24,
+      "medianMs": 2.3677690833333145,
+      "minMs": 2.2523194583333557,
+      "maxMs": 4.347968750000139
+    },
+    {
+      "count": 1200,
+      "operation": "item",
+      "backend": "state-lib-cow",
+      "iterations": 24,
+      "medianMs": 0.029925374999947962,
+      "minMs": 0.028444458333221217,
+      "maxMs": 0.03276212500001444
+    },
+    {
+      "count": 1200,
+      "operation": "item",
+      "backend": "generated",
+      "iterations": 24,
+      "medianMs": 0.0029652916667449367,
+      "minMs": 0.0027968750000582077,
+      "maxMs": 0.0037222083333290357
+    },
+    {
+      "count": 1200,
+      "operation": "sparse",
+      "backend": "baseline",
+      "iterations": 24,
+      "medianMs": 0.4641302083332448,
+      "minMs": 0.4355937499999527,
+      "maxMs": 7.158163208333311
+    },
+    {
+      "count": 1200,
+      "operation": "sparse",
+      "backend": "state-lib",
+      "iterations": 24,
+      "medianMs": 2.199770833333332,
+      "minMs": 1.923038166666629,
+      "maxMs": 2.498960083333259
+    },
+    {
+      "count": 1200,
+      "operation": "sparse",
+      "backend": "state-lib-cow",
+      "iterations": 24,
+      "medianMs": 0.16089408333330843,
+      "minMs": 0.14575345833342604,
+      "maxMs": 0.37881595833338605
+    },
+    {
+      "count": 1200,
+      "operation": "sparse",
+      "backend": "generated",
+      "iterations": 24,
+      "medianMs": 0.02949479166666909,
+      "minMs": 0.02727950000007695,
+      "maxMs": 0.04070487499999823
+    },
+    {
+      "count": 1200,
+      "operation": "all",
+      "backend": "baseline",
+      "iterations": 24,
+      "medianMs": 0.45664929166665996,
+      "minMs": 0.43909725000003164,
+      "maxMs": 0.7468507083334165
+    },
+    {
+      "count": 1200,
+      "operation": "all",
+      "backend": "state-lib",
+      "iterations": 24,
+      "medianMs": 2.2478455000000395,
+      "minMs": 1.9322725416665587,
+      "maxMs": 8.409361125000032
+    },
+    {
+      "count": 1200,
+      "operation": "all",
+      "backend": "state-lib-cow",
+      "iterations": 24,
+      "medianMs": 1.4901510416666497,
+      "minMs": 1.2865763749999435,
+      "maxMs": 1.895397583333306
+    },
+    {
+      "count": 1200,
+      "operation": "all",
+      "backend": "generated",
+      "iterations": 24,
+      "medianMs": 0.2761267500000031,
+      "minMs": 0.24338541666656965,
+      "maxMs": 0.5362048333333101
+    },
+    {
+      "count": 1200,
+      "operation": "move",
+      "backend": "baseline",
+      "iterations": 24,
+      "medianMs": 0.4531875000000885,
+      "minMs": 0.4307968750000934,
+      "maxMs": 0.638645833333309
+    },
+    {
+      "count": 1200,
+      "operation": "move",
+      "backend": "state-lib",
+      "iterations": 24,
+      "medianMs": 2.1363941250000003,
+      "minMs": 1.9274895833333783,
+      "maxMs": 2.2820642499999244
+    },
+    {
+      "count": 1200,
+      "operation": "move",
+      "backend": "state-lib-cow",
+      "iterations": 24,
+      "medianMs": 1.3074669999999362,
+      "minMs": 1.2527725833333534,
+      "maxMs": 6.067253500000031
+    },
+    {
+      "count": 1200,
+      "operation": "move",
+      "backend": "generated",
+      "iterations": 24,
+      "medianMs": 0.0034704999999727684,
+      "minMs": 0.003166666666705472,
+      "maxMs": 0.003921874999984236
+    },
+    {
+      "count": 1200,
+      "operation": "noop",
+      "backend": "baseline",
+      "iterations": 24,
+      "medianMs": 0.447480916666791,
+      "minMs": 0.4305294999997689,
+      "maxMs": 0.9341423750000407
+    },
+    {
+      "count": 1200,
+      "operation": "noop",
+      "backend": "state-lib",
+      "iterations": 24,
+      "medianMs": 2.216133666666792,
+      "minMs": 1.913668416666951,
+      "maxMs": 2.4514635416668775
+    },
+    {
+      "count": 1200,
+      "operation": "noop",
+      "backend": "state-lib-cow",
+      "iterations": 24,
+      "medianMs": 0.0015208333334157942,
+      "minMs": 0.0011961666665835462,
+      "maxMs": 0.001750000000053357
+    },
+    {
+      "count": 1200,
+      "operation": "noop",
+      "backend": "generated",
+      "iterations": 24,
+      "medianMs": 0.0007014166667431709,
+      "minMs": 0.0006544999999581099,
+      "maxMs": 0.0009861249997508519
+    },
+    {
+      "count": 1200,
+      "operation": "history",
+      "backend": "baseline",
+      "iterations": 24,
+      "medianMs": 1.0437968749999225,
+      "minMs": 1.0097812500001357,
+      "maxMs": 1.1890902916666164
+    },
+    {
+      "count": 1200,
+      "operation": "history",
+      "backend": "state-lib",
+      "iterations": 24,
+      "medianMs": 0.0006163333331035877,
+      "minMs": 0.0005312500000703343,
+      "maxMs": 0.000918416666839524
+    },
+    {
+      "count": 1200,
+      "operation": "history",
+      "backend": "state-lib-cow",
+      "iterations": 24,
+      "medianMs": 0.0005607500000526974,
+      "minMs": 0.000548624999889095,
+      "maxMs": 0.000583333333452174
+    },
+    {
+      "count": 1200,
+      "operation": "history",
+      "backend": "generated",
+      "iterations": 24,
+      "medianMs": 0.0005451249999168795,
+      "minMs": 0.000533000000056442,
+      "maxMs": 0.0008455000000443155
+    },
+    {
+      "count": 10000,
+      "operation": "root",
+      "backend": "baseline",
+      "iterations": 8,
+      "medianMs": 4.023468750000575,
+      "minMs": 3.737645875000453,
+      "maxMs": 5.449328124999738
+    },
+    {
+      "count": 10000,
+      "operation": "root",
+      "backend": "state-lib",
+      "iterations": 8,
+      "medianMs": 19.222583374999886,
+      "minMs": 17.40656775000025,
+      "maxMs": 44.23949474999972
+    },
+    {
+      "count": 10000,
+      "operation": "root",
+      "backend": "state-lib-cow",
+      "iterations": 8,
+      "medianMs": 0.004885374999503256,
+      "minMs": 0.0036249999993742676,
+      "maxMs": 0.007244750000609201
+    },
+    {
+      "count": 10000,
+      "operation": "root",
+      "backend": "generated",
+      "iterations": 8,
+      "medianMs": 0.0019010000005437178,
+      "minMs": 0.001307249999626947,
+      "maxMs": 0.0028593750002983143
+    },
+    {
+      "count": 10000,
+      "operation": "item",
+      "backend": "baseline",
+      "iterations": 8,
+      "medianMs": 4.147520874999827,
+      "minMs": 4.023650999999518,
+      "maxMs": 5.220192750000024
+    },
+    {
+      "count": 10000,
+      "operation": "item",
+      "backend": "state-lib",
+      "iterations": 8,
+      "medianMs": 18.501812499999687,
+      "minMs": 17.544812500000262,
+      "maxMs": 82.41659375000017
+    },
+    {
+      "count": 10000,
+      "operation": "item",
+      "backend": "state-lib-cow",
+      "iterations": 8,
+      "medianMs": 0.19292700000005425,
+      "minMs": 0.18586450000020704,
+      "maxMs": 0.20866662500066013
+    },
+    {
+      "count": 10000,
+      "operation": "item",
+      "backend": "generated",
+      "iterations": 8,
+      "medianMs": 0.0062447500004054746,
+      "minMs": 0.005624999999781721,
+      "maxMs": 0.007671874999687134
+    },
+    {
+      "count": 10000,
+      "operation": "sparse",
+      "backend": "baseline",
+      "iterations": 8,
+      "medianMs": 4.509119875000579,
+      "minMs": 3.791166625000187,
+      "maxMs": 5.64680212499934
+    },
+    {
+      "count": 10000,
+      "operation": "sparse",
+      "backend": "state-lib",
+      "iterations": 8,
+      "medianMs": 20.027026124999793,
+      "minMs": 18.32948949999991,
+      "maxMs": 83.72639587499998
+    },
+    {
+      "count": 10000,
+      "operation": "sparse",
+      "backend": "state-lib-cow",
+      "iterations": 8,
+      "medianMs": 1.3691198750002513,
+      "minMs": 1.3255156249997526,
+      "maxMs": 1.564572875000522
+    },
+    {
+      "count": 10000,
+      "operation": "sparse",
+      "backend": "generated",
+      "iterations": 8,
+      "medianMs": 0.2628958749992307,
+      "minMs": 0.2088646249994781,
+      "maxMs": 2.194593750000422
+    },
+    {
+      "count": 10000,
+      "operation": "all",
+      "backend": "baseline",
+      "iterations": 8,
+      "medianMs": 4.332281250000051,
+      "minMs": 3.8108750000001237,
+      "maxMs": 5.778437500000109
+    },
+    {
+      "count": 10000,
+      "operation": "all",
+      "backend": "state-lib",
+      "iterations": 8,
+      "medianMs": 19.770150999999714,
+      "minMs": 18.025458250000156,
+      "maxMs": 21.103911500000322
+    },
+    {
+      "count": 10000,
+      "operation": "all",
+      "backend": "state-lib-cow",
+      "iterations": 8,
+      "medianMs": 16.333604250000462,
+      "minMs": 15.401833375000024,
+      "maxMs": 74.61616150000009
+    },
+    {
+      "count": 10000,
+      "operation": "all",
+      "backend": "generated",
+      "iterations": 8,
+      "medianMs": 2.497546874999898,
+      "minMs": 2.106187499999578,
+      "maxMs": 4.027583250000134
+    },
+    {
+      "count": 10000,
+      "operation": "move",
+      "backend": "baseline",
+      "iterations": 8,
+      "medianMs": 4.175078124999345,
+      "minMs": 3.8043802499996673,
+      "maxMs": 5.8867656250004075
+    },
+    {
+      "count": 10000,
+      "operation": "move",
+      "backend": "state-lib",
+      "iterations": 8,
+      "medianMs": 18.324921875000655,
+      "minMs": 17.2896771249998,
+      "maxMs": 20.169890625000335
+    },
+    {
+      "count": 10000,
+      "operation": "move",
+      "backend": "state-lib-cow",
+      "iterations": 8,
+      "medianMs": 14.941296875000262,
+      "minMs": 14.07577612499972,
+      "maxMs": 64.10030212499987
+    },
+    {
+      "count": 10000,
+      "operation": "move",
+      "backend": "generated",
+      "iterations": 8,
+      "medianMs": 0.007593750000523869,
+      "minMs": 0.007078124999679858,
+      "maxMs": 0.008786500000496744
+    },
+    {
+      "count": 10000,
+      "operation": "noop",
+      "backend": "baseline",
+      "iterations": 8,
+      "medianMs": 4.217708374999347,
+      "minMs": 3.740354124998703,
+      "maxMs": 5.858625000000757
+    },
+    {
+      "count": 10000,
+      "operation": "noop",
+      "backend": "state-lib",
+      "iterations": 8,
+      "medianMs": 20.356510375000653,
+      "minMs": 18.55718749999869,
+      "maxMs": 21.13606775000153
+    },
+    {
+      "count": 10000,
+      "operation": "noop",
+      "backend": "state-lib-cow",
+      "iterations": 8,
+      "medianMs": 0.003328124999825377,
+      "minMs": 0.0024634999990666984,
+      "maxMs": 0.004224000000249362
+    },
+    {
+      "count": 10000,
+      "operation": "noop",
+      "backend": "generated",
+      "iterations": 8,
+      "medianMs": 0.0015988750001270091,
+      "minMs": 0.0012551250001706649,
+      "maxMs": 0.0024374999993597157
+    },
+    {
+      "count": 10000,
+      "operation": "history",
+      "backend": "baseline",
+      "iterations": 8,
+      "medianMs": 8.96644274999926,
+      "minMs": 8.720203124999898,
+      "maxMs": 10.278666625001279
+    },
+    {
+      "count": 10000,
+      "operation": "history",
+      "backend": "state-lib",
+      "iterations": 8,
+      "medianMs": 0.0009478749998379499,
+      "minMs": 0.0007812500007275958,
+      "maxMs": 0.0012031250007566996
+    },
+    {
+      "count": 10000,
+      "operation": "history",
+      "backend": "state-lib-cow",
+      "iterations": 8,
+      "medianMs": 0.0006822499999543652,
+      "minMs": 0.0006301249995885883,
+      "maxMs": 0.0008802499996818369
+    },
+    {
+      "count": 10000,
+      "operation": "history",
+      "backend": "generated",
+      "iterations": 8,
+      "medianMs": 0.0007708749999437714,
+      "minMs": 0.0006250000005820766,
+      "maxMs": 0.0033333749997837003
+    }
+  ],
+  "strictOriginalPassed": 26,
+  "cellCount": 42,
+  "medianRegressions": [],
+  "compilerDecisions": [
+    {
+      "unit": "root",
+      "selected": "baseline"
+    },
+    {
+      "unit": "item",
+      "selected": "baseline"
+    },
+    {
+      "unit": "sparse",
+      "selected": "baseline"
+    },
+    {
+      "unit": "all",
+      "selected": "baseline"
+    },
+    {
+      "unit": "move",
+      "selected": "baseline"
+    },
+    {
+      "unit": "noop",
+      "selected": "baseline"
+    }
+  ],
+  "emittedEntry": {
+    "baseline": {
+      "raw": 13932,
+      "gzip": 4891,
+      "brotli": 4336
+    },
+    "selected": {
+      "raw": 13932,
+      "gzip": 4891,
+      "brotli": 4336
+    },
+    "sourceMap": true,
+    "runtimeDispatcher": false
+  },
+  "byteCatalogues": {
+    "date": "2026-09-23T14:54:55.431Z",
+    "node": "v26.7.0",
+    "runtimeSha256": "63a46c83bc0c9ae6de9aa024b484eb511400284ef117fa64d4e27699e7ed6fa4",
+    "records": [
+      {
+        "commands": 1,
+        "reference": {
+          "raw": 4460,
+          "gzip": 1799,
+          "brotli": 1627
+        },
+        "generated": {
+          "raw": 2643,
+          "gzip": 1150,
+          "brotli": 1050
+        },
+        "controllerReference": {
+          "raw": 13041,
+          "gzip": 4691,
+          "brotli": 4164
+        },
+        "controllerGenerated": {
+          "raw": 11329,
+          "gzip": 4113,
+          "brotli": 3653
+        },
+        "allByteMetricsNonGrowing": true,
+        "sourceHash": "f3b527ca57f7d73703ee3a49a376b94958359eca52be9643c5c785ddfa9328a1"
+      },
+      {
+        "commands": 16,
+        "reference": {
+          "raw": 6093,
+          "gzip": 1976,
+          "brotli": 1754
+        },
+        "generated": {
+          "raw": 3480,
+          "gzip": 1311,
+          "brotli": 1184
+        },
+        "controllerReference": {
+          "raw": 14693,
+          "gzip": 4880,
+          "brotli": 4314
+        },
+        "controllerGenerated": {
+          "raw": 12196,
+          "gzip": 4264,
+          "brotli": 3749
+        },
+        "allByteMetricsNonGrowing": true,
+        "sourceHash": "3dcf8fafe251ffdc938ea62b647bce60d05af62f0f96c58395745e111b6c1a66"
+      },
+      {
+        "commands": 128,
+        "reference": {
+          "raw": 18692,
+          "gzip": 3048,
+          "brotli": 2314
+        },
+        "generated": {
+          "raw": 10136,
+          "gzip": 2280,
+          "brotli": 1750
+        },
+        "controllerReference": {
+          "raw": 27293,
+          "gzip": 6014,
+          "brotli": 4854
+        },
+        "controllerGenerated": {
+          "raw": 18860,
+          "gzip": 5326,
+          "brotli": 4254
+        },
+        "allByteMetricsNonGrowing": true,
+        "sourceHash": "919f1b044e6d55a3496358d78db688554b8d56a04ab31bb7e929e0a3adbaff1f"
+      },
+      {
+        "commands": 512,
+        "reference": {
+          "raw": 62468,
+          "gzip": 6380,
+          "brotli": 4092
+        },
+        "generated": {
+          "raw": 33560,
+          "gzip": 5385,
+          "brotli": 3291
+        },
+        "controllerReference": {
+          "raw": 71069,
+          "gzip": 9525,
+          "brotli": 6596
+        },
+        "controllerGenerated": {
+          "raw": 42284,
+          "gzip": 8619,
+          "brotli": 5779
+        },
+        "allByteMetricsNonGrowing": true,
+        "sourceHash": "c9a9cde3e11d04a63b710b2980d789a01c5f2235ff605c4080bbbdc51d1db944"
+      }
+    ],
+    "method": "Actual native-generated modules bundled with all reachable runtime helpers, distinct field paths and exported commands. Reference is the generic COW command implementation. No padding or fabricated timing profiles. Both alternatives are bundled independently for size measurement; this is not automatic runtime admission.",
+    "limits": [
+      "Command-only and complete document-controller entry graphs are both measured. The command-only controller includes Runtime, shared publication and history with identical exports in both variants; unrelated routes and UI dependencies are not part of this fixture.",
+      "These measurements do not include worker/Wasm assets not referenced by this experiment.",
+      "Source maps are debug artifacts and not included in the runtime byte totals."
+    ]
+  },
+  "browserRows": [
+    {
+      "engine": "chromium",
+      "version": "153.0.8010.12",
+      "comparisons": 1260,
+      "method": "Actual browser document-controller/Runtime/history; native-generated command functions. Nine alternating batches after three warmups. No DOM, network or initial import in operation timing; means within batches are not event percentiles.",
+      "limits": [
+        "One page/engine exploratory run, not independent physical-device replications.",
+        "Timer-limited zero values do not establish free work.",
+        "A generated function is measured independently of automatic admission; unqualified cases are not silently selected in a release."
+      ],
+      "rows": [
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0011718749883584678
+        },
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0048828125
+        },
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.0015624999650754035
+        },
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.0005859375232830644
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.004296874976716936
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.005468750023283064
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.006054687546566129
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.002734375011641532
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0011718749883584678
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0048828125
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.0029296875
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.0005859375232830644
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0011718750465661287
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0048828125
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.002148437488358468
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.0005859374650754035
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0023437499767169356
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0029296875
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.0027343749534338713
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.0017578125116415322
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0011718749883584678
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.004687500011641532
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.0007812500116415322
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.00039062503492459655
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.002734375011641532
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.00039062497671693563
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.00039062497671693563
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.00019531254656612873
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0013671874767169356
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.006054687488358468
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.0009765625
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.00039062503492459655
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0013671875349245965
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.006054687488358468
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.004492187523283064
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.0015624999650754035
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0013671874767169356
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.006054687488358468
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.005664062511641532
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.0013671875349245965
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0013671875349245965
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.006054687488358468
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.0052734375349245965
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.0013671874767169356
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0013671875349245965
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.006054687488358468
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.0015625000232830644
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0013671874767169356
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.006054687546566129
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.0007812500116415322
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.00039062497671693563
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.0033203124767169356
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.00039062497671693563
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.00039062497671693563
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.00039062497671693563
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.03593749995343387
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.0007812501862645149
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0.0007812499534338713
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.007031250046566129
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.037499999860301614
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.0054687499068677425
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0.0015624999068677425
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.036718750139698386
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.007031250046566129
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0.0015625001396983862
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.03750000009313226
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.025000000139698386
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0.004687499953433871
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.03828125004656613
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.029687500093132257
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0.0023437500931322575
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.037499999860301614
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.0007812499534338713
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0.0007812499534338713
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.01953125
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0.0007812499534338713
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.25
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.241666664679845
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.25
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.25
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0.025000000993410747
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0.00833333283662796
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.24166666716337204
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.3416666686534882
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0.13333333283662796
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0.025000000993410747
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.25833333283662796
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.366666667163372
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0.875
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0.18333333482344946
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.25
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.375
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0.8916666656732559
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.25
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.3083333323399227
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.616666667163372
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 2.125
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 14.625
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 2.149999998509884
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 15.274999998509884
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0.17499999701976776
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 2.149999998509884
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 13.975000001490116
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 1.1499999985098839
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0.20000000298023224
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 2.2000000029802322
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 14.174999997019768
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 11.075000002980232
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 1.9750000014901161
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 2.1749999970197678
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 12.625
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 10.299999997019768
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 2.1999999955296516
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 12.799999997019768
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 5.149999998509884
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        }
+      ]
+    },
+    {
+      "engine": "firefox",
+      "version": "155.0",
+      "comparisons": 1260,
+      "method": "Actual browser document-controller/Runtime/history; native-generated command functions. Nine alternating batches after three warmups. No DOM, network or initial import in operation timing; means within batches are not event percentiles.",
+      "limits": [
+        "One page/engine exploratory run, not independent physical-device replications.",
+        "Timer-limited zero values do not establish free work.",
+        "A generated function is measured independently of automatic admission; unqualified cases are not silently selected in a release."
+      ],
+      "rows": [
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.009765625
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.009765625
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.01171875
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.01953125
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.01953125
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.009765625
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.046875
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.046875
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.046875
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.0859375
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.046875
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.0546875
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.046875
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.0546875
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.0234375
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 2.1666666666666665
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 2
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 2
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0.5
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 2.0833333333333335
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 2.4166666666666665
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0.25
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 2.1666666666666665
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 2.1666666666666665
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 2.1666666666666665
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 1
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 4.75
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 19.25
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 4.75
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 18.25
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 1
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 5.5
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 18.75
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 2.5
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 1.75
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 5
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 17.5
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 25.75
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 2
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 5
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 18
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 20.75
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 4.75
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 18.5
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 8.75
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        }
+      ]
+    },
+    {
+      "engine": "webkit",
+      "version": "26.6",
+      "comparisons": 1260,
+      "method": "Actual browser document-controller/Runtime/history; native-generated command functions. Nine alternating batches after three warmups. No DOM, network or initial import in operation timing; means within batches are not event percentiles.",
+      "limits": [
+        "One page/engine exploratory run, not independent physical-device replications.",
+        "Timer-limited zero values do not establish free work.",
+        "A generated function is measured independently of automatic admission; unqualified cases are not silently selected in a release."
+      ],
+      "rows": [
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 0,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 1,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 1,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.00390625
+        },
+        {
+          "count": 1,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.001953125
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 1,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 512,
+          "medianMs": 0.005859375
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 1,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 512,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.0546875
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.0546875
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.0546875
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.0546875
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.0234375
+        },
+        {
+          "count": 30,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0.0078125
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.0546875
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0.03125
+        },
+        {
+          "count": 30,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.015625
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0.0546875
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 128,
+          "medianMs": 0.0390625
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 30,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 128,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5833333333333334
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.9166666666666667
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5833333333333334
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.9166666666666667
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0.08333333333333333
+        },
+        {
+          "count": 1200,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0.08333333333333333
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5833333333333334
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 2
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0.16666666666666666
+        },
+        {
+          "count": 1200,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0.08333333333333333
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5833333333333334
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.8333333333333333
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0.6666666666666666
+        },
+        {
+          "count": 1200,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0.16666666666666666
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5833333333333334
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.9166666666666667
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 1.0833333333333333
+        },
+        {
+          "count": 1200,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0.08333333333333333
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 0.5833333333333334
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 1.9166666666666667
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 12,
+          "medianMs": 1.3333333333333333
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 1200,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 12,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 5.5
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 18
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "root",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 5.5
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 17.5
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 1.25
+        },
+        {
+          "count": 10000,
+          "operation": "item",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 1.5
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 5.5
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 18
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 2
+        },
+        {
+          "count": 10000,
+          "operation": "sparse",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 1.5
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 5.25
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 16.5
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 6.75
+        },
+        {
+          "count": 10000,
+          "operation": "all",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 2.75
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 5.75
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 18.25
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 11.5
+        },
+        {
+          "count": 10000,
+          "operation": "move",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 1.5
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 5.5
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 18
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "noop",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "baseline",
+          "iterations": 4,
+          "medianMs": 11.25
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "state-lib",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "state-lib-cow",
+          "iterations": 4,
+          "medianMs": 0
+        },
+        {
+          "count": 10000,
+          "operation": "history",
+          "backend": "generated",
+          "iterations": 4,
+          "medianMs": 0
+        }
+      ]
+    }
+  ],
+  "tests": {
+    "compiler": 44,
+    "nodeCowAndCommand": 47,
+    "canonicalRuntimePublication": 6,
+    "appUnit": 125,
+    "appCowContract": 19,
+    "appCommonBrowser": 6
+  },
+  "sources": {
+    "core/document-store.mjs": "943a1b174753e9ab4c2e0a54a4e3a0852490d7b091abb58fc695ba11f4759383",
+    "core/document-store-baseline.mjs": "89dca584896e33930a3e438988e5e064710a60dcc453b7ff7e464ede52d4c5b3",
+    "core/json-draft.mjs": "63a46c83bc0c9ae6de9aa024b484eb511400284ef117fa64d4e27699e7ed6fa4",
+    "core/model.mjs": "ca6f56254ba91e016e81a21f7cf20de1408eececce19a3126c6958e081459b90",
+    "core/document-publication.mjs": "6a9046ec5d5a64e5c99f8656865bf6f95f7d4d966fa0f3991ac7624ea94fa4a3",
+    "runtime/index.js": "fb30c11aaffdab27822d2fca100accc352fabd7218548d8a553af1e50631bb11",
+    "runtime/core.js": "786b3ca1d1f17667409f71588adcfe3c571aa42c7c014fc6a18ed17b89b69fe0",
+    "runtime/latest-task.js": "08689b0a444ce16329df0e41ea94288faada6921570b04d2aca7977f896a4167",
+    "runtime/external-store.js": "7742fb0b3007b2506c28c49e219a3268a9a9a62c50cb651ff0b90fd6f868ee48"
+  },
+  "rawArchive": {
+    "file": "raw-results.zip",
+    "sha256": "90229df5f86f96901dd2e78b8bbb1a9e803e5d0d4a66122c4d6fb08b8a0e93e1",
+    "bytes": 371133
+  }
+}

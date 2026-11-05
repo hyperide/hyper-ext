@@ -1,0 +1,41 @@
+{
+  "received": "2026-09-18",
+  "provenance": "User-supplied attachments; originals retained without edits in the conversation source archive. Binary originals are not yet present in this Git checkout; use import_sources.py with the downloaded originals.",
+  "sources": [
+    {
+      "id": "S1",
+      "filename": "2026-09-01-state-master-spec.md",
+      "bytes": 72257,
+      "sha256": "217600106bc296a3978944f3666337efe6159ab6d6ef07239cb36dc4a5c98c5f",
+      "note": "Uploaded draft v0.2, not the newer canonical v0.6/decision log."
+    },
+    {
+      "id": "S2",
+      "filename": "Gradual Reactivity Compilation(1).pdf",
+      "bytes": 126142,
+      "sha256": "d7f80b5fbe162d39fdfd48ad516167f082f793db5d89ad0b859a4ea9a80d302c",
+      "note": "9 pages; prototype trapdoor and compiler hypotheses."
+    },
+    {
+      "id": "S3",
+      "filename": "Designing a Wasm-Compiled UI Framework Rendering Engine_ 2026 Architectural Analysis.pdf",
+      "bytes": 158563,
+      "sha256": "c8718086565eac6c52ea11a3aec2dca911b9b6cc875041425ef6382d063ce4f6",
+      "note": "10 pages; design synthesis, no fresh benchmark in that report."
+    },
+    {
+      "id": "S4",
+      "filename": "Beyond Push-Pull Signals_ Critical Research on Six Threads for a Wasm and Signals Rendering Engine.pdf",
+      "bytes": 213810,
+      "sha256": "2848b533cf7920dd11b512ba496a824806277bf1fbdc1bc03634b31265872cb0",
+      "note": "15 pages; six research threads, speculative claims retained as such."
+    },
+    {
+      "id": "S5",
+      "filename": "wasm-dom-state-research(1).docx",
+      "bytes": 62926,
+      "sha256": "c0b568de3fb988cccf51446f4ffb652204ebbfa02f5c126537f95a3d89556566",
+      "note": "Historical Chromium144/Linux measurements; original benchmark zip was not supplied."
+    }
+  ]
+}

@@ -61,7 +61,14 @@ const DEFAULT_REPO_ROOT = resolve(DEFAULT_TOOLKIT_ROOT, '..', '..', '..');
 
 export const SOURCE_RUNTIME_SPECIFIER = '../../runtime/src/index.js';
 export const PUBLIC_CORE_SPECIFIER = '@ultrabricks/state-lib';
-const KNOWN_MODULES = ['index', 'async-resource', 'match-async-state', 'testing', 'async-conformance'];
+const KNOWN_MODULES = [
+  'index',
+  'async-resource',
+  'match-async-state',
+  'operation-scope',
+  'testing',
+  'async-conformance',
+];
 export const KNOWN_BUILT_FILES = KNOWN_MODULES.flatMap((name) => [`dist/${name}.js`, `dist/${name}.d.ts`]);
 
 const hashFile = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -158,6 +165,7 @@ export function exportPackage(options) {
   const coreManifest = JSON.parse(readFileSync(join(repoRoot, 'packages/state-lib/runtime/package.json'), 'utf8'));
   const tsc = resolveTsc(options?.tscBin, repoRoot);
   const nodeBin = resolveNodeBin(options?.nodeBin);
+  const typescript = createRequire(join(repoRoot, 'package.json'))('typescript');
   const typescriptPackage = JSON.parse(
     readFileSync(createRequire(join(repoRoot, 'package.json')).resolve('typescript/package.json'), 'utf8'),
   );
@@ -170,8 +178,13 @@ export function exportPackage(options) {
     cpSync(runtimeSrcDir, join(build, 'runtime', 'src'), { recursive: true });
     const effective = {
       extends: join(toolkitRoot, 'tsconfig.build.json'),
-      compilerOptions: { outDir: join(build, 'out') },
-      include: [join(build, 'toolkit', 'src', 'index.ts'), join(build, 'toolkit', 'src', 'testing.ts')],
+      // Imported files under node_modules can be classified as external by
+      // TypeScript, changing its inferred common source root. Our mirror layout
+      // is explicit, so emitted toolkit paths must not depend on the destination.
+      compilerOptions: { rootDir: build, outDir: join(build, 'out') },
+      // Imported files inside node_modules are otherwise external inputs and
+      // can be checked without being emitted. Every promised module is a root.
+      include: KNOWN_MODULES.map((name) => join(build, 'toolkit', 'src', `${name}.ts`)),
     };
     writeFileSync(join(build, 'tsconfig.json'), JSON.stringify(effective, null, 2));
     try {
@@ -209,6 +222,15 @@ export function exportPackage(options) {
       const next = text.split(SOURCE_RUNTIME_SPECIFIER).join(PUBLIC_CORE_SPECIFIER);
       if (next.includes(SOURCE_RUNTIME_SPECIFIER) || next.includes('../')) {
         throw new Error(`Emitted file escapes its directory after rewriting: ${file}`);
+      }
+      // Explicit roots must not turn a skipped external import into a broken
+      // package. Check static, dynamic and type imports with the same compiler
+      // parser; only promised local modules and the declared core peer resolve.
+      const allowed = new Set(KNOWN_MODULES.map((name) => `./${name}.js`));
+      for (const { fileName } of typescript.preProcessFile(next, true, true).importedFiles) {
+        if (fileName !== PUBLIC_CORE_SPECIFIER && !allowed.has(fileName)) {
+          throw new Error(`Unexpected module specifier in emitted toolkit file: ${fileName}`);
+        }
       }
       rewritten.set(file, next);
     }
@@ -281,7 +303,7 @@ export function exportPackage(options) {
         bun: toolVersion('bun', ['--version']),
       },
       scope:
-        'Headless async-resource contract plus separate testing entrypoint; unpublished pre-release, not published; single Runtime comes from the core peer, never vendored.',
+        'Headless async-resource and operation-authority contracts plus separate testing entrypoint; unpublished pre-release, not published; single Runtime comes from the core peer, never vendored.',
     };
 
     const assembled = stage;

@@ -48,6 +48,8 @@ const EXPECTED_BUILT_FILES = [
   'dist/index.d.ts',
   'dist/async-resource.js',
   'dist/async-resource.d.ts',
+  'dist/operation-scope.js',
+  'dist/operation-scope.d.ts',
   'dist/match-async-state.js',
   'dist/match-async-state.d.ts',
   'dist/testing.js',
@@ -61,6 +63,8 @@ const EXPECTED_BUILT_FILES = [
 // they must NOT contain the specifier; the consumer run proves they resolve
 // transitively instead.
 const EXPECTED_CORE_BACKED_FILES = [
+  'dist/operation-scope.js',
+  'dist/operation-scope.d.ts',
   'dist/async-resource.js',
   'dist/async-resource.d.ts',
   'dist/match-async-state.js',
@@ -113,12 +117,35 @@ function buildCoreDist(outDir: string): void {
 }
 
 const CONSUMER_JS = `import assert from 'node:assert/strict';
-import { createAsyncResource, matchAsyncState } from '${TOOLKIT_NAME}';
+import { createAsyncResource, matchAsyncState, createOperationScope } from '${TOOLKIT_NAME}';
 import { NotificationError, Runtime, StateError } from '${CORE_NAME}';
 import { runFullConformance } from '${TOOLKIT_NAME}/testing';
 
 assert.equal(process.versions.bun, undefined, 'standalone consumer must run under Node, not Bun');
 const runtime = new Runtime();
+const scope = createOperationScope(runtime, { traceCapacity: 8 });
+const value = runtime.signal(0);
+const old = scope.begin('width');
+const next = scope.begin('width');
+assert.equal(old.commit(() => value.set(99)).status, 'dropped');
+assert.equal(next.commit(() => value.set(7)).status, 'applied');
+assert.equal(value.peek(), 7);
+scope.advance();
+let staleFeedback = 0;
+assert.equal(next.notify(() => staleFeedback++).status, 'dropped');
+assert.equal(staleFeedback, 0);
+const current = scope.begin('width');
+const original = new Error('current feedback still fails visibly');
+assert.throws(() => current.notify(() => { throw original; }), (error) => error === original);
+try {
+  runtime.transaction(() => scope.begin('illegal'));
+  assert.fail('expected operation boundary refusal');
+} catch (error) {
+  assert.ok(error instanceof StateError, 'operation scope uses the SAME Runtime and StateError as the consumer');
+}
+assert.equal(scope.diagnostics().activeOperations, 1);
+scope.dispose();
+assert.equal(current.current, false);
 const okResource = createAsyncResource(runtime, { load: (input) => 'value:' + input });
 assert.equal(await okResource.run('a'), 'committed');
 assert.deepEqual(okResource.getSnapshot(), { status: 'success', data: 'value:a' });
@@ -163,9 +190,23 @@ process.stdout.write('CONSUMER_OK\\n');
 `;
 
 const CONSUMER_DECLARATIONS_TS = `import { Runtime } from '${CORE_NAME}';
-import { createAsyncResource, matchAsyncState } from '${TOOLKIT_NAME}';
+import { createAsyncResource, matchAsyncState, createOperationScope } from '${TOOLKIT_NAME}';
 
 const runtime = new Runtime();
+const scope = createOperationScope(runtime);
+const lease = scope.begin('width');
+// @ts-expect-error A publication callback cannot cross await.
+lease.commit(async () => 1);
+// @ts-expect-error A feedback callback cannot cross await.
+lease.notify(async () => undefined);
+// @ts-expect-error Lanes have stable string/symbol identity, not object identity.
+scope.begin({ field: 'width' });
+const published = lease.commit(() => 1);
+if (published.status === 'applied') {
+  const count: number = published.value;
+  void count;
+}
+scope.dispose();
 const resource = createAsyncResource<string, number>(runtime, { load: (input) => input.length });
 
 // @ts-expect-error input type is preserved end to end.
@@ -555,7 +596,7 @@ test('build-tool declarations expose only actual runtime exports, not injection 
   assert.equal(tools.PUBLIC_CORE_SPECIFIER, '@ultrabricks/state-lib');
   assert.equal(tools.SOURCE_RUNTIME_SPECIFIER, '../../runtime/src/index.js');
   assert.ok(Array.isArray(tools.KNOWN_BUILT_FILES));
-  assert.equal(tools.KNOWN_BUILT_FILES.length, 10);
+  assert.equal(tools.KNOWN_BUILT_FILES.length, 12);
   assert.ok(tools.KNOWN_BUILT_FILES.every((file) => typeof file === 'string' && file.startsWith('dist/')));
   assert.equal(typeof tools.exportPackage, 'function');
 });

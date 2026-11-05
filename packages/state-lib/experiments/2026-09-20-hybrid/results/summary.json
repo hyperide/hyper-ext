@@ -1,0 +1,2214 @@
+{
+  "date": "2026-09-20",
+  "status": "historical-reference correction verified; global COW timing gate rejected",
+  "tests": {
+    "cow": 21,
+    "cow_failed": 0,
+    "boards_document_contracts": 19,
+    "boards_unit": 117,
+    "browser_combinations": 6,
+    "existing_cli": 18,
+    "generator_cli": 11
+  },
+  "controller": {
+    "date": "2026-09-20T11:09:49.917Z",
+    "node": "v26.7.0",
+    "method": "17 alternating batches after 3 warmups per condition. Means per operation, not individual interaction percentiles. Factory/import and DOM/network excluded; actual public document/history controller used. All outcomes compared after each trial. Baseline lacks immutability guarantees; state-lib full-copy is the stronger semantic comparator.",
+    "hashes": {
+      "packages/core/document-store.mjs": "568d90919e6faeb2723774a43ec73641996f1e6508b3532fd16c9a681cdb064e",
+      "packages/core/document-store-baseline.mjs": "89dca584896e33930a3e438988e5e064710a60dcc453b7ff7e464ede52d4c5b3",
+      "packages/core/json-draft.mjs": "2ccef07b5c2ce7ddb5df2775c184e90b58b415161561e7efa19cdfc11629d8a7",
+      "scripts/benchmark-state-cow.mjs": "5456deaf99aa06aef6495f17b64460a05f8e61d203717948969c1dfb6282d836"
+    },
+    "summary": [
+      {
+        "count": 30,
+        "operation": "root",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.012732287499999906,
+        "p95BatchMeanMs": 0.014141149999999936,
+        "minBatchMeanMs": 0.012328650000000075,
+        "maxBatchMeanMs": 0.014141149999999936
+      },
+      {
+        "count": 30,
+        "operation": "root",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.03844113749999991,
+        "p95BatchMeanMs": 0.04592968749999997,
+        "minBatchMeanMs": 0.03746457500000009,
+        "maxBatchMeanMs": 0.04592968749999997
+      },
+      {
+        "count": 30,
+        "operation": "root",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0017994749999999727,
+        "p95BatchMeanMs": 0.004098437500000074,
+        "minBatchMeanMs": 0.0009802125000000217,
+        "maxBatchMeanMs": 0.004098437500000074
+      },
+      {
+        "count": 30,
+        "operation": "item",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.012822399999999946,
+        "p95BatchMeanMs": 0.013488549999999933,
+        "minBatchMeanMs": 0.012263537500000154,
+        "maxBatchMeanMs": 0.013488549999999933
+      },
+      {
+        "count": 30,
+        "operation": "item",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.039706250000000054,
+        "p95BatchMeanMs": 0.06255676250000022,
+        "minBatchMeanMs": 0.03765363750000006,
+        "maxBatchMeanMs": 0.06255676250000022
+      },
+      {
+        "count": 30,
+        "operation": "item",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.008292699999999797,
+        "p95BatchMeanMs": 0.016773437499999842,
+        "minBatchMeanMs": 0.006343224999999819,
+        "maxBatchMeanMs": 0.016773437499999842
+      },
+      {
+        "count": 30,
+        "operation": "sparse",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.012856250000000102,
+        "p95BatchMeanMs": 0.0136588500000002,
+        "minBatchMeanMs": 0.012357299999999682,
+        "maxBatchMeanMs": 0.0136588500000002
+      },
+      {
+        "count": 30,
+        "operation": "sparse",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.03949218749999943,
+        "p95BatchMeanMs": 0.05172656250000003,
+        "minBatchMeanMs": 0.03771249999999995,
+        "maxBatchMeanMs": 0.05172656250000003
+      },
+      {
+        "count": 30,
+        "operation": "sparse",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.008894275000000108,
+        "p95BatchMeanMs": 0.040559375000000134,
+        "minBatchMeanMs": 0.008421349999999706,
+        "maxBatchMeanMs": 0.040559375000000134
+      },
+      {
+        "count": 30,
+        "operation": "all",
+        "backend": "baseline",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0131708500000002,
+        "p95BatchMeanMs": 0.014439600000000042,
+        "minBatchMeanMs": 0.012714550000001167,
+        "maxBatchMeanMs": 0.014439600000000042
+      },
+      {
+        "count": 30,
+        "operation": "all",
+        "backend": "state-lib",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.03975414999999884,
+        "p95BatchMeanMs": 0.040462500000001,
+        "minBatchMeanMs": 0.03809170000000108,
+        "maxBatchMeanMs": 0.040462500000001
+      },
+      {
+        "count": 30,
+        "operation": "all",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.029462499999999635,
+        "p95BatchMeanMs": 0.17419999999999902,
+        "minBatchMeanMs": 0.02780415000000005,
+        "maxBatchMeanMs": 0.17419999999999902
+      },
+      {
+        "count": 30,
+        "operation": "move",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.013082287499999267,
+        "p95BatchMeanMs": 0.04832812499999974,
+        "minBatchMeanMs": 0.01252500000000012,
+        "maxBatchMeanMs": 0.04832812499999974
+      },
+      {
+        "count": 30,
+        "operation": "move",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.03869375000000019,
+        "p95BatchMeanMs": 0.04229894999999999,
+        "minBatchMeanMs": 0.03727551249999976,
+        "maxBatchMeanMs": 0.04229894999999999
+      },
+      {
+        "count": 30,
+        "operation": "move",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.033567187500000276,
+        "p95BatchMeanMs": 0.10027864999999991,
+        "minBatchMeanMs": 0.028563025000000408,
+        "maxBatchMeanMs": 0.10027864999999991
+      },
+      {
+        "count": 30,
+        "operation": "noop",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.013028650000001108,
+        "p95BatchMeanMs": 0.013259375000001229,
+        "minBatchMeanMs": 0.0128354250000001,
+        "maxBatchMeanMs": 0.013259375000001229
+      },
+      {
+        "count": 30,
+        "operation": "noop",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.03925832500000013,
+        "p95BatchMeanMs": 0.0527213500000002,
+        "minBatchMeanMs": 0.03873698750000045,
+        "maxBatchMeanMs": 0.0527213500000002
+      },
+      {
+        "count": 30,
+        "operation": "noop",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0008744750000005297,
+        "p95BatchMeanMs": 0.0010885500000000548,
+        "minBatchMeanMs": 0.0008588624999987359,
+        "maxBatchMeanMs": 0.0010885500000000548
+      },
+      {
+        "count": 30,
+        "operation": "history",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.030158849999999404,
+        "p95BatchMeanMs": 0.030551562499999817,
+        "minBatchMeanMs": 0.02863384999999994,
+        "maxBatchMeanMs": 0.030551562499999817
+      },
+      {
+        "count": 30,
+        "operation": "history",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0004229249999994522,
+        "p95BatchMeanMs": 0.0029744874999991567,
+        "minBatchMeanMs": 0.0004145874999991861,
+        "maxBatchMeanMs": 0.0029744874999991567
+      },
+      {
+        "count": 30,
+        "operation": "history",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0004541624999987448,
+        "p95BatchMeanMs": 0.0006859375000004775,
+        "minBatchMeanMs": 0.00041250000000019326,
+        "maxBatchMeanMs": 0.0006859375000004775
+      },
+      {
+        "count": 300,
+        "operation": "root",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11341249999999832,
+        "p95BatchMeanMs": 0.1222223999999997,
+        "minBatchMeanMs": 0.10838437499999998,
+        "maxBatchMeanMs": 0.1222223999999997
+      },
+      {
+        "count": 300,
+        "operation": "root",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.33967656250000006,
+        "p95BatchMeanMs": 0.34763906250000076,
+        "minBatchMeanMs": 0.3257567749999993,
+        "maxBatchMeanMs": 0.34763906250000076
+      },
+      {
+        "count": 300,
+        "operation": "root",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.001092712499999493,
+        "p95BatchMeanMs": 0.0014046875000019554,
+        "minBatchMeanMs": 0.0009671875000009323,
+        "maxBatchMeanMs": 0.0014046875000019554
+      },
+      {
+        "count": 300,
+        "operation": "item",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11415207499999838,
+        "p95BatchMeanMs": 0.12696615000000405,
+        "minBatchMeanMs": 0.10803853749999917,
+        "maxBatchMeanMs": 0.12696615000000405
+      },
+      {
+        "count": 300,
+        "operation": "item",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.3428578124999973,
+        "p95BatchMeanMs": 0.3579041750000016,
+        "minBatchMeanMs": 0.32535729999999885,
+        "maxBatchMeanMs": 0.3579041750000016
+      },
+      {
+        "count": 300,
+        "operation": "item",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.010802599999999529,
+        "p95BatchMeanMs": 0.02563072500000203,
+        "minBatchMeanMs": 0.009243225000000166,
+        "maxBatchMeanMs": 0.02563072500000203
+      },
+      {
+        "count": 300,
+        "operation": "sparse",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11854167500000017,
+        "p95BatchMeanMs": 0.14340364999999905,
+        "minBatchMeanMs": 0.11258281249999982,
+        "maxBatchMeanMs": 0.14340364999999905
+      },
+      {
+        "count": 300,
+        "operation": "sparse",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.359732812499999,
+        "p95BatchMeanMs": 0.4195718750000026,
+        "minBatchMeanMs": 0.3404145874999983,
+        "maxBatchMeanMs": 0.4195718750000026
+      },
+      {
+        "count": 300,
+        "operation": "sparse",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.04632343750000132,
+        "p95BatchMeanMs": 0.06531771250000133,
+        "minBatchMeanMs": 0.04123490000000061,
+        "maxBatchMeanMs": 0.06531771250000133
+      },
+      {
+        "count": 300,
+        "operation": "all",
+        "backend": "baseline",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11776250000000346,
+        "p95BatchMeanMs": 0.24516874999999344,
+        "minBatchMeanMs": 0.11192085000000133,
+        "maxBatchMeanMs": 0.24516874999999344
+      },
+      {
+        "count": 300,
+        "operation": "all",
+        "backend": "state-lib",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.34974165000000995,
+        "p95BatchMeanMs": 0.5989771000000019,
+        "minBatchMeanMs": 0.3324312499999905,
+        "maxBatchMeanMs": 0.5989771000000019
+      },
+      {
+        "count": 300,
+        "operation": "all",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.33184790000000247,
+        "p95BatchMeanMs": 0.4508833500000037,
+        "minBatchMeanMs": 0.23806454999999005,
+        "maxBatchMeanMs": 0.4508833500000037
+      },
+      {
+        "count": 300,
+        "operation": "move",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11467499999999972,
+        "p95BatchMeanMs": 0.11743697499999825,
+        "minBatchMeanMs": 0.1109625000000051,
+        "maxBatchMeanMs": 0.11743697499999825
+      },
+      {
+        "count": 300,
+        "operation": "move",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.35496771250000164,
+        "p95BatchMeanMs": 0.369126037500007,
+        "minBatchMeanMs": 0.33573802500000055,
+        "maxBatchMeanMs": 0.369126037500007
+      },
+      {
+        "count": 300,
+        "operation": "move",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.22600519999999732,
+        "p95BatchMeanMs": 0.24548750000000155,
+        "minBatchMeanMs": 0.1913015625000014,
+        "maxBatchMeanMs": 0.24548750000000155
+      },
+      {
+        "count": 300,
+        "operation": "noop",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11547656249999819,
+        "p95BatchMeanMs": 0.12965988750000862,
+        "minBatchMeanMs": 0.10935937500000818,
+        "maxBatchMeanMs": 0.12965988750000862
+      },
+      {
+        "count": 300,
+        "operation": "noop",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.3416864625000017,
+        "p95BatchMeanMs": 0.351352087500004,
+        "minBatchMeanMs": 0.32987134999999623,
+        "maxBatchMeanMs": 0.351352087500004
+      },
+      {
+        "count": 300,
+        "operation": "noop",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0010192749999987428,
+        "p95BatchMeanMs": 0.0014015624999956344,
+        "minBatchMeanMs": 0.0009036375000050611,
+        "maxBatchMeanMs": 0.0014015624999956344
+      },
+      {
+        "count": 300,
+        "operation": "history",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.26810937499999454,
+        "p95BatchMeanMs": 0.2740588499999944,
+        "minBatchMeanMs": 0.2567916625000066,
+        "maxBatchMeanMs": 0.2740588499999944
+      },
+      {
+        "count": 300,
+        "operation": "history",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.00046353750000207585,
+        "p95BatchMeanMs": 0.0006015625000031832,
+        "minBatchMeanMs": 0.0004031250000025466,
+        "maxBatchMeanMs": 0.0006015625000031832
+      },
+      {
+        "count": 300,
+        "operation": "history",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0004244749999998021,
+        "p95BatchMeanMs": 0.0005578125000056389,
+        "minBatchMeanMs": 0.00041041250000262153,
+        "maxBatchMeanMs": 0.0005578125000056389
+      },
+      {
+        "count": 1200,
+        "operation": "root",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.45249635000000127,
+        "p95BatchMeanMs": 0.4665583374999983,
+        "minBatchMeanMs": 0.4449677124999994,
+        "maxBatchMeanMs": 0.4665583374999983
+      },
+      {
+        "count": 1200,
+        "operation": "root",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.318879687499998,
+        "p95BatchMeanMs": 1.397581249999996,
+        "minBatchMeanMs": 1.2943510375000074,
+        "maxBatchMeanMs": 1.397581249999996
+      },
+      {
+        "count": 1200,
+        "operation": "root",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.00145988749998196,
+        "p95BatchMeanMs": 0.011860937500000546,
+        "minBatchMeanMs": 0.0011744750000048042,
+        "maxBatchMeanMs": 0.011860937500000546
+      },
+      {
+        "count": 1200,
+        "operation": "item",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.45627291250000324,
+        "p95BatchMeanMs": 0.5017421875000082,
+        "minBatchMeanMs": 0.44945728749999037,
+        "maxBatchMeanMs": 0.5017421875000082
+      },
+      {
+        "count": 1200,
+        "operation": "item",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.341296350000016,
+        "p95BatchMeanMs": 1.3972375000000057,
+        "minBatchMeanMs": 1.3212453125000139,
+        "maxBatchMeanMs": 1.3972375000000057
+      },
+      {
+        "count": 1200,
+        "operation": "item",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.01215156250000291,
+        "p95BatchMeanMs": 0.024735937500008732,
+        "minBatchMeanMs": 0.011190099999998893,
+        "maxBatchMeanMs": 0.024735937500008732
+      },
+      {
+        "count": 1200,
+        "operation": "sparse",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.466143749999992,
+        "p95BatchMeanMs": 0.49440937499998655,
+        "minBatchMeanMs": 0.4462630125000032,
+        "maxBatchMeanMs": 0.49440937499998655
+      },
+      {
+        "count": 1200,
+        "operation": "sparse",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.387653649999993,
+        "p95BatchMeanMs": 1.444891662500004,
+        "minBatchMeanMs": 1.350242712499994,
+        "maxBatchMeanMs": 1.444891662500004
+      },
+      {
+        "count": 1200,
+        "operation": "sparse",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.20122187499998745,
+        "p95BatchMeanMs": 0.2830276124999955,
+        "minBatchMeanMs": 0.14223541250000835,
+        "maxBatchMeanMs": 0.2830276124999955
+      },
+      {
+        "count": 1200,
+        "operation": "all",
+        "backend": "baseline",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.4793125000000146,
+        "p95BatchMeanMs": 0.5369041499999184,
+        "minBatchMeanMs": 0.4518562500000371,
+        "maxBatchMeanMs": 0.5369041499999184
+      },
+      {
+        "count": 1200,
+        "operation": "all",
+        "backend": "state-lib",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 1.3798583500000858,
+        "p95BatchMeanMs": 1.448210399999971,
+        "minBatchMeanMs": 1.3251145999999607,
+        "maxBatchMeanMs": 1.448210399999971
+      },
+      {
+        "count": 1200,
+        "operation": "all",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 1.4289396000000125,
+        "p95BatchMeanMs": 1.7024583500000516,
+        "minBatchMeanMs": 1.0021353999999518,
+        "maxBatchMeanMs": 1.7024583500000516
+      },
+      {
+        "count": 1200,
+        "operation": "move",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.4638395874999787,
+        "p95BatchMeanMs": 0.46973542499999893,
+        "minBatchMeanMs": 0.45372656249996907,
+        "maxBatchMeanMs": 0.46973542499999893
+      },
+      {
+        "count": 1200,
+        "operation": "move",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.3511619875000178,
+        "p95BatchMeanMs": 1.38978228750002,
+        "minBatchMeanMs": 1.328848949999974,
+        "maxBatchMeanMs": 1.38978228750002
+      },
+      {
+        "count": 1200,
+        "operation": "move",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.5123375000000123,
+        "p95BatchMeanMs": 0.5437203124999996,
+        "minBatchMeanMs": 0.48614218749999055,
+        "maxBatchMeanMs": 0.5437203124999996
+      },
+      {
+        "count": 1200,
+        "operation": "noop",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.46534947499999363,
+        "p95BatchMeanMs": 0.4929187499999898,
+        "minBatchMeanMs": 0.453121874999988,
+        "maxBatchMeanMs": 0.4929187499999898
+      },
+      {
+        "count": 1200,
+        "operation": "noop",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.350791662499978,
+        "p95BatchMeanMs": 1.3771291624999775,
+        "minBatchMeanMs": 1.3292114625000067,
+        "maxBatchMeanMs": 1.3771291624999775
+      },
+      {
+        "count": 1200,
+        "operation": "noop",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0012260375000096245,
+        "p95BatchMeanMs": 0.011600512499990145,
+        "minBatchMeanMs": 0.0010073000000375032,
+        "maxBatchMeanMs": 0.011600512499990145
+      },
+      {
+        "count": 1200,
+        "operation": "history",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.0557677124999827,
+        "p95BatchMeanMs": 1.101559887500025,
+        "minBatchMeanMs": 1.039212499999985,
+        "maxBatchMeanMs": 1.101559887500025
+      },
+      {
+        "count": 1200,
+        "operation": "history",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0006083374999889202,
+        "p95BatchMeanMs": 0.0008255124999777763,
+        "minBatchMeanMs": 0.000523437499987267,
+        "maxBatchMeanMs": 0.0008255124999777763
+      },
+      {
+        "count": 1200,
+        "operation": "history",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0005479124999965279,
+        "p95BatchMeanMs": 0.0008109375000003638,
+        "minBatchMeanMs": 0.0005135375000008934,
+        "maxBatchMeanMs": 0.0008109375000003638
+      }
+    ],
+    "raw": [
+      {
+        "count": 30,
+        "operation": "root",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.012732287499999906,
+        "p95BatchMeanMs": 0.014141149999999936,
+        "minBatchMeanMs": 0.012328650000000075,
+        "maxBatchMeanMs": 0.014141149999999936,
+        "samples": [
+          0.014141149999999936, 0.012727087500000067, 0.013423437500000013, 0.012931250000000016, 0.012483325,
+          0.01315937499999995, 0.013125512500000002, 0.01333593749999995, 0.013158862499999913, 0.012371349999999915,
+          0.012436462500000012, 0.012732287499999906, 0.013039062500000042, 0.01235521249999998, 0.012328650000000075,
+          0.012675525000000043, 0.012638537500000168
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "root",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.03844113749999991,
+        "p95BatchMeanMs": 0.04592968749999997,
+        "minBatchMeanMs": 0.03746457500000009,
+        "maxBatchMeanMs": 0.04592968749999997,
+        "samples": [
+          0.04314062500000002, 0.042976562499999996, 0.042422387500000006, 0.04033072500000001, 0.0403567625,
+          0.03938385000000002, 0.041976562500000016, 0.0382494874999999, 0.04592968749999997, 0.03803177500000014,
+          0.03843333750000007, 0.037751037499999994, 0.03844113749999991, 0.03778124999999992, 0.03791406249999998,
+          0.03746457500000009, 0.0382093750000001
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "root",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0017994749999999727,
+        "p95BatchMeanMs": 0.004098437500000074,
+        "minBatchMeanMs": 0.0009802125000000217,
+        "maxBatchMeanMs": 0.004098437500000074,
+        "samples": [
+          0.0020359374999999957, 0.002940625000000008, 0.0020145874999999867, 0.0017192749999999535,
+          0.0017994749999999727, 0.001866150000000033, 0.0009890625000000598, 0.0009802125000000217,
+          0.001056249999999892, 0.0010869749999999456, 0.004098437500000074, 0.0009973999999999706,
+          0.004059374999999932, 0.0015687500000000298, 0.0038994750000000524, 0.0025156250000000213,
+          0.0009901125000000733
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "item",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.012822399999999946,
+        "p95BatchMeanMs": 0.013488549999999933,
+        "minBatchMeanMs": 0.012263537500000154,
+        "maxBatchMeanMs": 0.013488549999999933,
+        "samples": [
+          0.013343750000000121, 0.0127494875, 0.013488549999999933, 0.013215624999999776, 0.013028650000000041,
+          0.013002087499999959, 0.012774999999999892, 0.012935937499999994, 0.012822399999999946, 0.012620837500000093,
+          0.012263537500000154, 0.012677612499999925, 0.0127942749999999, 0.013387499999999974, 0.01339269999999999,
+          0.012719799999999993, 0.012328125000000157
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "item",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.039706250000000054,
+        "p95BatchMeanMs": 0.06255676250000022,
+        "minBatchMeanMs": 0.03765363750000006,
+        "maxBatchMeanMs": 0.06255676250000022,
+        "samples": [
+          0.04118333750000005, 0.03771718750000019, 0.039484374999999974, 0.05660052499999999, 0.039136987500000234,
+          0.039706250000000054, 0.05240937499999987, 0.038507812499999974, 0.038290100000000035, 0.04953281250000004,
+          0.03765363750000006, 0.03806197499999975, 0.04033958750000011, 0.04121666250000011, 0.04100259999999985,
+          0.06255676250000022, 0.0380749999999999
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "item",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.008292699999999797,
+        "p95BatchMeanMs": 0.016773437499999842,
+        "minBatchMeanMs": 0.006343224999999819,
+        "maxBatchMeanMs": 0.016773437499999842,
+        "samples": [
+          0.008844275000000224, 0.012910412500000135, 0.008350512499999851, 0.00842396249999986, 0.007645312500000045,
+          0.006650512499999905, 0.010720837500000257, 0.007438537499999853, 0.006638550000000265, 0.0073364624999999965,
+          0.006620824999999897, 0.006734900000000011, 0.008993750000000134, 0.008292699999999797, 0.016773437499999842,
+          0.008554687500000213, 0.006343224999999819
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "sparse",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.012856250000000102,
+        "p95BatchMeanMs": 0.0136588500000002,
+        "minBatchMeanMs": 0.012357299999999682,
+        "maxBatchMeanMs": 0.0136588500000002,
+        "samples": [
+          0.0136588500000002, 0.012357299999999682, 0.01243906250000002, 0.012849999999999894, 0.012733850000000047,
+          0.013095837499999874, 0.012856250000000102, 0.012499474999999904, 0.01240832500000053, 0.012447925000000026,
+          0.012434887500000259, 0.012919262500000172, 0.01297968749999967, 0.01314895000000007, 0.013031775000000323,
+          0.012911974999999387, 0.013325000000000387
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "sparse",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.03949218749999943,
+        "p95BatchMeanMs": 0.05172656250000003,
+        "minBatchMeanMs": 0.03771249999999995,
+        "maxBatchMeanMs": 0.05172656250000003,
+        "samples": [
+          0.041173949999999945, 0.03873593749999991, 0.03771249999999995, 0.03808072500000002, 0.03838020000000029,
+          0.0386005124999997, 0.03853749999999963, 0.038458849999999954, 0.038757812499999746, 0.0435651,
+          0.04113906250000028, 0.040790624999999636, 0.0396958374999997, 0.03969635000000053, 0.03949218749999943,
+          0.03973646250000016, 0.05172656250000003
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "sparse",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.008894275000000108,
+        "p95BatchMeanMs": 0.040559375000000134,
+        "minBatchMeanMs": 0.008421349999999706,
+        "maxBatchMeanMs": 0.040559375000000134,
+        "samples": [
+          0.010181250000000119, 0.040559375000000134, 0.008421349999999706, 0.00858124999999994, 0.00879687499999946,
+          0.008936974999999592, 0.009165624999999978, 0.03520729999999972, 0.013228125000000545, 0.0368551999999994,
+          0.008851562499999943, 0.010197912499999972, 0.00862761249999977, 0.008781774999999926, 0.00862917500000009,
+          0.008894275000000108, 0.008671875000000284
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "all",
+        "backend": "baseline",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0131708500000002,
+        "p95BatchMeanMs": 0.014439600000000042,
+        "minBatchMeanMs": 0.012714550000001167,
+        "maxBatchMeanMs": 0.014439600000000042,
+        "samples": [
+          0.013177100000001473, 0.014439600000000042, 0.012756249999998203, 0.012714550000001167, 0.014260400000000572,
+          0.01411250000000166, 0.01274375000000134, 0.0131708500000002, 0.014154200000001537, 0.013675000000000636,
+          0.013979199999999992, 0.013104150000000914, 0.013266649999999913, 0.012847899999999867, 0.012806249999999863,
+          0.013087500000000318, 0.012835400000000163
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "all",
+        "backend": "state-lib",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.03975414999999884,
+        "p95BatchMeanMs": 0.040462500000001,
+        "minBatchMeanMs": 0.03809170000000108,
+        "maxBatchMeanMs": 0.040462500000001,
+        "samples": [
+          0.039587500000001795, 0.03809170000000108, 0.03983545000000106, 0.03975414999999884, 0.03811044999999922,
+          0.04020209999999906, 0.03986250000000098, 0.03992709999999988, 0.0384145999999987, 0.039931249999997934,
+          0.040462500000001, 0.04007085000000075, 0.039883350000002336, 0.03843124999999929, 0.039681249999998155,
+          0.03818330000000003, 0.038406249999999885
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "all",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.029462499999999635,
+        "p95BatchMeanMs": 0.17419999999999902,
+        "minBatchMeanMs": 0.02780415000000005,
+        "maxBatchMeanMs": 0.17419999999999902,
+        "samples": [
+          0.028597899999999753, 0.0317875000000015, 0.028829199999998424, 0.02952914999999905, 0.029462499999999635,
+          0.02982290000000205, 0.029152099999998883, 0.032464600000000135, 0.02780415000000005, 0.02904374999999959,
+          0.17419999999999902, 0.03507710000000088, 0.030945800000000644, 0.029349999999999453, 0.02909790000000214,
+          0.02884375000000148, 0.13708540000000086
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "move",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.013082287499999267,
+        "p95BatchMeanMs": 0.04832812499999974,
+        "minBatchMeanMs": 0.01252500000000012,
+        "maxBatchMeanMs": 0.04832812499999974,
+        "samples": [
+          0.012764574999999922, 0.04832812499999974, 0.012684374999999904, 0.013054162499999933, 0.013254687499999562,
+          0.012963549999999912, 0.013067187499999734, 0.013518224999999972, 0.013130212500000482, 0.012873437500000052,
+          0.013254687500000273, 0.014840099999999978, 0.013338012499999507, 0.01252500000000012, 0.013207287499999864,
+          0.012588024999999448, 0.013082287499999267
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "move",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.03869375000000019,
+        "p95BatchMeanMs": 0.04229894999999999,
+        "minBatchMeanMs": 0.03727551249999976,
+        "maxBatchMeanMs": 0.04229894999999999,
+        "samples": [
+          0.03829167499999997, 0.03876718749999952, 0.03790781249999995, 0.038776562500000014, 0.03874374999999972,
+          0.041940100000000057, 0.04229894999999999, 0.04068802500000004, 0.038999474999999964, 0.03876353750000021,
+          0.0380859375, 0.037473437500000276, 0.037750000000000485, 0.03727551249999976, 0.0376843749999999,
+          0.03771198750000053, 0.03869375000000019
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "move",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.033567187500000276,
+        "p95BatchMeanMs": 0.10027864999999991,
+        "minBatchMeanMs": 0.028563025000000408,
+        "maxBatchMeanMs": 0.10027864999999991,
+        "samples": [
+          0.03452031250000047, 0.033567187500000276, 0.03436718750000054, 0.03413645000000045, 0.033428125000000364,
+          0.10027864999999991, 0.02866510000000062, 0.028711462500000097, 0.029272912499999394, 0.04859947500000032,
+          0.06678281249999998, 0.03247135000000014, 0.029025000000000033, 0.06203958749999998, 0.028563025000000408,
+          0.058763024999999657, 0.02931406250000066
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "noop",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.013028650000001108,
+        "p95BatchMeanMs": 0.013259375000001229,
+        "minBatchMeanMs": 0.0128354250000001,
+        "maxBatchMeanMs": 0.013259375000001229,
+        "samples": [
+          0.0128354250000001, 0.012948950000000537, 0.012931250000001171, 0.013018749999999102, 0.013178125000000308,
+          0.013259375000001229, 0.01323124999999976, 0.013002612500000055, 0.012919787500000269, 0.012978124999999351,
+          0.01304791250000079, 0.013132287499999507, 0.013031762500000354, 0.012995837500000107, 0.013177087500000084,
+          0.013153649999999573, 0.013028650000001108
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "noop",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.03925832500000013,
+        "p95BatchMeanMs": 0.0527213500000002,
+        "minBatchMeanMs": 0.03873698750000045,
+        "maxBatchMeanMs": 0.0527213500000002,
+        "samples": [
+          0.03873698750000045, 0.039147400000000235, 0.03988176250000066, 0.03890781249999975, 0.03921457500000116,
+          0.03907968750000066, 0.03945051249999949, 0.0527213500000002, 0.03897240000000011, 0.0395755125000008,
+          0.03903593750000027, 0.039341675000000007, 0.03957604999999944, 0.0392578125, 0.03925832500000013,
+          0.03980521249999924, 0.048085937500000855
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "noop",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0008744750000005297,
+        "p95BatchMeanMs": 0.0010885500000000548,
+        "minBatchMeanMs": 0.0008588624999987359,
+        "maxBatchMeanMs": 0.0010885500000000548,
+        "samples": [
+          0.000897399999999493, 0.0008588624999987359, 0.00097916249999912, 0.0008718749999999887, 0.000871349999999893,
+          0.0008885375000005525, 0.0010265625000002387, 0.0008744750000005297, 0.0009661375000007411,
+          0.0009562500000001251, 0.0010885500000000548, 0.0008734375000003069, 0.0009661499999992884,
+          0.0008729250000001799, 0.0008588625000001571, 0.000868749999999352, 0.0008682250000006774
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "history",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.030158849999999404,
+        "p95BatchMeanMs": 0.030551562499999817,
+        "minBatchMeanMs": 0.02863384999999994,
+        "maxBatchMeanMs": 0.030551562499999817,
+        "samples": [
+          0.030284887499999514, 0.030403649999999515, 0.030487499999999557, 0.03036354999999986, 0.030158849999999404,
+          0.03033801250000039, 0.0301453125000009, 0.030551562499999817, 0.030532287500000165, 0.030144275000000675,
+          0.030185425000000522, 0.028814062499999692, 0.02863384999999994, 0.02900312499999984, 0.02893384999999995,
+          0.03005416249999939, 0.02942291250000011
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "history",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0004229249999994522,
+        "p95BatchMeanMs": 0.0029744874999991567,
+        "minBatchMeanMs": 0.0004145874999991861,
+        "maxBatchMeanMs": 0.0029744874999991567,
+        "samples": [
+          0.0006562500000001137, 0.000514062499999568, 0.0004229249999994522, 0.0004661499999997432,
+          0.00045989999999989094, 0.0004145874999991861, 0.0004666749999998387, 0.00042291250000090483,
+          0.0004510500000009188, 0.0004187500000000455, 0.0004182249999999499, 0.0029744874999991567,
+          0.0004223999999993566, 0.0004166624999996316, 0.0005442750000000274, 0.0004229249999994522,
+          0.0004203124999989427
+        ]
+      },
+      {
+        "count": 30,
+        "operation": "history",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0004541624999987448,
+        "p95BatchMeanMs": 0.0006859375000004775,
+        "minBatchMeanMs": 0.00041250000000019326,
+        "maxBatchMeanMs": 0.0006859375000004775,
+        "samples": [
+          0.0006859375000004775, 0.0005984374999997045, 0.000413537500000416, 0.00045416250000016587,
+          0.0004541624999987448, 0.0005421874999996135, 0.0004546874999988404, 0.0004187500000000455,
+          0.00047603750000035916, 0.0004624999999990109, 0.00041302500000028886, 0.00046355000000062316,
+          0.0004161499999995044, 0.0004150999999993132, 0.0004187500000000455, 0.0004249999999998977,
+          0.00041250000000019326
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "root",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11341249999999832,
+        "p95BatchMeanMs": 0.1222223999999997,
+        "minBatchMeanMs": 0.10838437499999998,
+        "maxBatchMeanMs": 0.1222223999999997,
+        "samples": [
+          0.11987863749999975, 0.11307551250000074, 0.11521667500000063, 0.1218661499999996, 0.11647135000000049,
+          0.11324740000000019, 0.1222223999999997, 0.11048281249999832, 0.11214999999999975, 0.11073125000000061,
+          0.11341249999999832, 0.11330416250000042, 0.11881769999999961, 0.11346770000000106, 0.11384271249999926,
+          0.10873437500000023, 0.10838437499999998
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "root",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.33967656250000006,
+        "p95BatchMeanMs": 0.34763906250000076,
+        "minBatchMeanMs": 0.3257567749999993,
+        "maxBatchMeanMs": 0.34763906250000076,
+        "samples": [
+          0.336397925, 0.34113490000000013, 0.34105416250000076, 0.33320781249999953, 0.34763906250000076,
+          0.3339291750000001, 0.33848176249999967, 0.3363526000000007, 0.33948230000000024, 0.3416005250000012,
+          0.3416906250000011, 0.3257567749999993, 0.3283817625000012, 0.3401656250000002, 0.34127082500000083,
+          0.3432713499999977, 0.33967656250000006
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "root",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.001092712499999493,
+        "p95BatchMeanMs": 0.0014046875000019554,
+        "minBatchMeanMs": 0.0009671875000009323,
+        "maxBatchMeanMs": 0.0014046875000019554,
+        "samples": [
+          0.0010708374999992998, 0.001100000000000989, 0.0011161500000000046, 0.0009671875000009323,
+          0.0010885374999986652, 0.0010546875000002841, 0.0011213499999996658, 0.0009682249999997339,
+          0.0011015624999998863, 0.0009760499999998728, 0.001092712499999493, 0.000987499999999386,
+          0.0011630125000010594, 0.0010208375000019033, 0.0014046875000019554, 0.0011125000000021146,
+          0.0011145875000011074
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "item",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11415207499999838,
+        "p95BatchMeanMs": 0.12696615000000405,
+        "minBatchMeanMs": 0.10803853749999917,
+        "maxBatchMeanMs": 0.12696615000000405,
+        "samples": [
+          0.11377083749999883, 0.112578637499999, 0.11279427499999883, 0.11415207499999838, 0.1142676999999992,
+          0.10803853749999917, 0.11892812499999934, 0.1111916750000006, 0.12341301250000072, 0.11267500000000155,
+          0.1150088624999995, 0.12074531250000006, 0.11249478750000037, 0.11399322500000153, 0.11652656250000178,
+          0.12696615000000405, 0.11453906250000045
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "item",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.3428578124999973,
+        "p95BatchMeanMs": 0.3579041750000016,
+        "minBatchMeanMs": 0.32535729999999885,
+        "maxBatchMeanMs": 0.3579041750000016,
+        "samples": [
+          0.3377895875000007, 0.3388713500000023, 0.3428578124999973, 0.3461135499999983, 0.3526781249999999,
+          0.32946042499999917, 0.32535729999999885, 0.32964062499999897, 0.3288223999999985, 0.3385718749999995,
+          0.34752812499999947, 0.3579041750000016, 0.34656926250000025, 0.3495166624999996, 0.35098228749999977,
+          0.3302270749999991, 0.3438156249999963
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "item",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.010802599999999529,
+        "p95BatchMeanMs": 0.02563072500000203,
+        "minBatchMeanMs": 0.009243225000000166,
+        "maxBatchMeanMs": 0.02563072500000203,
+        "samples": [
+          0.009638025000000994, 0.009329687499999295, 0.009583862499999896, 0.009243225000000166, 0.013372924999998759,
+          0.010309374999999931, 0.010802599999999529, 0.02421875, 0.01110937500000091, 0.01063593750000109,
+          0.010966150000001562, 0.011251562499998613, 0.011822925000001306, 0.010441137499998376, 0.011295837500000516,
+          0.010759887499995102, 0.02563072500000203
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "sparse",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11854167500000017,
+        "p95BatchMeanMs": 0.14340364999999905,
+        "minBatchMeanMs": 0.11258281249999982,
+        "maxBatchMeanMs": 0.14340364999999905,
+        "samples": [
+          0.11258281249999982, 0.11854167500000017, 0.11684374999999818, 0.14340364999999905, 0.11528958750000129,
+          0.13639218750000168, 0.11511198750000062, 0.11835988750000297, 0.11875572499999976, 0.12187812499999495,
+          0.11938177499999938, 0.13879426249999938, 0.11903646249999725, 0.11400208750000047, 0.1187354125000013,
+          0.11726822499999798, 0.11719375000000128
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "sparse",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.359732812499999,
+        "p95BatchMeanMs": 0.4195718750000026,
+        "minBatchMeanMs": 0.3404145874999983,
+        "maxBatchMeanMs": 0.4195718750000026,
+        "samples": [
+          0.359732812499999, 0.35581823750000013, 0.34935312499999893, 0.3404145874999983, 0.3405812499999968,
+          0.3427838500000007, 0.3631088625000018, 0.36293489999999906, 0.37829166249999846, 0.37605886249999687,
+          0.4195718750000026, 0.3560697875000017, 0.34270989999999985, 0.364512499999995, 0.36030000000000084,
+          0.3563302125000007, 0.36122863749999967
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "sparse",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.04632343750000132,
+        "p95BatchMeanMs": 0.06531771250000133,
+        "minBatchMeanMs": 0.04123490000000061,
+        "maxBatchMeanMs": 0.06531771250000133,
+        "samples": [
+          0.04453853750000007, 0.05172551249999628, 0.04123490000000061, 0.06531771250000133, 0.05665572500000167,
+          0.04395832499999983, 0.04658593750000364, 0.04385573749999594, 0.04485833749999983, 0.043343225000000984,
+          0.06019115000000284, 0.056447400000001834, 0.06303697499999998, 0.050008850000000396, 0.04632343750000132,
+          0.04544999999999959, 0.04591144999999983
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "all",
+        "backend": "baseline",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11776250000000346,
+        "p95BatchMeanMs": 0.24516874999999344,
+        "minBatchMeanMs": 0.11192085000000133,
+        "maxBatchMeanMs": 0.24516874999999344,
+        "samples": [
+          0.11841875000000072, 0.11237500000002001, 0.11684374999999818, 0.12091454999999769, 0.12013125000000854,
+          0.11776250000000346, 0.120443750000004, 0.11610834999999042, 0.11229789999999866, 0.12105000000001383,
+          0.11994580000000496, 0.11438124999999673, 0.11596459999998388, 0.11957915000000412, 0.24516874999999344,
+          0.11294164999999338, 0.11192085000000133
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "all",
+        "backend": "state-lib",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.34974165000000995,
+        "p95BatchMeanMs": 0.5989771000000019,
+        "minBatchMeanMs": 0.3324312499999905,
+        "maxBatchMeanMs": 0.5989771000000019,
+        "samples": [
+          0.3500874999999951, 0.3336332999999968, 0.3383916499999941, 0.3551853999999821, 0.4559521000000132,
+          0.5989771000000019, 0.3409604500000114, 0.3324312499999905, 0.34974165000000995, 0.35157294999999067,
+          0.47114164999998137, 0.5488270499999999, 0.33606874999998126, 0.3388854000000038, 0.34958750000000693,
+          0.3419354500000054, 0.46668959999999515
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "all",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.33184790000000247,
+        "p95BatchMeanMs": 0.4508833500000037,
+        "minBatchMeanMs": 0.23806454999999005,
+        "maxBatchMeanMs": 0.4508833500000037,
+        "samples": [
+          0.3762916500000074, 0.4508833500000037, 0.3997521000000006, 0.253837499999986, 0.23806454999999005,
+          0.24570209999999407, 0.40095415000000684, 0.4372249999999894, 0.3186208499999793, 0.4322020500000008,
+          0.24839580000000297, 0.2490145999999868, 0.33184790000000247, 0.3784541499999932, 0.2831332999999859,
+          0.3913645999999972, 0.24199164999999995
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "move",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11467499999999972,
+        "p95BatchMeanMs": 0.11743697499999825,
+        "minBatchMeanMs": 0.1109625000000051,
+        "maxBatchMeanMs": 0.11743697499999825,
+        "samples": [
+          0.11195781249999755, 0.11375261249999653, 0.11486823749999645, 0.11665521250000097, 0.11743697499999825,
+          0.115462500000001, 0.11637812499999996, 0.11244374999999991, 0.11297396250000133, 0.11097187499999564,
+          0.11446250000000191, 0.1144520875000012, 0.11596562500000118, 0.11467499999999972, 0.1109625000000051,
+          0.11738072499999816, 0.11727396250000766
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "move",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.35496771250000164,
+        "p95BatchMeanMs": 0.369126037500007,
+        "minBatchMeanMs": 0.33573802500000055,
+        "maxBatchMeanMs": 0.369126037500007,
+        "samples": [
+          0.34269791250000026, 0.3578880249999997, 0.35347447500000156, 0.33573802500000055, 0.3395010500000012,
+          0.3511124999999993, 0.3448734375000015, 0.3633776000000012, 0.356971362500002, 0.35496771250000164,
+          0.35741822499999215, 0.35634427500000354, 0.34237761250000176, 0.36185677500000113, 0.35468176249999034,
+          0.3624296875000027, 0.369126037500007
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "move",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.22600519999999732,
+        "p95BatchMeanMs": 0.24548750000000155,
+        "minBatchMeanMs": 0.1913015625000014,
+        "maxBatchMeanMs": 0.24548750000000155,
+        "samples": [
+          0.20189062499999863, 0.23807500000000345, 0.19437864999999874, 0.2357984375000001, 0.1913015625000014,
+          0.2357520749999992, 0.19486927499999637, 0.23898644999999874, 0.19275728750000098, 0.23443646250000255,
+          0.24548750000000155, 0.23168437499999756, 0.19657396249999692, 0.22497551249999787, 0.21020208750001074,
+          0.22600519999999732, 0.23960208749999765
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "noop",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.11547656249999819,
+        "p95BatchMeanMs": 0.12965988750000862,
+        "minBatchMeanMs": 0.10935937500000818,
+        "maxBatchMeanMs": 0.12965988750000862,
+        "samples": [
+          0.11461249999999837, 0.11223697499999616, 0.11299896250000074, 0.11697447499999498, 0.11632396250000739,
+          0.11610052499999028, 0.11619478750000098, 0.10935937500000818, 0.11276718750000328, 0.11587812500000609,
+          0.1181557249999969, 0.11315000000000737, 0.11397552500000074, 0.11547656249999819, 0.11434011249999684,
+          0.11925937500000146, 0.12965988750000862
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "noop",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.3416864625000017,
+        "p95BatchMeanMs": 0.351352087500004,
+        "minBatchMeanMs": 0.32987134999999623,
+        "maxBatchMeanMs": 0.351352087500004,
+        "samples": [
+          0.34226666250000337, 0.34438698750000185, 0.3419765625000082, 0.3425786500000072, 0.33406093749999854,
+          0.3400614625000003, 0.33613437499999466, 0.3428645749999987, 0.3369822874999954, 0.33987500000000637,
+          0.32987134999999623, 0.3326744749999989, 0.3409838499999978, 0.345002087499995, 0.351352087500004,
+          0.3416864625000017, 0.34605364999999894
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "noop",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0010192749999987428,
+        "p95BatchMeanMs": 0.0014015624999956344,
+        "minBatchMeanMs": 0.0009036375000050611,
+        "maxBatchMeanMs": 0.0014015624999956344,
+        "samples": [
+          0.0010192749999987428, 0.0009557250000057138, 0.0010208375000047454, 0.000921874999994543,
+          0.0010359375000007277, 0.0009328124999910869, 0.0011723875000029694, 0.0011447875000044406,
+          0.0010166749999939383, 0.000929162499994618, 0.001071874999990996, 0.0009432250000031672,
+          0.0010578124999938154, 0.0009578125000075488, 0.0010281250000048203, 0.0009036375000050611,
+          0.0014015624999956344
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "history",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.26810937499999454,
+        "p95BatchMeanMs": 0.2740588499999944,
+        "minBatchMeanMs": 0.2567916625000066,
+        "maxBatchMeanMs": 0.2740588499999944,
+        "samples": [
+          0.26847759999999427, 0.2701354124999966, 0.2740588499999944, 0.2671249999999986, 0.2677151125000023,
+          0.26810937499999454, 0.2680739625000001, 0.2684270875000038, 0.26532812499999636, 0.2718682250000029,
+          0.26030781250000246, 0.2684494749999999, 0.2646510374999934, 0.2695942749999972, 0.2648427125000012,
+          0.2724208374999989, 0.2567916625000066
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "history",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.00046353750000207585,
+        "p95BatchMeanMs": 0.0006015625000031832,
+        "minBatchMeanMs": 0.0004031250000025466,
+        "maxBatchMeanMs": 0.0006015625000031832,
+        "samples": [
+          0.00044062500001018634, 0.00042343750000100043, 0.0004817750000029264, 0.0004734374999998181,
+          0.00044947499999352657, 0.00041926249999733043, 0.00043019999999387436, 0.00042136249999202846,
+          0.0004677000000015141, 0.0004760499999974854, 0.0005494750000025305, 0.0006015625000031832,
+          0.00046353750000207585, 0.0004208374999961961, 0.0004729124999926171, 0.0004031250000025466,
+          0.00048802500000419966
+        ]
+      },
+      {
+        "count": 300,
+        "operation": "history",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0004244749999998021,
+        "p95BatchMeanMs": 0.0005578125000056389,
+        "minBatchMeanMs": 0.00041041250000262153,
+        "maxBatchMeanMs": 0.0005578125000056389,
+        "samples": [
+          0.00042499999999563444, 0.0004661499999997432, 0.00043124999999690774, 0.0004145750000020598,
+          0.00041666249999252616, 0.0004687499999931788, 0.0005578125000056389, 0.0004593750000026375,
+          0.0004421874999934516, 0.0004203125000003638, 0.00042343750000100043, 0.00041874999999436113,
+          0.0004333374999987427, 0.00041041250000262153, 0.0004244749999998021, 0.0004140624999990905,
+          0.0004177124999955595
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "root",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.45249635000000127,
+        "p95BatchMeanMs": 0.4665583374999983,
+        "minBatchMeanMs": 0.4449677124999994,
+        "maxBatchMeanMs": 0.4665583374999983,
+        "samples": [
+          0.45194375000000947, 0.45249635000000127, 0.4486776125000006, 0.4568661499999962, 0.4492005250000034,
+          0.4565359375000071, 0.451936462499998, 0.451075000000003, 0.44982864999999495, 0.4665583374999983,
+          0.4449677124999994, 0.4664770875000045, 0.4524760375000028, 0.45574322500001474, 0.453514062499994,
+          0.4628640624999889, 0.4622572999999875
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "root",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.318879687499998,
+        "p95BatchMeanMs": 1.397581249999996,
+        "minBatchMeanMs": 1.2943510375000074,
+        "maxBatchMeanMs": 1.397581249999996,
+        "samples": [
+          1.3009724000000005, 1.3065291749999914, 1.2943510375000074, 1.3592927000000032, 1.3093974000000004,
+          1.3337505249999935, 1.3065729250000004, 1.3373192750000045, 1.3094375000000014, 1.3181729125000061,
+          1.3499994749999928, 1.397581249999996, 1.314364587500006, 1.3249932249999916, 1.318879687499998,
+          1.3331473875000028, 1.3190286499999957
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "root",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.00145988749998196,
+        "p95BatchMeanMs": 0.011860937500000546,
+        "minBatchMeanMs": 0.0011744750000048042,
+        "maxBatchMeanMs": 0.011860937500000546,
+        "samples": [
+          0.010930200000007061, 0.0013296874999923602, 0.001540112500003943, 0.0013078124999992724,
+          0.002065625000000182, 0.0013645874999951956, 0.0015583375000005617, 0.0013260374999958912,
+          0.0014526124999974855, 0.001309375000005275, 0.011860937500000546, 0.001321874999996453,
+          0.0016473999999902845, 0.0011744750000048042, 0.0015281249999816282, 0.0015270874999941952,
+          0.00145988749998196
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "item",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.45627291250000324,
+        "p95BatchMeanMs": 0.5017421875000082,
+        "minBatchMeanMs": 0.44945728749999037,
+        "maxBatchMeanMs": 0.5017421875000082,
+        "samples": [
+          0.44955937500001253, 0.45627291250000324, 0.4501140625000062, 0.45721042499999387, 0.4504224000000022,
+          0.45607343750000384, 0.4725838500000009, 0.45633697499999926, 0.4541119750000007, 0.4582536499999833,
+          0.44945728749999037, 0.5017421875000082, 0.476759375000006, 0.4714041625000164, 0.46588749999998524,
+          0.4506900999999971, 0.4536609374999898
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "item",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.341296350000016,
+        "p95BatchMeanMs": 1.3972375000000057,
+        "minBatchMeanMs": 1.3212453125000139,
+        "maxBatchMeanMs": 1.3972375000000057,
+        "samples": [
+          1.3288765624999996, 1.3324499999999944, 1.3317442750000055, 1.3597281249999924, 1.3212453125000139,
+          1.3465203125000016, 1.3603875000000016, 1.341296350000016, 1.3309692750000068, 1.3479448000000047,
+          1.3364708374999963, 1.3515400999999883, 1.392840625000008, 1.3972375000000057, 1.351724487499996,
+          1.3374171875000003, 1.3235656250000147
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "item",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.01215156250000291,
+        "p95BatchMeanMs": 0.024735937500008732,
+        "minBatchMeanMs": 0.011190099999998893,
+        "maxBatchMeanMs": 0.024735937500008732,
+        "samples": [
+          0.024735937500008732, 0.011190099999998893, 0.012125000000014551, 0.012027087499996014, 0.01173646249999365,
+          0.011573437500010187, 0.01311249999998836, 0.01215156250000291, 0.01294634999999289, 0.012466674999996031,
+          0.012582812499999818, 0.011592712499987102, 0.01433697499999198, 0.01308125000000473, 0.012219787499998348,
+          0.011910937500010732, 0.011390112499998394
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "sparse",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.466143749999992,
+        "p95BatchMeanMs": 0.49440937499998655,
+        "minBatchMeanMs": 0.4462630125000032,
+        "maxBatchMeanMs": 0.49440937499998655,
+        "samples": [
+          0.49440937499998655, 0.46575781250001, 0.46421614999999294, 0.4613057250000111, 0.4462630125000032,
+          0.46585625000000164, 0.47095625000001745, 0.4778036375000056, 0.47253801249999017, 0.49242864999998803,
+          0.4608364625000149, 0.4807192750000013, 0.4699171875000047, 0.46386301249999634, 0.466143749999992,
+          0.4766348999999991, 0.4638676999999916
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "sparse",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.387653649999993,
+        "p95BatchMeanMs": 1.444891662500004,
+        "minBatchMeanMs": 1.350242712499994,
+        "maxBatchMeanMs": 1.444891662500004,
+        "samples": [
+          1.360374999999999, 1.4439791624999998, 1.353035412500003, 1.3903651000000081, 1.354947399999992,
+          1.4003682250000111, 1.3554473874999986, 1.3898661374999848, 1.387653649999993, 1.4435041625000167,
+          1.4029270874999837, 1.444891662500004, 1.370770312500008, 1.4193182250000063, 1.350242712499994,
+          1.3801963500000056, 1.3559562500000084
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "sparse",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.20122187499998745,
+        "p95BatchMeanMs": 0.2830276124999955,
+        "minBatchMeanMs": 0.14223541250000835,
+        "maxBatchMeanMs": 0.2830276124999955,
+        "samples": [
+          0.2199114624999993, 0.20122187499998745, 0.21852603750000982, 0.19884374999999183, 0.16148644999998396,
+          0.1860192624999854, 0.1422536374999936, 0.2830276124999955, 0.14223541250000835, 0.23199635000000854,
+          0.25100417500000277, 0.2229390624999951, 0.22299427499999638, 0.19223177500000474, 0.17557656250000947,
+          0.23392343749999328, 0.1564828124999849
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "all",
+        "backend": "baseline",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 0.4793125000000146,
+        "p95BatchMeanMs": 0.5369041499999184,
+        "minBatchMeanMs": 0.4518562500000371,
+        "maxBatchMeanMs": 0.5369041499999184,
+        "samples": [
+          0.5027937500000007, 0.47267915000002175, 0.4793125000000146, 0.46652500000000147, 0.49025000000001456,
+          0.5288854000000356, 0.4560895999999957, 0.5369041499999184, 0.4720103999999992, 0.5286041500000465,
+          0.4518562500000371, 0.4674166999999215, 0.5113333499999498, 0.46764789999997447, 0.4888833500000146,
+          0.4704812500000116, 0.5054500000000189
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "all",
+        "backend": "state-lib",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 1.3798583500000858,
+        "p95BatchMeanMs": 1.448210399999971,
+        "minBatchMeanMs": 1.3251145999999607,
+        "maxBatchMeanMs": 1.448210399999971,
+        "samples": [
+          1.3565437499999462, 1.3251145999999607, 1.391333350000059, 1.3588812500000131, 1.3943707999999788,
+          1.3420854499999222, 1.448210399999971, 1.374822899999981, 1.4070333499999834, 1.3601187500000378,
+          1.3947708499999862, 1.3578499999999623, 1.3798583500000858, 1.3836521000000175, 1.4116812500000377,
+          1.334154149999995, 1.421368749999965
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "all",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 20,
+        "trials": 17,
+        "medianBatchMeanMs": 1.4289396000000125,
+        "p95BatchMeanMs": 1.7024583500000516,
+        "minBatchMeanMs": 1.0021353999999518,
+        "maxBatchMeanMs": 1.7024583500000516,
+        "samples": [
+          1.0021353999999518, 1.6229812499999752, 1.135241649999989, 1.7024583500000516, 1.107641650000005,
+          1.4981437500000538, 1.0649728999999752, 1.4990937500000654, 1.063641699999971, 1.4983062499999504,
+          1.0939000000000305, 1.6062312500000189, 1.4289396000000125, 1.5219499999999244, 1.0886687499999426,
+          1.5266333500000655, 1.097893750000003
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "move",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.4638395874999787,
+        "p95BatchMeanMs": 0.46973542499999893,
+        "minBatchMeanMs": 0.45372656249996907,
+        "maxBatchMeanMs": 0.46973542499999893,
+        "samples": [
+          0.4625963625000168, 0.46592916249996963, 0.4589973999999984, 0.46865677499999947, 0.46305103750000853,
+          0.4551932249999936, 0.45372656249996907, 0.465173437500016, 0.4624520875000144, 0.46973542499999893,
+          0.4638395874999787, 0.4641411500000231, 0.46690156250001563, 0.46850781250000184, 0.466732812500004,
+          0.4576239624999744, 0.4552682250000089
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "move",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.3511619875000178,
+        "p95BatchMeanMs": 1.38978228750002,
+        "minBatchMeanMs": 1.328848949999974,
+        "maxBatchMeanMs": 1.38978228750002,
+        "samples": [
+          1.3490630249999866, 1.358635937500003, 1.3430213625000307, 1.38978228750002, 1.3420744874999855,
+          1.3848260374999881, 1.3511619875000178, 1.3812093750000258, 1.3475541625000005, 1.3660583249999945,
+          1.328848949999974, 1.381607299999996, 1.3483177125000112, 1.378182812499972, 1.3351776125000014,
+          1.3558286499999668, 1.3390359375000116
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "move",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.5123375000000123,
+        "p95BatchMeanMs": 0.5437203124999996,
+        "minBatchMeanMs": 0.48614218749999055,
+        "maxBatchMeanMs": 0.5437203124999996,
+        "samples": [
+          0.5333619750000252, 0.5173468749999757, 0.48843697500001326, 0.5155994875000033, 0.5242723999999725,
+          0.5123375000000123, 0.48614218749999055, 0.4891177125000013, 0.4981520875000115, 0.53028697499999,
+          0.519960412499995, 0.5035031250000429, 0.49653853750000965, 0.4984046875000331, 0.5437203124999996,
+          0.5119307375000062, 0.5243171875000371
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "noop",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.46534947499999363,
+        "p95BatchMeanMs": 0.4929187499999898,
+        "minBatchMeanMs": 0.453121874999988,
+        "maxBatchMeanMs": 0.4929187499999898,
+        "samples": [
+          0.4576656249999814, 0.46178749999999125, 0.4601515625000047, 0.4553770875000282, 0.463496350000014,
+          0.4666932249999718, 0.453121874999988, 0.4707281250000051, 0.45909791250001036, 0.4929187499999898,
+          0.46670781249999893, 0.46534947499999363, 0.46286875000000693, 0.478663537500006, 0.4783755250000013,
+          0.46733437500001856, 0.46540052499999546
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "noop",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.350791662499978,
+        "p95BatchMeanMs": 1.3771291624999775,
+        "minBatchMeanMs": 1.3292114625000067,
+        "maxBatchMeanMs": 1.3771291624999775,
+        "samples": [
+          1.3394989500000065, 1.344918749999988, 1.348163537499977, 1.3675823000000036, 1.3292114625000067,
+          1.372206762499991, 1.3342546875000152, 1.350791662499978, 1.3425250000000233, 1.354667712499986,
+          1.3343203124999945, 1.3663234374999775, 1.3509520749999866, 1.3559072874999856, 1.3771291624999775,
+          1.3610442749999947, 1.3414604125000096
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "noop",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0012260375000096245,
+        "p95BatchMeanMs": 0.011600512499990145,
+        "minBatchMeanMs": 0.0010073000000375032,
+        "maxBatchMeanMs": 0.011600512499990145,
+        "samples": [
+          0.0010979124999721535, 0.0010073000000375032, 0.0010609375000058207, 0.0010171875000196452,
+          0.0016031249999741704, 0.0011551999999937835, 0.0015614624999670923, 0.0011828124999738066,
+          0.0013328125000043657, 0.001601562499990905, 0.011600512499990145, 0.0011208375000023806,
+          0.0013786499999696388, 0.0011083249999956023, 0.0013390625000283761, 0.0012260375000096245,
+          0.0013473999999860098
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "history",
+        "backend": "baseline",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 1.0557677124999827,
+        "p95BatchMeanMs": 1.101559887500025,
+        "minBatchMeanMs": 1.039212499999985,
+        "maxBatchMeanMs": 1.101559887500025,
+        "samples": [
+          1.03949427499997, 1.101559887500025, 1.0595166749999863, 1.056278125000017, 1.0432604250000168,
+          1.0557677124999827, 1.0533744750000096, 1.056960412499984, 1.0689968749999934, 1.0556140625000352,
+          1.0585088499999984, 1.0456281249999848, 1.046640625000009, 1.0598255250000421, 1.0562328125000022,
+          1.0453479124999832, 1.039212499999985
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "history",
+        "backend": "state-lib",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0006083374999889202,
+        "p95BatchMeanMs": 0.0008255124999777763,
+        "minBatchMeanMs": 0.000523437499987267,
+        "maxBatchMeanMs": 0.0008255124999777763,
+        "samples": [
+          0.0006281250000029104, 0.0005354125000394561, 0.0008255124999777763, 0.0006427124999845546,
+          0.0005645749999985128, 0.0005770875000052911, 0.0006249999999909051, 0.0005239499999788677,
+          0.0006046875000265573, 0.000523437499987267, 0.0007098999999925581, 0.0006083374999889202,
+          0.0005958249999821419, 0.0006312500000149157, 0.0005593750000116415, 0.00077707499999633,
+          0.0006135374999757914
+        ]
+      },
+      {
+        "count": 1200,
+        "operation": "history",
+        "backend": "state-lib-cow",
+        "iterationsPerTrial": 80,
+        "trials": 17,
+        "medianBatchMeanMs": 0.0005479124999965279,
+        "p95BatchMeanMs": 0.0008109375000003638,
+        "minBatchMeanMs": 0.0005135375000008934,
+        "maxBatchMeanMs": 0.0008109375000003638,
+        "samples": [
+          0.0005650999999943451, 0.0007718750000094588, 0.0005489624999881926, 0.0005302125000071101,
+          0.0005135375000008934, 0.0005296875000112778, 0.0005708375000267552, 0.0005203125000207365,
+          0.000523437499987267, 0.0005140624999967258, 0.0008109375000003638, 0.0005822875000376371,
+          0.0005520875000001979, 0.0005588625000200409, 0.000544274999992922, 0.000532287499981976,
+          0.0005479124999965279
+        ]
+      }
+    ],
+    "gates": [
+      {
+        "count": 30,
+        "operation": "root",
+        "medianRatio": 0.14133163424090023,
+        "strictSampleGate": true
+      },
+      {
+        "count": 30,
+        "operation": "item",
+        "medianRatio": 0.6467354005490261,
+        "strictSampleGate": false
+      },
+      {
+        "count": 30,
+        "operation": "sparse",
+        "medianRatio": 0.6918249878463811,
+        "strictSampleGate": false
+      },
+      {
+        "count": 30,
+        "operation": "all",
+        "medianRatio": 2.236947501489971,
+        "strictSampleGate": false
+      },
+      {
+        "count": 30,
+        "operation": "move",
+        "medianRatio": 2.565850009029549,
+        "strictSampleGate": false
+      },
+      {
+        "count": 30,
+        "operation": "noop",
+        "medianRatio": 0.06711938688969735,
+        "strictSampleGate": true
+      },
+      {
+        "count": 30,
+        "operation": "history",
+        "medianRatio": 0.01505901252861942,
+        "strictSampleGate": true
+      },
+      {
+        "count": 300,
+        "operation": "root",
+        "medianRatio": 0.009634850655787583,
+        "strictSampleGate": true
+      },
+      {
+        "count": 300,
+        "operation": "item",
+        "medianRatio": 0.09463340898533541,
+        "strictSampleGate": true
+      },
+      {
+        "count": 300,
+        "operation": "sparse",
+        "medianRatio": 0.3907776526694199,
+        "strictSampleGate": true
+      },
+      {
+        "count": 300,
+        "operation": "all",
+        "medianRatio": 2.817942044368901,
+        "strictSampleGate": false
+      },
+      {
+        "count": 300,
+        "operation": "move",
+        "medianRatio": 1.9708323522999596,
+        "strictSampleGate": false
+      },
+      {
+        "count": 300,
+        "operation": "noop",
+        "medianRatio": 0.00882668290371701,
+        "strictSampleGate": true
+      },
+      {
+        "count": 300,
+        "operation": "history",
+        "medianRatio": 0.0015832158051161424,
+        "strictSampleGate": true
+      },
+      {
+        "count": 1200,
+        "operation": "root",
+        "medianRatio": 0.0032262967424642338,
+        "strictSampleGate": true
+      },
+      {
+        "count": 1200,
+        "operation": "item",
+        "medianRatio": 0.02663222419543221,
+        "strictSampleGate": true
+      },
+      {
+        "count": 1200,
+        "operation": "sparse",
+        "medianRatio": 0.4316734376466292,
+        "strictSampleGate": true
+      },
+      {
+        "count": 1200,
+        "operation": "all",
+        "medianRatio": 2.9812274872864135,
+        "strictSampleGate": false
+      },
+      {
+        "count": 1200,
+        "operation": "move",
+        "medianRatio": 1.1045575104130927,
+        "strictSampleGate": false
+      },
+      {
+        "count": 1200,
+        "operation": "noop",
+        "medianRatio": 0.002634659682402438,
+        "strictSampleGate": true
+      },
+      {
+        "count": 1200,
+        "operation": "history",
+        "medianRatio": 0.0005189706916676872,
+        "strictSampleGate": true
+      }
+    ],
+    "universalPromotion": false
+  },
+  "cow_gate": {
+    "scope": "Same Runtime semantics against current full-copy implementation, with a separate stricter pre-library latency budget. This is not an assertion that the mutable pre-library baseline had the same correctness guarantees.",
+    "candidateAccepted": false,
+    "conformanceExit": 0,
+    "conformancePassed": 21,
+    "conformanceFailed": 0,
+    "autoEqualsBaseline": true,
+    "emittedBytes": 11408,
+    "baselineHash": "07789e06abc6515e203bdd25827ef88fb27e8ac5681238e92cd8898e0bd523fc",
+    "profileSourceHash": "7639f739440345f5a357fb09f3162cebb417b6e53e90cb11edadbdd7e8264b17",
+    "decision": {
+      "baseline": "src/baseline.mjs",
+      "baselineImport": "./baseline.mjs",
+      "candidates": [
+        {
+          "eligible": false,
+          "observedCells": 42,
+          "reasons": [
+            "Regression node26-m4pro/30/item/pre-library-budget-ms: max candidate 0.016773437499999842 > min baseline 0.012263537500000154",
+            "Regression node26-m4pro/30/sparse/current-runtime-ms: max candidate 0.040559375000000134 > min baseline 0.03771249999999995",
+            "Regression node26-m4pro/30/sparse/pre-library-budget-ms: max candidate 0.040559375000000134 > min baseline 0.012357299999999682",
+            "Regression node26-m4pro/30/all/current-runtime-ms: max candidate 0.17419999999999902 > min baseline 0.03809170000000108",
+            "Regression node26-m4pro/30/all/pre-library-budget-ms: max candidate 0.17419999999999902 > min baseline 0.012714550000001167",
+            "Regression node26-m4pro/30/move/current-runtime-ms: max candidate 0.10027864999999991 > min baseline 0.03727551249999976",
+            "Regression node26-m4pro/30/move/pre-library-budget-ms: max candidate 0.10027864999999991 > min baseline 0.01252500000000012",
+            "Regression node26-m4pro/30/history/current-runtime-ms: max candidate 0.0006859375000004775 > min baseline 0.0004145874999991861",
+            "Regression node26-m4pro/300/all/current-runtime-ms: max candidate 0.4508833500000037 > min baseline 0.3324312499999905",
+            "Regression node26-m4pro/300/all/pre-library-budget-ms: max candidate 0.4508833500000037 > min baseline 0.11192085000000132",
+            "Regression node26-m4pro/300/move/pre-library-budget-ms: max candidate 0.24548750000000155 > min baseline 0.1109625000000051",
+            "Regression node26-m4pro/300/history/current-runtime-ms: max candidate 0.0005578125000056389 > min baseline 0.0004031250000025466",
+            "Regression node26-m4pro/1200/all/current-runtime-ms: max candidate 1.7024583500000516 > min baseline 1.3251145999999607",
+            "Regression node26-m4pro/1200/all/pre-library-budget-ms: max candidate 1.7024583500000516 > min baseline 0.4518562500000371",
+            "Regression node26-m4pro/1200/move/pre-library-budget-ms: max candidate 0.5437203124999996 > min baseline 0.45372656249996907",
+            "Regression node26-m4pro/1200/history/current-runtime-ms: max candidate 0.0008109375000003638 > min baseline 0.000523437499987267"
+          ],
+          "variant": "cow",
+          "worstObservedRatio": 13.700838802787596,
+          "worstObservedRatioUnbounded": false
+        }
+      ],
+      "entry": "src/baseline.mjs",
+      "facade": "src/strategy.mjs",
+      "rewrite": {
+        "after": ";",
+        "before": "export { createDocumentStore } from "
+      },
+      "selected": "baseline",
+      "unit": "document"
+    },
+    "emitted": {
+      "baseline": {
+        "raw": 11408,
+        "gzip": 4288
+      },
+      "selected": {
+        "raw": 11408,
+        "gzip": 4288
+      },
+      "sourceMap": true,
+      "runtimeDispatcher": false
+    }
+  },
+  "generated": {
+    "compiler": "statec/0.1.0-oxc",
+    "decisions": [
+      {
+        "baseline": "src/baseline.mjs",
+        "baselineImport": "./baseline.mjs",
+        "candidates": [
+          {
+            "eligible": true,
+            "observedCells": 2,
+            "reasons": [],
+            "variant": "generated",
+            "worstObservedRatio": 0.11765556695142534,
+            "worstObservedRatioUnbounded": false
+          }
+        ],
+        "entry": "src/generated.mjs",
+        "facade": "src/strategy.mjs",
+        "rewrite": {
+          "after": ";",
+          "before": "export {project} from "
+        },
+        "selected": "generated",
+        "unit": "projection"
+      }
+    ],
+    "generatedModules": [
+      {
+        "content": "export function project(input) { return { [\"id\"]: input[\"id\"], [\"done\"]: input[\"done\"] }; }\n",
+        "kind": "projection",
+        "path": "src/generated.mjs",
+        "unit": "projection",
+        "variant": "generated"
+      }
+    ],
+    "guarantee": "All declared sampled cells pass conservative max(candidate)<=min(baseline); not a bound on every future execution",
+    "inventory": [
+      {
+        "bytes": 214,
+        "path": "src/baseline.mjs",
+        "statements": 2
+      },
+      {
+        "bytes": 39,
+        "path": "src/entry.mjs",
+        "statements": 1
+      },
+      {
+        "bytes": 39,
+        "path": "src/strategy.mjs",
+        "statements": 1
+      },
+      {
+        "bytes": 92,
+        "path": "src/generated.mjs",
+        "statements": 1
+      }
+    ],
+    "manifestVersion": 1,
+    "scope": "explicit contract-preserving module specialization; not general state source lowering",
+    "selectionTime": "build",
+    "sourceHash": "1a7620a632f348bae80f7a4cbd1358ce8f521dec1b7d099cf12d55c3482c444a",
+    "targets": ["node26-m4pro"],
+    "phase": "emitted-and-size-checked",
+    "emitted": {
+      "baseline": {
+        "raw": 171,
+        "gzip": 153
+      },
+      "selected": {
+        "raw": 64,
+        "gzip": 80
+      },
+      "sourceMap": true,
+      "runtimeDispatcher": false
+    },
+    "bundler": "esbuild/0.25.12",
+    "inputs": [
+      "state-generated:/Users/ultra/work/hyper-canvas-draft-worktrees/state-build-research-20260918/packages/state-lib/experiments/2026-09-20-hybrid/generated-fixture/src/generated.mjs",
+      "state-facade:/Users/ultra/work/hyper-canvas-draft-worktrees/state-build-research-20260918/packages/state-lib/experiments/2026-09-20-hybrid/generated-fixture/src/strategy.mjs",
+      "src/entry.mjs"
+    ]
+  },
+  "dense_data_only": {
+    "node": "v26.7.0",
+    "rows": [
+      {
+        "count": 30,
+        "method": "copy",
+        "medianBatchMeanMs": 0.03378750000000004,
+        "maximumBatchMeanMs": 0.06731562499999999,
+        "samples": [
+          0.03277603749999995, 0.03886613749999999, 0.037963012499999935, 0.03400990000000004, 0.033419787500000096,
+          0.06731562499999999, 0.03232916249999995, 0.03449947499999997, 0.03320208750000013, 0.036583862499999856,
+          0.036583325000000146, 0.036933849999999956, 0.03378750000000004, 0.0311124999999997, 0.03213593750000001,
+          0.03208177499999998, 0.03157968750000002
+        ]
+      },
+      {
+        "count": 30,
+        "method": "cow",
+        "medianBatchMeanMs": 0.03499947499999996,
+        "maximumBatchMeanMs": 0.18819010000000008,
+        "samples": [
+          0.03999687500000002, 0.04918230000000001, 0.07249687500000004, 0.03499947499999996, 0.03869218749999988,
+          0.047901037500000146, 0.031499475000000034, 0.031503124999999875, 0.18819010000000008, 0.02560886250000003,
+          0.026676562499999966, 0.026004687499999866, 0.025855212500000134, 0.05108020000000017, 0.02539947500000004,
+          0.025491137499999893, 0.06221509999999988
+        ]
+      },
+      {
+        "count": 30,
+        "method": "direct",
+        "medianBatchMeanMs": 0.0007729125000000891,
+        "maximumBatchMeanMs": 0.0009500000000000952,
+        "samples": [
+          0.0007890625000000817, 0.0007947874999999271, 0.0007687500000000292, 0.0007682374999999908,
+          0.000857287500000048, 0.0009349000000000273, 0.0009500000000000952, 0.0008573000000000163,
+          0.0007729125000000891, 0.0007536500000000501, 0.0007531249999999546, 0.000752074999999941,
+          0.0007973874999997576, 0.0008619875000000832, 0.0007500000000000284, 0.0007708250000000305,
+          0.0007692749999996806
+        ]
+      },
+      {
+        "count": 300,
+        "method": "copy",
+        "medianBatchMeanMs": 0.3282135374999996,
+        "maximumBatchMeanMs": 0.4041255249999999,
+        "samples": [
+          0.4041255249999999, 0.3221562500000005, 0.3661525999999995, 0.3016062500000004, 0.27856718749999915,
+          0.3282135374999996, 0.3838567749999996, 0.32675156250000015, 0.27779634999999986, 0.38947136250000086,
+          0.2840791624999994, 0.3628567750000002, 0.37536146250000113, 0.2988536500000009, 0.36251822499999947,
+          0.3292385375000009, 0.2706593749999996
+        ]
+      },
+      {
+        "count": 300,
+        "method": "cow",
+        "medianBatchMeanMs": 0.35453437500000007,
+        "maximumBatchMeanMs": 0.45395624999999884,
+        "samples": [
+          0.29161406250000044, 0.3384650999999998, 0.3557489625000002, 0.3523765624999996, 0.37776614999999936,
+          0.3395687499999994, 0.35602812500000025, 0.3390234375000006, 0.3900984374999993, 0.3100520750000001,
+          0.4163343749999996, 0.3401656250000002, 0.29389478749999964, 0.36356979999999905, 0.36544478750000164,
+          0.35453437500000007, 0.45395624999999884
+        ]
+      },
+      {
+        "count": 300,
+        "method": "direct",
+        "medianBatchMeanMs": 0.007158849999999717,
+        "maximumBatchMeanMs": 0.05687083749999999,
+        "samples": [
+          0.0072322874999997564, 0.007451562499999653, 0.0067911375000001325, 0.007158849999999717,
+          0.006768225000000428, 0.006941150000000107, 0.007124474999999108, 0.007293224999999381, 0.05687083749999999,
+          0.00701406249999934, 0.007434374999999704, 0.007382812500000569, 0.006779687499999909, 0.007407812499999977,
+          0.007077599999999506, 0.00745990000000063, 0.00687656249999975
+        ]
+      },
+      {
+        "count": 1200,
+        "method": "copy",
+        "medianBatchMeanMs": 1.232155212500004,
+        "maximumBatchMeanMs": 1.3215312499999983,
+        "samples": [
+          1.2533052124999984, 1.2086953125000037, 1.2026531250000005, 1.2911604249999982, 1.2080781249999972,
+          1.213563025000002, 1.2499140624999996, 1.2095880249999993, 1.273715625, 1.2862229125, 1.232155212500004,
+          1.1947656250000023, 1.2440072874999941, 1.2206770750000033, 1.2612838499999952, 1.3215312499999983,
+          1.2102161375000038
+        ]
+      },
+      {
+        "count": 1200,
+        "method": "cow",
+        "medianBatchMeanMs": 1.5586906250000083,
+        "maximumBatchMeanMs": 2.089479162499998,
+        "samples": [
+          1.6055682375000004, 1.4708276000000011, 1.6296067625000035, 1.504678637500001, 2.089479162499998,
+          1.5354609375000052, 1.7110333374999982, 1.476810412499998, 1.6034760500000005, 1.476642712499995,
+          1.5914265624999984, 1.5586906250000083, 1.7053380250000032, 1.448386974999994, 1.625664574999996,
+          1.416805737499999, 1.553980212500005
+        ]
+      },
+      {
+        "count": 1200,
+        "method": "direct",
+        "medianBatchMeanMs": 0.029238024999995105,
+        "maximumBatchMeanMs": 0.06939531250000072,
+        "samples": [
+          0.06939531250000072, 0.028477600000002212, 0.029879687499999363, 0.029403650000000427, 0.028957287500003304,
+          0.029549487500003125, 0.02828333749999956, 0.028487499999999954, 0.029238024999995105, 0.029382812500000455,
+          0.028573437499994726, 0.02957238750000215, 0.029689062499994635, 0.029717187500000363, 0.028714587499996468,
+          0.028089587499994195, 0.027657812500001454
+        ]
+      }
+    ],
+    "method": "17 alternating batches after3 warmups;80 transformations per batch from the same immutable owned base. The last40 versions remain live and every retained row is checked outside timing; freezing and result construction are included.",
+    "limits": [
+      "Data transformation only: excludes Runtime, history, notification, validation/import and DOM.",
+      "Direct function is handwritten as a compiler-target prototype, not emitted by state build.",
+      "Restricted known JSON-tree command; it is not a replacement for arbitrary callbacks or shared-reference graphs.",
+      "Direct output is not registered as owned by the generic COW helper; automatic interleaving/adoption is not implemented."
+    ]
+  },
+  "sources": {
+    "compiler/src/main.rs": "89afbeed4af4ed4388719f30841a4aed71fd981f7326dc5aa3781df50673ff36",
+    "compiler/src/projection.rs": "ffa624619c4697611f4217332c113f26fb67b5abf6174eeb9a2e675e097df4a2",
+    "cli/state_cli/main.py": "9430e7035217f93559e153b3c15c2b56621b2fe89d2effde21e3ce90679b186b",
+    "build-tools/bundle.mjs": "58a7eace2f87949fdec2705b0dbd667f6571119e1366bb60fd758cf110a28bed",
+    "tests/compiler/test_generated.py": "21d7d503868716a39c8ed08bc57714cecdb261e3d364ee2509d19fdfcf5097e4",
+    "experiments/2026-09-19-cow/json-draft.mjs": "2ccef07b5c2ce7ddb5df2775c184e90b58b415161561e7efa19cdfc11629d8a7",
+    "experiments/2026-09-19-cow/json-draft.test.mjs": "84c4291692b9aeaa4e3b04b8830f9001525a7419ca743230e46a3f97999d5a29"
+  },
+  "publication": "source commit recorded separately after normal review/hooks",
+  "notes": [
+    "COW is an explicit laboratory backend, not automatic per-command application selection.",
+    "B0 original mutable application and B1 conforming full-copy Runtime are different comparison contracts.",
+    "Generated projections are implemented; the dense updater is a handwritten restricted probe, not yet compiler-emitted or app-integrated.",
+    "Raw controller and generated profiles were produced from actual source. Future edits invalidate qualification."
+  ]
+}

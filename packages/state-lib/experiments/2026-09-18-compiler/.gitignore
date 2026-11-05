@@ -1,0 +1,8 @@
+projection-fixture/compiled/
+results/*.log
+results/*.exit
+results/*preflight.json
+results/*retry.json
+results/report-page-*.png
+results/*.diff
+results/final-profile-check.json

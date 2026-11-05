@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 
 const RUNTIME_PUBLIC_ENTRY = '../../runtime/src/index.js';
-const PRODUCTION_MODULES = ['async-resource.ts', 'match-async-state.ts', 'index.ts'];
+const PRODUCTION_MODULES = ['async-resource.ts', 'match-async-state.ts', 'operation-scope.ts', 'index.ts'];
 const TESTING_MODULES = ['async-conformance.ts', 'testing.ts'];
 const HEADLESS_MODULES = [...PRODUCTION_MODULES, ...TESTING_MODULES];
 

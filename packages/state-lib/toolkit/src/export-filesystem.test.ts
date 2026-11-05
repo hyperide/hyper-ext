@@ -327,8 +327,37 @@ test('an output beside custom sources remains supported', () => {
     const srcDir = join(scratch, 'src');
     fs.cpSync(${JSON.stringify(resolve(toolkitRoot, 'src'))}, srcDir, { recursive: true });
     const result = exportPackage({ srcDir, dest });
-    assert.equal(result.builtFiles.length, 10);
+    assert.equal(result.builtFiles.length, 12);
     assert.ok(fs.existsSync(join(dest, 'dist/index.js')));
+    assert.ok(owned.every((path) => !fs.existsSync(path)));
+  `);
+});
+
+test('export under node_modules preserves the declared emitted layout', () => {
+  runFilesystemCase(`
+    const parent = join(scratch, 'node_modules', '@ultrabricks');
+    fs.mkdirSync(parent, { recursive: true });
+    const target = join(parent, 'state-toolkit-async');
+    const result = exportPackage({ dest: target });
+    assert.equal(result.builtFiles.length, 12);
+    assert.ok(fs.existsSync(join(target, 'dist/index.js')));
+    assert.ok(fs.existsSync(join(target, 'dist/operation-scope.d.ts')));
+    assert.ok(owned.every((path) => !fs.existsSync(path)));
+  `);
+});
+
+test('export below node_modules rejects a referenced module outside its declared file set', () => {
+  runFilesystemCase(`
+    const parent = join(scratch, 'node_modules', '@ultrabricks');
+    fs.mkdirSync(parent, { recursive: true });
+    const source = join(scratch, 'source');
+    fs.cpSync(${JSON.stringify(resolve(toolkitRoot, 'src'))}, source, { recursive: true });
+    fs.appendFileSync(join(source, 'index.ts'), ${JSON.stringify('\nexport * from "./unexpected.js";\n')});
+    fs.writeFileSync(join(source, 'unexpected.ts'), 'export const unexpected = 1;');
+    const target = join(parent, 'state-toolkit-async');
+    assert.throws(() => exportPackage({ srcDir: source, dest: target }),
+      /Unexpected (?:emitted toolkit files|module specifier)/);
+    assert.equal(fs.existsSync(target), false);
     assert.ok(owned.every((path) => !fs.existsSync(path)));
   `);
 });

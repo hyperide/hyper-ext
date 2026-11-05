@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "sourceRoot": "src",
+  "entry": "src/entry.ts",
+  "outDir": "compiled",
+  "targets": ["node26-m4pro"],
+  "capabilities": [],
+  "metrics": ["meanOperationMs", "gzipBytes"],
+  "cases": ["one-row", "many-rows"],
+  "minimumSamples": 5,
+  "units": [
+    {
+      "id": "projection",
+      "facade": "src/strategy.ts",
+      "baseline": "src/baseline.ts",
+      "timing": "sync",
+      "contract": "own-id-done-projection-v1",
+      "variants": [
+        {
+          "id": "static-fields",
+          "entry": "src/specialized.ts",
+          "contract": "own-id-done-projection-v1",
+          "executor": "js-main",
+          "requires": []
+        }
+      ]
+    }
+  ]
+}

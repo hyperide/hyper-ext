@@ -1,0 +1,9 @@
+selection-fixture/
+results/*.log
+results/*.exit
+results/*.tap
+results/boards-browser/
+results/ui/
+results/*.png
+results/controller-initial.json
+results/*.diff

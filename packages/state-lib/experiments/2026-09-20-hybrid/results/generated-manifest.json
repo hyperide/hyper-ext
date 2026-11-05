@@ -1,0 +1,83 @@
+{
+  "compiler": "statec/0.1.0-oxc",
+  "decisions": [
+    {
+      "baseline": "src/baseline.mjs",
+      "baselineImport": "./baseline.mjs",
+      "candidates": [
+        {
+          "eligible": true,
+          "observedCells": 2,
+          "reasons": [],
+          "variant": "generated",
+          "worstObservedRatio": 0.11765556695142534,
+          "worstObservedRatioUnbounded": false
+        }
+      ],
+      "entry": "src/generated.mjs",
+      "facade": "src/strategy.mjs",
+      "rewrite": {
+        "after": ";",
+        "before": "export {project} from "
+      },
+      "selected": "generated",
+      "unit": "projection"
+    }
+  ],
+  "generatedModules": [
+    {
+      "content": "export function project(input) { return { [\"id\"]: input[\"id\"], [\"done\"]: input[\"done\"] }; }\n",
+      "kind": "projection",
+      "path": "src/generated.mjs",
+      "unit": "projection",
+      "variant": "generated"
+    }
+  ],
+  "guarantee": "All declared sampled cells pass conservative max(candidate)<=min(baseline); not a bound on every future execution",
+  "inventory": [
+    {
+      "bytes": 214,
+      "path": "src/baseline.mjs",
+      "statements": 2
+    },
+    {
+      "bytes": 39,
+      "path": "src/entry.mjs",
+      "statements": 1
+    },
+    {
+      "bytes": 39,
+      "path": "src/strategy.mjs",
+      "statements": 1
+    },
+    {
+      "bytes": 92,
+      "path": "src/generated.mjs",
+      "statements": 1
+    }
+  ],
+  "manifestVersion": 1,
+  "scope": "explicit contract-preserving module specialization; not general state source lowering",
+  "selectionTime": "build",
+  "sourceHash": "1a7620a632f348bae80f7a4cbd1358ce8f521dec1b7d099cf12d55c3482c444a",
+  "targets": ["node26-m4pro"],
+  "phase": "emitted-and-size-checked",
+  "emitted": {
+    "baseline": {
+      "raw": 171,
+      "gzip": 153
+    },
+    "selected": {
+      "raw": 64,
+      "gzip": 80
+    },
+    "sourceMap": true,
+    "runtimeDispatcher": false
+  },
+  "bundler": "esbuild/0.25.12",
+  "inputs": [
+    "state-generated:/Users/ultra/work/hyper-canvas-draft-worktrees/state-build-research-20260918/packages/state-lib/experiments/2026-09-20-hybrid/generated-fixture/src/generated.mjs",
+    "state-facade:/Users/ultra/work/hyper-canvas-draft-worktrees/state-build-research-20260918/packages/state-lib/experiments/2026-09-20-hybrid/generated-fixture/src/strategy.mjs",
+    "src/entry.mjs"
+  ]
+}

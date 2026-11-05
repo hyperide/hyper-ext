@@ -1,0 +1,12 @@
+{
+  "name": "@state/build-tools",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "esbuild": "0.25.12"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0",
+    "wabt": "1.0.39"
+  }
+}

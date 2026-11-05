@@ -1,0 +1,62 @@
+{
+  "scope": "Same Runtime semantics against current full-copy implementation, with a separate stricter pre-library latency budget. This is not an assertion that the mutable pre-library baseline had the same correctness guarantees.",
+  "candidateAccepted": false,
+  "conformanceExit": 0,
+  "conformancePassed": 21,
+  "conformanceFailed": 0,
+  "autoEqualsBaseline": true,
+  "emittedBytes": 11408,
+  "baselineHash": "07789e06abc6515e203bdd25827ef88fb27e8ac5681238e92cd8898e0bd523fc",
+  "profileSourceHash": "7639f739440345f5a357fb09f3162cebb417b6e53e90cb11edadbdd7e8264b17",
+  "decision": {
+    "baseline": "src/baseline.mjs",
+    "baselineImport": "./baseline.mjs",
+    "candidates": [
+      {
+        "eligible": false,
+        "observedCells": 42,
+        "reasons": [
+          "Regression node26-m4pro/30/item/pre-library-budget-ms: max candidate 0.016773437499999842 > min baseline 0.012263537500000154",
+          "Regression node26-m4pro/30/sparse/current-runtime-ms: max candidate 0.040559375000000134 > min baseline 0.03771249999999995",
+          "Regression node26-m4pro/30/sparse/pre-library-budget-ms: max candidate 0.040559375000000134 > min baseline 0.012357299999999682",
+          "Regression node26-m4pro/30/all/current-runtime-ms: max candidate 0.17419999999999902 > min baseline 0.03809170000000108",
+          "Regression node26-m4pro/30/all/pre-library-budget-ms: max candidate 0.17419999999999902 > min baseline 0.012714550000001167",
+          "Regression node26-m4pro/30/move/current-runtime-ms: max candidate 0.10027864999999991 > min baseline 0.03727551249999976",
+          "Regression node26-m4pro/30/move/pre-library-budget-ms: max candidate 0.10027864999999991 > min baseline 0.01252500000000012",
+          "Regression node26-m4pro/30/history/current-runtime-ms: max candidate 0.0006859375000004775 > min baseline 0.0004145874999991861",
+          "Regression node26-m4pro/300/all/current-runtime-ms: max candidate 0.4508833500000037 > min baseline 0.3324312499999905",
+          "Regression node26-m4pro/300/all/pre-library-budget-ms: max candidate 0.4508833500000037 > min baseline 0.11192085000000132",
+          "Regression node26-m4pro/300/move/pre-library-budget-ms: max candidate 0.24548750000000155 > min baseline 0.1109625000000051",
+          "Regression node26-m4pro/300/history/current-runtime-ms: max candidate 0.0005578125000056389 > min baseline 0.0004031250000025466",
+          "Regression node26-m4pro/1200/all/current-runtime-ms: max candidate 1.7024583500000516 > min baseline 1.3251145999999607",
+          "Regression node26-m4pro/1200/all/pre-library-budget-ms: max candidate 1.7024583500000516 > min baseline 0.4518562500000371",
+          "Regression node26-m4pro/1200/move/pre-library-budget-ms: max candidate 0.5437203124999996 > min baseline 0.45372656249996907",
+          "Regression node26-m4pro/1200/history/current-runtime-ms: max candidate 0.0008109375000003638 > min baseline 0.000523437499987267"
+        ],
+        "variant": "cow",
+        "worstObservedRatio": 13.700838802787596,
+        "worstObservedRatioUnbounded": false
+      }
+    ],
+    "entry": "src/baseline.mjs",
+    "facade": "src/strategy.mjs",
+    "rewrite": {
+      "after": ";",
+      "before": "export { createDocumentStore } from "
+    },
+    "selected": "baseline",
+    "unit": "document"
+  },
+  "emitted": {
+    "baseline": {
+      "raw": 11408,
+      "gzip": 4288
+    },
+    "selected": {
+      "raw": 11408,
+      "gzip": 4288
+    },
+    "sourceMap": true,
+    "runtimeDispatcher": false
+  }
+}

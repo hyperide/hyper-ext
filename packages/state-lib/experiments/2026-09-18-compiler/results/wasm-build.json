@@ -1,0 +1,23 @@
+{
+  "tool": "wabt@1.0.39",
+  "builds": [
+    {
+      "name": "numeric",
+      "bytes": 137,
+      "sourceSha256": "14ab240c77d40d93779e1492ca9d646b0d03ca6353b249b399b82677c376014d",
+      "sha256": "c8f9ba07c31b0b344bd47d2b89d4eb0d7fa2876f91874f226e95a7946efcbfdf"
+    },
+    {
+      "name": "strings",
+      "bytes": 91,
+      "sourceSha256": "e401431677476d0f24dcafc4013d633c2574b757aec8cc8e0c5cc977cddc7098",
+      "sha256": "f594cc491dd981228059a0104a2be6ce740d0a9bda6a82c0bc4bbf492633681f"
+    },
+    {
+      "name": "simd",
+      "bytes": 57,
+      "sourceSha256": "6a46dee7bc0bf256a0f5ad38eb0f68902c4f6c9a0ca3f30ddc97a29cc74240f7",
+      "sha256": "5e2504acc8a5b0e62501402e30ca599ddeeac0da7fd75caf8e729877505f617d"
+    }
+  ]
+}

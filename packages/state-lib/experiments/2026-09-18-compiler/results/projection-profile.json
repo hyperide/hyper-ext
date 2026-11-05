@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "sourceHash": "6585cf73c6d61e232d7a711927860eb3341189ef339d6773bf47c4f4c0ad3c28",
+  "correctness": [
+    {
+      "unit": "projection",
+      "variant": "static-fields",
+      "target": "node26-m4pro",
+      "passed": true,
+      "testHash": "33f1134149b920daba5719b09d51d43e60f6e4bee42fb37bbbda1a0a742c730f",
+      "checks": 5008
+    }
+  ],
+  "records": [
+    {
+      "unit": "projection",
+      "variant": "static-fields",
+      "target": "node26-m4pro",
+      "case": "one-row",
+      "metric": "meanOperationMs",
+      "baseline": [
+        0.00022457915000000027, 0.00022237500000000027, 0.00021522292499999977, 0.0002091260499999997,
+        0.00020881562499999972, 0.00020533227499999995, 0.00020987500000000026, 0.00020156772500000032,
+        0.00021107187499999966
+      ],
+      "candidate": [
+        0.00000987292499999981, 0.00002408645000000007, 0.000011879174999999976, 0.000010334375000000051,
+        0.000010564574999999365, 0.00000995417500000002, 0.000009856249999999989, 0.000010734374999999829,
+        0.00000993855000000039
+      ]
+    },
+    {
+      "unit": "projection",
+      "variant": "static-fields",
+      "target": "node26-m4pro",
+      "case": "one-row",
+      "metric": "gzipBytes",
+      "baseline": [155, 155, 155, 155, 155],
+      "candidate": [80, 80, 80, 80, 80]
+    },
+    {
+      "unit": "projection",
+      "variant": "static-fields",
+      "target": "node26-m4pro",
+      "case": "many-rows",
+      "metric": "meanOperationMs",
+      "baseline": [
+        0.0002091562499999995, 0.00022525520000000085, 0.00021798019999999952, 0.00020727499999999993,
+        0.00021157812499999977, 0.00021585624999999879, 0.00020836147499999952, 0.00021201562499999937,
+        0.00020895210000000048
+      ],
+      "candidate": [
+        0.000011037500000000477, 0.000013082274999999299, 0.0000113020750000004, 0.000011336450000000297,
+        0.000010315625000001205, 0.00001254062500000117, 0.000010808325000000708, 0.000009251050000000305,
+        0.000009880225000000565
+      ]
+    },
+    {
+      "unit": "projection",
+      "variant": "static-fields",
+      "target": "node26-m4pro",
+      "case": "many-rows",
+      "metric": "gzipBytes",
+      "baseline": [155, 155, 155, 155, 155],
+      "candidate": [80, 80, 80, 80, 80]
+    }
+  ],
+  "method": "Nine alternating timing trials after three warmups; 40000 calls per trial, batch mean not event P95. Five independent minified bundle builds per byte measurement. Scalar projection, not application state/DOM speed.",
+  "node": "v26.7.0"
+}

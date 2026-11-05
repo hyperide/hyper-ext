@@ -1,0 +1,9 @@
+generated-fixture/
+results/browser/
+results/selection-fixture/
+results/*.log
+results/*.tap
+results/*.exit
+results/*.png
+results/*.diff
+RESEARCH-SUMMARY.pdf

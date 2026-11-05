@@ -142,7 +142,8 @@ import { createAsyncResource, matchAsyncState } from '@ultrabricks/state-toolkit
 import { Runtime } from '@ultrabricks/state-lib';
 
 const runtime = new Runtime();
-const resource = createAsyncResource(runtime, { load: async (id) => fetch(`/api/items/${id}`) });
+const load = (id) => fetch(`/api/items/${id}`);
+const resource = createAsyncResource(runtime, { load });
 await resource.run('42');
 matchAsyncState(resource.getSnapshot(), {
   idle: () => 'idle',
@@ -155,8 +156,8 @@ matchAsyncState(resource.getSnapshot(), {
 ```
 
 Production entry (`@ultrabricks/state-toolkit-async`) exports only the
-async-resource/match surface and stays browser-safe (no `node:` builtins). The
-conformance harness is a SEPARATE explicit subpath
+async-resource/match and operation-authority surfaces. It stays browser-safe
+(no `node:` builtins). The conformance harness is a SEPARATE explicit subpath
 (`@ultrabricks/state-toolkit-async/testing`) with its Node-only runners; the
 production closure never loads it. One Runtime serves both sides: the toolkit
 never vendors, bundles or inlines the core — `StateError`,
@@ -167,3 +168,73 @@ planned peer slices against the same AR-01…AR-10 suite), no source adapters
 (REST/GraphQL/streams/persist/router), no published registry artifact, no
 stable v1 API. Next adapter matrix: `docs/api/CORE-TOOLKIT-CONFORMANCE.md` —
 only the headless row is implemented and tested; every other row is planned.
+
+## Operation publication and feedback authority
+
+`createOperationScope(runtime, { traceCapacity? })` controls synchronous UI
+publication, not execution of an external writer. `begin(lane)` supersedes only
+that lane. `advance()` revokes the old committed context, including A to B to A.
+Dispose the scope before its Runtime. Ending UI authority is not cancellation,
+rollback, or suppression of the document owner's external outcome.
+
+```ts
+import { createOperationScope } from '@ultrabricks/state-toolkit-async';
+import { Runtime } from '@ultrabricks/state-lib';
+
+const runtime = new Runtime();
+const scope = createOperationScope(runtime, { traceCapacity: 64 });
+const messages: string[] = [];
+const operation = scope.begin('width');
+const report = operation.bind((message: string) => messages.push(message));
+report('current'); // applied
+scope.advance();
+report('late'); // dropped; messages still contains only 'current'
+operation.finish(); // No-op: this lease was already revoked by advance().
+scope.dispose();
+runtime.dispose();
+```
+
+`commit(fn)` performs one guarded synchronous Runtime transaction. `notify(fn)`
+protects synchronous feedback outside a transaction. Both return `applied` with
+its value, or `dropped` with a revocation reason. `bind(fn)` captures arguments
+and creates a callback that checks authority on every invocation, not when it
+is bound. Current callback exceptions propagate unchanged; stale callbacks are
+not invoked. The advisory `current` value must not be carried across await.
+
+These gates are not a security sandbox and cannot revoke arbitrary code.
+TypeScript rejects async callbacks. JavaScript thenable misuse fails loudly;
+feedback drains that thenable once using its cached method and original
+receiver. Work the invalid callback already started cannot be undone.
+Kernel transaction/purity/notification guards are preserved. Failed-commit
+telemetry uses the Runtime's publication fact, not only an error class.
+
+Omitting traceCapacity or explicitly passing 0 disables trace recording.
+A capacity from 1 to 4096 enables bounded frozen metadata and a dropped-event
+count. It includes no lane
+names, document IDs, field values, exception messages or stacks, and starts no
+telemetry or persistence. Numeric diagnostics are not archival IDs; authority
+uses ticket revocation rather than numeric equality.
+
+The standalone and offline-install tests consume the exported package with one
+shared Runtime. Real inspector wiring, protected drafts and full record/replay
+remain separate implementation steps, not implied by this package contract.
+
+The optional browser acceptance test compiles the exported package pair and
+executes the authority scenarios in real Chromium. It checks that only emitted
+package files enter the bundle and there is one Runtime. It is not a Hyper
+inspector test or a performance comparison. Set `STATE_CHROME` to an installed
+Chromium executable when the root Playwright default is not available.
+
+```sh
+node packages/state-lib/toolkit/tools/check-operation-browser.mjs \
+  ./state-operation-browser-proof
+```
+
+The evidence directory must not already exist; earlier results are never
+silently replaced. The command must print nine successful cases and exit 0.
+
+A revoked callback arriving inside a transaction, pure read, or Runtime
+notification is a read-only `dropped` result: it invokes no user callback and
+appends no diagnostic event in that forbidden phase. Live leases still reject
+all those boundary violations. This prevents a harmless stale listener from
+turning a newer publication into a notification error.
