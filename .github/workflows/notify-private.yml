@@ -10,11 +10,14 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           fetch-depth: 1
 
@@ -33,7 +36,7 @@ jobs:
 
       - name: Send repository_dispatch
         if: steps.check.outputs.skip != 'true'
-        uses: peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0
         with:
           token: ${{ secrets.PRIVATE_REPO_DISPATCH_TOKEN }}
           repository: hyperide/hyper-saas
