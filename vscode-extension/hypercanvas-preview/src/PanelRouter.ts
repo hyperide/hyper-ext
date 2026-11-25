@@ -290,7 +290,7 @@ export class PanelRouter {
    * null` instead of the source location — a functional regression from the pre-fix
    * "widen implicitly because there was no check at all" behavior, but a fail-safe one
    * (worse UX, not a new read-outside-workspace hole). Tracked as
-   * https://linear.app/glide-vc/issue/HYP-1136.
+   * HYP-1136.
    */
   async getComponentGroups(): Promise<ScanResult> {
     // HYP-1012 review rounds 2+3 (codex) P1: `scanComponentGroups()` is awaited below, and a

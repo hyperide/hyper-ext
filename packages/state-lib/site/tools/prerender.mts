@@ -94,7 +94,7 @@ export async function prerender(directory = 'dist-served', selectedRoutes = rout
       .join('\n')}\n\n## Optional\n\n- [Complete corpus](${origin}/llms-full.txt): larger combined export\n`;
     const evidencePath = resolve(out, evidenceDownload.slice(1));
     await mkdir(dirname(evidencePath), { recursive: true });
-    await writeFile(evidencePath, JSON.stringify(rawEvidence, null, 2) + '\n');
+    await writeFile(evidencePath, `${JSON.stringify(rawEvidence, null, 2)}\n`);
     await writeFile(resolve(out, 'llms.txt'), index);
     await writeFile(resolve(out, 'llms-full.txt'), all.join('\n\n---\n\n'));
     await writeFile(

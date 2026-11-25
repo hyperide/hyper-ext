@@ -14,7 +14,7 @@ assert(source.includes('/repl/board-commands'), 'Archived conditions should link
 const spec = readFileSync('../docs/spec/live-example-lab.md', 'utf8');
 for (const example of LAB_EXAMPLES)
   for (const mechanism of example.mechanisms)
-    assert(spec.includes(`id="${mechanism.href.split('#')[1]}"`), 'Real mechanism target: ' + mechanism.href);
+    assert(spec.includes(`id="${mechanism.href.split('#')[1]}"`), `Real mechanism target: ${mechanism.href}`);
 const app = readFileSync('src/App.tsx', 'utf8');
 assert(
   app.includes('live-example-lab.md?raw'),

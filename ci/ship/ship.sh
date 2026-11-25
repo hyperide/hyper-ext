@@ -126,24 +126,19 @@ if [[ -z "${SHIP_IMAGE_UPLOAD_CMD:-}" || "${SHIP_IMAGE_UPLOAD_CMD:-}" == "$_ship
     # Uploader missing/non-executable.
     #
     # HYP-1252-P1 (Codex review, PR #724): the previous version of this branch exported a
-    # reliably-FAILING command (`false`) and delegated anyway, on the assumption that
-    # upstream's own screenshot gate "correctly refuses" a UI-touching merge whenever the
-    # upload fails. That assumption is FALSE for the canonical behavior this repo's own tests
-    # pin: `.claude/scripts/pr-ship.test.sh` (T33, "upload failure -> visible note in PR
-    # comment, merge proceeds") documents that canonical treats "a screenshot PATH was
-    # supplied" as satisfying the gate even when the upload itself fails — it posts a path
-    # note and ships anyway ("Gate is satisfied because --screenshot was supplied — the gap
-    # is surfaced, not silent"). So delegating with a poisoned SHIP_IMAGE_UPLOAD_CMD does NOT
-    # fail closed: a UI-touching PR with a real local screenshot silently ships WITHOUT an
-    # embedded image whenever this uploader happens to be broken — exactly the silent
-    # regression HYP-1252 exists to close, just moved one layer down.
+    # reliably-FAILING command (`false`) and delegated anyway. Canonical's screenshot gate does
+    # refuse a UI-touching merge when only a path note (no embedded image) exists, but a failed
+    # upload still makes canonical post a misleading "upload manually" path-note PR comment before
+    # it refuses, and a non-UI PR ships with that note. Refusing here, before delegation, fails
+    # early and keeps that comment from being posted when the uploader is known to be broken.
     #
     # Fix: REFUSE here, before delegating, whenever --screenshot/--shot is actually in play —
-    # do not rely on canonical's gate to catch it (it doesn't). This does reintroduce the
+    # canonical's gate remains the backstop for UI PRs, but refusing early means no misleading
+    # path-note comment is posted. This does reintroduce the
     # argv scan an earlier version deliberately avoided ("agent-tools could add a
     # --screenshot=<path> spelling or an alias at any time, silently un-matching a hand-rolled
-    # scan") — accepted now because the alternative (trust the downstream gate) is proven
-    # unsafe, not just theoretically fragile. Matched against both the space-separated form
+    # scan") — accepted now because delegating with a broken uploader leaves a misleading
+    # path-note comment (and ships a non-UI PR with it), not just a theoretical fragility. Matched against both the space-separated form
     # canonical's arg parser recognizes TODAY (`--screenshot|--shot)` in agent-tools'
     # ci/ship/ship.sh) and an `=`-joined form it does not yet accept — review finding
     # (independently raised by two reviewers on PR #724's own fix): matching only the exact
@@ -157,7 +152,7 @@ if [[ -z "${SHIP_IMAGE_UPLOAD_CMD:-}" || "${SHIP_IMAGE_UPLOAD_CMD:-}" == "$_ship
     for _ship_arg in "$@"; do
       case "$_ship_arg" in
         --screenshot | --shot | --screenshot=* | --shot=*)
-          echo "ci/ship/ship.sh: REFUSING — screenshot uploader not found/executable ($uploader) and --screenshot/--shot was passed. Delegating anyway would silently ship without an embedded image: canonical's screenshot gate does NOT fail closed on a failed upload, it only requires that a screenshot PATH was supplied (HYP-1252 P1 / pr-ship.test.sh T33). Fix the uploader (check it exists and is executable) or drop --screenshot from this ship." >&2
+          echo "ci/ship/ship.sh: REFUSING — screenshot uploader not found/executable ($uploader) and --screenshot/--shot was passed. Delegating anyway would post a path-note PR comment instead of an embedded image (canonical then refuses a UI PR; a non-UI PR ships with only the note) (HYP-1252 P1 / pr-ship.test.sh T33). Fix the uploader (check it exists and is executable) or drop --screenshot from this ship." >&2
           exit 1
           ;;
       esac
@@ -167,9 +162,8 @@ if [[ -z "${SHIP_IMAGE_UPLOAD_CMD:-}" || "${SHIP_IMAGE_UPLOAD_CMD:-}" == "$_ship
     # `eval "$SHIP_IMAGE_UPLOAD_CMD ..." 2>/dev/null` throws stderr away, so this is the only
     # point in the whole flow where a message is actually visible) and still export a
     # reliably-FAILING command rather than leaving SHIP_IMAGE_UPLOAD_CMD unset. This is
-    # best-effort surfacing, NOT a safety net for a spelling the scan above misses — per the
-    # T33 analysis this whole fix is built on, a failing upload command does not block a ship
-    # here either; it only earns a visible "upload failed" note. The real backstop against a
+    # best-effort surfacing, NOT a safety net for a spelling the scan above misses — a failing
+    # upload command only yields a path-note PR comment (see pr-ship.test.sh T33). The real backstop against a
     # missed spelling is the scan covering every spelling canonical accepts, not this export.
     echo "ci/ship/ship.sh: WARNING screenshot uploader not found/executable ($uploader) — no --screenshot/--shot in this invocation, so this is inert; exporting a reliably-failing command as best-effort surfacing." >&2
     export SHIP_IMAGE_UPLOAD_CMD="$_ship_self_fail_sentinel"

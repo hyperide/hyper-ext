@@ -452,10 +452,10 @@ fi
 
 # 2c-2. HYP-1252-P1 (Codex, PR #724): uploader missing + --screenshot IS in argv -> REFUSES
 # before delegation (does not reach canonical at all). Pins the actual bug fix: canonical's
-# own screenshot gate does NOT fail closed on a failed upload (it only requires that a
-# screenshot PATH was supplied — see .claude/scripts/pr-ship.test.sh T33), so exporting a
-# failing SHIP_IMAGE_UPLOAD_CMD and delegating would have silently shipped a UI-touching PR
-# without an embedded image. rc must be non-zero, the delegation must never happen (no
+# own screenshot gate refuses a UI-touching merge without an embedded image, but only after a
+# failed upload has already posted a misleading path-note PR comment (see
+# .claude/scripts/pr-ship.test.sh T33), so exporting a failing SHIP_IMAGE_UPLOAD_CMD and
+# delegating would have posted that note before refusing. rc must be non-zero, the delegation must never happen (no
 # CANON_RAN in the output), and the failure must be visible on stderr.
 out=$(cd "$FAKE_REPO" && AGENT_TOOLS_ROOT="$TMP/agent-tools" XDG_CONFIG_HOME="$TMP/empty-config" \
   bash ci/ship/ship.sh 1 --screenshot /tmp/whatever.png "a screenshot" 2>&1)

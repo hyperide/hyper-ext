@@ -116,7 +116,7 @@ The following are NOT acceptable answers to "what have you done?":
 | Excuse | Response |
 |--------|----------|
 | "Waiting for user" | You have tools. Use them. Run tests, take screenshots, check logs. |
-| "Pre-existing issue" | If it blocks your task, fix it or document it with a Linear ticket. NOW. |
+| "Pre-existing issue" | If it blocks your task, fix it or document it with a ticket (`task new`). NOW. |
 | "Investigating" | Investigation without artifacts is daydreaming. Write a hypothesis. Test it. |
 | "Planning next steps" | Plans without commits are fiction. Do the smallest possible thing. |
 | "Reading code" | What did you learn? State it. If you can't, you weren't reading — you were scrolling. |

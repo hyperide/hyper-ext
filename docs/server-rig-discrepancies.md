@@ -22,7 +22,6 @@ Audit date: 2026-06-30. For implementation by a dedicated agent.
 | `draw`            | `draw` via agent-tools       | missing       | Needs agent-tools install                                                                                                                                                                                                                                                                                                                                                                          |
 | `task`            | `task` via agent-tools       | missing       | Needs agent-tools install                                                                                                                                                                                                                                                                                                                                                                          |
 | `rtk`             | `rtk` binary                 | missing       | Needs agent-tools install                                                                                                                                                                                                                                                                                                                                                                          |
-| `linear`          | `linear` CLI                 | missing       | `npm install -g @linear/sdk` or via agent-tools                                                                                                                                                                                                                                                                                                                                                    |
 
 ### Claude Code Auth
 
@@ -40,11 +39,11 @@ Audit date: 2026-06-30. For implementation by a dedicated agent.
   3. Add to PATH in `~/.bashrc` / `~/.zshrc`
   4. Install each skill: `tg install-skill`, `review install-skill`, `draw install-skill`
 
-### rig.yaml
+### Task routing
 
-- **Mac**: rig.yaml routes `task` → Linear backend, team HYP
+- **Mac**: task.yaml routes `task` → tasks backend (<https://tasks.glide.vc>), team HYP
 - **Server**: no rig.yaml present (agent-tools not installed)
-- **Action needed**: Mirror Mac's rig.yaml task routing block after agent-tools install
+- **Action needed**: none for routing (committed `task.yaml`); authenticate once with `tasks-app auth login --url https://tasks.glide.vc` (or set `TASKS_TOKEN` and `TASKS_URL`)
 
 ## Implementation Order
 
@@ -53,7 +52,7 @@ Audit date: 2026-06-30. For implementation by a dedicated agent.
 3. Clone + install agent-tools
 4. Authenticate Claude Code (`claude auth login` → OAuth URL → complete)
 5. Install skills: `tg install-skill`, `review install-skill`, `draw install-skill`
-6. Configure rig.yaml: copy task/Linear routing from Mac
+6. Authenticate the tracker: `tasks-app auth login --url https://tasks.glide.vc`
 7. Verify: `tg "test"` from server shell
 
 ## Notes

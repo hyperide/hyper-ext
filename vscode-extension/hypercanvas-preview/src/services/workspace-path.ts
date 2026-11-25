@@ -290,7 +290,7 @@ export interface ResolveContainedPathOptions {
  * widening must invalidate atomically with a workspace switch, and the `monorepoRoot` the
  * scanner returns needs a bound tighter than "is an ancestor of the workspace root" —
  * `/` and `$HOME` both pass that check) — real design work tracked as
- * https://linear.app/glide-vc/issue/HYP-1136, not bolted onto this security-hotfix diff.
+ * HYP-1136, not bolted onto this security-hotfix diff.
  * See PanelRouter.ts's `getComponentGroups` doc comment for the current, deliberate
  * consequence (a monorepo-sibling source-map request resolves to `null` instead of
  * widening implicitly, same as before this fix existed).

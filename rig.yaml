@@ -76,7 +76,7 @@ ci:
     leftover-grep:     { enabled: true, tier: block }
     review-threads:    { enabled: true, tier: block }
 
-# ── Ticket tracker — task-cli routing (Linear team HYP, CTO decision #4136.4) lives in the
+# ── Ticket tracker — task-cli routing (tasks backend, team HYP, CTO decision #4136.4) lives in the
 # sibling native ./task.yaml, NOT here: rig-cli's schema is closed at the top level and rejects
 # any key it doesn't own (`task` → "unknown top-level key", exit 2), which blocked rig apply.
 # task-cli reads ./task.yaml with higher precedence than this file, so routing is unchanged. ──

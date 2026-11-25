@@ -3,7 +3,7 @@
  *
  * Accessed via: Internal module, not exposed
  * Assumptions: Tamagui supports React Native style props + some web extras
- * Architecture: static set — for dynamic project palettes see future Linear issue
+ * Architecture: static set — for dynamic project palettes see a future ticket
  */
 
 export const VALID_TAMAGUI_STYLE_PROPS: ReadonlySet<string> = new Set([

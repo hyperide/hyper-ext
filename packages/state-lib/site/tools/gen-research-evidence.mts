@@ -23,7 +23,7 @@ const compact = {
   generatedFrom: createHash('sha256').update(JSON.stringify(raw)).digest('hex'),
   controller: { ...raw.controller, rows },
 };
-const text = JSON.stringify(compact, null, 2) + '\n';
+const text = `${JSON.stringify(compact, null, 2)}\n`;
 let current: unknown;
 try {
   current = JSON.parse(readFileSync(output, 'utf8'));

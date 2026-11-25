@@ -185,7 +185,7 @@ if [[ -n "${HYPER_E2E_EXTENSION_REPO:-}" ]]; then
   # grows a new top-level non-git directory it needs, add it here too (or
   # switch to a git-ls-files-based include-list, tracked as a follow-up so
   # this class of gap can't recur by omission — see
-  # https://linear.app/glide-vc/issue/HYP-1305).
+  # HYP-1305).
   #
   # The 9 server-state excludes below are anchored with a leading `/` —
   # every one of them was observed only at the TOP LEVEL of

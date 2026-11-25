@@ -48,7 +48,7 @@ Hook: PostToolUse(AskUserQuestion) → render-state.py → auto-show
   "started_at": "2026-03-10T10:00:00Z",
 
   "phases": {
-    "linear": "done",
+    "ticket": "done",
     "plan": "done",
     "worktree": "done",
     "impl": "active",
@@ -198,7 +198,7 @@ If all remaining steps are `done`/`skipped`, no promotion happens.
 
 | /task Phase                  | State phase | Notes                                                |
 | ---------------------------- | ----------- | ---------------------------------------------------- |
-| Phase 0: Task Identification | `linear`    | Includes input parsing, Linear lookup, status update |
+| Phase 0: Task Identification | `ticket`    | Includes input parsing, ticket lookup, status update |
 | Phase 1: Planning            | `plan`      | Includes /review-plan                                |
 | Phase 2: Worktree Setup      | `worktree`  |                                                      |
 | Phase 3: Dev Server          | `impl`      | Folded into impl — dev server is impl infrastructure |
@@ -234,7 +234,7 @@ state.sh set-description "new description"    # update description after init
 state.sh set-ticket HYP-283                   # set ticket after init
 
 # Phases
-state.sh phase linear done
+state.sh phase ticket done
 state.sh phase impl active
 state.sh phase pr active
 
@@ -295,7 +295,7 @@ Implementation: bash + `jq` for JSON manipulation.
 
 ```text
 /task ━━━━━━━━━━━━━━━━━╸ · · · · · ·     HYP-283          4/6
-      Linear → Plan → Worktree → Impl → PR → Cleanup
+      Ticket → Plan → Worktree → Impl → PR → Cleanup
 
   a1b2c3f  feat: add color picker (HYP-283)
   /commit ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━                   5/5
@@ -316,7 +316,7 @@ Implementation: bash + `jq` for JSON manipulation.
 
 ```text
 /task ━━━━━━━━━━━━━━━━━━━━━━━━━╸ · · ·   HYP-283          5/6
-      Linear → Plan → Worktree → Impl → PR → Cleanup
+      Ticket → Plan → Worktree → Impl → PR → Cleanup
 
   a1b2c3f  feat: add color picker (HYP-283)
   d4e5f6a  test: edge cases (HYP-283)
@@ -416,7 +416,7 @@ Add `state.sh` calls at each phase transition and commit step:
 | Point in /task        | state.sh call                                    |
 | --------------------- | ------------------------------------------------ |
 | Phase 0 start         | `init task HYP-XXX` or `init task "description"` |
-| Phase 0 Linear found  | `phase linear done`                              |
+| Phase 0 ticket found  | `phase ticket done`                              |
 | Phase 1 Plan start    | `phase plan active`                              |
 | Phase 1 Plan done     | `phase plan done`                                |
 | Phase 2 Worktree done | `phase worktree done && phase impl active`       |

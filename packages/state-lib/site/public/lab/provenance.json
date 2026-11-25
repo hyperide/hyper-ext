@@ -2,8 +2,8 @@
   "version": 1,
   "compiler": "statec/0.1.0-oxc",
   "harness": {
-    "src/lib/example-lab/execution.worker.js": "e180938ad6ed0ce757d027c19f53a4aa9a1f54611386753070554dabd25a8a00",
-    "src/lib/example-lab/compiler.worker.ts": "c29513e01e5dafe85228fcdd2566c176fdec1f17560ccdac4134fbfbabafa95c",
+    "src/lib/example-lab/execution.worker.js": "5be21b217c7a8d6601c496f2bfb4de840e79db0dafb36dffd4e9621489aad511",
+    "src/lib/example-lab/compiler.worker.ts": "42199bcbeeb785dc9024f9648e5102a311e97ea058efc24f960a9d00864383e7",
     "src/lib/example-lab/core.ts": "15cc7c0e800187d5ff80988ee05bb9cd2394ef2b8389e539e9576221bea7d2e8"
   },
   "rustSources": {

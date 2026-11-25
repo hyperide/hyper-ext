@@ -19,7 +19,7 @@ proactively remind the user (via `tg`) and offer to run it. Do not let these sil
 ## How to run
 
 - **Pen test**: adversarial multi-lens review of the auth/proxy/file surfaces (see the security
-  rules in `AGENTS.md`), plus a live probe of the running stand. Record findings as Linear tickets.
+  rules in `AGENTS.md`), plus a live probe of the running stand. Record findings as tickets.
 - **Perf review**: measure the documented hot paths against a baseline; file regressions as tickets.
 - **Dependency sweep**: `gh api repos/{owner}/{repo}/dependabot/alerts` full triage — fix
   patch/minor, ticket majors with a reason.
@@ -41,7 +41,7 @@ oauth-as, proxy-ssrf, file-access / input-injection. **10 substantiated findings
 `checkProjectAccess` never run — a known `projectId` yields cross-tenant code-server (RCE + terminal)
 and cross-tenant source read with no auth at all.
 
-Findings filed as Linear tickets:
+Findings filed as tickets:
 
 - **HYP-669** (P1) — unauthenticated `/ide/*` + `/project-preview/*` proxy → cross-tenant code-server RCE & source read (no `checkProjectAccess`).
 - **HYP-670** (P1) — session cookies (`access_token`/`refresh_token`) forwarded verbatim to untrusted project/IDE containers → account takeover.

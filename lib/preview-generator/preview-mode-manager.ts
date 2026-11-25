@@ -298,7 +298,7 @@ export class PreviewModeManager {
       //
       // LIMITATION: the user's PreviewWrapper from .hyperide/preview.tsx is NOT applied in
       // Astro previews. Full isolated support needs PreviewProxy taught to skip its
-      // script-swap for Astro (route-based isolation, not proxy-swap). Deferred — NEEDS LINEAR.
+      // script-swap for Astro (route-based isolation, not proxy-swap). Deferred — NEEDS TICKET.
       await this._fileManager.ensurePreviewFiles();
       return; // stay in app-shell — do not fall through to _mode='isolated' / onModeChange(true)
     } else if (framework === 'webpack') {
